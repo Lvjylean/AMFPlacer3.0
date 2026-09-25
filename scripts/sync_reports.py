@@ -16,6 +16,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('run_id', type=validate_run_id)
     parser.add_argument('--destination', type=Path)
+    parser.add_argument('--ssh-hostname', help='Override HostName while retaining the configured SSH alias and identity')
     args = parser.parse_args()
     settings = json.loads((ROOT / 'configs/machines/eda072.json').read_text())
     remote_root = settings['project_root']
@@ -26,7 +27,11 @@ def main():
         'from report_bundle import write_bundle',
         'write_bundle(Path(' + repr(remote_root + '/experiments/runs/' + args.run_id) + '), sys.stdout.buffer)',
     ])
-    blob = subprocess.check_output([ 'ssh', settings['ssh_alias'], 'python3 -c ' + shlex.quote(remote_code)])
+    command = ['ssh']
+    if args.ssh_hostname:
+        command.extend(['-o', 'HostName=' + args.ssh_hostname])
+    command.extend([settings['ssh_alias'], 'python3 -c ' + shlex.quote(remote_code)])
+    blob = subprocess.check_output(command)
     destination = args.destination or ROOT / 'local-reports' / args.run_id
     count = extract_bundle(blob, destination)
     print(json.dumps({'files': count, 'destination': str(destination.resolve()), 'dcp_downloaded': False}, indent=2))
