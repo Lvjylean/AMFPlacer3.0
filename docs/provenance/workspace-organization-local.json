@@ -1,0 +1,278 @@
+{
+  "date": "2026-09-25T16:29:39.693384+08:00",
+  "scope": "local workspace organization",
+  "moves": [
+    {
+      "source": "research/AMFplacer3.0项目入口.md",
+      "target": "AMFplacer3.0/docs/research/project-overview.md",
+      "sha256": "fa1c9b6179c64649e9127e41739db15403f74299c86bb1ef9c6141a64e1861bd"
+    },
+    {
+      "source": "AMFplacer3.0/docs/research/课题三-增量编译器工作梳理.md",
+      "target": "AMFplacer3.0/docs/research/incremental-compiler-scope.md",
+      "sha256": "28fc916be9bf587965546f84b05a02d5eeb52e842df4fa398bfe25c9bc97e8dc"
+    },
+    {
+      "source": "AMFplacer3.0/docs/research/服务器-case-可运行性核查.md",
+      "target": "AMFplacer3.0/docs/research/server-case-audit.md",
+      "sha256": "c613917c887f96ad9b1db36cca0c5b8a5bfddb99976e507c9563a7efd7c5c8d1"
+    },
+    {
+      "source": "AMFplacer3.0/docs/research/faceDetect-完整流程运行记录.md",
+      "target": "AMFplacer3.0/docs/research/face-detect-full-flow.md",
+      "sha256": "e5cce33239eef969a95a6914b8602dab5900263684669e92276e1b69aa53f9d1"
+    },
+    {
+      "source": "AMFplacer3.0/docs/research/faceDetect-宏兼容性根因.md",
+      "target": "AMFplacer3.0/docs/research/face-detect-macro-compatibility.md",
+      "sha256": "b1c9a3811c007d4b14ac70de2aad9b241c89464521400ad04bd99f77d719a950"
+    },
+    {
+      "source": "AMFplacer3.0/docs/research/haoning-faceDetect历史核查.md",
+      "target": "AMFplacer3.0/docs/research/haoning-face-detect-history.md",
+      "sha256": "b5081ebd889b28d86891ed8ba637d878eecc383ea079bf31b647af4e997791a7"
+    },
+    {
+      "source": "AMFplacer3.0/docs/research/faceDetect-benchmark完整验证.md",
+      "target": "AMFplacer3.0/docs/research/face-detect-benchmark-validation.md",
+      "sha256": "d962da77850a755546b1c11de1e74f13c4e9b8b03e8d8e0032f54cc8dd92e6ec"
+    },
+    {
+      "source": "research/diagnostics/faceDetect-macros/cell-properties.tsv",
+      "target": "AMFplacer3.0/experiments/evidence/20260925-face-detect-macros/cell-properties.tsv",
+      "sha256": "b2c2cb3ea63f1c60e1765d2f606d0abb12a334fd23a3731b52c3330d68e55643"
+    },
+    {
+      "source": "research/diagnostics/faceDetect-macros/cell.log",
+      "target": "AMFplacer3.0/experiments/evidence/20260925-face-detect-macros/cell.log",
+      "sha256": "84edf1992b27a882894f586539c9e4f7d61816fd92e6a6f6c824681e97b0cc54"
+    },
+    {
+      "source": "research/diagnostics/faceDetect-macros/deduplicated.log",
+      "target": "AMFplacer3.0/experiments/evidence/20260925-face-detect-macros/deduplicated.log",
+      "sha256": "630cd08b3b5a89588a21b18f7e5ddc7d60cf503787aecdbcb74921e24f9c1b8e"
+    },
+    {
+      "source": "research/diagnostics/faceDetect-macros/diagnosis.json",
+      "target": "AMFplacer3.0/experiments/evidence/20260925-face-detect-macros/diagnosis.json",
+      "sha256": "2ae06d3330c8daf9ce05d97aeefa13a87ca17c682b1b8bc2b0b6d59ddad7c47d"
+    },
+    {
+      "source": "research/diagnostics/faceDetect-macros/native-macro-conflicts.json",
+      "target": "AMFplacer3.0/experiments/evidence/20260925-face-detect-macros/native-macro-conflicts.json",
+      "sha256": "94eba45cf9e622de84130046f8aede3dbd4a82843b61d6e88c485cc8c00aee63"
+    },
+    {
+      "source": "research/diagnostics/faceDetect-macros/without_native_overlap.log",
+      "target": "AMFplacer3.0/experiments/evidence/20260925-face-detect-macros/without_native_overlap.log",
+      "sha256": "4ed7f0a4bc2074b333913332284ac1bdfbb36ed55c40bdf14ac92c8681ce2f64"
+    },
+    {
+      "source": "research/case-audit-faceDetect-preflight.log",
+      "target": "AMFplacer3.0/experiments/evidence/20260925-preflight/case-audit-faceDetect-preflight.log",
+      "sha256": "0e562b019a99ffa46d518f596011459b6079e53710a5d87f43834673e60976bc"
+    },
+    {
+      "source": "research/eda070-vivado-license-preflight.log",
+      "target": "AMFplacer3.0/experiments/evidence/20260925-preflight/eda070-vivado-license-preflight.log",
+      "sha256": "56e2e2f0668785d78b2f14dcc7b3b60a33d3ef14efe0aa617f2ac310ad6fca48"
+    },
+    {
+      "source": "research/eda072-vivado-license-after-copy.log",
+      "target": "AMFplacer3.0/experiments/evidence/20260925-preflight/eda072-vivado-license-after-copy.log",
+      "sha256": "8b7c0eaf2fd56f0b7beae15212130b4466fc842262d67de4a1bd3b5171f2aea5"
+    },
+    {
+      "source": "research/sources/amd-vp1902-hotchips-2023.pdf",
+      "target": "AMFplacer3.0/docs/references/amd-vp1902-hotchips-2023.pdf",
+      "sha256": "7f2cccb9aa076fe73fde103f179984b525961acfc1d3696e9a9c5f98d8b90433"
+    },
+    {
+      "source": "scripts/__pycache__/run_face_detect_flow.cpython-312.pyc",
+      "target": "AMFplacer3.0/archives/legacy-workspace/scripts/__pycache__/run_face_detect_flow.cpython-312.pyc",
+      "sha256": "76a04d54abe3eac316af86460176ab0dd0b30535aa71e0a0afacefac58430312"
+    },
+    {
+      "source": "scripts/audit_face_detect_placement.tcl",
+      "target": "AMFplacer3.0/archives/legacy-workspace/scripts/audit_face_detect_placement.tcl",
+      "sha256": "7fbecf61b50fb04478da45b8e2b895ec92ec1dd83c4245e0b48d0deceb8dd3af"
+    },
+    {
+      "source": "scripts/diagnose_face_detect_macros.py",
+      "target": "AMFplacer3.0/scripts/diagnostics/diagnose_face_detect_macros.py",
+      "sha256": "7e796cb00ed4451a119b0ccb0bc1e084748f1a61ac9adce7e9f3910789612a80"
+    },
+    {
+      "source": "scripts/run_face_detect_flow.py",
+      "target": "AMFplacer3.0/archives/legacy-workspace/scripts/run_face_detect_flow.py",
+      "sha256": "6f459c80fddc1f9fd00c0456425a8b4640ab1c2ebf196bc3675bf453129fdbd0"
+    },
+    {
+      "source": "scripts/summarize_face_detect_flow.py",
+      "target": "AMFplacer3.0/archives/legacy-workspace/scripts/summarize_face_detect_flow.py",
+      "sha256": "454d00cbd24faf12f5aa6dd2862fe9664e52f7cac50c2640426376be28e229b2"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/reports/faceDetect_amf_routed.dcp",
+      "target": "AMFplacer3.0/artifacts/legacy-downloads/faceDetect-benchmark-20260925-144131/reports/faceDetect_amf_routed.dcp",
+      "sha256": "a0a9c38831cfd171cdf06f2ee93dcedf1e531c1fca344d6a90268c7ca6e85e36"
+    },
+    {
+      "source": "课题三final.pdf",
+      "target": "AMFplacer3.0/docs/requirements/archives/task-3-final.workspace-copy.pdf",
+      "sha256": "a5f4c8598f6ca793564f4d525e34195b75dfcefbd7977d01a8e3744651b18ad4"
+    }
+  ],
+  "deduplicated": [
+    {
+      "source": "research/课题三-增量编译器工作梳理.md",
+      "kept": "AMFplacer3.0/docs/research/incremental-compiler-scope.md",
+      "sha256": "28fc916be9bf587965546f84b05a02d5eeb52e842df4fa398bfe25c9bc97e8dc"
+    },
+    {
+      "source": "research/服务器-case-可运行性核查.md",
+      "kept": "AMFplacer3.0/docs/research/server-case-audit.md",
+      "sha256": "c613917c887f96ad9b1db36cca0c5b8a5bfddb99976e507c9563a7efd7c5c8d1"
+    },
+    {
+      "source": "research/faceDetect-完整流程运行记录.md",
+      "kept": "AMFplacer3.0/docs/research/face-detect-full-flow.md",
+      "sha256": "e5cce33239eef969a95a6914b8602dab5900263684669e92276e1b69aa53f9d1"
+    },
+    {
+      "source": "research/faceDetect-宏兼容性根因.md",
+      "kept": "AMFplacer3.0/docs/research/face-detect-macro-compatibility.md",
+      "sha256": "b1c9a3811c007d4b14ac70de2aad9b241c89464521400ad04bd99f77d719a950"
+    },
+    {
+      "source": "research/haoning-faceDetect历史核查.md",
+      "kept": "AMFplacer3.0/docs/research/haoning-face-detect-history.md",
+      "sha256": "b5081ebd889b28d86891ed8ba637d878eecc383ea079bf31b647af4e997791a7"
+    },
+    {
+      "source": "research/faceDetect-benchmark完整验证.md",
+      "kept": "AMFplacer3.0/docs/research/face-detect-benchmark-validation.md",
+      "sha256": "d962da77850a755546b1c11de1e74f13c4e9b8b03e8d8e0032f54cc8dd92e6ec"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/config.json",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/config.json",
+      "sha256": "e4d47a891642b81c8818003ce0b1b63bf24cee642fde8566527856a8299753be"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/logs/02_amf.log",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/logs/02_amf.log",
+      "sha256": "42c2c527badca2cf96d5b5fd3da18cffb4acc6141898f77154e97f58e83e55e2"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/logs/03_vivado_route.log",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/logs/03_vivado_route.log",
+      "sha256": "f5fcee07157c2c428afcb4fa536214814dfdf5b80832cfbd267c27e870d97683"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/logs/04_placement_audit.log",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/logs/04_placement_audit.log",
+      "sha256": "d83bdc18c3654a5555473e89f4daf7e48d37ba9bb8d972692cb9f209f34c391c"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/manifest.json",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/manifest.json",
+      "sha256": "8f4027224c069ab25dd4d5c4d7810a8d3f183a044790f0fb52aaa8de2ae6c720"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/reports/bus_skew.rpt",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/bus_skew.rpt",
+      "sha256": "c777bbafa44f12be6c21eaa65549bc752a17e2ca080b136abcf2df363824bf89"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/reports/drc.rpt",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/drc.rpt",
+      "sha256": "b025bd835c18a80d489b894246eec0d9f029c50cd7b9d8c3a19f704c3846e1a2"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/reports/input_validation.json",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/input_validation.json",
+      "sha256": "4aaa40316d4ef4acb3a183a286d20463efa5d970bf5c66a9feb94469743aaa8f"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/reports/original_rebuilt_placement_comparison.json",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/original_rebuilt_placement_comparison.json",
+      "sha256": "86aeceda8e03c56b2891255f93fb3be3071595dbb5d648548f318cfcfbfd97ad"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/reports/placement_audit.json",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/placement_audit.json",
+      "sha256": "1fb08b115ce5cf59e5ad4a78fa7d9c864306ec866aeb2845f5eb7e8f2284e871"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/reports/placement_audit_status.json",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/placement_audit_status.json",
+      "sha256": "c44c4aa666c7643d82c58f019b6b9dd516434eb25defbb673f7a89e1329c8549"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/reports/placement_changes.tsv",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/placement_changes.tsv",
+      "sha256": "9149109b32688164cc1bb946c81701ee77fe9c0bace7f48745a8f3f666df793a"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/reports/placement_name_normalization.json",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/placement_name_normalization.json",
+      "sha256": "2a79ce328d740afd356909425e02a3fbe80adf53f2be9cc85b405d8ef87b9126"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/reports/placement_request_summary.json",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/placement_request_summary.json",
+      "sha256": "cd4d510e4e3afd92055a730e89896e265f20e6aa4ddd810d030fdb7218c35584"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/reports/rebuild_provenance.json",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/rebuild_provenance.json",
+      "sha256": "2ca7ed50514d7f5241f5bf6999a8dd5549e5a1fcdf11cd91fa02eef1d5fbdb1a"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/reports/reference_drc.rpt",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/reference_drc.rpt",
+      "sha256": "c74a04ac0a027b96fe4cbfdb183e0bbdf657d8b4daf41e7091015877252230ea"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/reports/reference_timing_summary.rpt",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/reference_timing_summary.rpt",
+      "sha256": "1ae5d5e605e761e50077dfa15dc8ea1979ae0777bbf4070818225516f701f862"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/reports/route_status.rpt",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/route_status.rpt",
+      "sha256": "5f95ff4ee565f51da302312b75de5f0b04369b8a115b51c68794df0051db0c86"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/reports/tcl_adapter.json",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/tcl_adapter.json",
+      "sha256": "ee1f2835719fd2f229617937087e0c6b8fd370ef152b445447d6c620e4e58e69"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/reports/timing_summary.rpt",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/timing_summary.rpt",
+      "sha256": "7fc084dff9cf2b5f4bd7e8e5a8a56f47afcc0fcc900ba28a645da240602fd2a4"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/reports/utilization.rpt",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/utilization.rpt",
+      "sha256": "2e834cc82732886ec910168470c675d501917d11dfaff7babcd3be8cc9d30ff0"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/reports/verification_summary.json",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/verification_summary.json",
+      "sha256": "cb14952bb605352a387818437b937a806f1471d78e028bca7b4b25f7e20509f8"
+    },
+    {
+      "source": "results/faceDetect-benchmark-20260925-144131/status.json",
+      "kept": "AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/status.json",
+      "sha256": "c5d9370dcf2df66cb9e61a5c0dbf5a98d8257d267ed3afc0f24a406c49be8266"
+    }
+  ],
+  "canonical_requirement": {
+    "source": "/Users/jinyanglyu/Documents/课题三final.pdf",
+    "target": "AMFplacer3.0/docs/requirements/task-3-final.pdf",
+    "sha256": "451302ba0423ea3d2e5b71394861239ac6fee6a1d8141801fcffebfd24d7d67b"
+  }
+}

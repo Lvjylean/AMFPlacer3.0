@@ -102,17 +102,17 @@ AMF 导出包含 1,431 个初始 `place_cell` 调用，涉及 133,561 个不同�
 
 本地已同步最终 DCP、报告、日志和版本/配置记录：
 
-- [最终 routed DCP](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/results/faceDetect-benchmark-20260925-144131/reports/faceDetect_amf_routed.dcp)
-- [机器可读验证汇总](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/results/faceDetect-benchmark-20260925-144131/reports/verification_summary.json)
-- [最终时序报告](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/results/faceDetect-benchmark-20260925-144131/reports/timing_summary.rpt)
-- [最终 DRC 报告](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/results/faceDetect-benchmark-20260925-144131/reports/drc.rpt)
+- [最终 routed DCP](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/artifacts/legacy-downloads/faceDetect-benchmark-20260925-144131/reports/faceDetect_amf_routed.dcp)
+- [机器可读验证汇总](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/verification_summary.json)
+- [最终时序报告](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/timing_summary.rpt)
+- [最终 DRC 报告](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/local-reports/faceDetect-benchmark-20260925-144131/reports/drc.rpt)
 
 DCP SHA-256：`a0a9c38831cfd171cdf06f2ee93dcedf1e531c1fca344d6a90268c7ca6e85e36`。
 
 再次复现时应显式选择已验证的干净构建，默认原工程二进制仍保留用于排查：
 
 ```bash
-ssh eda072 'python3 /Projects/jinyang/workspace/run_face_detect_flow.py --input-mode benchmark --binary-dir /Projects/jinyang/workspace/amf-runs/faceDetect-benchmark-20260925-143241/rebuild/build'
+ssh eda072 'python3 /Projects/jinyang/workspace/AMFplacer3.0/scripts/run_face_detect_flow.py --input-mode benchmark --binary-dir /Projects/jinyang/workspace/amf-runs/faceDetect-benchmark-20260925-143241/rebuild/build'
 ```
 
 该命令会新建实验目录并执行整轮验证，不应用于只读查询状态。

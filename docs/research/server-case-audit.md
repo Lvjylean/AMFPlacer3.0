@@ -2,7 +2,7 @@
 
 日期：2026-09-25。服务器：`ssh eda072`；账号：`jinyang`；实际主机：`ee4e072`。
 
-**最新状态：2026-09-25 14:52，整套历史 faceDetect benchmark 经隔离干净重编译后的 AMFPlacer 和 Vivado 2024.2 完成布局布线，路由错误为 0，WNS=0.300 ns、TNS=0。详见[完整验证记录](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/research/faceDetect-benchmark完整验证.md)。许可问题已解决；下文保留初始排查历史。DCP 新导出宏接口仍有独立的 KEEP 宏冲突待修。**
+**最新状态：2026-09-25 14:52，整套历史 faceDetect benchmark 经隔离干净重编译后的 AMFPlacer 和 Vivado 2024.2 完成布局布线，路由错误为 0，WNS=0.300 ns、TNS=0。详见[完整验证记录](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/docs/research/face-detect-benchmark-validation.md)。许可问题已解决；下文保留初始排查历史。DCP 新导出宏接口仍有独立的 KEEP 宏冲突待修。**
 
 ## 结论
 
@@ -37,7 +37,7 @@ digitRecognition 的输入目录为：
 ## 本次预检
 
 - Vivado：`/Projects/Xilinx/Vivado/2024.2/bin/vivado`。
-- 独立实验目录：`/Projects/jinyang/workspace/case-audit-4ylqb3l5`。
+- 独立实验目录：`/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20260925-face-detect-case-audit`。
 - `open_checkpoint` 成功，读取约 22 秒；DCP 来自 Vivado 2023.2。
 - 器件：`xcvu095-ffva2104-2-e`。
 - 当前 DCP 中 `IS_PRIMITIVE` 单元数：140,148。
@@ -46,7 +46,7 @@ digitRecognition 的输入目录为：
 - 当前普通 SSH 环境及 `bash -lc` 环境中 `XILINXD_LICENSE_FILE`、`LM_LICENSE_FILE` 均未设置；用户 `.Xilinx` 目录未发现顶层 `.lic`。这只说明当前所测环境，未排除管理员维护的其他许可配置。
 - 预检 Vivado 进程已退出，未留下运行中的编译任务。
 
-日志本地副本：[case-audit-faceDetect-preflight.log](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/research/case-audit-faceDetect-preflight.log)。
+日志本地副本：[case-audit-faceDetect-preflight.log](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/experiments/evidence/20260925-preflight/case-audit-faceDetect-preflight.log)。
 
 ## 输入一致性
 
@@ -123,7 +123,7 @@ digitRecognition 的输入目录为：
 | 最终标记 | `AUDIT_VIVADO_2024_2_XCVU095_IMPLEMENTATION_OK` |
 | 结束时间 | 服务器日志显示 2026-09-25 12:56:02 |
 
-本地证据：[eda070-vivado-license-preflight.log](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/research/eda070-vivado-license-preflight.log)。
+本地证据：[eda070-vivado-license-preflight.log](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/experiments/evidence/20260925-preflight/eda070-vivado-license-preflight.log)。
 
 结论：eda070 上这份许可已被 Vivado 2024.2 实际接受，满足当前 xcvu095 的综合及布局布线许可需求。完整 AMFPlacer case 尚未在 eda070 重跑；这份许可在 eda072 上是否有效也尚未验证。本次没有改变 eda072 环境。
 
@@ -131,13 +131,13 @@ digitRecognition 的输入目录为：
 
 按用户明确要求，将 eda070 的 `/Projects/jinyang/.Xilinx/xilinx_ise_vivado.lic` 通过 SSH 复制到 eda072 的同一路径。目标原先没有同名文件；使用原子落盘方式保存，文件权限为 `0600`，大小为 48,787 字节，两端 SHA-256 一致。未修改源文件、其他许可证或 shell 初始化配置，未在本地保存许可证正文。
 
-在 eda072 新建独立验证目录 `/Projects/jinyang/workspace/license-check-8wm9jv94`，使用 Vivado 2024.2 默认许可搜索路径，未设置额外许可环境变量。打开既有 faceDetect routed DCP 后，执行内存中的 `place_design -unplace`：
+在 eda072 新建独立验证目录 `/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20260925-vivado-license-check`，使用 Vivado 2024.2 默认许可搜索路径，未设置额外许可环境变量。打开既有 faceDetect routed DCP 后，执行内存中的 `place_design -unplace`：
 
 - 器件：`xcvu095-ffva2104-2-e`。
 - 日志第 70 行：`Got license for feature 'Implementation' and/or device 'xcvu095'`。
 - 日志第 74 行：`AUDIT_IMPLEMENTATION_PREFLIGHT_OK`。
 - 命令成功结束，0 Errors，进程正常退出。
 
-本地验证日志：[eda072-vivado-license-after-copy.log](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/research/eda072-vivado-license-after-copy.log)。
+本地验证日志：[eda072-vivado-license-after-copy.log](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/experiments/evidence/20260925-preflight/eda072-vivado-license-after-copy.log)。
 
 此结果确认此前 eda072 的许可阻塞已经解除；它属于许可证及已有 DCP 的预检，不代表完整 AMFPlacer 布局布线流程已重新验证。

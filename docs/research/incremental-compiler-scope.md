@@ -2,7 +2,7 @@
 
 整理日期：2026-09-25。依据：用户指定的 `/Users/jinyanglyu/Documents/课题三final.pdf`，以及 `ssh eda072` 下 `jinyang` 账号的工程只读检查。
 
-后续更新：同日已对 faceDetect 做隔离预检，DCP 成功加载，但当前账号下的 Vivado 2024.2 实现许可检查失败。详见[服务器 case 可运行性核查](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/research/服务器-case-可运行性核查.md)；下文初始盘点中的“尚未验证”状态应结合此更新阅读。
+后续更新：同日已对 faceDetect 做隔离预检，DCP 成功加载，但当前账号下的 Vivado 2024.2 实现许可检查失败。详见[服务器 case 可运行性核查](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/docs/research/server-case-audit.md)；下文初始盘点中的“尚未验证”状态应结合此更新阅读。
 
 最新更新：同日按用户要求将 eda070 的许可复制到 eda072 后，Vivado 2024.2 已成功取得 Implementation / xcvu095 授权，原许可阻塞已解除。完整 AMFPlacer case 仍待重跑，详见上述核查记录末节。
 

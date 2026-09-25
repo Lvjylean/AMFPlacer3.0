@@ -55,7 +55,7 @@ logs/runner.log
 
 `status.json` 为 `completed` 表示上述流程结束并已检查路由错误为 0；仍需审阅 DRC、时序、bus skew 和布局导入诊断，不能仅根据完成状态声称设计满足全部板级要求。
 
-本地可复用启动脚本：[run_face_detect_flow.py](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/scripts/run_face_detect_flow.py)。该脚本应在 eda072 上运行，默认每次创建新的实验目录。不要为了查看状态再次启动它。
+本地可复用启动脚本：[run_face_detect_flow.py](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/scripts/run_face_detect_flow.py)。该脚本应在 eda072 上运行，默认每次创建新的实验目录。不要为了查看状态再次启动它。
 
 ## 启动时的状态
 
@@ -74,4 +74,4 @@ logs/runner.log
 
 ## 后续根因确认
 
-已用原二进制和原 DCP 确认：52 个 `KEEP=yes` 的 FDRE 已属于 CARRY 宏，又被外部宏文件按原 SLICE 分组，产生交叉归属；这些冲突单元没有 ASYNC_REG 或 XPM_CDC 属性。仅去重仍失败；在独立诊断输入中仅排除这 52 个单元后，CLB 宏加载通过。对照运行在进入全局布局前主动结束，完整流水线尚未重启。详见[宏兼容性根因](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/research/faceDetect-宏兼容性根因.md)。
+已用原二进制和原 DCP 确认：52 个 `KEEP=yes` 的 FDRE 已属于 CARRY 宏，又被外部宏文件按原 SLICE 分组，产生交叉归属；这些冲突单元没有 ASYNC_REG 或 XPM_CDC 属性。仅去重仍失败；在独立诊断输入中仅排除这 52 个单元后，CLB 宏加载通过。对照运行在进入全局布局前主动结束，完整流水线尚未重启。详见[宏兼容性根因](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/docs/research/face-detect-macro-compatibility.md)。

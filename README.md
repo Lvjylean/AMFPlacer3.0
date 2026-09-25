@@ -18,8 +18,15 @@ builds/current          最近成功构建的入口
 experiments/registry.json 实验登记索引，轻量版本管理
 experiments/baselines/   固定基线指标与产物引用
 experiments/runs/<id>/   每次运行的输入、日志、报告与 DCP，不入 Git
+experiments/preflight/   早期 case/许可证预检，不入 Git
+experiments/evidence/    诊断证据，不入 Git
+archives/legacy-workspace/ 历史脚本与兼容链接存档，不作为运行入口
+local-reports/          本地同步的轻量报告，不入 Git
+artifacts/legacy-downloads/ 以前已下载的本地 DCP，不再自动新增
 data/                   大型输入和缓存，不入 Git
 ```
+
+命名与存放规则见 [目录规范](docs/workspace-layout.md)。本项目文件均收拢在项目内；服务器同级 `amf-runs` 仅是指向 `experiments/runs/` 的兼容链接。
 
 ## 服务器使用
 
@@ -47,6 +54,6 @@ python3 AMFplacer3.0/scripts/sync_reports.py <run-id>
 
 2026-09-25 的成功轮次为 `faceDetect-benchmark-20260925-144131`：AMF 98.676 秒，Vivado 后端 564.033 秒，113,125 条可布线网络全部完成，路由错误 0；WNS 0.300 ns、TNS 0，hold 违例 0，总线偏斜 8 项通过。约 99.22% 的 AMF 请求位置在最终 DCP 中保留。
 
-该结果证明现有约束下的全量布局布线链路可用，不能作为增量功能、多芯粒优化或完整板级签核的通过证据。详见 `experiments/baselines/faceDetect-20260925.json` 和 `docs/research/faceDetect-benchmark完整验证.md`。
+该结果证明现有约束下的全量布局布线链路可用，不能作为增量功能、多芯粒优化或完整板级签核的通过证据。详见 `experiments/baselines/faceDetect-20260925.json` 和 `docs/research/face-detect-benchmark-validation.md`。
 
-需求入口：`docs/requirements/课题三final.pdf`、`docs/requirements/traceability.md`。开发顺序与已知问题见 `docs/roadmap.md`、`docs/known-issues.md`。原 AMF 说明保存在 `docs/upstream-AMF2-README.md`。
+需求入口：`docs/requirements/task-3-final.pdf`、`docs/requirements/traceability.md`。开发顺序与已知问题见 `docs/roadmap.md`、`docs/known-issues.md`。原 AMF 说明保存在 `docs/upstream-AMF2-README.md`。

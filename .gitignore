@@ -7,6 +7,9 @@
 !/data/README.md
 /artifacts/
 /local-reports/
+/archives/
+/experiments/preflight/
+/experiments/evidence/
 *.dcp
 *.DCP
 *.bit

@@ -1,0 +1,91 @@
+{
+  "date": "2026-09-25T16:31:48.246162+08:00",
+  "scope": "server workspace organization",
+  "moves": [
+    {
+      "source": "/Projects/jinyang/workspace/case-audit-4ylqb3l5",
+      "target": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20260925-face-detect-case-audit",
+      "sha256": {
+        "vivado.log": "a2113ee8dc3c018457354c8fd6a5cbf907717ee24b5f00bb3c29777099b0fcb9",
+        "cell_types.tsv": "3c8037dcab2805ca1c4e0a960f53ed286f7230f3cb80e926c10bc77ce78ed2c4",
+        "console.log": "0e562b019a99ffa46d518f596011459b6079e53710a5d87f43834673e60976bc",
+        "preflight.tcl": "57f0aeba65d4d4cab4c503f5a3ef2f3fc17174630edb3cf27e5c11dff6c4fb4c",
+        "vivado.jou": "7c34a2274d8b95055667a8d18d4d91808171de72570c946a235d04628452afa2",
+        "netlist_comparison.json": "4c75031bf0a7d89591247ac8d996111e5aa2634f543424ea13f4cc4f219d5900",
+        "manifest.json": "bd59b35c426a1e52a4ecbace8340d5b0ceac4f0249a435159857c55c01ac1f69"
+      }
+    },
+    {
+      "source": "/Projects/jinyang/workspace/license-check-8wm9jv94",
+      "target": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20260925-vivado-license-check",
+      "sha256": {
+        "vivado.log": "97121fddfe3057dc31cedbc160cf53233fdef58c5f241852d261e052094b4981",
+        "console.log": "8b7c0eaf2fd56f0b7beae15212130b4466fc842262d67de4a1bd3b5171f2aea5",
+        "vivado.jou": "f81df86d85e6ccdc3d280b122e825484bd158752efb8b8927dfb1bf961140d4e",
+        "check.tcl": "669732955a7dcec628c8ac6268404810ce8525b3d7fd7d98d89655016eb969cf",
+        "manifest.json": "89c67a5badd0ac39b02c51928bffeae4a83d3cba92e4a5889469f9e57ccd11f9"
+      }
+    },
+    {
+      "source": "/Projects/jinyang/workspace/audit_face_detect_placement.tcl",
+      "target": "/Projects/jinyang/workspace/AMFplacer3.0/archives/legacy-workspace/scripts/audit_face_detect_placement.tcl",
+      "sha256": {
+        "audit_face_detect_placement.tcl": "7fbecf61b50fb04478da45b8e2b895ec92ec1dd83c4245e0b48d0deceb8dd3af"
+      }
+    },
+    {
+      "source": "/Projects/jinyang/workspace/run_face_detect_flow.py",
+      "target": "/Projects/jinyang/workspace/AMFplacer3.0/archives/legacy-workspace/scripts/run_face_detect_flow.py",
+      "sha256": {
+        "run_face_detect_flow.py": "6f459c80fddc1f9fd00c0456425a8b4640ab1c2ebf196bc3675bf453129fdbd0"
+      }
+    },
+    {
+      "source": "/Projects/jinyang/workspace/summarize_face_detect_flow.py",
+      "target": "/Projects/jinyang/workspace/AMFplacer3.0/archives/legacy-workspace/scripts/summarize_face_detect_flow.py",
+      "sha256": {
+        "summarize_face_detect_flow.py": "454d00cbd24faf12f5aa6dd2862fe9664e52f7cac50c2640426376be28e229b2"
+      }
+    },
+    {
+      "source": "/Projects/jinyang/workspace/amf-runs",
+      "target": "/Projects/jinyang/workspace/AMFplacer3.0/archives/legacy-workspace/links/amf-runs",
+      "sha256": {}
+    },
+    {
+      "source": "/Projects/jinyang/workspace/AMFplacer3.0/docs/research/课题三-增量编译器工作梳理.md",
+      "target": "/Projects/jinyang/workspace/AMFplacer3.0/docs/research/incremental-compiler-scope.md"
+    },
+    {
+      "source": "/Projects/jinyang/workspace/AMFplacer3.0/docs/research/服务器-case-可运行性核查.md",
+      "target": "/Projects/jinyang/workspace/AMFplacer3.0/docs/research/server-case-audit.md"
+    },
+    {
+      "source": "/Projects/jinyang/workspace/AMFplacer3.0/docs/research/faceDetect-完整流程运行记录.md",
+      "target": "/Projects/jinyang/workspace/AMFplacer3.0/docs/research/face-detect-full-flow.md"
+    },
+    {
+      "source": "/Projects/jinyang/workspace/AMFplacer3.0/docs/research/faceDetect-宏兼容性根因.md",
+      "target": "/Projects/jinyang/workspace/AMFplacer3.0/docs/research/face-detect-macro-compatibility.md"
+    },
+    {
+      "source": "/Projects/jinyang/workspace/AMFplacer3.0/docs/research/haoning-faceDetect历史核查.md",
+      "target": "/Projects/jinyang/workspace/AMFplacer3.0/docs/research/haoning-face-detect-history.md"
+    },
+    {
+      "source": "/Projects/jinyang/workspace/AMFplacer3.0/docs/research/faceDetect-benchmark完整验证.md",
+      "target": "/Projects/jinyang/workspace/AMFplacer3.0/docs/research/face-detect-benchmark-validation.md"
+    },
+    {
+      "source": "/Projects/jinyang/workspace/AMFplacer3.0/docs/requirements/课题三final.pdf",
+      "target": "/Projects/jinyang/workspace/AMFplacer3.0/docs/requirements/task-3-final.pdf",
+      "sha256": "451302ba0423ea3d2e5b71394861239ac6fee6a1d8141801fcffebfd24d7d67b"
+    }
+  ],
+  "compatibility_links": [
+    {
+      "path": "/Projects/jinyang/workspace/amf-runs",
+      "target": "AMFplacer3.0/experiments/runs"
+    }
+  ]
+}

@@ -45,5 +45,5 @@
     "Vivado place_design adjusted 1038 AMF-requested cell locations.",
     "Fresh netlist macro compatibility bug remains unresolved."
   ],
-  "evidence": "docs/research/faceDetect-benchmark完整验证.md"
+  "evidence": "docs/research/face-detect-benchmark-validation.md"
 }

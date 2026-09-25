@@ -61,6 +61,6 @@ LUTRAM 结构约束和真正的同步器放置约束仍需保留。ASYNC_REG 确
 /Projects/jinyang/workspace/amf-runs/faceDetect-20260925-131037/diagnostics/macro-conflict-134719
 ```
 
-本地证据：[诊断汇总](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/research/diagnostics/faceDetect-macros/diagnosis.json)、[52 个冲突单元及已有宏](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/research/diagnostics/faceDetect-macros/native-macro-conflicts.json)、[DCP 属性表](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/research/diagnostics/faceDetect-macros/cell-properties.tsv)。
+本地证据：[诊断汇总](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/experiments/evidence/20260925-face-detect-macros/diagnosis.json)、[52 个冲突单元及已有宏](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/experiments/evidence/20260925-face-detect-macros/native-macro-conflicts.json)、[DCP 属性表](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/experiments/evidence/20260925-face-detect-macros/cell-properties.tsv)。
 
-后续检查 haoning 历史记录确认：其 faceDetect 使用预先导出的 LUTRAM 宏文件，存在 AMF 布局和 Vivado 布线成功记录；87 份相关日志中未找到同一宏归属断言。见[历史核查](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/research/haoning-faceDetect历史核查.md)。
+后续检查 haoning 历史记录确认：其 faceDetect 使用预先导出的 LUTRAM 宏文件，存在 AMF 布局和 Vivado 布线成功记录；87 份相关日志中未找到同一宏归属断言。见[历史核查](/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/docs/research/haoning-face-detect-history.md)。
