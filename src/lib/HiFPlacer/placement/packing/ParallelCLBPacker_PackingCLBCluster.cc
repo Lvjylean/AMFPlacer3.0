@@ -527,6 +527,9 @@ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::updateScoreInSite()
         }
         totalNetNum += tmpPU->getNetsSetPtr()->size() * 0.5; //(tmpPU->getWeight() > 1 ? (tmpPU->getWeight() / 2) : 1);
         totalLen += getPlacementUnitMaxPathLen(tmpPU);
+        // Timing-aware packing: accumulate negative slack for critical path prioritization
+        // 时序感知打包: 累积负 slack 用于关键路径优先
+        totalNegSlack += getPlacementUnitMaxPathNegativeSlack(tmpPU);
         if (tmpPU->getType() == PlacementInfo::PlacementUnitType_Macro)
             totalCellNum += tmpPU->getWeight();
         else
@@ -549,8 +552,11 @@ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::updateScoreInSite()
         }
     }
 
-    scoreInSite = totalNetNum * 0.45 + 0.05 * totalLen + 0.5 * totalConnectivityScore - HPWLWeight * HPWLChange -
-                  0.2 * (singleLUTs.size() + pairedLUTs.size());
+    // Timing-enhanced packing score: increased path length weight + negative slack bonus
+    // 时序增强打包评分: 增大路径长度权重 + 负 slack 加分
+    scoreInSite = totalNetNum * 0.40 + 0.15 * totalLen + 0.5 * totalConnectivityScore
+                  - HPWLWeight * HPWLChange - 0.2 * (singleLUTs.size() + pairedLUTs.size())
+                  + 0.1 * totalNegSlack;  // negative slack is positive value -> higher score for critical PUs
 }
 
 void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::incrementalUpdateScoreInSite(
@@ -563,6 +569,7 @@ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::incrementalUpdateScor
     HPWLChange = 0;
     totalNetNum = 0;
     totalLen = 0;
+    totalNegSlack = 0;
     totalCellNum = 0;
     for (auto tmpPU : PUs)
     {
@@ -579,6 +586,7 @@ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::incrementalUpdateScor
         }
         totalNetNum += tmpPU->getNetsSetPtr()->size() * 0.5; //(tmpPU->getWeight() > 1 ? (tmpPU->getWeight() / 2) : 1);
         totalLen += getPlacementUnitMaxPathLen(tmpPU);
+        totalNegSlack += getPlacementUnitMaxPathNegativeSlack(tmpPU);
         if (tmpPU->getType() == PlacementInfo::PlacementUnitType_Macro)
             totalCellNum += tmpPU->getWeight();
         else
@@ -602,8 +610,9 @@ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::incrementalUpdateScor
         }
     }
 
-    scoreInSite = totalNetNum * 0.45 + 0.05 * totalLen + 0.5 * totalConnectivityScore - HPWLWeight * HPWLChange -
-                  0.2 * (singleLUTs.size() + pairedLUTs.size());
+    scoreInSite = totalNetNum * 0.40 + 0.15 * totalLen + 0.5 * totalConnectivityScore
+                  - HPWLWeight * HPWLChange - 0.2 * (singleLUTs.size() + pairedLUTs.size())
+                  + 0.1 * totalNegSlack;
 }
 
 bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::addPU(PlacementInfo::PlacementUnit *tmpPU, bool allowOverlap)

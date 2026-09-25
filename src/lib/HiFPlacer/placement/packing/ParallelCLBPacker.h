@@ -1753,6 +1753,7 @@ class ParallelCLBPacker
              *
              */
             int totalLen = 0;
+            float totalNegSlack = 0;  // accumulated negative slack for timing-aware packing
 
             /**
              * @brief the configurable weight for the wirelength in the cluster score

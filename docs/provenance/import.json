@@ -1,0 +1,18 @@
+{
+  "created": "2026-09-25T15:07:42.930000+08:00",
+  "project": "AMFplacer3.0",
+  "version": "3.0.0-dev",
+  "source_repository": "/Projects/jinyang/AMF-Placer",
+  "upstream_commit": "179f9658b15c607c7e21535794b7919eff7d9b69",
+  "preserved_tracked_modifications": [
+    "src/lib/HiFPlacer/designInfo/DesignInfo.cc",
+    "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.h",
+    "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBCluster.cc"
+  ],
+  "preserved_untracked_source_files": [
+    "src/lib/HiFPlacer/placement/placementTiming/MLTimingModel.cc",
+    "src/lib/HiFPlacer/placement/placementTiming/MLTimingModel.h"
+  ],
+  "excluded_untracked_outputs": "benchmarks/testConfig/testConfigSets/outputs/outputs/ remains untouched in legacy project",
+  "scope": "Project initialization and baseline preservation; incremental compiler features not yet implemented."
+}

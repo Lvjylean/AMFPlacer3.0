@@ -1,0 +1,88 @@
+diff --git a/src/lib/HiFPlacer/designInfo/DesignInfo.cc b/src/lib/HiFPlacer/designInfo/DesignInfo.cc
+index e2726788..504fa63c 100644
+--- a/src/lib/HiFPlacer/designInfo/DesignInfo.cc
++++ b/src/lib/HiFPlacer/designInfo/DesignInfo.cc
+@@ -207,7 +207,14 @@ DesignInfo::DesignInfo(std::map<std::string, std::string> &JSONCfg, DeviceInfo *
+                 // print_warning(line);
+                 continue; // not connected
+             }
+-            assert(drivepinName != "");
++            // Fix: skip pins with empty drivepinName (incomplete input line)
++            // 修复: 跳过 drivepinName 为空的 pin (输入行不完整)
++            if (drivepinName == "")
++            {
++                curPin->updateParentCellNetInfo();
++                curPin->setUnconnected();
++                continue;
++            }
+ 
+             assert(fill1 == "net=>");
+             std::regex GNDpattern(".*/<const0>");
+diff --git a/src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.h b/src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.h
+index 64fc950c..5d8407c9 100644
+--- a/src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.h
++++ b/src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.h
+@@ -1753,6 +1753,7 @@ class ParallelCLBPacker
+              *
+              */
+             int totalLen = 0;
++            float totalNegSlack = 0;  // accumulated negative slack for timing-aware packing
+ 
+             /**
+              * @brief the configurable weight for the wirelength in the cluster score
+diff --git a/src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBCluster.cc b/src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBCluster.cc
+index 5ef1aff4..e68eb482 100644
+--- a/src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBCluster.cc
++++ b/src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBCluster.cc
+@@ -527,6 +527,9 @@ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::updateScoreInSite()
+         }
+         totalNetNum += tmpPU->getNetsSetPtr()->size() * 0.5; //(tmpPU->getWeight() > 1 ? (tmpPU->getWeight() / 2) : 1);
+         totalLen += getPlacementUnitMaxPathLen(tmpPU);
++        // Timing-aware packing: accumulate negative slack for critical path prioritization
++        // 时序感知打包: 累积负 slack 用于关键路径优先
++        totalNegSlack += getPlacementUnitMaxPathNegativeSlack(tmpPU);
+         if (tmpPU->getType() == PlacementInfo::PlacementUnitType_Macro)
+             totalCellNum += tmpPU->getWeight();
+         else
+@@ -549,8 +552,11 @@ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::updateScoreInSite()
+         }
+     }
+ 
+-    scoreInSite = totalNetNum * 0.45 + 0.05 * totalLen + 0.5 * totalConnectivityScore - HPWLWeight * HPWLChange -
+-                  0.2 * (singleLUTs.size() + pairedLUTs.size());
++    // Timing-enhanced packing score: increased path length weight + negative slack bonus
++    // 时序增强打包评分: 增大路径长度权重 + 负 slack 加分
++    scoreInSite = totalNetNum * 0.40 + 0.15 * totalLen + 0.5 * totalConnectivityScore
++                  - HPWLWeight * HPWLChange - 0.2 * (singleLUTs.size() + pairedLUTs.size())
++                  + 0.1 * totalNegSlack;  // negative slack is positive value -> higher score for critical PUs
+ }
+ 
+ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::incrementalUpdateScoreInSite(
+@@ -563,6 +569,7 @@ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::incrementalUpdateScor
+     HPWLChange = 0;
+     totalNetNum = 0;
+     totalLen = 0;
++    totalNegSlack = 0;
+     totalCellNum = 0;
+     for (auto tmpPU : PUs)
+     {
+@@ -579,6 +586,7 @@ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::incrementalUpdateScor
+         }
+         totalNetNum += tmpPU->getNetsSetPtr()->size() * 0.5; //(tmpPU->getWeight() > 1 ? (tmpPU->getWeight() / 2) : 1);
+         totalLen += getPlacementUnitMaxPathLen(tmpPU);
++        totalNegSlack += getPlacementUnitMaxPathNegativeSlack(tmpPU);
+         if (tmpPU->getType() == PlacementInfo::PlacementUnitType_Macro)
+             totalCellNum += tmpPU->getWeight();
+         else
+@@ -602,8 +610,9 @@ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::incrementalUpdateScor
+         }
+     }
+ 
+-    scoreInSite = totalNetNum * 0.45 + 0.05 * totalLen + 0.5 * totalConnectivityScore - HPWLWeight * HPWLChange -
+-                  0.2 * (singleLUTs.size() + pairedLUTs.size());
++    scoreInSite = totalNetNum * 0.40 + 0.15 * totalLen + 0.5 * totalConnectivityScore
++                  - HPWLWeight * HPWLChange - 0.2 * (singleLUTs.size() + pairedLUTs.size())
++                  + 0.1 * totalNegSlack;
+ }
+ 
+ bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::addPU(PlacementInfo::PlacementUnit *tmpPU, bool allowOverlap)

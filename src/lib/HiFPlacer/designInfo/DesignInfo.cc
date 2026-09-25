@@ -207,7 +207,14 @@ DesignInfo::DesignInfo(std::map<std::string, std::string> &JSONCfg, DeviceInfo *
                 // print_warning(line);
                 continue; // not connected
             }
-            assert(drivepinName != "");
+            // Fix: skip pins with empty drivepinName (incomplete input line)
+            // 修复: 跳过 drivepinName 为空的 pin (输入行不完整)
+            if (drivepinName == "")
+            {
+                curPin->updateParentCellNetInfo();
+                curPin->setUnconnected();
+                continue;
+            }
 
             assert(fill1 == "net=>");
             std::regex GNDpattern(".*/<const0>");
