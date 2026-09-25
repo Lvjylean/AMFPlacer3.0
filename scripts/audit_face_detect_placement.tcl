@@ -13,6 +13,32 @@ if {[catch {
     }
     close $input
     open_checkpoint $dcp
+    # place_cell accepts Tcl-list names; Vivado's NAME property can retain an
+    # additional backslash. Resolve only escaped requests through Vivado so
+    # literal string comparison does not report existing cells as missing.
+    set canonicalTargets [dict create]
+    set aliases 0
+    set aliasFile [open "${output}/placement_name_aliases.tsv" w]
+    puts $aliasFile "request_name\tcanonical_name"
+    dict for {name target} $targets {
+        set canonical $name
+        if {[string first "\\" $name] >= 0} {
+            set objects [get_cells -quiet $name]
+            if {[llength $objects] == 1} {
+                set canonical [get_property NAME $objects]
+            }
+        }
+        if {$canonical ne $name} {
+            incr aliases
+            puts $aliasFile "$name\t$canonical"
+        }
+        if {[dict exists $canonicalTargets $canonical] && [dict get $canonicalTargets $canonical] ne $target} {
+            error "Conflicting canonical placement targets: $canonical"
+        }
+        dict set canonicalTargets $canonical $target
+    }
+    close $aliasFile
+    set targets $canonicalTargets
     set found 0
     set exact 0
     set changed 0
@@ -56,7 +82,7 @@ if {[catch {
         close $f
     }
     set result [open "${output}/placement_audit.json" w]
-    puts $result "\{\"requested_cells\":[dict size $targets],\"found_cells\":$found,\"exact_location_matches\":$exact,\"changed_locations\":$changed,\"unplaced_requested_cells\":$unplaced,\"input_fixed_cells\":$fixedCount,\"fixed_location_matches\":$fixedMatches\}"
+    puts $result "\{\"requested_cells\":[dict size $targets],\"found_cells\":$found,\"exact_location_matches\":$exact,\"changed_locations\":$changed,\"unplaced_requested_cells\":$unplaced,\"input_fixed_cells\":$fixedCount,\"fixed_location_matches\":$fixedMatches,\"escaped_name_aliases\":$aliases\}"
     close $result
     puts "PLACEMENT_AUDIT requested=[dict size $targets] found=$found exact=$exact changed=$changed unplaced=$unplaced"
     close_design

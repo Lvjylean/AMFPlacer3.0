@@ -65,6 +65,43 @@ class PreplacementInput(unittest.TestCase):
             self.assertEqual(result.strip(), '2 0')
             self.assertEqual((root / 'out').read_text(), 'a[0]\tSLICE_X0Y0/AFF\nb c\tSLICE_X0Y0/BFF\n')
 
+    def test_audit_resolves_vivado_backslash_name_representation(self):
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            requests = root / 'requests.tsv'
+            requests.write_text('x\\.q[0]\tSLICE_X0Y0/AFF\n')
+            harness = root / 'mock_vivado.tcl'
+            harness.write_text(r'''
+set mockCellName {x\\.q[0]}
+proc set_param {args} {}
+proc open_checkpoint {args} {}
+proc close_design {} {}
+namespace eval xilinx::designutils {
+    proc get_leaf_cells {args} {return [list $::mockCellName]}
+}
+proc get_cells {args} {
+    if {[lindex $args end] eq {x\.q[0]}} {return [list $::mockCellName]}
+    error "Unexpected cell query"
+}
+proc get_property {property object} {
+    switch $property {
+        NAME {return $::mockCellName}
+        LOC {return SLICE_X0Y0}
+        BEL {return AFF}
+        default {error "Unexpected property"}
+    }
+}
+set script [lindex $argv 2]
+set argv [list ignored [lindex $argv 0] [lindex $argv 1]]
+source $script
+''')
+            audit = Path(__file__).resolve().parents[1] / 'scripts/audit_face_detect_placement.tcl'
+            subprocess.check_output(['tclsh', str(harness), str(requests), str(root), str(audit)], text=True)
+            report = json.loads((root / 'placement_audit.json').read_text())
+            self.assertEqual(report['found_cells'], 1)
+            self.assertEqual(report['exact_location_matches'], 1)
+            self.assertEqual(report['escaped_name_aliases'], 1)
+
 
 if __name__ == '__main__':
     unittest.main()

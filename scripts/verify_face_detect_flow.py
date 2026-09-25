@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Audit completed AMF requests against the final server-side checkpoint."""
 import argparse
+import datetime as dt
 import json
 from pathlib import Path
 import re
@@ -45,8 +46,20 @@ def verify(root):
     if status['state'] != 'completed':
         raise RuntimeError('Flow must complete before final verification')
     manifest = json.loads((root / 'manifest.json').read_text())
-    audit_dir = root / 'work/audit'
+    attempt = dt.datetime.now().strftime('%Y%m%d-%H%M%S-%f')
+    audit_dir = root / 'work' / ('audit-' + attempt)
     audit_dir.mkdir(exist_ok=False)
+    # Preserve previous checks, including failed diagnostics, before a retry.
+    previous = ['reports/placement_audit.json', 'reports/placement_audit_status.json',
+                'reports/placement_changes.tsv', 'reports/placement_name_aliases.tsv',
+                'reports/placement_request_summary.json', 'reports/verification_summary.json',
+                'logs/04_placement_audit.log', 'scripts/audit_placement.tcl', 'scripts/verify_flow.py']
+    for relative in previous:
+        path = root / relative
+        if path.is_file():
+            saved = root / 'work/audit-history' / attempt / relative
+            saved.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, saved)
     requests = root / 'inputs/amf_placement_requests.tsv'
     raw = root / 'inputs/amf_placement_requests.list'
     raw.write_text(request_lists((root / 'placement/DumpCLBPacking-first-0.tcl').read_text()))
