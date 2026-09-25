@@ -11,3 +11,4 @@
 - 本次初始化不实现增量算法。既有未提交源代码修改已作为基线保存，不得误记为本次新算法成果。
 - 所有本项目文件放在项目内，遵循 `docs/workspace-layout.md`。Python/Tcl 文件使用 snake_case，新增文档和普通目录使用小写 kebab-case；历史实验 ID 和上游源码命名保持稳定。
 - 单次诊断脚本放在 `scripts/diagnostics/`，预检运行放在 `experiments/preflight/`，诊断证据放在 `experiments/evidence/`。旧脚本仅存于 `archives/legacy-workspace/`，不得当作当前入口。
+- 时序目标以用户提供给 placer 的约束为准；当前入口采用配置中的 `ClockPeriod` 及可选 `ClockPeriod:<driver>`。网表连接不能独立给出目标周期，DCP 约束提取为可选辅助，不能自动覆盖用户配置。不把“未自动导入 DCP/XDC”单独作为第一步未完成的依据。目标约束、估计延迟及 Vivado 后端约束分别记录。
