@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "project": "AMFplacer3.0",
+  "runs": [
+    {
+      "id": "faceDetect-20260925-131037",
+      "kind": "fresh-export",
+      "directory": "experiments/runs/faceDetect-20260925-131037",
+      "status_file": "experiments/runs/faceDetect-20260925-131037/status.json",
+      "original_path": "/Projects/jinyang/workspace/amf-runs/faceDetect-20260925-131037",
+      "imported": "2026-09-25T15:20:33.976569+08:00"
+    },
+    {
+      "id": "faceDetect-benchmark-20260925-143241",
+      "kind": "benchmark-original-binary",
+      "directory": "experiments/runs/faceDetect-benchmark-20260925-143241",
+      "status_file": "experiments/runs/faceDetect-benchmark-20260925-143241/status.json",
+      "original_path": "/Projects/jinyang/workspace/amf-runs/faceDetect-benchmark-20260925-143241",
+      "imported": "2026-09-25T15:20:33.976593+08:00"
+    },
+    {
+      "id": "faceDetect-benchmark-20260925-144131",
+      "kind": "full-benchmark",
+      "directory": "experiments/runs/faceDetect-benchmark-20260925-144131",
+      "status_file": "experiments/runs/faceDetect-benchmark-20260925-144131/status.json",
+      "original_path": "/Projects/jinyang/workspace/amf-runs/faceDetect-benchmark-20260925-144131",
+      "imported": "2026-09-25T15:20:33.976599+08:00"
+    }
+  ]
+}

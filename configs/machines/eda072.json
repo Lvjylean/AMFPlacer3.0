@@ -1,0 +1,8 @@
+{
+  "ssh_alias": "eda072",
+  "project_root": "/Projects/jinyang/workspace/AMFplacer3.0",
+  "vivado": "/Projects/Xilinx/Vivado/2024.2/bin/vivado",
+  "build_jobs": 8,
+  "amf_jobs": 8,
+  "vivado_threads": 4
+}

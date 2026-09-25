@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "baseline_id": "faceDetect-20260925",
+  "run_id": "faceDetect-benchmark-20260925-144131",
+  "status": "passed-with-documented-limitations",
+  "scope": "AMF 2.0 full placement and Vivado routing using existing matching benchmark; not incremental compilation.",
+  "source_baseline_commit": "77365ac9f41a156f832bc9e5f58365cd38b106cb",
+  "source_baseline_tag": "amf2.0-validated-20260925",
+  "source_matches_validated_build_snapshot": true,
+  "build_directory": "experiments/runs/faceDetect-benchmark-20260925-143241/rebuild/build",
+  "part": "xcvu095-ffva2104-2-e",
+  "vivado_version": "2024.2",
+  "routed_dcp": {
+    "path": "experiments/runs/faceDetect-benchmark-20260925-144131/reports/faceDetect_amf_routed.dcp",
+    "bytes": 52697801,
+    "sha256": "a0a9c38831cfd171cdf06f2ee93dcedf1e531c1fca344d6a90268c7ca6e85e36",
+    "storage": "server-only"
+  },
+  "metrics": {
+    "amf_seconds": 98.676,
+    "vivado_backend_seconds": 564.033,
+    "end_to_end_stage_seconds": 662.709,
+    "fully_routed_nets": 113125,
+    "routing_errors": 0,
+    "wns_ns": 0.3,
+    "tns_ns": 0.0,
+    "whs_ns": 0.03,
+    "ths_ns": 0.0,
+    "bus_skew_constraints": 8,
+    "bus_skew_violations": 0,
+    "bus_skew_worst_slack_ns": 6.875,
+    "amf_requested_cells": 133561,
+    "exact_placement_cells": 132523,
+    "moved_cells": 1038,
+    "unplaced_cells": 0,
+    "exact_placement_percent": 99.222827,
+    "drc_warning_findings": 288,
+    "drc_advisory_findings": 40,
+    "drc_error_findings": 0,
+    "drc_critical_warning_findings": 0
+  },
+  "limitations": [
+    "Existing clock methodology warning and incomplete I/O delays; not board signoff.",
+    "Single-die case, no multi-SLR validation.",
+    "Vivado place_design adjusted 1038 AMF-requested cell locations.",
+    "Fresh netlist macro compatibility bug remains unresolved."
+  ],
+  "evidence": "docs/research/faceDetect-benchmark完整验证.md"
+}
