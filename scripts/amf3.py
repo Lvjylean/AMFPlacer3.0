@@ -131,6 +131,12 @@ def status(args):
             raise RuntimeError('No status file: ' + str(path))
 
 
+def native_run(args):
+    require_server()
+    from run_native_face_detect import launch
+    launch(ROOT, validate_run_id(args.reference_run), args.dry_run)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
@@ -141,6 +147,10 @@ def main():
     p.add_argument('--config', type=Path, default=Path('configs/experiments/faceDetect-baseline.json'))
     p.add_argument('--dry-run', action='store_true')
     p.set_defaults(action=run)
+    p = sub.add_parser('native-run', help='Run a native Vivado control from a completed AMF experiment')
+    p.add_argument('--reference-run', required=True)
+    p.add_argument('--dry-run', action='store_true')
+    p.set_defaults(action=native_run)
     p = sub.add_parser('status', help='Read experiment status')
     p.add_argument('--run')
     p.set_defaults(action=status)
