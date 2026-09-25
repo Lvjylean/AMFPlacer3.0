@@ -25,6 +25,15 @@
       "status_file": "experiments/runs/faceDetect-benchmark-20260925-144131/status.json",
       "original_path": "/Projects/jinyang/workspace/amf-runs/faceDetect-benchmark-20260925-144131",
       "imported": "2026-09-25T15:20:33.976599+08:00"
+    },
+    {
+      "id": "faceDetect-preplacement-20260925-204605-664053",
+      "kind": "full-preplacement",
+      "experiment_config": "configs/experiments/face-detect-opt.json",
+      "directory": "experiments/runs/faceDetect-preplacement-20260925-204605-664053",
+      "status_file": "experiments/runs/faceDetect-preplacement-20260925-204605-664053/status.json",
+      "build_directory": "/Projects/jinyang/workspace/AMFplacer3.0/builds/build-20260925-152056-398298-7ed7e39f/build",
+      "created": "2026-09-25T20:46:06.464297+08:00"
     }
   ]
 }

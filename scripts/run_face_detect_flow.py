@@ -55,7 +55,7 @@ if {[catch {
     set meta [open "${targetFolderPath}/design_state.tsv" w]
     puts $meta "leaf_cells\t[llength $leafCells]"
     puts $meta "blackboxes\t[llength [get_cells -hier -quiet -filter {IS_BLACKBOX == 1}]]"
-    puts $meta "loc_assigned\t[llength [get_cells $leafCells -filter {LOC != \"\"}]]"
+    puts $meta "loc_assigned\t[llength [get_cells $leafCells -filter {LOC != ""}]]"
     puts $meta "loc_fixed\t[llength [get_cells $leafCells -filter {IS_LOC_FIXED == 1}]]"
     close $meta
     set pahtPrefix "${targetFolderPath}/faceDetect_"
