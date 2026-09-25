@@ -1,0 +1,8 @@
+{
+  "case": "faceDetect",
+  "mode": "preplacement",
+  "reference_dcp": "/Projects/haoning/Vivado_Results/faceDetect_project/VCU108_PCIE_faceDetection/VCU108_PCIE_faceDetection.runs/impl_1/design_1_wrapper_opt.dcp",
+  "part": "xcvu095-ffva2104-2-e",
+  "scope": "Fresh export from opt_design checkpoint, AMF structural placement without historical physical macros or clusters, then Vivado placement completion and routing",
+  "dcp_storage": "server-only"
+}

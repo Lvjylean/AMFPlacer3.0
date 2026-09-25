@@ -88,16 +88,17 @@ def build(args):
 
 def run(args):
     require_server()
-    config = json.loads((ROOT / 'configs/experiments/faceDetect-baseline.json').read_text())
+    config_path = ROOT / args.config
+    config = json.loads(config_path.read_text())
     settings = machine()
     binary_dir = ROOT / 'builds/current'
     dcp = ROOT / config['reference_dcp']
     for p in [binary_dir / 'AMFPlacer', binary_dir / 'partitionHyperGraph', dcp, Path(settings['vivado'])]:
         if not p.is_file():
             raise RuntimeError('Missing runtime input; build/configure first: ' + str(p))
-    run_id = 'faceDetect-benchmark-' + stamp()
+    run_id = 'faceDetect-' + config['mode'] + '-' + stamp()
     directory = ROOT / 'experiments/runs' / run_id
-    command = [sys.executable, str(ROOT / 'scripts/run_face_detect_flow.py'), '--input-mode', 'benchmark',
+    command = [sys.executable, str(ROOT / 'scripts/run_face_detect_flow.py'), '--input-mode', config['mode'],
                '--binary-dir', str(binary_dir.resolve()), '--run-dir', str(directory)]
     if args.dry_run:
         print(json.dumps({'command': command, 'dcp_location': str(dcp), 'dcp_storage': 'server-only'}, indent=2))
@@ -109,7 +110,7 @@ def run(args):
     launched = json.loads(output)
     registry_path = ROOT / 'experiments/registry.json'
     registry = json.loads(registry_path.read_text())
-    registry['runs'].append({'id': run_id, 'kind': 'full-benchmark', 'directory': 'experiments/runs/' + run_id,
+    registry['runs'].append({'id': run_id, 'kind': 'full-' + config['mode'], 'experiment_config': str(config_path.relative_to(ROOT)), 'directory': 'experiments/runs/' + run_id,
                              'status_file': 'experiments/runs/' + run_id + '/status.json',
                              'build_directory': str(binary_dir.resolve()), 'created': dt.datetime.now().astimezone().isoformat()})
     save(registry_path, registry)
@@ -136,7 +137,8 @@ def main():
     p = sub.add_parser('build', help='Create an isolated clean build')
     p.add_argument('--jobs', type=int)
     p.set_defaults(action=build)
-    p = sub.add_parser('run', help='Launch the full historical faceDetect benchmark flow')
+    p = sub.add_parser('run', help='Launch a configured faceDetect flow')
+    p.add_argument('--config', type=Path, default=Path('configs/experiments/faceDetect-baseline.json'))
     p.add_argument('--dry-run', action='store_true')
     p.set_defaults(action=run)
     p = sub.add_parser('status', help='Read experiment status')

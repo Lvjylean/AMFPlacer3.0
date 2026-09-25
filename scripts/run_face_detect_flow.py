@@ -44,16 +44,35 @@ set_param general.maxThreads 4
 set inputDcp [lindex $argv 0]
 set targetFolderPath [file normalize [lindex $argv 1]]
 set scriptFolder [file normalize [lindex $argv 2]]
+set inputMode [lindex $argv 3]
 file mkdir $targetFolderPath
 if {[catch {
     open_checkpoint $inputDcp
     set part [get_property PART [current_design]]
     if {$part ne "xcvu095-ffva2104-2-e"} {error "Unexpected part: $part"}
     puts "FLOW_PART=$part"
+    set leafCells [xilinx::designutils::get_leaf_cells *]
+    set meta [open "${targetFolderPath}/design_state.tsv" w]
+    puts $meta "leaf_cells\t[llength $leafCells]"
+    puts $meta "blackboxes\t[llength [get_cells -hier -quiet -filter {IS_BLACKBOX == 1}]]"
+    puts $meta "loc_assigned\t[llength [get_cells $leafCells -filter {LOC != \"\"}]]"
+    puts $meta "loc_fixed\t[llength [get_cells $leafCells -filter {IS_LOC_FIXED == 1}]]"
+    close $meta
     set pahtPrefix "${targetFolderPath}/faceDetect_"
     source "${scriptFolder}/extractNetlist.tcl"
     source "${scriptFolder}/extractLUTRAMs.tcl"
     source "${scriptFolder}/extractFixedUnits.tcl"
+    if {$inputMode eq "preplacement"} {
+        # The legacy reader skips its first line. Supply a real header so the
+        # first constrained cell is retained without changing the AMF binary.
+        set f [open "${pahtPrefix}fixedUnits" r]
+        set rows [read $f]
+        close $f
+        set f [open "${pahtPrefix}fixedUnits" w]
+        puts $f "# fixed cells exported from the input checkpoint"
+        puts -nonewline $f $rows
+        close $f
+    }
     puts "FLOW_EXPORTED_CELLS=[llength $allCells]"
     exec zip -q -j "${pahtPrefix}allCellPinNet.zip" "${pahtPrefix}allCellPinNet"
     file delete "${pahtPrefix}allCellPinNet"
@@ -129,7 +148,7 @@ def prepare(root, input_mode='export', binary_dir=None):
                 'input_mode': input_mode,
                 'scope': ('existing benchmark -> existing AMFPlacer binary -> Vivado placement and routing using matching DCP; no fresh export, RTL synthesis or bitstream'
                           if input_mode == 'benchmark' else
-                          'routed input DCP -> fresh export -> existing AMFPlacer binary -> Vivado placement and routing; no RTL synthesis or bitstream'),
+                          'input DCP -> fresh export -> AMFPlacer -> Vivado placement and routing; no RTL synthesis or bitstream'),
                 'repo': str(REPO), 'vivado': VIVADO, 'input_dcp_source': str(DCP),
                 'binary_directory': str(binary_dir),
                 'binary_source_correspondence': ('Existing repository binary and current source diff recorded; correspondence not independently verified.'
@@ -169,9 +188,18 @@ def prepare(root, input_mode='export', binary_dir=None):
     new_inputs = {'vivado extracted design information file': 'allCellPinNet.zip',
                   'unpredictable macro file': 'unpredictableMacros',
                   'fixed units file': 'fixedUnits', 'clock file': 'clocks'}
-    if input_mode == 'export':
+    if input_mode in ('export', 'preplacement'):
         for key, suffix in new_inputs.items():
             config[key] = str(root / 'inputs/exported' / ('faceDetect_' + suffix))
+    if input_mode == 'preplacement':
+        config.pop('unpredictable macro file', None)
+        config.pop('designCluster', None)
+        manifest['macro_policy'] = 'AMF structural macros and conservative one-SLICEM-per-LUTRAM fallback; no prior physical macro placement imported.'
+        manifest['cluster_policy'] = 'AMF computes clusters; historical designCluster input disabled.'
+        manifest['fixed_input_policy'] = 'Fresh IS_LOC_FIXED cells with explicit header for the legacy reader.'
+    manifest['timing_policy'] = {'amf_clock_period_ns': config.get('ClockPeriod'),
+                                 'amf_source': 'user placer configuration',
+                                 'vivado_source': 'constraints retained in input DCP'}
     config['dumpDirectory'] = str(root / 'placement')
     config['jobs'] = str(AMF_JOBS)
     save_json(root / 'config.json', config)
@@ -201,7 +229,7 @@ def netlist_cells(path):
     return cells
 
 
-def validate_export(root):
+def validate_export(root, input_mode='export'):
     new = netlist_cells(root / 'inputs/exported/faceDetect_allCellPinNet.zip')
     old = netlist_cells(root / 'inputs/baseline/faceDetect_allCellPinNet.zip')
     if not new:
@@ -211,8 +239,9 @@ def validate_export(root):
         with archive.open(archive.namelist()[0]) as stream:
             for line in stream:
                 referenced.update(line.decode().split())
-    missing = sorted(referenced - new.keys())
+    missing = sorted(referenced - new.keys()) if input_mode != 'preplacement' else []
     validation = {'new_cells': len(new), 'old_cells': len(old), 'common_names': len(new.keys() & old.keys()),
+                  'cluster_input_used': input_mode != 'preplacement',
                   'cluster_referenced_cells': len(referenced), 'cluster_missing_cells': len(missing), 'missing_examples': missing[:10],
                   'exported_files': {p.name: {'bytes': p.stat().st_size, 'sha256': digest(p)} for p in (root / 'inputs/exported').iterdir() if p.is_file()}}
     save_json(root / 'reports/input_validation.json', validation)
@@ -221,6 +250,23 @@ def validate_export(root):
     for name in ['faceDetect_unpredictableMacros', 'faceDetect_fixedUnits', 'faceDetect_clocks']:
         if not (root / 'inputs/exported' / name).is_file():
             raise RuntimeError('Missing exported input: ' + name)
+    if input_mode == 'preplacement':
+        state = dict(line.split('\t') for line in (root / 'inputs/exported/design_state.tsv').read_text().splitlines())
+        if int(state['blackboxes']) or int(state['leaf_cells']) != len(new):
+            raise RuntimeError('Incomplete or inconsistent exported netlist')
+        fixed = (root / 'inputs/exported/faceDetect_fixedUnits').read_text().splitlines()
+        if not fixed or not fixed[0].startswith('#'):
+            raise RuntimeError('Fixed-cell header is required by the legacy reader')
+        rows = [line.split() for line in fixed[1:] if line.strip()]
+        if len(rows) != int(state['loc_fixed']):
+            raise RuntimeError('Fixed-cell count differs from checkpoint')
+        for row in rows:
+            if len(row) != 6 or row[0::2] != ['name=>', 'loc=>', 'bel=>'] or row[1] not in new:
+                raise RuntimeError('Invalid fixed-cell record: ' + ' '.join(row))
+        validation.update({'design_state': state, 'fixed_cells_validated': len(rows),
+                           'physical_macro_input_used': False})
+        save_json(root / 'reports/input_validation.json', validation)
+    (root / 'inputs/expected_cells.tsv').write_text(''.join(f'{name}\t{kind}\n' for name, kind in new.items()))
 
 
 def validate_benchmark(root, manifest):
@@ -270,8 +316,8 @@ def worker(root):
         if manifest.get('input_mode') == 'benchmark':
             validate_benchmark(root, manifest)
         else:
-            stage(root, manifest, '01_export', [VIVADO, '-mode', 'batch', '-notrace', '-source', root / 'scripts/export.tcl', '-tclargs', root / 'inputs/reference.dcp', root / 'inputs/exported', root / 'scripts'], root / 'work/export', 3600)
-            validate_export(root)
+            stage(root, manifest, '01_export', [VIVADO, '-mode', 'batch', '-notrace', '-source', root / 'scripts/export.tcl', '-tclargs', root / 'inputs/reference.dcp', root / 'inputs/exported', root / 'scripts', manifest['input_mode']], root / 'work/export', 3600)
+            validate_export(root, manifest['input_mode'])
         stage(root, manifest, '02_amf', [root / 'bin/AMFPlacer', root / 'config.json'], root / 'work/amf', 7200)
         generated = root / 'placement/DumpCLBPacking-first-0.tcl'
         if not generated.is_file():
@@ -305,7 +351,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--worker', type=Path)
     parser.add_argument('--run-dir', type=Path)
-    parser.add_argument('--input-mode', choices=['export', 'benchmark'], default='export')
+    parser.add_argument('--input-mode', choices=['export', 'benchmark', 'preplacement'], default='export')
     parser.add_argument('--binary-dir', type=Path)
     args = parser.parse_args()
     if args.worker:
