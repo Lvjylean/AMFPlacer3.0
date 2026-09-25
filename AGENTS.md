@@ -12,4 +12,4 @@
 - 所有本项目文件放在项目内，遵循 `docs/workspace-layout.md`。Python/Tcl 文件使用 snake_case，新增文档和普通目录使用小写 kebab-case；历史实验 ID 和上游源码命名保持稳定。
 - 单次诊断脚本放在 `scripts/diagnostics/`，预检运行放在 `experiments/preflight/`，诊断证据放在 `experiments/evidence/`。旧脚本仅存于 `archives/legacy-workspace/`，不得当作当前入口。
 - 时序目标以用户提供给 placer 的约束为准；当前入口采用配置中的 `ClockPeriod` 及可选 `ClockPeriod:<driver>`。网表连接不能独立给出目标周期，DCP 约束提取为可选辅助，不能自动覆盖用户配置。不把“未自动导入 DCP/XDC”单独作为第一步未完成的依据。目标约束、估计延迟及 Vivado 后端约束分别记录。
-- 2026-09-25 用户确认 PDF 第一步“网表输入处理与初始分析”按当前支持范围完成。通用外部宏格式、独立分析入口与全面输入诊断保留为工程完善项，不再据此阻塞第二步。第二步仍为部分完成：已有 2.0 聚类、PaToH 划分和模拟退火基础，多芯粒模型与相应优化未实现；详见 `docs/research/step-02-topology-floorplanning-assessment.md`。
+- 2026-09-25 用户确认 PDF 第一步“网表输入处理与初始分析”按当前支持范围完成。通用外部宏格式、独立分析入口与全面输入诊断保留为工程完善项，不再据此阻塞第二步。第二步仍为部分完成：AMF 已有 2.0 聚类、PaToH 划分和模拟退火基础；用户独立 `non_dataflow_case` 项目已有资源感知划分、多 SLR 区域规划及软 Pblock，但尚未接入 AMF。不得把 AMF 仓库缺口误记为用户未做过对应工作；优先复用该前端。详见 `docs/research/step-02-topology-floorplanning-assessment.md` 和 `docs/research/partition-floorplan-amf-integration-assessment.md`。
