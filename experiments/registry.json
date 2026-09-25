@@ -43,6 +43,14 @@
       "status_file": "experiments/runs/faceDetect-preplacement-20260925-204725-194072/status.json",
       "build_directory": "/Projects/jinyang/workspace/AMFplacer3.0/builds/build-20260925-152056-398298-7ed7e39f/build",
       "created": "2026-09-25T20:47:25.988497+08:00"
+    },
+    {
+      "id": "faceDetect-vivado-native-20260925-214940-832956",
+      "kind": "vivado-native-control",
+      "reference_run": "faceDetect-preplacement-20260925-204725-194072",
+      "directory": "experiments/runs/faceDetect-vivado-native-20260925-214940-832956",
+      "status_file": "experiments/runs/faceDetect-vivado-native-20260925-214940-832956/status.json",
+      "created": "2026-09-25T21:49:40.876538+08:00"
     }
   ]
 }
