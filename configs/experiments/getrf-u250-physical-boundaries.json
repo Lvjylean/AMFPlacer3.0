@@ -36,5 +36,7 @@
   "BoundaryNearCriticalFraction": "0.15",
   "BoundaryMaxDisplacement": "280",
   "BoundaryMinGainNs": "0.05",
-  "BoundaryDisplacementCost": "0.0001"
+  "BoundaryDisplacementCost": "0.0001",
+  "TimingMaxEnhancement": "1000",
+  "QPStabilityGuard": "true"
 }

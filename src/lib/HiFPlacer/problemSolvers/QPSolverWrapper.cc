@@ -13,9 +13,17 @@
 #include "QPSolverWrapper.h"
 
 #include <cmath>
+#include <algorithm>
+#include <stdexcept>
 
 void QPSolverWrapper::QPSolve(QPSolverWrapper *&curSolver)
 {
+    if (curSolver->solverSettings.stabilityGuard) {
+        curSolver->guardDiagnostics = GuardDiagnostics{};
+        try { solveGuarded(*curSolver); }
+        catch (const std::exception &error) { curSolver->guardDiagnostics.error = error.what(); }
+        return;
+    }
     osqp::OsqpSolver &osqpSolver = curSolver->osqpSolver;
 
     Eigen::ConjugateGradient<Eigen::SparseMatrix<double>, Eigen::Lower | Eigen::Upper> &CGSolver = curSolver->CGSolver;
@@ -110,4 +118,82 @@ void QPSolverWrapper::QPSolve(QPSolverWrapper *&curSolver)
         if (curSolver->solverSettings.verbose)
             print_status("OSQP Solver Done.");
     }
+}
+
+
+void QPSolverWrapper::solveGuarded(QPSolverWrapper &solver)
+{
+    auto &data = solver.solverData;
+    auto &settings = solver.solverSettings;
+    auto &diagnostic = solver.guardDiagnostics;
+    const int n = data.objectiveVector.size();
+    if (!settings.useUnconstrainedCG || data.oriSolution.size() != n ||
+        data.objectiveMatrixDiag.size() != size_t(n) ||
+        !data.objectiveVector.allFinite() || !data.oriSolution.allFinite())
+        throw std::runtime_error("Invalid QP dimensions, objective, warm start, or solver mode");
+    for (const auto &entry : data.objectiveMatrixTripletList)
+        if (entry.row() < 0 || entry.col() < 0 || entry.row() >= n || entry.col() >= n ||
+            !std::isfinite(entry.value()))
+            throw std::runtime_error("Invalid QP matrix entry");
+    for (float diagonal : data.objectiveMatrixDiag)
+        if (!std::isfinite(diagonal) || diagonal < 0)
+            throw std::runtime_error("Invalid QP diagonal");
+
+    // Sum duplicates in double, without changing the stored objective or triplets.
+    Eigen::SparseMatrix<double> matrix(n, n);
+    matrix.setFromTriplets(data.objectiveMatrixTripletList.begin(), data.objectiveMatrixTripletList.end());
+    for (int i = 0; i < n; ++i) matrix.coeffRef(i, i) += data.objectiveMatrixDiag[i];
+    matrix.makeCompressed();
+    Eigen::VectorXd offSum = Eigen::VectorXd::Zero(n);
+    for (int k = 0; k < matrix.outerSize(); ++k)
+        for (Eigen::SparseMatrix<double>::InnerIterator it(matrix, k); it; ++it) {
+            if (!std::isfinite(it.value())) throw std::runtime_error("Non-finite assembled QP matrix");
+            if (it.row() != it.col()) {
+                if (it.value() > 0) throw std::runtime_error("QP is not a spring matrix");
+                offSum[it.row()] += std::abs(it.value());
+            }
+        }
+    // Builders emit paired symmetric springs. Reject any broken assembly before using CG.
+    Eigen::SparseMatrix<double> asymmetry = matrix - Eigen::SparseMatrix<double>(matrix.transpose());
+    if (asymmetry.norm() > 1e-12 * std::max(1.0, matrix.norm()))
+        throw std::runtime_error("Asymmetric QP spring matrix");
+    Eigen::VectorXd objective = data.objectiveVector;
+    for (int i = 0; i < n; ++i) {
+        const double diagonal = matrix.coeff(i, i);
+        const double minimum = offSum[i] + std::max(1e-8, offSum[i] * 1e-7);
+        if (diagonal < minimum) {
+            const double delta = minimum - diagonal;
+            matrix.coeffRef(i, i) = minimum;
+            // An added spring to the previous location, not to coordinate zero.
+            objective[i] -= delta * data.oriSolution[i];
+            ++diagnostic.repairedRows;
+            diagnostic.maxDiagonalDelta = std::max(diagnostic.maxDiagonalDelta, delta);
+        }
+    }
+    if (!objective.allFinite()) throw std::runtime_error("Non-finite regularized QP objective");
+    auto &cg = solver.CGSolver;
+    cg.setMaxIterations(settings.maxIters);
+    cg.setTolerance(settings.tolerence);
+    cg.compute(matrix);
+    Eigen::VectorXd candidate = cg.solveWithGuess(-objective, data.oriSolution);
+    diagnostic.iterations = cg.iterations();
+    diagnostic.relativeError = cg.error();
+    diagnostic.converged = cg.info() == Eigen::Success;
+    // Evaluate the objective difference in displacement form to avoid subtracting large energies.
+    bool accept = candidate.allFinite();
+    if (accept) {
+        const Eigen::VectorXd displacement = candidate - data.oriSolution;
+        const Eigen::VectorXd gradient = matrix * data.oriSolution + objective;
+        const double linear = displacement.dot(gradient);
+        const double quadratic = 0.5 * displacement.dot(matrix * displacement);
+        const double change = linear + quadratic;
+        accept = std::isfinite(change) && change <= 1e-10 * std::max(1.0, std::abs(linear) + std::abs(quadratic));
+    }
+    if (!accept) {
+        diagnostic.rollback = true;
+        diagnostic.converged = false;
+        candidate = data.oriSolution;
+    }
+    if (settings.solutionForward) data.oriSolution = candidate;
+    else data.solution = candidate;
 }

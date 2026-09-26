@@ -12,6 +12,8 @@
  */
 
 #include "WirelengthOptimizer.h"
+#include "TimingWeightGuard.h"
+#include <stdexcept>
 
 #include <cmath>
 #include <omp.h>
@@ -36,6 +38,16 @@ WirelengthOptimizer::WirelengthOptimizer(PlacementInfo *placementInfo, std::map<
         DSPCritical = JSONCfg["DSPCritical"] == "true";
     if (JSONCfg.find("y2xRatio") != JSONCfg.end())
         y2xRatio = std::stof(JSONCfg["y2xRatio"]);
+    if (JSONCfg.count("TimingMaxEnhancement"))
+        timingMaxEnhancement = TimingWeightGuard::parseCap(JSONCfg.at("TimingMaxEnhancement"));
+    if (JSONCfg.count("QPStabilityGuard")) {
+        const auto &value = JSONCfg.at("QPStabilityGuard");
+        if (value != "true" && value != "false")
+            throw std::invalid_argument("QPStabilityGuard must be true or false");
+        qpStabilityGuard = value == "true";
+    }
+    if (qpStabilityGuard && !useUnconstrainedCG)
+        throw std::invalid_argument("QPStabilityGuard currently requires useUnconstrainedCG=true");
     float leftBound = placementInfo->getGlobalMinX() - 0.5;
     float rightBound = placementInfo->getGlobalMaxX() + 0.5;
     float bottomBound = placementInfo->getGlobalMinY() - 0.5;
@@ -44,6 +56,8 @@ WirelengthOptimizer::WirelengthOptimizer(PlacementInfo *placementInfo, std::map<
                                   placementInfo->getPlacementUnits().size(), verbose);
     ySolver = new QPSolverWrapper(useUnconstrainedCG, MKLorNot, bottomBound, topBound,
                                   placementInfo->getPlacementUnits().size(), verbose);
+    xSolver->solverSettings.stabilityGuard = qpStabilityGuard;
+    ySolver->solverSettings.stabilityGuard = qpStabilityGuard;
     if (JSONCfg.find("DirectMacroLegalize") != JSONCfg.end())
     {
         directMacroLegalize = JSONCfg["DirectMacroLegalize"] == "true";
@@ -68,6 +82,8 @@ void WirelengthOptimizer::reloadPlacementInfo()
                                   placementInfo->getPlacementUnits().size(), verbose);
     ySolver = new QPSolverWrapper(useUnconstrainedCG, MKLorNot, bottomBound, topBound,
                                   placementInfo->getPlacementUnits().size(), verbose);
+    xSolver->solverSettings.stabilityGuard = qpStabilityGuard;
+    ySolver->solverSettings.stabilityGuard = qpStabilityGuard;
 
     netPinEnhanceRate.clear();
     for (auto pNet : placementInfo->getPlacementNets())
@@ -117,6 +133,17 @@ void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool fir
     std::thread t2(QPSolverWrapper::QPSolve, std::ref(ySolver));
     t1.join();
     t2.join();
+    if (qpStabilityGuard) {
+        for (const auto &axis : {std::make_pair("X", xSolver), std::make_pair("Y", ySolver)}) {
+            const auto &d = axis.second->guardDiagnostics;
+            print_status(std::string("QP_GUARD axis=") + axis.first + " repaired=" + std::to_string(d.repairedRows) +
+                         " max_diagonal_delta=" + std::to_string(d.maxDiagonalDelta) +
+                         " iterations=" + std::to_string(d.iterations) + " relative_error=" + std::to_string(d.relativeError) +
+                         " converged=" + std::to_string(d.converged) + " rollback=" + std::to_string(d.rollback));
+            if (!d.error.empty())
+                throw std::runtime_error(std::string("QP_GUARD ") + axis.first + ": " + d.error);
+        }
+    }
     if (verbose)
         print_status("Solver Done.");
 
@@ -443,7 +470,7 @@ void WirelengthOptimizer::addPseudoNet_SlackBased(float timingWeight, double sla
         assert(cellLoc.size() == timingNodes.size());
         auto &netActualSlackPinNum = timingOptimizer->getNetActualSlackPinNum();
 
-        int enhanceNetCnt = 0;
+        int enhanceNetCnt = 0, clippedEdgeCnt = 0, invalidEdgeCnt = 0;
         unsigned int highFanoutThr = 10000;
 
         if (placementInfo->getNetDistributionByDensity(512) < 200)
@@ -456,7 +483,7 @@ void WirelengthOptimizer::addPseudoNet_SlackBased(float timingWeight, double sla
 
         int netNum = placementInfo->getPlacementNets().size();
 
-#pragma omp parallel for
+#pragma omp parallel for reduction(+:enhanceNetCnt,clippedEdgeCnt,invalidEdgeCnt)
         for (int PNetId = 0; PNetId < netNum; PNetId++)
         {
             PNetId2SlackEnhanceTuples[PNetId] = new std::vector<slackEnhanceTuple>();
@@ -534,11 +561,8 @@ void WirelengthOptimizer::addPseudoNet_SlackBased(float timingWeight, double sla
                     continue;
                 enhanceNetCnt++;
                 // enhance the net based on the slack
-                float enhanceRatio = std::pow(1 - slack / clockPeriod, slackPowFactor);
-                if (slack < slackThr)
-                {
-                    enhanceRatio = std::pow(enhanceRatio, slack / slackThr * 3);
-                }
+                float enhanceRatio = TimingWeightGuard::enhancement(
+                    slack, clockPeriod, slackPowFactor, slackThr, timingMaxEnhancement);
                 // * std::pow(netDelay / expectedAvgDelay_driver, 0.6);
 
                 if (timingOptimizer->getEffectFactor() < 0.5)
@@ -563,6 +587,12 @@ void WirelengthOptimizer::addPseudoNet_SlackBased(float timingWeight, double sla
                                     std::max(enhanceRatio, (float)std::pow((netDelay / expectedAvgDelay_driver), 0.66));
                         }
                     }
+                }
+
+                if (timingMaxEnhancement > 0) {
+                    if (!std::isfinite(enhanceRatio)) { ++invalidEdgeCnt; continue; }
+                    if (enhanceRatio >= timingMaxEnhancement) ++clippedEdgeCnt;
+                    enhanceRatio = std::min(enhanceRatio, float(timingMaxEnhancement));
                 }
 
                 if (pinEnhanceRate[pinBeDriven] < 0)
@@ -597,6 +627,10 @@ void WirelengthOptimizer::addPseudoNet_SlackBased(float timingWeight, double sla
                         pinEnhanceRate[pinBeDriven] = enhanceRatio;
                     }
                 }
+                if (timingMaxEnhancement > 0) {
+                    enhanceRatio = std::min(enhanceRatio, float(timingMaxEnhancement));
+                    pinEnhanceRate[pinBeDriven] = enhanceRatio;
+                }
                 if (srcCell->getCellId() == targetCellId)
                 {
                     std::cout << "sink: " << sinkCell->getName() << " x: " << sinkLoc.X << " y: " << sinkLoc.Y
@@ -623,6 +657,14 @@ void WirelengthOptimizer::addPseudoNet_SlackBased(float timingWeight, double sla
                 //     ySolver->solverData.objectiveVector, w * enhanceRatio, y2xRatio, false, true,
                 //     PUs[driverPinInNet]->getId(), PUs[pinBeDriven]->getId(), driverPinInNet, pinBeDriven);
             }
+        }
+        if (timingMaxEnhancement > 0) {
+            print_status("TIMING_WEIGHT_GUARD cap=" + std::to_string(timingMaxEnhancement) +
+                         " enhanced_edges=" + std::to_string(enhanceNetCnt) +
+                         " saturated_edges=" + std::to_string(clippedEdgeCnt) +
+                         " invalid_edges=" + std::to_string(invalidEdgeCnt));
+            if (invalidEdgeCnt)
+                throw std::runtime_error("Non-finite timing enhancement inputs");
         }
     }
     else
@@ -757,7 +799,10 @@ void WirelengthOptimizer::LUTLUTPairing_TimingDriven(float timingWeight, float d
                         }
                         PlacementInfo::PlacementUnit *succLUTPU =
                             placementInfo->getPlacementUnitByCellId(targetSinkCell->getCellId());
-                        float enhanceRatio = std::pow(1 - worstSlack / clockPeriod, slackPowerFactor);
+                        float enhanceRatio = TimingWeightGuard::enhancement(
+                            worstSlack, clockPeriod, slackPowerFactor, 0, timingMaxEnhancement, false);
+                        if (timingMaxEnhancement > 0 && !std::isfinite(enhanceRatio))
+                            throw std::runtime_error("Non-finite LUT pairing timing enhancement");
 
                         int driverPinInNet = -1;
                         auto &pins = curNet->getPins();

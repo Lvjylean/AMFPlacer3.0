@@ -51,8 +51,18 @@ class QPSolverWrapper
         float tolerence = 0.001;
         bool solutionForward = false;
         bool verbose = false;
+        bool stabilityGuard = false;
     } solverSettingsType;
     solverSettingsType solverSettings;
+    struct GuardDiagnostics {
+        int repairedRows = 0, iterations = 0;
+        double maxDiagonalDelta = 0, relativeError = 0;
+        bool converged = false, rollback = false;
+        std::string error;
+    } guardDiagnostics;
+
+    // Worker errors are returned to the joining thread, never thrown across std::thread.
+    static void solveGuarded(QPSolverWrapper &solver);
 
     QPSolverWrapper(bool useUnconstrainedCG, bool MKLorNot, float lowerbound, float upperbound, int elementNum,
                     bool verbose)

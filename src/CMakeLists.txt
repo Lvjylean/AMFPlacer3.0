@@ -182,3 +182,5 @@ add_executable(checkPhysicalBoundaries EXCLUDE_FROM_ALL tests/check_physical_bou
 target_link_libraries(checkPhysicalBoundaries DeviceInfo PlacementInfo PlacementTiming DesignInfo Utils pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 add_executable(checkBoundaryClustering EXCLUDE_FROM_ALL tests/check_boundary_clustering.cc)
 target_link_libraries(checkBoundaryClustering DesignInfo DeviceInfo PlacementInfo PlacementTiming Utils pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+add_executable(checkQPStability EXCLUDE_FROM_ALL tests/check_qp_stability.cc)
+target_link_libraries(checkQPStability ProblemSolvers Utils pthread ${Boost_LIBRARIES})

@@ -329,6 +329,8 @@ class WirelengthOptimizer
     float generalNetWeight = 1.0;
     float generalTimingNetWeight = 1.0;
     double slackPowerFactor = 1.1;
+    double timingMaxEnhancement = 0;
+    bool qpStabilityGuard = false;
 
     /**
      * @brief a factor to tune the weights of the net spanning in Y-coordinate relative to the net spanning

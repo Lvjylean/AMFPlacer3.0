@@ -57,7 +57,7 @@ def run(root, args):
         model_dir = Path(config['physical boundary model file']).parent
         for name in ('boundaries.json','physical_regions.svg'):
             shutil.copy2(model_dir/name,physical/name)
-        save(physical/'effective_parameters.json', {k:v for k,v in config.items() if k.startswith(('Boundary','Physical','SLR')) or k in ('ClockPeriod','physical device part','physical boundary model file')})
+        save(physical/'effective_parameters.json', {k:v for k,v in config.items() if k.startswith(('Boundary','Physical','SLR','TimingMax','QP')) or k in ('ClockPeriod','physical device part','physical boundary model file')})
     save(directory / 'config.json', config)
     dcp = (root / args.dcp).resolve()
     manifest = dict(schema='amf-full-flow-v1', source_commit=git('rev-parse', 'HEAD'),
