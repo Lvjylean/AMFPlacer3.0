@@ -14,15 +14,23 @@
 
 int main(int argc, const char **argv)
 {
-    if (argc < 2)
+    if (argc != 2 && !(argc == 4 && std::string(argv[2]) == "--inspect-input"))
     {
-        std::cerr << "Usage: " << argv[0] << " <config JSON file> " << std::endl;
+        std::cerr << "Usage: " << argv[0] << " <config JSON file> [--inspect-input <report.json>]\n";
         return 1;
     }
-
-    auto placer = new AMFPlacer(argv[1]);
-    placer->run();
-    delete placer;
-
+    try
+    {
+        AMFPlacer placer(argv[1]);
+        if (argc == 4)
+            placer.inspectInputs(argv[3]);
+        else
+            placer.run();
+    }
+    catch (const std::exception &error)
+    {
+        std::cerr << "AMF_ERROR: " << error.what() << "\n";
+        return 2;
+    }
     return 0;
 }

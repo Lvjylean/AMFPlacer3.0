@@ -180,6 +180,8 @@ DesignInfo::DesignInfo(std::map<std::string, std::string> &JSONCfg, DeviceInfo *
     DesignCell *curCell = new DesignCell(cellName, fromStringToCellType(cellName, cellType), getNumCells());
     curCell = addCell(curCell);
 
+    const std::regex GNDpattern(".*/<const0>");
+    const std::regex VCCpattern(".*/<const1>");
     while (std::getline(infile, line))
     {
         std::istringstream iss(line);
@@ -217,12 +219,10 @@ DesignInfo::DesignInfo(std::map<std::string, std::string> &JSONCfg, DeviceInfo *
             }
 
             assert(fill1 == "net=>");
-            std::regex GNDpattern(".*/<const0>");
             if (std::regex_match(netName, GNDpattern))
             {
                 netName = drivepinName = "<const0>";
             }
-            std::regex VCCpattern(".*/<const1>");
             if (std::regex_match(netName, VCCpattern))
             {
                 netName = drivepinName = "<const1>";
@@ -272,19 +272,22 @@ DesignInfo::DesignInfo(std::map<std::string, std::string> &JSONCfg, DeviceInfo *
 
     print_info("#Connected Cell Pairs in Small Nets = " + std::to_string(connectedPinsWithSmallNet.size()));
 
-    std::string STR_PCIE_3_1 = "PCIE_3_1";
-
-    assert(deviceInfo->getSitesInType(STR_PCIE_3_1).size() > 0 && "info for PCIE should be included in deviceInfo.");
-    DeviceInfo::DeviceSite::DeviceSitePinInfos *PCIESitePinInfo =
-        deviceInfo->getSitesInType(STR_PCIE_3_1)[0]->getSitePinInfos();
-    assert(PCIESitePinInfo);
-    for (DesignCell *PCIECell : type2Cells[CellType_PCIE_3_1])
+    if (!type2Cells[CellType_PCIE_3_1].empty())
     {
-        for (DesignPin *curPin : PCIECell->getPins())
+        std::string STR_PCIE_3_1 = "PCIE_3_1";
+
+        assert(deviceInfo->getSitesInType(STR_PCIE_3_1).size() > 0 && "info for PCIE should be included in deviceInfo.");
+        DeviceInfo::DeviceSite::DeviceSitePinInfos *PCIESitePinInfo =
+            deviceInfo->getSitesInType(STR_PCIE_3_1)[0]->getSitePinInfos();
+        assert(PCIESitePinInfo);
+        for (DesignCell *PCIECell : type2Cells[CellType_PCIE_3_1])
         {
-            assert(PCIESitePinInfo->name2offsetX.find(curPin->getRefPinName()) != PCIESitePinInfo->name2offsetX.end());
-            curPin->setOffsetInCell(PCIESitePinInfo->name2offsetX[curPin->getRefPinName()],
-                                    PCIESitePinInfo->name2offsetY[curPin->getRefPinName()]);
+            for (DesignPin *curPin : PCIECell->getPins())
+            {
+                assert(PCIESitePinInfo->name2offsetX.find(curPin->getRefPinName()) != PCIESitePinInfo->name2offsetX.end());
+                curPin->setOffsetInCell(PCIESitePinInfo->name2offsetX[curPin->getRefPinName()],
+                                        PCIESitePinInfo->name2offsetY[curPin->getRefPinName()]);
+            }
         }
     }
 

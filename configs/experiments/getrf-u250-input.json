@@ -1,0 +1,7 @@
+{
+  "device": "U250",
+  "jobs": "8",
+  "vivado extracted device information file": "data/devices/u250-vivado-2024.2/exportSiteLocation.zip",
+  "vivado extracted design information file": "data/reference/getrf-u250/amf-inputs/netlist.zip",
+  "clock file": "data/reference/getrf-u250/amf-inputs/clocks"
+}

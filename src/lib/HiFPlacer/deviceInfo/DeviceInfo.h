@@ -337,6 +337,9 @@ class DeviceInfo
             return siteX;
         }
 
+        inline int getSLRId() const { return slrId; }
+        inline void setSLRId(int value) { slrId = value; }
+
         inline int getClockRegionX()
         {
             return clockRegionX;
@@ -378,6 +381,7 @@ class DeviceInfo
         DeviceSitePinInfos *sitePins = nullptr;
         float locX;
         float locY;
+        int slrId = 0; // Legacy single-die exports have no explicit SLR field.
         int clockRegionX = -1;
         int clockRegionY = -1;
         int siteY;

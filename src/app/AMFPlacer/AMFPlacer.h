@@ -10,6 +10,8 @@
  *
  */
 
+#include <iomanip>
+#include <stdexcept>
 #include "DesignInfo.h"
 #include "DeviceInfo.h"
 #include "GlobalPlacer.h"
@@ -52,12 +54,8 @@ class AMFPlacer
         JSON = parseJSONFile(JSONFileName);
 
         assert(JSON.find("vivado extracted device information file") != JSON.end());
-        assert(JSON.find("special pin offset info file") != JSON.end());
+        // Special pin offsets are required only by designs using that hard IP.
         assert(JSON.find("vivado extracted design information file") != JSON.end());
-        assert(JSON.find("cellType2fixedAmo file") != JSON.end());
-        assert(JSON.find("cellType2sharedCellType file") != JSON.end());
-        assert(JSON.find("sharedCellType2BELtype file") != JSON.end());
-        assert(JSON.find("GlobalPlacementIteration") != JSON.end());
         if (JSON.find("dumpDirectory") != JSON.end())
         {
             if (!fileExists(JSON["dumpDirectory"]))
@@ -67,7 +65,6 @@ class AMFPlacer
 
         oriTime = std::chrono::steady_clock::now();
 
-        omp_set_num_threads(std::stoi(JSON["jobs"]));
         if (JSON.find("jobs") != JSON.end())
         {
             omp_set_num_threads(std::stoi(JSON["jobs"]));
@@ -78,7 +75,7 @@ class AMFPlacer
         }
 
         // load device information
-        deviceinfo = new DeviceInfo(JSON, "VCU108");
+        deviceinfo = new DeviceInfo(JSON, JSON.count("device") ? JSON["device"] : "VCU108");
         deviceinfo->printStat();
 
         // load design information
@@ -97,6 +94,83 @@ class AMFPlacer
             delete globalPlacer;
         if (initialPacker)
             delete initialPacker;
+    }
+
+    void inspectInputs(const std::string &reportPath)
+    {
+        if (JSON.count("clock file"))
+        {
+            std::set<std::string> connectedClocks;
+            for (auto clock : designInfo->getClocksInDesign())
+                if (!designInfo->getCellsUnderClock(clock).empty()) connectedClocks.insert(clock->getName());
+            std::ifstream clocks(JSON["clock file"]);
+            std::string name;
+            while (clocks >> name)
+                if (!connectedClocks.count(name))
+                    throw std::runtime_error("Configured clock has no connected net: " + name);
+        }
+        std::map<int, std::map<std::string, int>> siteCounts, unavailableCounts;
+        std::map<std::string, int> cellCounts;
+        int uramCells = 0, uramSites = 0;
+        for (auto site : deviceinfo->getSites())
+        {
+            siteCounts[site->getSLRId()][site->getSiteType()]++;
+            if (site->isOccupied())
+                unavailableCounts[site->getSLRId()][site->getSiteType()]++;
+            if (site->getSiteType() == "URAM288" && !site->isOccupied())
+                uramSites++;
+        }
+        for (auto cell : designInfo->getCells())
+        {
+            cellCounts[designInfo->DesignCellTypeStr[cell->getCellType()]]++;
+            if (cell->isURAM()) uramCells++;
+        }
+        if (uramCells > uramSites)
+            throw std::runtime_error("URAM demand exceeds available URAM sites.");
+        std::ofstream out(reportPath);
+        if (!out) throw std::runtime_error("Cannot open input report: " + reportPath);
+        auto counts = [&out](const std::map<std::string, int> &values) {
+            out << "{";
+            bool first = true;
+            for (const auto &item : values)
+            {
+                if (!first) out << ",";
+                first = false;
+                out << std::quoted(item.first) << ":" << item.second;
+            }
+            out << "}";
+        };
+        out << "{\n\"schema\":\"amf-input-inspection-v1\",\n\"device\":"
+            << std::quoted(deviceinfo->getDeviceName()) << ",\n\"placement_executed\":false,\n"
+            << "\"slr_count\":" << siteCounts.size() << ",\n\"cell_count\":"
+            << designInfo->getNumCells() << ",\n\"cell_types\":";
+        counts(cellCounts);
+        out << ",\n\"net_count\":" << designInfo->getNumNets()
+            << ",\n\"clock_count\":" << designInfo->getClocksInDesign().size()
+            << ",\n\"clock_loads\":{";
+        bool firstClock = true;
+        for (auto clock : designInfo->getClocksInDesign())
+        {
+            if (!firstClock) out << ",";
+            firstClock = false;
+            out << std::quoted(clock->getName()) << ":" << designInfo->getCellsUnderClock(clock).size();
+        }
+        out << "},\n\"slrs\":[";
+        bool first = true;
+        for (const auto &slr : siteCounts)
+        {
+            if (!first) out << ",";
+            first = false;
+            out << "{\"id\":" << slr.first << ",\"sites\":";
+            counts(slr.second);
+            out << ",\"unavailable_sites\":";
+            counts(unavailableCounts[slr.first]);
+            out << "}";
+        }
+        out << "]\n}\n";
+        out.close();
+        if (!out) throw std::runtime_error("Failed writing input report: " + reportPath);
+        print_status("AMF_INPUT_INSPECTION_OK: " + reportPath);
     }
 
     void clearSomeAttributesCannotRecord()
@@ -121,6 +195,17 @@ class AMFPlacer
      */
     void run()
     {
+        // Input-only porting milestone: never silently run unported legalizers.
+        for (auto site : deviceinfo->getSites())
+            if (site->getSLRId() != 0)
+                throw std::runtime_error("Multi-SLR placement is not enabled yet; use --inspect-input.");
+        for (auto cell : designInfo->getCells())
+            if (cell->isURAM())
+                throw std::runtime_error("URAM placement is not enabled yet; use --inspect-input.");
+        assert(JSON.find("cellType2fixedAmo file") != JSON.end());
+        assert(JSON.find("cellType2sharedCellType file") != JSON.end());
+        assert(JSON.find("sharedCellType2BELtype file") != JSON.end());
+        assert(JSON.find("GlobalPlacementIteration") != JSON.end());
         // initialize placement information, including how to map cells to BELs
         placementInfo = new PlacementInfo(designInfo, deviceinfo, JSON);
 

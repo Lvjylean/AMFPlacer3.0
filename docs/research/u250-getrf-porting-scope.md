@@ -1,6 +1,6 @@
 # U250 / GETRF 移植范围与输入预检
 
-日期：2026-09-26。当前为范围确认和只读输入检查；尚未实现或验证 U250/URAM 算法支持。本轮不修改 placer 算法、不启动布局布线。
+日期：2026-09-26。本文记录开始实施前的范围确认和只读输入检查。用户随后授权逐步实施，当前进度见 [U250 输入适配](u250-input-adaptation.md)；完整 U250/URAM 布局算法仍未验证。
 
 ## 当前用户决定
 
@@ -19,7 +19,7 @@
 /Projects/jinyang/workspace/non_dataflow_crossSLR/case/experiment/getrf_partition_floorplan_20260923_7VSNOFzw/optimized/post_opt.dcp
 ```
 
-记录的 SHA-256：`6283aa4874b42d939a2b00e53cce77574fa03a26f45914364ab9ca632b42c031`。本轮读取已有绑定/哈希记录，尚未重新计算 DCP 哈希或搬运 DCP；实际实验前须重新核对。
+SHA-256：`6283aa4874b42d939a2b00e53cce77574fa03a26f45914364ab9ca632b42c031`。后续实施已将 DCP 流式复制到 eda072 的 `data/reference/getrf-u250/post_opt.dcp` 并重新计算哈希，确认一致；没有下载 DCP 到本地。
 
 - metadata 指定 part：`xcu250-figd2104-2L-e`。
 - 原始时钟报告为 `ap_clk`，周期 10 ns。这是输入中的已有约束记录，后续 AMF 目标配置仍以用户给 placer 的约束为准。

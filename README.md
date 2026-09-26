@@ -1,6 +1,6 @@
 # AMFplacer3.0
 
-基于 AMFPlacer 2.0 的 FPGA 增量编译器项目，目标对应《课题三final.pdf》子课题 3.2。当前版本为 **3.0.0-dev**：已建立可追溯的全量基线，跨版本增量编译与多芯粒扩展仍在规划阶段。
+基于 AMFPlacer 2.0 的 FPGA 增量编译器项目，目标对应《课题三final.pdf》子课题 3.2。当前版本为 **3.0.0-dev**：已有可追溯的全量基线，正在实现 U250 多 SLR 适配；跨版本增量编译待开发。
 
 正式工作区位于 eda072：`/Projects/jinyang/workspace/AMFplacer3.0`。源码、构建、大型输入及最终 DCP 保存在服务器；本地保留轻量管理镜像、报告与日志。
 
@@ -51,6 +51,8 @@ python3 AMFplacer3.0/scripts/sync_reports.py <run-id>
 同步器仅允许报告/元数据/日志扩展名，拒绝 DCP 和符号链接，不传输输入、构建或许可证。
 
 ## 已验证基线
+
+U250 当前开放器件/网表输入检查，完整布局入口尚未开放。输入层实现、验证记录与下一阶段验收条件见 [U250 输入适配](docs/research/u250-input-adaptation.md)。本阶段不接入用户独立项目的 floorplan，不实现 SLL 优化。
 
 2026-09-25 的成功轮次为 `faceDetect-benchmark-20260925-144131`：AMF 98.676 秒，Vivado 后端 564.033 秒，113,125 条可布线网络全部完成，路由错误 0；WNS 0.300 ns、TNS 0，hold 违例 0，总线偏斜 8 项通过。约 99.22% 的 AMF 请求位置在最终 DCP 中保留。
 

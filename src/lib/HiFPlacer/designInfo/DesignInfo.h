@@ -29,7 +29,7 @@
         "BUFGCE", "BUFG_GT", "BUFG_GT_SYNC", "BUFGCE_DIV", "BUFGCTRL", "GTHE3_CHANNEL", "GTHE3_COMMON", "IOBUF",       \
         "IBUF", "IBUFDS", "IOBUFDS", "IBUFDS_GTE3", "IBUF_ANALOG", "IOBUFE3", "MMCME3_ADV", "OBUF", "OBUFT",           \
         "PCIE_3_1", "BSCANE2", "SYSMONE1", "RXTX_BITSLICE", "BITSLICE_CONTROL", "TX_BITSLICE_TRI", "OSERDESE3",        \
-        "RIU_OR", "PLLE3_ADV", "HPIO_VREF", "OBUFDS_DUAL_BUF"
+        "RIU_OR", "PLLE3_ADV", "HPIO_VREF", "OBUFDS_DUAL_BUF", "URAM288", "URAM288_BASE"
 
 /**
  * @brief Information related to FPGA designs, including design cells and their interconnections.
@@ -130,7 +130,9 @@ class DesignInfo
         CellType_RIU_OR,
         CellType_PLLE3_ADV,
         CellType_HPIO_VREF,
-        CellType_OBUFDS_DUAL_BUF
+        CellType_OBUFDS_DUAL_BUF,
+        CellType_URAM288,
+        CellType_URAM288_BASE
     };
 
     inline static bool FFSRCompatible(DesignCellType typeA, DesignCellType typeB)
@@ -956,6 +958,11 @@ class DesignInfo
         {
             return cellType == CellType_SRL16E || cellType == CellType_SRLC32E;
         }
+        inline bool isURAM() const
+        {
+            return cellType == CellType_URAM288 || cellType == CellType_URAM288_BASE;
+        }
+
         inline bool isDSP()
         {
             return cellType == CellType_DSP48E2;
@@ -1002,7 +1009,7 @@ class DesignInfo
          */
         inline bool isTimingEndPoint()
         {
-            return (isFF() || isLUTRAM() || originallyIsLUTRAM() || isBRAM() || isDSP() || isIO() || isClockBuffer() ||
+            return (isFF() || isLUTRAM() || originallyIsLUTRAM() || isBRAM() || isURAM() || isDSP() || isIO() || isClockBuffer() ||
                     isShifter());
         }
 
@@ -1014,7 +1021,7 @@ class DesignInfo
          */
         inline bool isLogicRelated()
         {
-            return (isLUT() || isFF() || isLUTRAM() || originallyIsLUTRAM() || isBRAM() || isDSP() || isShifter());
+            return (isLUT() || isFF() || isLUTRAM() || originallyIsLUTRAM() || isBRAM() || isURAM() || isDSP() || isShifter());
         }
 
         /**
@@ -1321,6 +1328,11 @@ class DesignInfo
         return cellType == CellType_CARRY8;
     }
 
+    inline static bool isURAM(DesignCellType cellType)
+    {
+        return cellType == CellType_URAM288 || cellType == CellType_URAM288_BASE;
+    }
+
     inline static bool isDSP(DesignCellType cellType)
     {
         return cellType == CellType_DSP48E2;
@@ -1388,7 +1400,7 @@ class DesignInfo
      */
     inline bool isLogicRelated(DesignCellType cellType)
     {
-        return (isLUT(cellType) || isFF(cellType) || isLUTRAM(cellType) || isBRAM(cellType) || isDSP(cellType) ||
+        return (isLUT(cellType) || isFF(cellType) || isLUTRAM(cellType) || isBRAM(cellType) || isURAM(cellType) || isDSP(cellType) ||
                 isShifter(cellType));
     }
 

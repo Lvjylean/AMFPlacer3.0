@@ -11,6 +11,7 @@
  */
 
 #include "DeviceInfo.h"
+#include <stdexcept>
 #include "readZip.h"
 #include "strPrint.h"
 #include "stringCheck.h"
@@ -116,6 +117,21 @@ DeviceInfo::DeviceInfo(std::map<std::string, std::string> &JSONCfg, std::string 
 
             addSite(siteName, siteType, centerX, centerY, clockRegionX, clockRegionY, curTile);
             DeviceSite *curSite = name2Site[siteName];
+            // Optional v2 fields preserve the legacy single-die export format.
+            std::string slrTag, prohibitedTag;
+            int slrId = 0, prohibited = 0;
+            if (iss >> slrTag)
+            {
+                if (slrTag != "slr=>" || !(iss >> slrId >> prohibitedTag >> prohibited) ||
+                    prohibitedTag != "prohibited=>" || slrId < 0 || (prohibited != 0 && prohibited != 1))
+                    throw std::runtime_error("Invalid site SLR/availability metadata: " + siteName);
+                std::string extra;
+                if (iss >> extra)
+                    throw std::runtime_error("Unexpected site metadata: " + siteName);
+            }
+            curSite->setSLRId(slrId);
+            if (prohibited)
+                curSite->setOccupied();
             if (coord2ClockRegion.find(clockRegionCoord) == coord2ClockRegion.end())
             {
                 ClockRegion *newCR = new ClockRegion(curSite);
@@ -148,7 +164,8 @@ DeviceInfo::DeviceInfo(std::map<std::string, std::string> &JSONCfg, std::string 
         std::sort(tmpIt->second.begin(), tmpIt->second.end(), siteSortCmp);
     }
 
-    loadPCIEPinOffset(specialPinOffsetFileName);
+    if (!specialPinOffsetFileName.empty())
+        loadPCIEPinOffset(specialPinOffsetFileName);
 
     print_info("There are " + std::to_string(clockRegionNumY) + "x" + std::to_string(clockRegionNumX) +
                "(YxX) clock regions on the device");

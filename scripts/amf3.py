@@ -117,6 +117,12 @@ def run(args):
     print(json.dumps(launched, indent=2))
 
 
+def inspect_inputs(args):
+    require_server()
+    from inspect_amf_inputs import inspect
+    inspect(ROOT, args)
+
+
 def status(args):
     require_server()
     if args.run:
@@ -151,6 +157,10 @@ def main():
     p.add_argument('--reference-run', required=True)
     p.add_argument('--dry-run', action='store_true')
     p.set_defaults(action=native_run)
+    p = sub.add_parser('inspect', help='Load and report device/netlist inputs without placement')
+    p.add_argument('--config', type=Path, required=True)
+    p.add_argument('--binary', type=Path, default=Path('builds/current/AMFPlacer'))
+    p.set_defaults(action=inspect_inputs)
     p = sub.add_parser('status', help='Read experiment status')
     p.add_argument('--run')
     p.set_defaults(action=status)
