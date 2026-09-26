@@ -1159,6 +1159,13 @@ class DeviceInfo
      */
     void mapClockRegionToArray();
 
+    // Count physical horizontal seams, not numerical differences between SLR IDs.
+    inline int getSLRBoundaryCount(int clockRegionY0, int clockRegionY1) const
+    {
+        return std::abs(clockRegionYSLRBoundaryCounts.at(clockRegionY1) -
+                        clockRegionYSLRBoundaryCounts.at(clockRegionY0));
+    }
+
     inline float getBoundaryTolerance()
     {
         return boundaryTolerance;
@@ -1280,6 +1287,7 @@ class DeviceInfo
     std::vector<ClockColumn *> clockColumns;
     std::vector<float> clockRegionXBounds;
     std::vector<float> clockRegionYBounds;
+    std::vector<int> clockRegionYSLRBoundaryCounts;
 
     std::map<std::string, std::string> &JSONCfg;
     std::string deviceArchievedTextFileName;

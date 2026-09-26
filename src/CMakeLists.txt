@@ -172,3 +172,8 @@ target_link_libraries(AMFPlacer GlobalPlacer DesignInfo DeviceInfo PlacementInfo
                         ${ZLIB_LIBRARIES}  ${Boost_LIBRARIES} ) #GL GLU glut GLEW
 target_link_libraries(partitionHyperGraph  ${Boost_LIBRARIES}  m ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a )
 
+
+# Opt-in native model regression, built from the same isolated source snapshot.
+add_executable(checkSLRTiming EXCLUDE_FROM_ALL tests/check_slr_timing.cc)
+target_link_libraries(checkSLRTiming DesignInfo DeviceInfo PlacementInfo PlacementTiming Utils
+                      pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})

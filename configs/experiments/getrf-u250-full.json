@@ -23,5 +23,6 @@
   "Simulated Annealing IterNum": "100000",
   "DSPCritical": "true",
   "MKL": "true",
-  "GlobalPlacerPrintHPWL": "true"
+  "GlobalPlacerPrintHPWL": "true",
+  "SLRBoundaryDelayNs": "1.5"
 }

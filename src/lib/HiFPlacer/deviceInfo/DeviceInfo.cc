@@ -176,6 +176,26 @@ DeviceInfo::DeviceInfo(std::map<std::string, std::string> &JSONCfg, std::string 
 
 void DeviceInfo::mapClockRegionToArray()
 {
+    // U250 SLRs are stacked vertically. Derive seams from site metadata so that
+    // legacy exports (all SLR0) and non-consecutive SLR IDs work without constants.
+    std::vector<int> rowSLR(clockRegionNumY, -1);
+    for (auto site : sites)
+    {
+        auto &slr = rowSLR.at(site->getClockRegionY());
+        if (slr != -1 && slr != site->getSLRId())
+            throw std::runtime_error("SLR timing requires horizontally aligned SLR rows: " + site->getName());
+        slr = site->getSLRId();
+    }
+    clockRegionYSLRBoundaryCounts.assign(clockRegionNumY, 0);
+    for (int row = 0; row < clockRegionNumY; ++row)
+    {
+        if (rowSLR[row] < 0)
+            throw std::runtime_error("Missing SLR metadata for clock-region row " + std::to_string(row));
+        if (row > 0)
+            clockRegionYSLRBoundaryCounts[row] = clockRegionYSLRBoundaryCounts[row - 1] +
+                                               (rowSLR[row] != rowSLR[row - 1]);
+    }
+
     clockRegions.clear();
     clockRegions.resize(clockRegionNumY, std::vector<ClockRegion *>(clockRegionNumX, nullptr));
     for (int i = 0; i < clockRegionNumY; i++)

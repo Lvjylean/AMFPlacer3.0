@@ -14,6 +14,7 @@
 
 #include <cmath>
 #include <codecvt>
+#include <stdexcept>
 
 PlacementTimingOptimizer::PlacementTimingOptimizer(PlacementInfo *placementInfo,
                                                    std::map<std::string, std::string> &JSONCfg)
@@ -25,6 +26,23 @@ PlacementTimingOptimizer::PlacementTimingOptimizer(PlacementInfo *placementInfo,
         y2xRatio = std::stof(JSONCfg["y2xRatio"]);
     if (JSONCfg.find("DSPCritical") != JSONCfg.end())
         DSPCritical = JSONCfg["DSPCritical"] == "true";
+
+    if (JSONCfg.count("SLRBoundaryDelayNs"))
+    {
+        const auto &value = JSONCfg.at("SLRBoundaryDelayNs");
+        size_t used = 0;
+        try
+        {
+            slrBoundaryDelayNs = std::stof(value, &used);
+        }
+        catch (const std::exception &)
+        {
+            throw std::invalid_argument("SLRBoundaryDelayNs must be a finite non-negative number in ns");
+        }
+        if (used != value.size() || !std::isfinite(slrBoundaryDelayNs) || slrBoundaryDelayNs < 0)
+            throw std::invalid_argument("SLRBoundaryDelayNs must be a finite non-negative number in ns");
+    }
+    print_info("Timing model SLRBoundaryDelayNs=" + std::to_string(slrBoundaryDelayNs));
 
     designInfo = placementInfo->getDesignInfo();
     deviceInfo = placementInfo->getDeviceInfo();

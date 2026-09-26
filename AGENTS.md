@@ -17,3 +17,5 @@
 - U250 第一阶段已实现并验证器件/输入模型，详见 `docs/research/u250-input-adaptation.md`。`configs/experiments/getrf-u250-input.json` 只用于 `amf3.py inspect`；第二阶段已加入独立 URAM 资源分配、硬资源合法化和 Carry/DSP 专用级联 SLR 检查，见 `docs/research/u250-resource-legalization.md`。`amf3.py legalize-resources` 仅执行硬资源阶段，完整布局入口仍有显式保护。原始划分清单省略时钟负载，必须使用从同一 DCP 补齐时钟后的 `data/reference/getrf-u250/amf-inputs/`，不能把旧 `getrf.zip` 当作完整输入。
 
 - GETRF 全流程入口为 `amf3.py full-run`，配置 `getrf-u250-full.json` 显式开启实验性多 SLR。MUX/SRL、CLB 试插入计数、无固定 I/O 初始化和分数列溢出修复已实现；完整基线 `getrf-u250-full-20260926-183758-400040` 已通过全量布线、DRC 错误/严重警告为 0 和级联审计，10 ns setup 时序未收敛；指标与限制见 `docs/research/u250-getrf-full-flow.md`。稳定构建入口为 `builds/validated-getrf-u250-full/AMFPlacer`。覆盖检查不完整时不得进入正式后端验收，不能把 Vivado 补放遗漏单元记作 AMF 的完整输出。当前标准配置保留 `GlobalPlacementIteration=30` 和默认宏合法化模式；9 次前期迭代曾导致 QP 发散，`DirectMacroLegalize=true` 曾不收敛，失败轮次保留供诊断。
+
+- 2026-09-27 用户要求为现有延迟修正补充纵向 SLR 边界惩罚，覆盖上一阶段“暂不实现跨界时序代价”的限制。参数 `SLRBoundaryDelayNs` 默认 1.5 ns/道边界，GETRF 全流程配置显式设置为 1.5；设为 0 可复现旧延迟模型。原 X 方向修正保留，普通时钟区域的 Y 边界不增加惩罚；SLR 边界从器件元数据推导。仍不加入 SLL 容量或估计拥塞、不接入外部 floorplan。该系数是启发式初值，不代表已校准或新一轮 GETRF 布线后的时序结论。实现、测试与构建见 `docs/research/u250-slr-timing-penalty.md`。

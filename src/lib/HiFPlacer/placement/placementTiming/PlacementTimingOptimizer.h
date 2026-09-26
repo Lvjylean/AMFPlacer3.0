@@ -117,6 +117,8 @@ class PlacementTimingOptimizer
 
         float X = std::fabs(X1 - X2);
         float Y = std::fabs(Y1 - Y2);
+        const float slrDelay = slrBoundaryDelayNs *
+                               deviceInfo->getSLRBoundaryCount(clockRegionY0, clockRegionY1);
 
         if (X * X + Y * Y < 9)
         {
@@ -129,7 +131,7 @@ class PlacementTimingOptimizer
 
             if (delay < 0.05)
                 delay = 0.05;
-            return delay;
+            return delay + slrDelay;
         }
         else if (X * X + Y * Y < 36)
         {
@@ -142,7 +144,7 @@ class PlacementTimingOptimizer
 
             if (delay < 0.05)
                 delay = 0.05;
-            return delay;
+            return delay + slrDelay;
         }
         else
         {
@@ -155,7 +157,7 @@ class PlacementTimingOptimizer
 
             if (delay < 0.05)
                 delay = 0.05;
-            return delay;
+            return delay + slrDelay;
         }
     }
 
@@ -192,6 +194,8 @@ class PlacementTimingOptimizer
     bool verbose = false;
     float y2xRatio = 1;
     bool DSPCritical = false;
+    // Heuristic ns per physical SLR seam; 0 reproduces the pre-SLR model.
+    float slrBoundaryDelayNs = 1.5f;
 
     inline float getDis(float x1, float y1, float x2, float y2)
     {
