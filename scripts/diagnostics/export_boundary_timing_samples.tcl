@@ -8,11 +8,20 @@ proc export_boundary_timing_samples {out {limit 200}} {
     puts $sf "path\torder\tsource_pin\tsink_pin\tsource_site\tsink_site\tsource_type\tsink_type\tfanout\trouted_delay_ns"
     puts $ef "path\tpin\treason"
     set pathId 0
+    array set cachedConnections {}
     # Constrained setup paths only. No synthetic HD.CLK_SRC is installed.
     foreach path [get_timing_paths -quiet -setup -max_paths $limit -nworst 1 -no_report_unconstrained] {
         puts $pf [join [list $pathId [get_property SLACK $path] [get_property DATAPATH_DELAY $path] [get_property STARTPOINT_PIN $path] [get_property ENDPOINT_PIN $path]] "\t"]
         set order 0
         foreach pin [get_pins -quiet -of_objects $path -filter {DIRECTION == IN}] {
+            if {[info exists cachedConnections($pin)]} {
+                if {$cachedConnections($pin) ne ""} {
+                    puts $sf [join [concat [list $pathId $order] $cachedConnections($pin)] "\t"]
+                    incr order
+                }
+                continue
+            }
+            set cachedConnections($pin) ""
             if {[catch {
                 set net [get_nets -quiet -of_objects $pin]
                 if {[llength $net]!=1} {continue}
@@ -31,7 +40,8 @@ proc export_boundary_timing_samples {out {limit 200}} {
                 if {![string is double -strict $ps]} {puts $ef "$pathId\t$pin\tinvalid-delay";continue}
                 set fanout [llength [get_pins -quiet -leaf -of_objects $net -filter {DIRECTION == IN}]]
                 # NET_DELAY.SLOW_MAX is in ps; timing path properties are in ns.
-                puts $sf [join [list $pathId $order $driver $pin $a $b $st [get_property REF_NAME $sink] $fanout [expr {$ps/1000.0}]] "\t"]
+                set cachedConnections($pin) [list $driver $pin $a $b $st [get_property REF_NAME $sink] $fanout [expr {$ps/1000.0}]]
+                puts $sf [join [concat [list $pathId $order] $cachedConnections($pin)] "\t"]
                 incr order
             } failure]} {puts $ef "$pathId\t$pin\t[string map [list \n { } \t { }] $failure]"}
         }

@@ -25,6 +25,9 @@ RegionCapacityTracker::RegionCapacityTracker(PlacementInfo *p) : placement(p), m
 RegionCapacityTracker::Resources RegionCapacityTracker::cellDemand(DesignInfo::DesignCell *cell,bool memory) const
 {
     Resources d{};
+    // InitialPacker represents a real RAMB36 plus a virtual RAMB18 upper half.
+    // The real 36K demand already consumes both 18K slots in fits().
+    if (cell->isVirtualCell() && cell->isBRAM()) return d;
     auto table=placement->getCompatiblePlacementTable();
     auto &occupation=table->getcellId2Occupation();
     double slots=cell->getCellId()<int(occupation.size()) ? occupation[cell->getCellId()] : table->getOccupation(cell->getCellType());
