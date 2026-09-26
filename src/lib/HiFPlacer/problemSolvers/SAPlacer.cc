@@ -604,7 +604,7 @@ void SAPlacer::greedyInitialize(std::vector<std::pair<int, int>> &init_cluster2X
 
     int iterNum = clusterAdjMat.size();
 
-    while (iterNum == clusterAdjMat.size())
+    if (iterNum == clusterAdjMat.size())
     {
         for (int i = 0; i < clusterAdjMat.size(); i++)
         {
@@ -646,6 +646,19 @@ void SAPlacer::greedyInitialize(std::vector<std::pair<int, int>> &init_cluster2X
             //     }
             // }
         }
+    }
+
+    // Out-of-context fabric designs need not contain fixed IO/clock cells.
+    // Start from a deterministic cluster when no fixed-connected seed was found.
+    if (iterNum > 0 && iterNum == clusterAdjMat.size())
+    {
+        int seed = initOffset % clusterAdjMat.size();
+        auto nextXY = init_cluster2XY;
+        auto nextGrid = init_grid2clusters;
+        greedyPlaceACluster(init_cluster2XY, init_grid2clusters, nextXY, nextGrid, seed);
+        init_cluster2XY = nextXY;
+        init_grid2clusters = nextGrid;
+        iterNum--;
     }
 
     while (iterNum--)
@@ -704,7 +717,7 @@ void SAPlacer::solve()
         works_E.clear();
         workers_randomSeed.clear();
 
-        for (int threadId = restartI; threadId >= 0 && threadId > restartI - nJobs; threadId--)
+        for (int threadId = restartI; threadId > 0 && threadId > restartI - nJobs; threadId--)
         {
 
             // generate initial cluster placement

@@ -19,6 +19,7 @@
 #include <iostream>
 #include <stdexcept>
 #include "HardResourceUtils.h"
+#include "ColumnOverflow.h"
 
 MacroLegalizer::MacroLegalizer(std::string legalizerName, PlacementInfo *placementInfo, DeviceInfo *deviceInfo,
                                std::vector<DesignInfo::DesignCellType> &macroTypesToLegalize,
@@ -1318,18 +1319,17 @@ void MacroLegalizer::spreadMacros(int columnNum, std::vector<int> &columnUntiliz
                 rightUtil += accumulationUtil[columnNum - 1] - accumulationUtil[overflowColId];
             }
 
-            int overflowNum =
-                (unsigned int)columnUntilization[overflowColId] -
-                column2Sites[overflowColId].size() * budgetRatios[overflowColId]; // spread more for redundant space
+            int overflowNum = AMFColumnOverflow::requiredRelief(columnUntilization[overflowColId],
+                column2Sites[overflowColId].size(), budgetRatios[overflowColId]);
             int toLeft = 0;
 
             std::cout << " overflowNum=" << overflowNum << "\n";
 
             int totalAvailableCapacity = rightAvaliableCapacity + leftAvaliableCapacity - leftUtil - rightUtil;
             assert(totalAvailableCapacity > 0);
-            float toLeftRatio = (float)(leftAvaliableCapacity - leftUtil) / totalAvailableCapacity;
+            float toLeftRatio = std::max(0.0f, std::min(1.0f,
+                (float)(leftAvaliableCapacity - leftUtil) / totalAvailableCapacity));
             int toLeftNum = int((overflowNum * toLeftRatio) + 0.4999);
-            int toRightNum = overflowNum - toLeft;
 
             if (leftAvaliableCapacity - leftUtil > 0)
             {
@@ -1340,9 +1340,13 @@ void MacroLegalizer::spreadMacros(int columnNum, std::vector<int> &columnUntiliz
                     columnUntilization[overflowColId - 1] += macroSize;
                     columnUntilization[overflowColId] -= macroSize;
                     toLeftNum -= macroSize;
+                    toLeft += macroSize;
                     column2PUs[overflowColId].pop_front();
                 }
             }
+            // A whole macro can exceed the requested left relief. Count what
+            // actually moved before deciding whether the right side still needs any.
+            int toRightNum = std::max(0, overflowNum - toLeft);
             if (rightAvaliableCapacity - rightUtil > 0)
             {
                 while (toRightNum > 0 && column2PUs[overflowColId].size() > 0)

@@ -2976,13 +2976,13 @@ bool containLUTRAMCells(PlacementInfo::PlacementUnit *curPU)
 {
     if (auto unpackedCell = dynamic_cast<PlacementInfo::PlacementUnpackedCell *>(curPU))
     {
-        return unpackedCell->getCell()->originallyIsLUTRAM();
+        return unpackedCell->getCell()->originallyIsLUTRAM() || unpackedCell->getCell()->originallyIsShifter();
     }
     else if (auto curMacro = dynamic_cast<PlacementInfo::PlacementMacro *>(curPU))
     {
         for (auto tmpCell : curMacro->getCells())
         {
-            if (tmpCell->originallyIsLUTRAM())
+            if (tmpCell->originallyIsLUTRAM() || tmpCell->originallyIsShifter())
             {
                 return true;
             }
@@ -3042,29 +3042,21 @@ void ParallelCLBPacker::dumpCLBPlacementTcl(std::ofstream &outfileTcl, bool pack
                 auto tmpMacro = tmpPackingSite->getLUTRAMMacro();
                 if (containLUTRAMCells(tmpMacro))
                 {
-                    if (tmpMacro->getFixedCellInfoVec().size() % 2 ==
-                        0) // if the number of fixed cells is odd and >1, there might be weird errors from Vivado.
+                    // A valid macro may have an odd number of cells (two SRLs
+                    // and one F7, for example). Never silently omit its placement.
+                    if (!tmpMacro->getFixedCellInfoVec().empty())
                     {
-                        if (tmpMacro->getFixedCellInfoVec().size() > 0)
+                        for (const auto &fixed : tmpMacro->getFixedCellInfoVec())
                         {
-                            for (unsigned int i = 0; i < tmpMacro->getFixedCellInfoVec().size(); i++)
-                            {
-                                DesignInfo::DesignCell *curCell = tmpMacro->getFixedCellInfoVec()[i].cell;
-                                placementStr += "  " + curCell->getName() + "  " + CLBSite->getName() + "/" +
-                                                tmpMacro->getFixedCellInfoVec()[i].BELName + "  \n";
-                            }
-                        }
-                        else
-                        {
-                            placementStr += "  " + tmpMacro->getName() + "  " + CLBSite->getName() + "/H6LUT  \n";
+                            placementStr += "  " + fixed.cell->getName() + "  " + CLBSite->getName() + "/" +
+                                            fixed.BELName + "  \n";
+                            cnt++;
                         }
                     }
                     else
                     {
-                        if (tmpMacro->getFixedCellInfoVec().size() == 1)
-                        {
-                            placementStr += "  " + tmpMacro->getName() + "  " + CLBSite->getName() + "/H6LUT  \n";
-                        }
+                        placementStr += "  " + tmpMacro->getName() + "  " + CLBSite->getName() + "/H6LUT  \n";
+                        cnt++;
                     }
                 }
             }

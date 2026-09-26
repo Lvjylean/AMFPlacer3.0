@@ -112,6 +112,12 @@ def run(args):
             for line in lines))
         return path
 
+    fractional = restricted('carry-fractional-budget', 'SLICE_',
+        {'SLICE_X%dY%d' % (x, y) for x in (0, 1) for y in range(11)})
+    rows = check('carry-fractional-budget', ''.join(cell('c%d' % i, 'CARRY8') for i in range(10)),
+        fractional, seeds=''.join('c%d 0 %d\n' % (i, i) for i in range(10)))
+    assert len(rows) == 10 and any(r['site'].startswith('SLICE_X1') for r in rows.values()), rows
+
     seam_carry = restricted('carry-only-seam', 'SLICE_', {'SLICE_X0Y239', 'SLICE_X0Y240'})
     check('carry-impossible-seam', carry, seam_carry, message='No contiguous same-SLR resource range')
     seam_dsp = restricted('dsp-only-seam', 'DSP48E2_', {'DSP48E2_X0Y95', 'DSP48E2_X0Y96'})

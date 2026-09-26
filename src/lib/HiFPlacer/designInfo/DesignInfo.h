@@ -941,6 +941,10 @@ class DesignInfo
                     oriCellType == CellType_RAM64X1S || oriCellType == CellType_RAM64M8 ||
                     oriCellType == CellType_RAM256X1D);
         }
+        inline bool originallyIsShifter() const
+        {
+            return oriCellType == CellType_SRL16E || oriCellType == CellType_SRLC32E;
+        }
         inline bool isBRAM()
         {
             return cellType == CellType_RAMB18E2 || cellType == CellType_RAMB36E2 || cellType == CellType_FIFO18E2 ||

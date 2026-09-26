@@ -973,6 +973,11 @@ class ParallelCLBPacker
                     singleLUTs = fakeCluster->getSingleLUTs();
                     pairedLUTs = fakeCluster->getPairedLUTs();
                     PUs.insert(tmpPU);
+                    // Commit all packing state from the successful trial. Without
+                    // the MUX count, finalMapToSlots treats this as an ordinary
+                    // LUT/FF site and silently drops the dedicated MUX BELs.
+                    numMuxes = fakeCluster->getNumMuxes();
+                    hashed = false;
                     delete fakeCluster;
                     return true;
                 }

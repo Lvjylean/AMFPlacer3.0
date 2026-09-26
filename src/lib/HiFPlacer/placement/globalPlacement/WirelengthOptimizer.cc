@@ -1047,7 +1047,16 @@ void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
         {
             int clockRegionX = PU2ClockRegionColumn[curPU];
 
-            if (clockRegionX == 2)
+            if (JSONCfg["experimental multi-SLR placement"] == "true")
+            {
+                // Use the actual selected column on U250; VCU108's column-2
+                // special case must not pull an eight-column device toward 1/3.
+                placementInfo->addPseudoNetsInPlacementInfo(
+                    xSolver->solverData.objectiveMatrixTripletList, xSolver->solverData.objectiveMatrixDiag,
+                    xSolver->solverData.objectiveVector, curPU, cX,
+                    pesudoNetWeight * curPU->getNetsSetPtr()->size(), y2xRatio, true, false);
+            }
+            else if (clockRegionX == 2)
             {
                 if (std::fabs(curPU->X() - cX) > 6)
                     placementInfo->addPseudoNetsInPlacementInfo(

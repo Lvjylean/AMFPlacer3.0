@@ -363,7 +363,7 @@ void InitialPacker::findLUTRAMMacros()
     for (int curCellId = 0; curCellId < curNumCells; curCellId++)
     {
         auto curCell = curCellsInDesign[curCellId];
-        if (!curCell->originallyIsLUTRAM())
+        if (!curCell->originallyIsLUTRAM() && !curCell->originallyIsShifter())
             continue;
 
         if (cellInMacros.find(curCell) != cellInMacros.end())
@@ -374,6 +374,12 @@ void InitialPacker::findLUTRAMMacros()
 
         curMacro->addOccupiedSite(0, 1);
         curMacro->addCell(curCell, curCell->getCellType(), 0, 0);
+        // Only LUT A exposes Q31/MC31 to routing outside this reserved SLICEM.
+        // Keep a standalone cascade source there; in-slice F7 pairs were packed above.
+        if (curCell->originallyIsShifter())
+            for (auto pin : curCell->getOutputPins())
+                if (pin->getRefPinName() == "Q31" && pin->getNet() && pin->getNet()->getPins().size() > 1)
+                    curMacro->addFixedCellInfo(curCell, "SLICEM", "A6LUT");
         assert(cellInMacros.find(curCell) == cellInMacros.end());
         cellInMacros.insert(curCell);
         cellId2PlacementUnit[curCell->getElementIdInType()] = curMacro;
@@ -1361,6 +1367,61 @@ void InitialPacker::findMuxMacros()
 
         if (cellInMacros.find(curCell) != cellInMacros.end())
             continue;
+
+        // SRL32 O6 can feed F7 just like LUT6, but the pair must stay in a
+        // SLICEM. Reserve one whole SLICEM conservatively: general CLB packing
+        // does not yet model SRL write-clock/enable sharing with other cells.
+        std::vector<std::pair<DesignInfo::DesignCell *, std::string>> srlMuxCells;
+        bool hasSRL = false;
+        for (auto pin : curCell->getInputPins())
+            if ((pin->getRefPinName() == "I0" || pin->getRefPinName() == "I1") && pin->getDriverPin())
+            {
+                auto source = pin->getDriverPin()->getCell();
+                hasSRL |= source->getOriCellType() == DesignInfo::CellType_SRLC32E;
+                srlMuxCells.push_back({source, pin->getRefPinName() == "I0" ? "B6LUT" : "A6LUT"});
+            }
+        if (hasSRL)
+        {
+            auto netAt = [](DesignInfo::DesignCell *cell, const std::string &name) -> DesignInfo::DesignNet * {
+                for (auto pin : cell->getInputPins())
+                    if (pin->getRefPinName() == name) return pin->getNet();
+                return nullptr;
+            };
+            DesignInfo::DesignCell *firstSRL = nullptr;
+            std::set<DesignInfo::DesignCell *> members;
+            for (auto member : srlMuxCells)
+            {
+                auto cell = member.first;
+                if (!members.insert(cell).second || cellInMacros.count(cell))
+                    throw std::runtime_error("SRL/MUX input already owned by a macro: " + cell->getName());
+                if (cell->getOriCellType() == DesignInfo::CellType_SRLC32E)
+                {
+                    if (firstSRL && (netAt(cell, "CLK") != netAt(firstSRL, "CLK") ||
+                                     netAt(cell, "CE") != netAt(firstSRL, "CE")))
+                        throw std::runtime_error("SRL/MUX pair has incompatible CLK/CE: " + curCell->getName());
+                    firstSRL = cell;
+                }
+                else if (!cell->isLUT())
+                    throw std::runtime_error("Unsupported SRL/MUX input: " + cell->getName());
+            }
+            auto macro = new PlacementInfo::PlacementMacro(curCell->getName(), placementUnits.size(),
+                PlacementInfo::PlacementMacro::PlacementMacroType_MCLB);
+            macro->addOccupiedSite(0, 1);
+            srlMuxCells.push_back({curCell, "F7MUX_AB"});
+            for (auto member : srlMuxCells)
+            {
+                // Preserve original primitive types and SLICEM resource accounting.
+                macro->addCell(member.first, member.first->getCellType(), 0, 0);
+                macro->addFixedCellInfo(member.first, "SLICEM", member.second);
+                cellInMacros.insert(member.first);
+                cellId2PlacementUnit[member.first->getElementIdInType()] = macro;
+            }
+            macro->setWeight(16);
+            res.push_back(macro);
+            placementMacros.push_back(macro);
+            placementUnits.push_back(macro);
+            continue;
+        }
 
         std::vector<DesignInfo::DesignCell *> curMacroCores;
         curMacroCores.clear();

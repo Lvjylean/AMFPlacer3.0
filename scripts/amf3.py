@@ -155,6 +155,18 @@ def validate_resources(args):
     validate(ROOT, args)
 
 
+def validate_packing(args):
+    require_server()
+    from validate_srl_packing import validate
+    validate(ROOT,args)
+
+
+def full_run(args):
+    require_server()
+    from run_full_flow import run
+    run(ROOT, args)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
@@ -181,6 +193,18 @@ def main():
     p.add_argument('--resource-run', required=True)
     p.add_argument('--dcp', default='data/reference/getrf-u250/post_opt.dcp')
     p.set_defaults(action=validate_resources)
+    p = sub.add_parser('full-run', help='Recorded AMF full placement and Vivado routing')
+    p.add_argument('--config', default='configs/experiments/getrf-u250-full.json')
+    p.add_argument('--binary', default='builds/current/AMFPlacer')
+    p.add_argument('--dcp', default='data/reference/getrf-u250/post_opt.dcp')
+    p.add_argument('--packing-only', action='store_true')
+    p.add_argument('--amf-only', action='store_true')
+    p.add_argument('--placement-run', help='Completed AMF run to import and route in a new experiment')
+    p.set_defaults(action=full_run)
+    p = sub.add_parser('validate-packing', help='Vivado audit of SRL/MUX BEL maps')
+    p.add_argument('--packing-run', required=True)
+    p.add_argument('--dcp', default='data/reference/getrf-u250/post_opt.dcp')
+    p.set_defaults(action=validate_packing)
     p = sub.add_parser('status', help='Read experiment status')
     p.add_argument('--run')
     p.set_defaults(action=status)

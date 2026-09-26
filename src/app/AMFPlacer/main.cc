@@ -14,7 +14,7 @@
 
 int main(int argc, const char **argv)
 {
-    if (argc != 2 && !(argc == 4 && (std::string(argv[2]) == "--inspect-input" || std::string(argv[2]) == "--legalize-resources")))
+    if (argc != 2 && !(argc == 4 && (std::string(argv[2]) == "--inspect-packing" || std::string(argv[2]) == "--inspect-input" || std::string(argv[2]) == "--legalize-resources")))
     {
         std::cerr << "Usage: " << argv[0] << " <config JSON file> [--inspect-input <report.json> | --legalize-resources <directory>]\n";
         return 1;
@@ -24,6 +24,8 @@ int main(int argc, const char **argv)
         AMFPlacer placer(argv[1]);
         if (argc == 4 && std::string(argv[2]) == "--legalize-resources")
             placer.legalizeResources(argv[3]);
+        else if (argc == 4 && std::string(argv[2]) == "--inspect-packing")
+            placer.run(argv[3]);
         else if (argc == 4)
             placer.inspectInputs(argv[3]);
         else

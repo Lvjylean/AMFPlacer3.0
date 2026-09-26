@@ -970,7 +970,15 @@ void PlacementInfo::updateElementBinGrid()
                     assert(binIdX >= 0);
                     assert((unsigned int)binIdY < getBinGrid(SharedBELID).size());
                     assert((unsigned int)binIdX < getBinGrid(SharedBELID)[binIdY].size());
-                    assert(getBinGrid(SharedBELID)[binIdY][binIdX]->inRange(cellX, cellY));
+                    if (!getBinGrid(SharedBELID)[binIdY][binIdX]->inRange(cellX, cellY))
+                    {
+                        auto bin = getBinGrid(SharedBELID)[binIdY][binIdX];
+                        throw std::runtime_error("Macro cell outside assigned density bin: " + curCell->getName() +
+                            " xy=" + std::to_string(cellX) + "," + std::to_string(cellY) +
+                            " bounds=" + std::to_string(bin->left()) + "," + std::to_string(bin->right()) +
+                            "," + std::to_string(bin->bottom()) + "," + std::to_string(bin->top()) +
+                            " anchor=" + std::to_string(curMacro->X()) + "," + std::to_string(curMacro->Y()));
+                    }
                     if (getBinGrid(SharedBELID)[binIdY][binIdX]->canAddMore(num_cellOccupationBELs))
                     {
 

@@ -182,7 +182,15 @@ void writePlacement(PlacementInfo *placement, const std::string &directory)
         tcl << "lappend amf_resources " << tclWord(cell->getName()) << " " << tclWord(target + (bel.empty() ? "" : "/" + bel)) << '\n';
     }
     tcl << "place_cell $amf_resources\nunset amf_resources\n";
-    for (const auto &edge : cascadeEdges(placement->getDesignInfo())) edges[edge.family]++;
+    std::ofstream cascades(directory + "/cascades.tsv");
+    cascades << "source\tsink\tfamily\n";
+    for (const auto &edge : cascadeEdges(placement->getDesignInfo()))
+    {
+        edges[edge.family]++;
+        cascades << edge.source->getName() << '\t' << edge.sink->getName() << '\t' << edge.family << '\n';
+    }
+    cascades.close();
+    if (!cascades) throw std::runtime_error("Cannot write cascade report");
     auto emit = [&report](const std::map<std::string, int> &values) {
         bool first = true; report << "{";
         for (const auto &v : values) { if (!first) report << ','; first = false; report << std::quoted(v.first) << ':' << v.second; }

@@ -1582,7 +1582,7 @@ class PlacementInfo
                     if (curCell->isFF())
                         addFF();
                 }
-                if (curCell->isLUTRAM() || curCell->originallyIsLUTRAM())
+                if (curCell->isLUTRAM() || curCell->originallyIsLUTRAM() || curCell->originallyIsShifter())
                     addLUTRAM();
                 if (curCell->isLUT())
                     addLUT();
@@ -3347,8 +3347,8 @@ class PlacementInfo
     inline void getGridXY(float cellX, float cellY, int &binIdX, int &binIdY)
     {
 
-        float coord_offsetX = cellX - startX;
-        float coord_offsetY = cellY - startY;
+        double coord_offsetX = static_cast<double>(cellX) - startX;
+        double coord_offsetY = static_cast<double>(cellY) - startY;
         binIdX = static_cast<int>((coord_offsetX) / binWidth);
         binIdY = static_cast<int>((coord_offsetY) / binHeight);
         if (binIdY < 0)

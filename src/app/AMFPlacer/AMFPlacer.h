@@ -275,14 +275,14 @@ class AMFPlacer
      * @brief launch the analytical mixed-size FPGA placement procedure
      *
      */
-    void run()
+    void run(const std::string &packingReport = "")
     {
-        // Input-only porting milestone: never silently run unported legalizers.
+        // Full multi-SLR flow remains an explicit experimental opt-in.
         for (auto site : deviceinfo->getSites())
-            if (site->getSLRId() != 0)
+            if (packingReport.empty() && JSON["experimental multi-SLR placement"] != "true" && site->getSLRId() != 0)
                 throw std::runtime_error("Multi-SLR placement is not enabled yet; use --inspect-input.");
         for (auto cell : designInfo->getCells())
-            if (cell->isURAM())
+            if (packingReport.empty() && JSON["experimental multi-SLR placement"] != "true" && cell->isURAM())
                 throw std::runtime_error("URAM placement is not enabled yet; use --inspect-input.");
         assert(JSON.find("cellType2fixedAmo file") != JSON.end());
         assert(JSON.find("cellType2sharedCellType file") != JSON.end());
@@ -295,6 +295,41 @@ class AMFPlacer
         InitialPacker *initialPacker = new InitialPacker(designInfo, deviceinfo, placementInfo, JSON);
         initialPacker->pack();
         HardResourceUtils::validateCascadeMacros(placementInfo);
+        if (!packingReport.empty())
+        {
+            std::ofstream report(packingReport);
+            report << "macro\tcell\tprimitive\tbel\tslicem_required\n";
+            for (auto macro : placementInfo->getPlacementMacros())
+                for (const auto &fixed : macro->getFixedCellInfoVec())
+                    report << macro->getName() << "\t" << fixed.cell->getName() << "\t"
+                           << fixed.cell->getOriCellType() << "\t" << fixed.BELName << "\t" << macro->isMCLB() << "\n";
+            if (!report) throw std::runtime_error("Cannot write packing report: " + packingReport);
+            // Exercise the trial-commit path used by exception handling and
+            // detailed placement, not just initial macro recognition.
+            DeviceInfo::DeviceSite *testSite = nullptr;
+            for (auto site : deviceinfo->getSites())
+                if (site->getSiteType() == "SLICEL") { testSite = site; break; }
+            unsigned int checkedMuxClusters = 0;
+            std::vector<ParallelCLBPacker::PackingCLBSite *> unused;
+            for (auto macro : placementInfo->getPlacementMacros())
+            {
+                if (macro->getMacroType() != PlacementInfo::PlacementMacro::PlacementMacroType_MUX7 &&
+                    macro->getMacroType() != PlacementInfo::PlacementMacro::PlacementMacroType_MUX8) continue;
+                if (!testSite) throw std::runtime_error("No SLICEL for MUX packing inspection");
+                ParallelCLBPacker::PackingCLBSite site(placementInfo, testSite, 3, 10, 0.25, 0.5, 6, 10, 0.4, 0.02, unused);
+                ParallelCLBPacker::PackingCLBSite::PackingCLBCluster cluster(&site);
+                if (!cluster.tryAddPU(macro) || cluster.getNumMuxes() != 1)
+                    throw std::runtime_error("MUX trial insertion lost cluster state: " + macro->getName());
+                ParallelCLBPacker::PackingCLBSite::PackingCLBCluster copy(&cluster);
+                copy.removePUToConstructDetCluster(macro);
+                if (copy.getNumMuxes() != 0 || !copy.tryAddPU(macro) || copy.getNumMuxes() != 1 || copy.tryAddPU(macro))
+                    throw std::runtime_error("MUX cluster copy/remove/reinsert failed: " + macro->getName());
+                ++checkedMuxClusters;
+            }
+            print_info("MUX cluster trial-commit checks: " + std::to_string(checkedMuxClusters));
+            print_status("Initial Packing Done");
+            return;
+        }
         placementInfo->resetLUTFFDeterminedOccupation();
 
         placementInfo->printStat();
@@ -381,6 +416,8 @@ class AMFPlacer
                                   timingOptimizer, globalPlacer->getWirelengthOptimizer());
         parallelCLBPacker->packCLBs(30, true);
         parallelCLBPacker->setPULocationToPackedSite();
+        if (JSON["experimental multi-SLR placement"] == "true")
+            HardResourceUtils::writePlacement(placementInfo, JSON["dumpDirectory"]);
         timingOptimizer->conductStaticTimingAnalysis();
         placementInfo->checkClockUtilization(true);
         print_info("Current Total HPWL = " + std::to_string(placementInfo->updateB2BAndGetTotalHPWL()));
@@ -391,7 +428,10 @@ class AMFPlacer
         placementInfo->dumpCongestion(JSON["dumpDirectory"] + "/congestionInfo");
 
         if (parallelCLBPacker)
+        {
             delete parallelCLBPacker;
+            parallelCLBPacker = nullptr;
+        }
 
         // currently, some fixed/packed flag cannot be stored in the check-point (TODO)
         clearSomeAttributesCannotRecord();

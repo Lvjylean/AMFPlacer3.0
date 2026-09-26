@@ -50,9 +50,11 @@ python3 AMFplacer3.0/scripts/sync_reports.py <run-id>
 
 同步器仅允许报告/元数据/日志扩展名，拒绝 DCP 和符号链接，不传输输入、构建或许可证。
 
+U250 GETRF 完整流程使用 `python3 scripts/amf3.py full-run`，后端重试使用 `full-run --placement-run experiments/runs/<completed-amf-run>`。当前修复、验证进展与限制见 [GETRF 完整流程](docs/research/u250-getrf-full-flow.md)。
+
 ## 已验证基线
 
-U250 已开放输入检查和独立硬资源分配/合法化，覆盖 URAM 与 Carry/DSP 专用级联 SLR 检查。`amf3.py legalize-resources` 执行本阶段，`amf3.py validate-resources` 用 Vivado 回读部分位置。完整布局入口仍未开放；不接入外部 floorplan，不实现 SLL 优化。输入层记录见 [U250 输入适配](docs/research/u250-input-adaptation.md)，本阶段验证、命令和限制见 [U250 资源合法化](docs/research/u250-resource-legalization.md)。
+U250 已开放输入检查和独立硬资源分配/合法化，覆盖 URAM 与 Carry/DSP 专用级联 SLR 检查。`amf3.py legalize-resources` 执行本阶段，`amf3.py validate-resources` 用 Vivado 回读部分位置。已新增实验性 `amf3.py full-run` 入口并修复 GETRF 的 SRL/MUX 初始打包与最终 CLB 映射问题，修复版 AMF 全部 856,998 个单元导出已通过，完整 GETRF 布线验收进行中；不接入外部 floorplan，不实现 SLL 优化。输入层记录见 [U250 输入适配](docs/research/u250-input-adaptation.md)，本阶段验证、命令和限制见 [U250 资源合法化](docs/research/u250-resource-legalization.md)。
 
 2026-09-25 的成功轮次为 `faceDetect-benchmark-20260925-144131`：AMF 98.676 秒，Vivado 后端 564.033 秒，113,125 条可布线网络全部完成，路由错误 0；WNS 0.300 ns、TNS 0，hold 违例 0，总线偏斜 8 项通过。约 99.22% 的 AMF 请求位置在最终 DCP 中保留。
 
