@@ -2,7 +2,7 @@
 
 2026-09-27。服务器根目录 `/Projects/jinyang/workspace/AMFplacer3.0`，分支 `codex/device-physical-boundaries`。
 
-A–C 已实现并通过预检。早期 D 容量审计发现并修正了 RAMB36 虚拟占位重复计数，修正后的三组完整 GETRF 正在运行。尚无新策略布线后的 QoR 结论，默认配置和 `builds/validated-getrf-u250-full` 不变。
+A–C 已实现并通过预检。早期 D 容量审计发现并修正了 RAMB36 虚拟占位重复计数，随后旧时序权重导致 control 数值失败；共同数值保护已实现，完整 GETRF 将重新验证。尚无新策略布线后的 QoR 结论，默认配置和 `builds/validated-getrf-u250-full` 不变。
 
 ## A：器件结构与模型
 
@@ -67,7 +67,7 @@ A–C 已实现并通过预检。早期 D 容量审计发现并修正了 RAMB36 
 
 ```bash
 python3 scripts/amf3.py compare-boundaries \
-  --binary builds/build-20260927-031245-945274-acc3123f/build/AMFPlacer \
+  --binary builds/build-20260927-040853-711621-4a9afc6f/build/AMFPlacer \
   --parallel 3
 ```
 
@@ -89,7 +89,7 @@ python3 scripts/amf3.py compare-boundaries \
 | delay | getrf-u250-full-20260927-032031-594456 |
 | cluster | getrf-u250-full-20260927-032031-595260 |
 
-预检已完成，三组仍在运行。最终验收须读取本轮结果，不能混用前面已中止的三个目录。
+该轮已因 control 数值失败停止，详见下一节。不得将这三个目录当作已完成验收。
 
 ## D 阶段数值稳定性阻塞与共同修复
 
