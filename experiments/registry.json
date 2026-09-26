@@ -51,6 +51,103 @@
       "directory": "experiments/runs/faceDetect-vivado-native-20260925-214940-832956",
       "status_file": "experiments/runs/faceDetect-vivado-native-20260925-214940-832956/status.json",
       "created": "2026-09-25T21:49:40.876538+08:00"
+    },
+    {
+      "id": "getrf-u250-full-20260926-150155-081308",
+      "kind": "u250-full-attempt",
+      "directory": "experiments/runs/getrf-u250-full-20260926-150155-081308",
+      "status_file": "experiments/runs/getrf-u250-full-20260926-150155-081308/status.json",
+      "configuration_snapshot": "experiments/runs/getrf-u250-full-20260926-150155-081308/config.json",
+      "source_commit_at_start": "fbebbe04c28f57a1f03c4e1587c9bd90d9a006c9",
+      "build_directory": "/Projects/jinyang/workspace/AMFplacer3.0/builds/build-20260926-145958-730571-fbebbe04/build",
+      "created": "2026-09-26T15:01:55.335150+08:00"
+    },
+    {
+      "id": "getrf-u250-full-20260926-150648-975751",
+      "kind": "u250-full-attempt",
+      "directory": "experiments/runs/getrf-u250-full-20260926-150648-975751",
+      "status_file": "experiments/runs/getrf-u250-full-20260926-150648-975751/status.json",
+      "configuration_snapshot": "experiments/runs/getrf-u250-full-20260926-150648-975751/config.json",
+      "source_commit_at_start": "fbebbe04c28f57a1f03c4e1587c9bd90d9a006c9",
+      "build_directory": "/Projects/jinyang/workspace/AMFplacer3.0/builds/build-20260926-150449-133571-fbebbe04/build",
+      "created": "2026-09-26T15:06:49.232947+08:00"
+    },
+    {
+      "id": "getrf-u250-full-20260926-151909-521419",
+      "kind": "u250-full-attempt",
+      "directory": "experiments/runs/getrf-u250-full-20260926-151909-521419",
+      "status_file": "experiments/runs/getrf-u250-full-20260926-151909-521419/status.json",
+      "configuration_snapshot": "experiments/runs/getrf-u250-full-20260926-151909-521419/config.json",
+      "source_commit_at_start": "fbebbe04c28f57a1f03c4e1587c9bd90d9a006c9",
+      "build_directory": "/Projects/jinyang/workspace/AMFplacer3.0/builds/build-20260926-151740-456314-fbebbe04/build",
+      "created": "2026-09-26T15:19:09.779199+08:00"
+    },
+    {
+      "id": "getrf-u250-full-20260926-161904-089708",
+      "kind": "u250-full-attempt",
+      "directory": "experiments/runs/getrf-u250-full-20260926-161904-089708",
+      "status_file": "experiments/runs/getrf-u250-full-20260926-161904-089708/status.json",
+      "configuration_snapshot": "experiments/runs/getrf-u250-full-20260926-161904-089708/config.json",
+      "source_commit_at_start": "fbebbe04c28f57a1f03c4e1587c9bd90d9a006c9",
+      "build_directory": "/Projects/jinyang/workspace/AMFplacer3.0/builds/build-20260926-151740-456314-fbebbe04/build",
+      "created": "2026-09-26T16:19:04.349561+08:00"
+    },
+    {
+      "id": "getrf-u250-full-20260926-163444-325508",
+      "kind": "u250-full-attempt",
+      "directory": "experiments/runs/getrf-u250-full-20260926-163444-325508",
+      "status_file": "experiments/runs/getrf-u250-full-20260926-163444-325508/status.json",
+      "configuration_snapshot": "experiments/runs/getrf-u250-full-20260926-163444-325508/config.json",
+      "source_commit_at_start": "fbebbe04c28f57a1f03c4e1587c9bd90d9a006c9",
+      "build_directory": "/Projects/jinyang/workspace/AMFplacer3.0/builds/build-20260926-151740-456314-fbebbe04/build",
+      "created": "2026-09-26T16:34:44.574769+08:00"
+    },
+    {
+      "id": "getrf-u250-full-20260926-170252-047980",
+      "kind": "u250-full-attempt",
+      "directory": "experiments/runs/getrf-u250-full-20260926-170252-047980",
+      "status_file": "experiments/runs/getrf-u250-full-20260926-170252-047980/status.json",
+      "configuration_snapshot": "experiments/runs/getrf-u250-full-20260926-170252-047980/config.json",
+      "source_commit_at_start": "fbebbe04c28f57a1f03c4e1587c9bd90d9a006c9",
+      "build_directory": "/Projects/jinyang/workspace/AMFplacer3.0/builds/build-20260926-165756-043079-fbebbe04/build",
+      "created": "2026-09-26T17:02:52.315510+08:00"
+    },
+    {
+      "id": "getrf-u250-full-20260926-173107-822886",
+      "kind": "u250-full-diagnostic",
+      "directory": "experiments/runs/getrf-u250-full-20260926-173107-822886",
+      "status_file": "experiments/runs/getrf-u250-full-20260926-173107-822886/status.json",
+      "configuration_snapshot": "experiments/runs/getrf-u250-full-20260926-173107-822886/config.json",
+      "source_commit_at_start": "fbebbe04c28f57a1f03c4e1587c9bd90d9a006c9",
+      "build_directory": "/Projects/jinyang/workspace/AMFplacer3.0/builds/build-20260926-165756-043079-fbebbe04/build",
+      "created": "2026-09-26T17:31:08.088756+08:00"
+    },
+    {
+      "id": "getrf-u250-full-20260926-183758-400040",
+      "kind": "u250-full-validated",
+      "directory": "experiments/runs/getrf-u250-full-20260926-183758-400040",
+      "status_file": "experiments/runs/getrf-u250-full-20260926-183758-400040/status.json",
+      "configuration_snapshot": "experiments/runs/getrf-u250-full-20260926-183758-400040/config.json",
+      "source_commit_at_start": "fbebbe04c28f57a1f03c4e1587c9bd90d9a006c9",
+      "build_directory": "/Projects/jinyang/workspace/AMFplacer3.0/builds/build-20260926-183632-669176-fbebbe04/build",
+      "created": "2026-09-26T18:37:58.656073+08:00",
+      "baseline_file": "experiments/baselines/getrf-u250-full-20260926.json",
+      "implementation_verified": true,
+      "timing_met": false
+    },
+    {
+      "id": "getrf-u250-route-altclb-20260926-213914-179421",
+      "kind": "u250-route-retry",
+      "directory": "experiments/runs/getrf-u250-route-altclb-20260926-213914-179421",
+      "status_file": "experiments/runs/getrf-u250-route-altclb-20260926-213914-179421/status.json",
+      "configuration_snapshot": "experiments/runs/getrf-u250-route-altclb-20260926-213914-179421/config.json",
+      "placement_source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/runs/getrf-u250-full-20260926-183758-400040",
+      "directive": "AlternateCLBRouting",
+      "source_commit_at_start": "5755fe7a0087c6212c0bd40688549e3dc09d256d",
+      "created": "2026-09-26T21:39:14.253849+08:00",
+      "outcome": "stopped_after_verified_default_success",
+      "implementation_verified": false,
+      "algorithm_failure": false
     }
   ]
 }

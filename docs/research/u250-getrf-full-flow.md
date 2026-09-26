@@ -1,10 +1,55 @@
 # U250 GETRF 完整布局布线适配
 
-状态：修复版 AMF 完整布局与 100% 单元导出已通过；Vivado 完整布线仍在验证，本记录暂不表示布线成功。
+状态：修复版 GETRF 在 U250 上的 AMF → Vivado 完整布局布线验收通过，最终 DCP 已保存在服务器；本次 10 ns 约束下 setup 时序尚未收敛。
+
+## 最终验收结果
+
+通过轮次：`getrf-u250-full-20260926-183758-400040`。汇总中的 `amf_export_complete=true`、`routing_complete=true`、`implementation_verified=true`，`timing_met=false`。
+
+| 项目 | 结果 |
+|---|---|
+| AMF 真实单元导出 | 856,998 / 856,998；适配层未改变任何站点或 BEL |
+| 可布线网络 | 928,432 / 928,432 全部完成，路由错误 0 |
+| DRC | Error 0、Critical Warning 0；另有 9,985 条 Warning、4,096 条 Advisory |
+| 原始 LOC/BEL 保留 | 855,160 / 856,998，99.7855% |
+| 原始站点保留 | 855,193 / 856,998 |
+| Carry/DSP 专用级联 | 12,183 对，布线后违规 0 |
+| SRL Q31 连接 | 325 条，布线后违规 0 |
+| URAM | 256 个全部保留原站点；SLR0/1/2/3 分别为 69/139/48/0 |
+| Setup | WNS −2.886 ns，TNS −811.808 ns，1,744 个失败端点 |
+| Hold / Pulse width | WHS 0.019 ns、THS 0；脉宽违例 0 |
+
+26,096 个硬资源全部合法放置；其中 4 个 Carry 单元经 Vivado 调整了站点，全部专用级联仍满足同 SLR、同列、相邻行。DRC 警告主要是 DSP 流水线建议和无可布线负载提示。输入是 OOC 内核，Vivado 明确提示部分连接型 DRC 未执行；这里不将其等同于完整板级签核。GETRF 最终日志没有 `Timing 38-242` 提示。
+
+| 阶段 | 本次墙钟耗时（秒） |
+|---|---:|
+| AMF 进程 | 3411.106 |
+| Vivado 读取 DCP | 80.944 |
+| AMF 位置导入 | 1721.207 |
+| Vivado 布局 | 940.697 |
+| Vivado 布线 | 7163.717 |
+
+Vivado 进程整体为 10328.067 s；从实验开始到完成为 13781.058 s，包含适配、审计、报告、检查点 I/O 等。本轮使用已有网表导出缓存，未计入重新导出网表的时间；期间与诊断或备用实验并行运行，以上是本次观测值，不作为独占服务器的性能基准。
+
+最终 DCP（仅服务器）：
+
+```text
+/Projects/jinyang/workspace/AMFplacer3.0/experiments/runs/getrf-u250-full-20260926-183758-400040/reports/getrf_routed.dcp
+```
+
+大小 389,780,549 字节，SHA256 `e14f4710711e1b45d2842948a9a48035f225ab7c1b818477a51afc72a59e48a9`。固定基线为 `experiments/baselines/getrf-u250-full-20260926.json`，验证构建入口为 `builds/validated-getrf-u250-full/AMFPlacer`；以前的 faceDetect 和硬资源验证构建入口保持不变。原生 C++ 源码对应 `5755fe7a`，执行脚本以该轮 `inputs/` 的实际快照与哈希为准。
+
+```sh
+python3 scripts/amf3.py full-run --binary builds/validated-getrf-u250-full/AMFPlacer --config configs/experiments/getrf-u250-full.json
+```
+
+当前保留的工程边界是原生 CLB 模型尚需 Vivado 完成少量合法化；AMF SLL 代价、外部 floorplan 接入和跨版本增量算法仍按后续阶段推进。
 
 ## 范围与输入
 
 沿用原始 `data/reference/getrf-u250/post_opt.dcp`（SHA256 `6283aa4874b42d939a2b00e53cce77574fa03a26f45914364ab9ca632b42c031`）、完整时钟连接网表和 U250 器件库。源代码基点为 `fbebbe04`，工作分支 `codex/u250-uram`。本阶段不接入外部 partition/floorplan，也不优化 SLL。
+
+原生修复与完整流程入口已提交为 `5755fe7a0087c6212c0bd40688549e3dc09d256d`。实验启动时的基点、工作区补丁和独立构建快照保留在各轮 manifest/inputs 中；不能把启动后提交的哈希改写成实验的启动提交。
 
 本轮配置显式选择 AMF `ClockPeriod=10` ns；Vivado 保留原始 DCP 中的 `ap_clk=10` ns。二者分别记录，没有从网表推断目标时序。最终 DCP 只保存在服务器。
 
@@ -34,7 +79,7 @@ SRL32 使用 SLICEM 的依据：[AMD UG574](https://docs.amd.com/r/en-US/ug574-u
 - `input-regression-20260926-1520`：6 项输入兼容检查通过。
 - `resource-regression-20260926-1520`：15 项硬资源检查通过，含 URAM、Carry/DSP 跨 SLR 边界和旧 VCU108。
 - `check_sa_floating.cc`：3 个簇、无固定单元、非整除线程批次，在 15 秒超时内完成；每个簇恰好出现一次，坐标均有效。
-- `make check`：35 项 Python 检查通过，覆盖输出路径、后端重试、重复赋值、失败批次的带索引单元名以及布线完整性判定。
+- `make check`：38 项 Python 检查通过，覆盖输出路径、后端重试、重复赋值、失败批次的带索引单元名以及布线完整性判定。
 - `resource-regression-20260926-1700`：新构建 16 项硬资源检查通过，新增两个各 11 站点列的 9.9 行预算回归；新构建约 8 秒完成，旧构建在同一输入上超过 20 秒未结束（主动超时），见 `overflow-before-fix-20260926-1702`。
 - `mux-tests-20260926-1843`：最终映射修复构建的 6 项真实 C++ 检查通过，含普通 MUXF7、MUXF8 宏的试插入状态回归。
 - `mux-tests-20260926-1816`：出口修复构建 `build-20260926-181230-598338-fbebbe04` 的 5 项真实 C++ 打包检查通过，新增独立 Q31 源必须导出 A6LUT 的用例。
@@ -44,11 +89,15 @@ SRL32 使用 SLICEM 的依据：[AMD UG574](https://docs.amd.com/r/en-US/ug574-u
 - `getrf-u250-full-20260926-161904-089708`：试用上游 `DirectMacroLegalize=true`，硬资源位移反复在约 45～60 单位间波动，928.615 s 主动终止；保留失败状态和终止原因。正式全量配置恢复默认合法化方式。
 - `getrf-u250-full-20260926-163444-325508`：使用显式验证配置 `GlobalPlacementIteration=9`；全部前期布局阶段完成后，在精确合法化中暴露分数列预算死循环。约 30.49 GB 完整重复日志无损保存为 `logs/amf.log.gz`（约 231 MB），另存首尾摘录。终止状态和原因保留。
 - `getrf-u250-full-20260926-170252-047980`：包含列溢出修复的新构建 `build-20260926-165756-043079-fbebbe04` 已越过原始列预算死循环，但减少前期迭代导致末段 QP 发散：线长上升至 1.0315e11 后产生 NaN 坐标，2026-09-26 17:29:16 自行退出。失败配置仅保留在实验目录，不作为推荐入口。
-- `getrf-u250-full-20260926-173107-822886`：恢复标准 30 次配置，AMF 3125.938 s 完成并成功导出；但覆盖检查发现 298 个 MUXF7、91 个 MUXF8 未输出 BEL。保留该轮 Vivado 诊断，不计作修复后的完整 AMF 验收。
+- `getrf-u250-full-20260926-173107-822886`：恢复标准 30 次配置，AMF 3125.938 s 完成并成功导出；但覆盖检查发现 298 个 MUXF7、91 个 MUXF8 未输出 BEL。保留该轮 Vivado 诊断，不计作修复后的完整 AMF 验收。该轮后端已结束：路由 4822.969 s，929,057/929,057 条可布线网络全部完成、路由错误 0、DRC 错误及严重警告均为 0；布线后 Carry/DSP/SRL 均无违规。最终 WNS −2.872 ns、TNS −1376.263 ns，hold 无违例。汇总明确为 `amf_export_complete=false`、`implementation_verified=false`，不能用它替代修复版验收。
 
-- `getrf-u250-full-20260926-183758-400040`：使用构建 `build-20260926-183632-669176-fbebbe04` 原生包含 MUX 试插入状态修复与独立 SRL Q31 出口修复。AMF 3411.106 s、退出码 0；856,998/856,998 个真实单元全部赋值，MUXF7 13,860 个、MUXF8 5,679 个无遗漏。325 条 SRL 级联检查通过，适配层未修改任何站点或 BEL。Vivado 后端正在验证。构建二进制 SHA256 为 `c2e3fddc6cb89c56bd9cc67b33b17011fb29b5d1c3ab0b23e382d6299b7f6df8`，全部 3,387 个源码文件与当前原生代码一致，证据 `experiments/evidence/getrf-u250-source-match-20260926-1847.json`。
+- `getrf-u250-full-20260926-183758-400040`：使用构建 `build-20260926-183632-669176-fbebbe04` 原生包含 MUX 试插入状态修复与独立 SRL Q31 出口修复。AMF 3411.106 s、退出码 0；856,998/856,998 个真实单元全部赋值，MUXF7 13,860 个、MUXF8 5,679 个无遗漏。325 条 SRL 级联检查通过，适配层未修改任何站点或 BEL。Vivado 默认后端已完成严格验收，最终结果见本文开头。构建二进制 SHA256 为 `c2e3fddc6cb89c56bd9cc67b33b17011fb29b5d1c3ab0b23e382d6299b7f6df8`，全部 3,387 个源码文件与当前原生代码一致，证据 `experiments/evidence/getrf-u250-source-match-20260926-1847.json`。
 
 - `getrf-export-adapter-20260926-192606`：444 MB 真实 Tcl 的增强适配预检通过，准确拒绝旧输出缺失的 389 个 MUX；Tcl 语法完整，新增诊断前后请求位置清单 SHA256 一致。
+
+修复版 `getrf-u250-full-20260926-183758-400040` 的 Vivado 导入耗时 1721.207 s，855,158/856,998 个真实单元直接接受原始 LOC/BEL，1,840 个留给后端合法化。`place_design` 耗时 940.697 s 后，全部 856,998 个请求单元均在设计中且完成放置；855,160 个 LOC/BEL 精确保留（99.7855%），855,193 个站点保留。12,183 对 Carry/DSP 级联与 325 条 SRL 连接均为零违规。布局 DCP 保存在该轮服务器 `reports/getrf_placed.dcp`，它不代表完成布线。
+
+导入仍有少量原生 CLB 打包限制：347 个初始批次拒绝和 923 次重试拒绝中，记录到 1,084 次 OUTMUXC 争用、130 次 FFMUX 不可布线、48 次共享复位不匹配、6 次 Vivado shape 限制及 2 次 LUT 输入数量冲突。这些是错误事件数，不能当作不同单元的数量；完整消息保存在 `reports/import_diagnostics.json`。后端合法化已完成放置并修复导入后暂时未满足的级联；本阶段没有声称 AMF 原始输出可完全省略 Vivado 的后续布局。
 
 ## 入口与结果语义
 
@@ -67,3 +116,13 @@ python3 scripts/amf3.py full-run --placement-run experiments/runs/<completed-amf
 ## 后端环境预检
 
 `u250-backend-probe-20260926-1801` 使用微小原生 Vivado 计数器验证同一 U250 型号的 OOC 综合、布局、布线和许可，146.003 s 完成，10/10 可布线网络完成、路由错误 0。这不是 GETRF 或 AMF 全流程验证。OOC 时钟未设置顶层 `HD.CLK_SRC` 时，Vivado 提示不能估计时钟延迟/偏斜；最终 GETRF 报告单独记录该提示，不把 OOC 约束结果等同于顶层时钟树签核。
+
+## 独立路由重试
+
+修复版默认路由在第一轮全局重布结束时仍残留 1 个重叠节点，第二轮重布的冲突计数一度升到 292,968，当时默认实验继续运行。为检验拥塞处理策略，另建 `getrf-u250-route-altclb-20260926-213914-179421`，复用同一轮已审计的 `getrf_placed.dcp`，采用 Vivado 2024.2 原生 `AlternateCLBRouting`。该选项来自实际安装版本的命令帮助（`experiments/preflight/vivado-routing-help-20260926-213352/help.log`），用于尝试不同的 CLB 路由算法；没有修改时序约束或 AMF 放置。
+
+```sh
+python3 scripts/diagnostics/retry_getrf_routing.py --placement-run experiments/runs/getrf-u250-full-20260926-183758-400040
+```
+
+重试入口要求原 AMF 退出成功、导出全覆盖、布局全部完成且级联零违规，并记录源检查点哈希、源 manifest、源阶段耗时和本轮脚本快照。复用的 AMF/导入/布局耗时与新执行的路由耗时分开记录，重试状态中的 `full_placement_executed=false` 表示本轮复用布局。38 项 Python 回归检查通过，包含拒绝不完整或非法来源的保护。备用轮次读取后全部 856,998 个单元仍在位，855,160 个 LOC/BEL 匹配，级联检查通过；默认轮次通过严格验收并写出最终 DCP 后，备用轮次于 2026-09-26 22:30 主动停止以释放资源；状态为 `stopped`、`algorithm_failure=false`，保留 `reports/termination.json` 和原始退出状态。备用策略没有完成整轮路由，不计作成功或算法失败。

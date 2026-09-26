@@ -6,12 +6,12 @@ set timeline [open [file join $out stages.tsv] w]
 puts $timeline "stage\tseconds"
 proc timed {name body} {
     global timeline
-    puts "AMF_STAGE_START $name"
+    puts "AMF_STAGE_START $name"; flush stdout
     set begin [clock milliseconds]
     uplevel 1 $body
     set seconds [expr {([clock milliseconds]-$begin)/1000.0}]
     puts $timeline "$name\t$seconds"; flush $timeline
-    puts "AMF_STAGE_FINISH $name $seconds"
+    puts "AMF_STAGE_FINISH $name $seconds"; flush stdout
 }
 array set requested {}
 set f [open [file join $placement requested.tsv] r]

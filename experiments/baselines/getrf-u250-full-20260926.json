@@ -1,0 +1,246 @@
+{
+  "schema": "amf-full-flow-baseline-v1",
+  "case": "getrf-u250",
+  "run": "experiments/runs/getrf-u250-full-20260926-183758-400040",
+  "source_commit_at_start": "fbebbe04c28f57a1f03c4e1587c9bd90d9a006c9",
+  "native_source_equivalent_commit": "5755fe7a0087c6212c0bd40688549e3dc09d256d",
+  "source_patch_at_start": "experiments/runs/getrf-u250-full-20260926-183758-400040/inputs/working_tree.patch",
+  "runner_snapshots": "experiments/runs/getrf-u250-full-20260926-183758-400040/inputs",
+  "runner_files_sha256": {
+    "run_full_flow.py": "5a043e171d5cb954e33a35096f0baf62d821835909fe696be38e1b32de68002b",
+    "run_full_backend.py": "94ec7cd821d2593b87e4cfa4a152ff12e4e3b62d3ed65c913ae11fe9dbbe9981",
+    "summarize_full_flow.py": "161ea6f1d7662f5552351c1f3cc277091a387f79ffa303ad92cf387e561b158c",
+    "srl_cascades.py": "347287f71cc4c39d6aac6cdfd3f851047cd3f741352da1fb3d20baf6361bd033",
+    "inspect_amf_inputs.py": "c575b5e0d91998ed356ff0ff90d6fd16c12145b9eed5fa61a3560c93a7a8fe69",
+    "amf3.py": "7b1c78841ca370a08dd38c69634dc93c9089c207fda0b088de39336ad2dc88ed"
+  },
+  "backend_script_sha256": "266c891a218bd564cf7427a9258c3645f4ef3465c9dfc974ad4f4d5a53730479",
+  "build": "builds/build-20260926-183632-669176-fbebbe04",
+  "binary_sha256": "c2e3fddc6cb89c56bd9cc67b33b17011fb29b5d1c3ab0b23e382d6299b7f6df8",
+  "validated_build": "builds/validated-getrf-u250-full",
+  "config_snapshot": "experiments/runs/getrf-u250-full-20260926-183758-400040/config.json",
+  "config_sha256": "622303d25b7eff35250c3a5f0070afc8ab0ca5dfdb1bded1191f35647d0ea571",
+  "input_dcp_sha256": "6283aa4874b42d939a2b00e53cce77574fa03a26f45914364ab9ca632b42c031",
+  "inputs": {
+    "vivado extracted device information file": {
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/data/devices/u250-vivado-2024.2/exportSiteLocation.zip",
+      "sha256": "30b07cc2f8505a8d4a8c14bdebd4bd128051325e2ec0e535f192f8068d434fcb"
+    },
+    "vivado extracted design information file": {
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/data/reference/getrf-u250/amf-inputs/netlist.zip",
+      "sha256": "43f9519fc3dfdbc6fe899c0bdfdbcff12d3e077d74f6acf456262c0859d50a4b"
+    },
+    "clock file": {
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/data/reference/getrf-u250/amf-inputs/clocks",
+      "sha256": "07a841cee796403bb14a3659b2c4a5c09a79047f0bdf6662b2c64c8bb9801a27"
+    },
+    "mergedSharedCellType2sharedCellType": {
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/configs/devices/u250/mergedSharedCellType2sharedCellType",
+      "sha256": "1649489710040b2425f5f508c241101e37bbf62eae60f8eb4fd736ff1079c982"
+    },
+    "cellType2fixedAmo file": {
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/configs/devices/u250/cellType2fixedAmo",
+      "sha256": "f3e4d2bbe26b45c0eb562b7fb8249524dc7f01c0be9595ffeb722cc572ed4e33"
+    },
+    "cellType2sharedCellType file": {
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/configs/devices/u250/cellType2sharedCellType",
+      "sha256": "f2f1832e477624e1b1f563c85415405c8fbe85b93809509e5eac5cf73d73d553"
+    },
+    "sharedCellType2BELtype file": {
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/configs/devices/u250/sharedCellType2BELtype",
+      "sha256": "ff49d19d6fac348d39e23ceb1fcd5b678e01f7ff32f60e9d13448bed30d64781"
+    }
+  },
+  "tools": {
+    "vivado_version": "2024.2",
+    "part": "xcu250-figd2104-2L-e",
+    "max_threads": 4
+  },
+  "clock_constraints": {
+    "amf_clock_period_ns": 10.0,
+    "amf_source": "explicit experiment configuration",
+    "vivado_source": "original DCP constraints",
+    "note": "10 ns is this experiment configuration; it is not inferred from connectivity."
+  },
+  "process_elapsed_seconds": {
+    "amf": 3411.1060422691517,
+    "vivado": 10328.06678685313
+  },
+  "vivado_stage_elapsed_seconds": {
+    "open": 80.944,
+    "import": 1721.207,
+    "import_audit": 16.679,
+    "place": 940.697,
+    "place_audit": 18.626,
+    "route": 7163.717,
+    "route_audit": 19.384,
+    "reports": 165.365,
+    "checkpoint": 76.868
+  },
+  "wall_clock_elapsed_seconds": 13781.058283,
+  "amf_coverage": {
+    "input_cells": 856998,
+    "assigned_cells": 856998,
+    "input_by_type": {
+      "FDRE": 390827,
+      "LUT4": 63712,
+      "LUT5": 44656,
+      "LUT6": 107670,
+      "LUT3": 97090,
+      "LUT2": 81498,
+      "FDSE": 357,
+      "SRL16E": 11614,
+      "LUT1": 13122,
+      "CARRY8": 22508,
+      "MUXF7": 13860,
+      "SRLC32E": 817,
+      "RAMB36E2": 515,
+      "MUXF8": 5679,
+      "DSP48E2": 2816,
+      "URAM288": 256,
+      "RAMB18E2": 1
+    },
+    "assigned_by_type": {
+      "FDRE": 390827,
+      "LUT4": 63712,
+      "LUT5": 44656,
+      "LUT6": 107670,
+      "LUT3": 97090,
+      "LUT2": 81498,
+      "FDSE": 357,
+      "SRL16E": 11614,
+      "LUT1": 13122,
+      "CARRY8": 22508,
+      "MUXF7": 13860,
+      "SRLC32E": 817,
+      "RAMB36E2": 515,
+      "MUXF8": 5679,
+      "DSP48E2": 2816,
+      "URAM288": 256,
+      "RAMB18E2": 1
+    },
+    "missing_by_type": {}
+  },
+  "placement_adapter_assignments_changed": false,
+  "routed_placement": {
+    "requested": 856998,
+    "present": 856998,
+    "placed": 856998,
+    "exact_loc_bel_matches": 855160,
+    "site_matches": 855193,
+    "exact_original_loc_bel_matches": 855160,
+    "design_primitive_cells": 934975,
+    "unrequested_primitive_cells": 77977,
+    "exact_retention_ratio": 0.9978553042130787
+  },
+  "hardware_validation": {
+    "resource_counts": {
+      "CARRY8": 22508,
+      "RAMB36E2": 515,
+      "DSP48E2": 2816,
+      "URAM288": 256,
+      "RAMB18E2": 1
+    },
+    "same_site_resource_counts": {
+      "CARRY8": 22504,
+      "RAMB36E2": 515,
+      "DSP48E2": 2816,
+      "URAM288": 256,
+      "RAMB18E2": 1
+    },
+    "uram_by_slr": {
+      "SLR0": 69,
+      "SLR2": 48,
+      "SLR1": 139
+    },
+    "dedicated_cascade_pairs": {
+      "CARRY8": 10903,
+      "DSP48E2": 1280
+    },
+    "validated_build_link": "/Projects/jinyang/workspace/AMFplacer3.0/builds/validated-getrf-u250-full",
+    "native_source_equivalent_commit": "5755fe7a0087c6212c0bd40688549e3dc09d256d",
+    "verified_at": "2026-09-26T22:31:37.650488+08:00"
+  },
+  "routed_cascades": {
+    "checked": 12183,
+    "violations": 0
+  },
+  "routed_srl_cascades": {
+    "checked": 325,
+    "violations": 0
+  },
+  "routing_counts": {
+    "logical nets": 3257493,
+    "nets not needing routing": 2329061,
+    "internally routed nets": 2043062,
+    "nets with no loads": 285696,
+    "implicitly routed ports": 303,
+    "routable nets": 928432,
+    "fully routed nets": 928432,
+    "nets with routing errors": 0
+  },
+  "drc_counts": {
+    "errors": 0,
+    "critical_warnings": 0
+  },
+  "drc_severity_totals": {
+    "Warning": 9985,
+    "Advisory": 4096
+  },
+  "timing": {
+    "wns_ns": -2.886,
+    "tns_ns": -811.808,
+    "setup_failing_endpoints": 1744,
+    "setup_total_endpoints": 608205,
+    "whs_ns": 0.019,
+    "ths_ns": 0.0,
+    "hold_failing_endpoints": 0,
+    "hold_total_endpoints": 608205,
+    "wpws_ns": 4.3,
+    "tpws_ns": 0.0,
+    "pulse_failing_endpoints": 0,
+    "pulse_total_endpoints": 405870
+  },
+  "timing_met": false,
+  "amf_export_complete": true,
+  "full_placement_executed": true,
+  "routing_executed": true,
+  "routing_complete": true,
+  "implementation_verified": true,
+  "output_dcp": "experiments/runs/getrf-u250-full-20260926-183758-400040/reports/getrf_routed.dcp",
+  "output_dcp_sha256": "e14f4710711e1b45d2842948a9a48035f225ab7c1b818477a51afc72a59e48a9",
+  "output_dcp_bytes": 389780549,
+  "dcp_storage": "server-only",
+  "manifest_sha256": "eed42fe00e4cb1cf4102c3605ea033a6fefbca1fe6be0fa7518653b5c617793f",
+  "summary_sha256": "7565dd9424156ec1f9b71f9f81b0597f70c21d4e50a347cf6e0e6c3aa591969b",
+  "finished": "2026-09-26T22:27:39.714356+08:00",
+  "tests": {
+    "python": 38,
+    "mux_srl_cpp": 6,
+    "hard_resource_cpp": 16
+  },
+  "limitations": [
+    "Cached netlist export was reused; no fresh Vivado netlist export is included in this runtime.",
+    "Runtime was observed alongside another diagnostic/alternate routing run; it is not an exclusive-resource performance comparison.",
+    "OOC kernel implementation; full board-level signoff is outside this validation.",
+    "AMF SLL cost, external floorplan integration and cross-version incremental compilation remain future work.",
+    "Residual native CLB pin/control constraints require Vivado legalization; exact final AMF LOC/BEL retention is recorded separately."
+  ],
+  "test_evidence": {
+    "mux_srl_cpp": {
+      "directory": "experiments/preflight/mux-tests-20260926-1843",
+      "build": "builds/build-20260926-183632-669176-fbebbe04",
+      "passed": 6
+    },
+    "hard_resource_cpp": {
+      "directory": "experiments/preflight/resource-regression-20260926-1700",
+      "build": "builds/build-20260926-165756-043079-fbebbe04",
+      "passed": 16,
+      "note": "This regression preceded the final MUX/SRL export fixes; the final build also passed the complete GETRF hardware/cascade audit recorded above."
+    },
+    "python": {
+      "command": "make check",
+      "passed": 38
+    }
+  }
+}

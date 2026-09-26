@@ -41,7 +41,7 @@ def prepare(root, source, directory, manifest):
     for index in range(len(batches)-1,-1,-1):
         if (index+1)%500==0 or index+1==len(batches):
             end=batches[index].end()
-            adapted=adapted[:end]+'\nputs "AMF_IMPORT_BATCHES_ATTEMPTED '+str(index+1)+'/'+str(len(batches))+'"'+adapted[end:]
+            adapted=adapted[:end]+'\nputs "AMF_IMPORT_BATCHES_ATTEMPTED '+str(index+1)+'/'+str(len(batches))+'"; flush stdout'+adapted[end:]
     adapted=re.sub(r'(set result \[catch \{place_cell \{.*?\}\})\]',
         r'\1 amf3_place_error]\nif {$result} {puts "AMF_IMPORT_REJECTED: $amf3_place_error"}', adapted, flags=re.S)
     adapted=adapted.replace('set result [catch {place_cell  $placeBatch }]',
