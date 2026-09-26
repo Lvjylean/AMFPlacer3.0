@@ -137,3 +137,16 @@ python3 scripts/amf3.py compare-boundaries \
 仅数值保护矩阵装配实现变化：先加入全部对角 triplet，再一次压缩，不重复插入已压缩矩阵。新增十万变量测试与原数值测试整体耗时 0.02 s、峰值 RSS 25,388 KiB。前述边界/聚拢回归对应代码未变化。完整证据在 `experiments/evidence/device-physical-guarded-preflight-20260927/manifest.json`。
 
 04:21 早期真实诊断每组已求解 20 次，无回退、无未收敛、无非法权重；最大对角修正约 0.0044。修复行计数包含无弹簧孤立行，按求解累计，不是唯一被移动 cell 数。此过程检查不代替最终布线验收。
+
+## D 暴露的最终打包候选缺口
+
+04:18 对照的 control/delay 已完成 AMF，分别 5459.6/5410.1 s，均覆盖 856,998 个 cell，均无 QP 回退；正在 Vivado 后端。cluster 在最终打包中稳定剩余 3,774 个 PU，扩大搜索半径到 100 以上仍多轮不减。代码审计发现，前面的二维软目标已接通，但 `ParallelCLBPacker` 的普通/方向站点查询及 `PackingCLBSite` 的 PU 查询仍强制同一个 X 时钟区域列，遗漏了下游软回退接口。不能将前面的 C 预检当作完整打包验收。
+
+补丁增加两个文件的修改：
+
+- `src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc`：只在 `BoundaryAwareClustering=true` 时取消普通 clock-region 列的候选硬筛选；只返回当前打包器实际持有的站点，防止 bin 中保留站点进入非法映射；连续 8 轮没有减少剩余 PU 时写出 `reports/physical/packing_stall.tsv`，包含 PU/cell 类型和坐标，不直接宣称设计不可放置。原终止界限保留。
+- `src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc`：新模式的未映射/已映射 PU 邻域查询均允许跨普通 clock-region 列。物理时钟半列容量检查、固定站点和 cell/CLB 打包合法性继续执行。
+
+新增 `src/tests/check_boundary_packing.cc`，用真实 U250 相邻时钟列验证普通查询、方向查询、未映射/已映射 PU 查询的四个分支，确认旧模式仍有原列筛选；再令目标列无可用 SLICE，仅邻列有站点，验证新模式实际完成跨列合法化。新增目标为 `checkBoundaryPacking`。
+
+早期探针日志保留：API 非 const 引用调用修正；保留站点候选暴露并修正；实际合法化探针半径按既有环形搜索约定修正。新实验需要使用此补丁后的同一二进制重跑三组。此前两个已进入 Vivado 的轮次保留作诊断参考，不与新 cluster 混成“同二进制”最终对照。
