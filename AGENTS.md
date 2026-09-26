@@ -19,3 +19,5 @@
 - GETRF 全流程入口为 `amf3.py full-run`，配置 `getrf-u250-full.json` 显式开启实验性多 SLR。MUX/SRL、CLB 试插入计数、无固定 I/O 初始化和分数列溢出修复已实现；完整基线 `getrf-u250-full-20260926-183758-400040` 已通过全量布线、DRC 错误/严重警告为 0 和级联审计，10 ns setup 时序未收敛；指标与限制见 `docs/research/u250-getrf-full-flow.md`。稳定构建入口为 `builds/validated-getrf-u250-full/AMFPlacer`。覆盖检查不完整时不得进入正式后端验收，不能把 Vivado 补放遗漏单元记作 AMF 的完整输出。当前标准配置保留 `GlobalPlacementIteration=30` 和默认宏合法化模式；9 次前期迭代曾导致 QP 发散，`DirectMacroLegalize=true` 曾不收敛，失败轮次保留供诊断。
 
 - 2026-09-27 用户要求为现有延迟修正补充纵向 SLR 边界惩罚，覆盖上一阶段“暂不实现跨界时序代价”的限制。参数 `SLRBoundaryDelayNs` 默认 1.5 ns/道边界，GETRF 全流程配置显式设置为 1.5；设为 0 可复现旧延迟模型。原 X 方向修正保留，普通时钟区域的 Y 边界不增加惩罚；SLR 边界从器件元数据推导。仍不加入 SLL 容量或估计拥塞、不接入外部 floorplan。该系数是启发式初值，不代表已校准或新一轮 GETRF 布线后的时序结论。实现、测试与构建见 `docs/research/u250-slr-timing-penalty.md`。
+
+- 2026-09-27 用户批准物理边界 A–D 方案。新模式从 Vivado 全器件 site/tile 与统一坐标映射生成模型；U250 已识别三条 SLR 接缝和内部 HPIO 带，形成 8 个区域。`PhysicalBoundaryMode=true` 替换固定 X 列经验项；`BoundaryAwareClustering=true` 要求新模式，并使用容量预留和 X/Y 软目标。局部硬 IP/未知类型只报告，不把包围盒视为必经障碍。架构规则和系数仍为启发式，不包含 SLL 容量/拥塞。新模式完整 GETRF 对照运行中，不能宣称优于旧模式或替换默认验证基线；实施、构建、测试、比较 ID 见 `docs/research/device-physical-boundary-implementation.md`。

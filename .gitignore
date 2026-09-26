@@ -20,3 +20,6 @@ __pycache__/
 *.pyc
 .Xil/
 .DS_Store
+
+# Runtime comparison manifests and logs; configs/scripts are versioned.
+/experiments/comparisons/

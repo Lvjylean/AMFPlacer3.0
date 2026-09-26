@@ -11,6 +11,7 @@
 | 需求及其历史副本 | `docs/requirements/`、其下 `archives/` | 主版本 `task-3-final.pdf`，副本须明确标注来源 |
 | 调研、说明和参考资料 | `docs/research/`、`docs/references/` | 小写 `kebab-case`，正文可用中文 |
 | 完整实验 | `experiments/runs/<run-id>/` | 保留既有实验 ID，新实验由入口自动分配唯一 ID |
+| 多组对照索引 | `experiments/comparisons/<comparison-id>/` | 保存配置快照、进程状态及三组运行的关联；完整产物仍在 `runs/` |
 | case/工具预检 | `experiments/preflight/` | `YYYYMMDD-<case-or-tool>-<purpose>` |
 | 诊断证据 | `experiments/evidence/` | `YYYYMMDD-<case-or-tool>-<issue>` |
 | 编译结果 | `builds/<build-id>/` | 由构建入口生成；`current` 为成功构建链接 |

@@ -33,9 +33,9 @@ int main(int argc,char **argv)
         p.createGridBins(5,5);p.updateElementBinGrid();p.buildSimpleTimingGraph();
         // Match the actual InitialPacker representation, not just scalar capacities.
         RegionCapacityTracker budget(&p);
-        DesignInfo::DesignCell real36(false,"ram36-probe",DesignInfo::CellType_RAMB36E2,999997);
+        DesignInfo::DesignCell real36(std::string("ram36-probe"),DesignInfo::CellType_RAMB36E2,999997);
         DesignInfo::DesignCell upper18(true,"ram36-upper",DesignInfo::CellType_RAMB18E2,999998);
-        DesignInfo::DesignCell real18(false,"ram18-probe",DesignInfo::CellType_RAMB18E2,999999);
+        DesignInfo::DesignCell real18(std::string("ram18-probe"),DesignInfo::CellType_RAMB18E2,999999);
         auto a=budget.cellDemand(&real36),b=budget.cellDemand(&upper18),c=budget.cellDemand(&real18);
         if(a[PhysicalBoundaryModel::BRAM36]!=1 || b[PhysicalBoundaryModel::BRAM18]!=0 || c[PhysicalBoundaryModel::BRAM18]!=1)
             throw std::runtime_error("RAMB36 virtual upper-half double counted");
