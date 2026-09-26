@@ -1772,6 +1772,8 @@ void ParallelCLBPacker::exceptionHandling(bool verbose)
             PUPoints.emplace_back(PU);
     }
 
+    size_t previousUnpacked = PUPoints.size();
+    int stagnantRounds = 0;
     while (PUPoints.size())
     {
         timingOptimizer->getPUId2Slack(true); // update PU slack information
@@ -1844,6 +1846,26 @@ void ParallelCLBPacker::exceptionHandling(bool verbose)
             }
         }
         PUPoints.resize(unprocessedCnt);
+        stagnantRounds = PUPoints.size() == previousUnpacked ? stagnantRounds + 1 : 0;
+        previousUnpacked = PUPoints.size();
+        if (placementInfo->boundaryClusteringEnabled() && stagnantRounds == 8 && !PUPoints.empty()) {
+            print_warning("Physical-region packing made no progress for 8 sweeps; recording remaining PUs");
+            if (JSONCfg.count("BoundaryReportDirectory")) {
+                std::ofstream diagnostic(JSONCfg.at("BoundaryReportDirectory") + "/packing_stall.tsv", std::ios::app);
+                if (diagnostic.tellp() == 0)
+                    diagnostic << "radius\tpu_id\tpu_name\tx\ty\tcell_name\tcell_type\n";
+                for (const auto &point : PUPoints) {
+                    auto pu = point.getPU();
+                    auto writeCell = [&](DesignInfo::DesignCell *cell) {
+                        diagnostic << Dc << '\t' << pu->getId() << '\t' << pu->getName() << '\t' << pu->X() << '\t'
+                                   << pu->Y() << '\t' << cell->getName() << '\t' << int(cell->getCellType()) << '\n';
+                    };
+                    if (auto single = dynamic_cast<PlacementInfo::PlacementUnpackedCell *>(pu)) writeCell(single->getCell());
+                    else if (auto macro = dynamic_cast<PlacementInfo::PlacementMacro *>(pu))
+                        for (auto cell : macro->getCells()) writeCell(cell);
+                }
+            }
+        }
         Dc += 0.3 * maxD;
 
         if (placementInfo->isDensePlacement())
@@ -2295,6 +2317,8 @@ ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCell
                                               float v2y, int numLimit)
 {
     assert(displacementLowerbound < displacementUpperbound);
+    // Physical regions are soft preferences; ordinary clock-region columns are not placement fences.
+    if (placementInfo->boundaryClusteringEnabled()) clockRegionAware = false;
     // please note that the input DesignCell is only used to find the corresponding binGrid for site search.
     std::vector<DeviceInfo::DeviceSite *> *res = new std::vector<DeviceInfo::DeviceSite *>();
     res->clear();
@@ -2422,6 +2446,8 @@ ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCell
                                               float y2xRatio, bool clockRegionAware)
 {
     assert(displacementLowerbound < displacementUpperbound);
+    // Physical regions are soft preferences; ordinary clock-region columns are not placement fences.
+    if (placementInfo->boundaryClusteringEnabled()) clockRegionAware = false;
     // please note that the input DesignCell is only used to find the corresponding binGrid for site search.
     std::vector<DeviceInfo::DeviceSite *> *res = new std::vector<DeviceInfo::DeviceSite *>();
     res->clear();

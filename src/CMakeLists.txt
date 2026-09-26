@@ -184,3 +184,5 @@ add_executable(checkBoundaryClustering EXCLUDE_FROM_ALL tests/check_boundary_clu
 target_link_libraries(checkBoundaryClustering DesignInfo DeviceInfo PlacementInfo PlacementTiming Utils pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 add_executable(checkQPStability EXCLUDE_FROM_ALL tests/check_qp_stability.cc)
 target_link_libraries(checkQPStability ProblemSolvers Utils pthread ${Boost_LIBRARIES})
+add_executable(checkBoundaryPacking EXCLUDE_FROM_ALL tests/check_boundary_packing.cc)
+target_link_libraries(checkBoundaryPacking Packing GlobalPlacer Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})

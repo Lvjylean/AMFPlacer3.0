@@ -363,7 +363,7 @@ ParallelCLBPacker::PackingCLBSite::findNeiborPUsFromBinGrid(
                             int PUClockRegionX, PUClockRegionY;
                             placementInfo->getDeviceInfo()->getClockRegionByLocation(tmpPU->X(), targetY,
                                                                                      PUClockRegionX, PUClockRegionY);
-                            if (PUClockRegionX == clockRegionX)
+                            if (PUClockRegionX == clockRegionX || placementInfo->boundaryClusteringEnabled())
                                 res->insert(tmpPU);
                         }
                     }
@@ -377,7 +377,7 @@ ParallelCLBPacker::PackingCLBSite::findNeiborPUsFromBinGrid(
                                 int PUClockRegionX, PUClockRegionY;
                                 placementInfo->getDeviceInfo()->getClockRegionByLocation(
                                     tmpPU->X(), targetY, PUClockRegionX, PUClockRegionY);
-                                if (PUClockRegionX == clockRegionX)
+                                if (PUClockRegionX == clockRegionX || placementInfo->boundaryClusteringEnabled())
                                     res->insert(tmpPU);
                             }
                         }

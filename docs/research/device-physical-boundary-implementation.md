@@ -106,7 +106,7 @@ python3 scripts/amf3.py compare-boundaries \
 新增原生 `checkQPStability` 覆盖普通权重/正常 QP 与旧模式一致、失败 slack、极端 slack、零阈值、参数拒绝、float 锚点丢失、线程错误传递与 NaN 结果回退。完整 GETRF 比较仍待重新运行；不能据此声称时序或布线已经改善。
 
 
-## 当前 D 对照与数值预检
+## 数值保护初版对照与预检（已停止）
 
 - 启动时间：2026-09-27 04:13:44（服务器时间）。
 - 比较目录：`experiments/comparisons/getrf-physical-20260927-041344-459680/`。
@@ -121,4 +121,19 @@ python3 scripts/amf3.py compare-boundaries \
 | delay：新边界＋共同数值保护 | getrf-u250-full-20260927-041344-564377 |
 | cluster：新边界＋二维聚拢＋共同数值保护 | getrf-u250-full-20260927-041344-557157 |
 
-运行启动不表示 D 验收完成。结束后同时审阅 `comparison.json`、各组 `status.json` 和 `reports/summary.json`，其中 `numerical_guard` 的累计事件数不是唯一 cell/net 数，必须同时检查回退和不收敛情况。默认配置和验证基线尚未晋升。
+该 04:13 轮次在首个 QP 暴露稀疏矩阵逐项插入对角线的性能问题，已停止并保存。一次性 triplet 装配修复后重新运行，见下节。结束后同时审阅 `comparison.json`、各组 `status.json` 和 `reports/summary.json`，其中 `numerical_guard` 的累计事件数不是唯一 cell/net 数，必须同时检查回退和不收敛情况。默认配置和验证基线尚未晋升。
+
+
+## 当前 D 对照：一次性稀疏矩阵装配
+
+2026-09-27 04:18:53 启动，比较目录 `experiments/comparisons/getrf-physical-20260927-041853-990282/`。生产提交 `7427f87b`；冻结二进制 `builds/build-20260927-041750-934343-7427f87b/build/AMFPlacer`，SHA-256 `14eeac6ed755c26099b121157030ca699433107e3165de80bc9d6408ab88ca74`。
+
+| 组 | 完整运行 ID |
+|---|---|
+| control | getrf-u250-full-20260927-041854-078213 |
+| delay | getrf-u250-full-20260927-041854-083355 |
+| cluster | getrf-u250-full-20260927-041854-079412 |
+
+仅数值保护矩阵装配实现变化：先加入全部对角 triplet，再一次压缩，不重复插入已压缩矩阵。新增十万变量测试与原数值测试整体耗时 0.02 s、峰值 RSS 25,388 KiB。前述边界/聚拢回归对应代码未变化。完整证据在 `experiments/evidence/device-physical-guarded-preflight-20260927/manifest.json`。
+
+04:21 早期真实诊断每组已求解 20 次，无回退、无未收敛、无非法权重；最大对角修正约 0.0044。修复行计数包含无弹簧孤立行，按求解累计，不是唯一被移动 cell 数。此过程检查不代替最终布线验收。
