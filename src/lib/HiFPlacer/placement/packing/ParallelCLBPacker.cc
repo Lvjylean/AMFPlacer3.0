@@ -2318,7 +2318,8 @@ ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCell
 {
     assert(displacementLowerbound < displacementUpperbound);
     // Physical regions are soft preferences; ordinary clock-region columns are not placement fences.
-    if (placementInfo->boundaryClusteringEnabled()) clockRegionAware = false;
+    const bool physicalRegions = placementInfo->boundaryClusteringEnabled();
+    if (physicalRegions) clockRegionAware = false;
     // please note that the input DesignCell is only used to find the corresponding binGrid for site search.
     std::vector<DeviceInfo::DeviceSite *> *res = new std::vector<DeviceInfo::DeviceSite *>();
     res->clear();
@@ -2371,6 +2372,9 @@ ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCell
                     placementInfo->getDeviceInfo()->getClockRegionByLocation(tmpSite->X(), targetY, siteClockRegionX,
                                                                              siteClockRegionY);
                     if (siteClockRegionX != clockRegionX && clockRegionAware)
+                        continue;
+                    // The bin grid can include reserved sites omitted by this packer.
+                    if (physicalRegions && !deviceSite2PackingSite.count(tmpSite))
                         continue;
 
                     res->push_back(tmpSite);
@@ -2447,7 +2451,8 @@ ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCell
 {
     assert(displacementLowerbound < displacementUpperbound);
     // Physical regions are soft preferences; ordinary clock-region columns are not placement fences.
-    if (placementInfo->boundaryClusteringEnabled()) clockRegionAware = false;
+    const bool physicalRegions = placementInfo->boundaryClusteringEnabled();
+    if (physicalRegions) clockRegionAware = false;
     // please note that the input DesignCell is only used to find the corresponding binGrid for site search.
     std::vector<DeviceInfo::DeviceSite *> *res = new std::vector<DeviceInfo::DeviceSite *>();
     res->clear();
@@ -2493,6 +2498,9 @@ ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCell
                     placementInfo->getDeviceInfo()->getClockRegionByLocation(tmpSite->X(), targetY, siteClockRegionX,
                                                                              siteClockRegionY);
                     if (siteClockRegionX != clockRegionX && clockRegionAware)
+                        continue;
+                    // The bin grid can include reserved sites omitted by this packer.
+                    if (physicalRegions && !deviceSite2PackingSite.count(tmpSite))
                         continue;
 
                     res->push_back(tmpSite);

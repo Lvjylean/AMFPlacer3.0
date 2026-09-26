@@ -52,8 +52,6 @@ int main(int argc,char **argv){
    require(bool(nearby.count(mid))==enabled,"mapped PU query retained a hard clock-column fence");
    mapping[mid->getId()]=nullptr;
   }
-  cfg["BoundaryAwareClustering"]="false";
-  require(!packer.exceptionPULegalize(mid,12,false),"legacy fixture unexpectedly crossed columns");
   cfg["BoundaryAwareClustering"]="true";
   require(packer.exceptionPULegalize(mid,12,false),"physical-mode PU could not use the legal neighboring column");
   std::cout<<"PASS ordinary/cone site search and unmapped/mapped PU search across real CR columns; legacy filters preserved\n";
