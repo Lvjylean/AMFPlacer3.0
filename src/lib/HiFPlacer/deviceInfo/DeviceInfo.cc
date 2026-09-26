@@ -171,6 +171,23 @@ DeviceInfo::DeviceInfo(std::map<std::string, std::string> &JSONCfg, std::string 
                "(YxX) clock regions on the device");
 
     mapClockRegionToArray();
+    for (const auto &key : {"PhysicalBoundaryMode", "PhysicalBoundaryAudit", "BoundaryAwareClustering"})
+        if (JSONCfg.count(key) && JSONCfg[key] != "true" && JSONCfg[key] != "false")
+            throw std::runtime_error(std::string(key) + " must be true or false");
+    physicalBoundaryTiming = JSONCfg["PhysicalBoundaryMode"] == "true";
+    if (JSONCfg["BoundaryAwareClustering"] == "true" && !physicalBoundaryTiming)
+        throw std::runtime_error("BoundaryAwareClustering requires PhysicalBoundaryMode=true");
+    if (physicalBoundaryTiming || JSONCfg["PhysicalBoundaryAudit"] == "true")
+    {
+        if (JSONCfg["physical boundary model file"].empty())
+            throw std::runtime_error("PhysicalBoundaryMode requires a physical boundary model file");
+        physicalBoundaryModel.reset(new PhysicalBoundaryModel(JSONCfg["physical boundary model file"], this));
+        if (JSONCfg["physical device part"].empty() ||
+            physicalBoundaryModel->getMetadata().at("part") != JSONCfg["physical device part"])
+            throw std::runtime_error("Physical boundary model part/config mismatch");
+        print_info("Loaded physical model: " + std::to_string(physicalBoundaryModel->getRegions().size()) +
+                   " regions, " + std::to_string(physicalBoundaryModel->getBoundaries().size()) + " boundaries");
+    }
     print_status("New Device Info Created.");
 }
 

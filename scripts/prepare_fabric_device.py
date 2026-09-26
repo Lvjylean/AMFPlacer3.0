@@ -97,6 +97,22 @@ def convert(source, destination, part, metadata=None):
                     x_pitch=x_pitch, slice_rows_per_clock_region=height,
                     site_count=len(rows), slr_count=len(counts), sites_by_slr=dict(counts),
                     unavailable_by_slr=dict(prohibited), clock_region_slr=cr_slr)
+    anchors = {}
+    for row in rows:
+        if row['family'] == 'SLICE':
+            old = anchors.setdefault(row['rpm_y'], row['y'])
+            if abs(old - row['y']) > 1e-6:
+                raise ValueError('Ambiguous RPM Y to AMF Y mapping')
+    anchor_rows = sorted(anchors.items())
+    if any(b[1] <= a[1] for a, b in zip(anchor_rows, anchor_rows[1:])):
+        raise ValueError('Non-monotone RPM Y mapping')
+    mapping = dict(schema='amf-coordinate-map-v1', part=part,
+                   model=manifest['coordinate_model'], rpm_x_origin=min_x,
+                   rpm_x_pitch=x_pitch, rpm_y_anchors=anchor_rows,
+                   slice_rows_per_clock_region=height)
+    mapping_path = destination.with_suffix('.coordinates.json')
+    mapping_path.write_text(json.dumps(mapping, indent=2) + '\n')
+    manifest['coordinate_map_sha256'] = digest(mapping_path)
     if metadata is not None:
         manifest['export_metadata'] = exported
         manifest['metadata_sha256'] = digest(metadata)

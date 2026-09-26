@@ -50,6 +50,7 @@ class PlacementTimingOptimizer
                                                            float targetY);
     void setPinsLocation();
     void clusterLongPathInOneClockRegion(int pathLenThr, float clusterThrRatio);
+    void clusterCriticalPathsByPhysicalRegion();
     void dumpClockRegionClusters();
     void stretchClockRegionColumns();
 
@@ -117,8 +118,9 @@ class PlacementTimingOptimizer
 
         float X = std::fabs(X1 - X2);
         float Y = std::fabs(Y1 - Y2);
-        const float slrDelay = slrBoundaryDelayNs *
-                               deviceInfo->getSLRBoundaryCount(clockRegionY0, clockRegionY1);
+        auto physical = deviceInfo->isPhysicalBoundaryTimingEnabled() ? deviceInfo->getPhysicalBoundaryModel() : nullptr;
+        const float slrDelay = physical ? physical->penalty(X1, Y1, X2, Y2, slrBoundaryDelayNs) :
+            slrBoundaryDelayNs * deviceInfo->getSLRBoundaryCount(clockRegionY0, clockRegionY1);
 
         if (X * X + Y * Y < 9)
         {
@@ -126,7 +128,7 @@ class PlacementTimingOptimizer
             float delay = (timingC0[0] + std::pow(X, 0.3) * timingC0[1] + std::pow(Y, 0.3) * timingC0[2] +
                            std::pow(X, 0.5) * timingC0[3] + std::pow(Y, 0.5) * timingC0[4]) /
                           1000.0;
-            if (std::abs(clockRegionX1 - clockRegionX0) > 1 || clockRegionX1 == 2 || clockRegionX0 == 2)
+            if (!physical && (std::abs(clockRegionX1 - clockRegionX0) > 1 || clockRegionX1 == 2 || clockRegionX0 == 2))
                 delay += std::abs(clockRegionX1 - clockRegionX0) * 0.5;
 
             if (delay < 0.05)
@@ -139,7 +141,7 @@ class PlacementTimingOptimizer
             float delay = (timingC1[0] + std::pow(X, 0.3) * timingC1[1] + std::pow(Y, 0.3) * timingC1[2] +
                            std::pow(X, 0.5) * timingC1[3] + std::pow(Y, 0.5) * timingC1[4]) /
                           1000.0;
-            if (std::abs(clockRegionX1 - clockRegionX0) > 1 || clockRegionX1 == 2 || clockRegionX0 == 2)
+            if (!physical && (std::abs(clockRegionX1 - clockRegionX0) > 1 || clockRegionX1 == 2 || clockRegionX0 == 2))
                 delay += std::abs(clockRegionX1 - clockRegionX0) * 0.5;
 
             if (delay < 0.05)
@@ -152,7 +154,7 @@ class PlacementTimingOptimizer
             float delay = (timingC2[0] + std::pow(X, 0.3) * timingC2[1] + std::pow(Y, 0.3) * timingC2[2] +
                            std::pow(X, 0.5) * timingC2[3] + std::pow(Y, 0.5) * timingC2[4]) /
                           1000.0;
-            if (std::abs(clockRegionX1 - clockRegionX0) > 1 || clockRegionX1 == 2 || clockRegionX0 == 2)
+            if (!physical && (std::abs(clockRegionX1 - clockRegionX0) > 1 || clockRegionX1 == 2 || clockRegionX0 == 2))
                 delay += std::abs(clockRegionX1 - clockRegionX0) * 0.5;
 
             if (delay < 0.05)

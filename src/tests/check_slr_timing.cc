@@ -16,6 +16,16 @@ int main(int argc, char **argv)
         auto offCfg = cfg;
         offCfg["SLRBoundaryDelayNs"] = "0";
         PlacementTimingOptimizer off(&placement, offCfg), on(&placement, cfg);
+        if (device.isPhysicalBoundaryTimingEnabled())
+        {
+            float reference=on.getDelayByModel(100,200,120,206);
+            float crossed=on.getDelayByModel(150,237,170,243);
+            float expected=std::stof(cfg["SLRBoundaryDelayNs"])+0.5f;
+            if(std::fabs(crossed-reference-expected)>2e-5)
+                throw std::runtime_error("Physical penalties missing or old X penalty double-counted");
+            if(std::fabs(on.getDelayByModel(nullptr,nullptr,150,237,170,243)-crossed)>1e-6)
+                throw std::runtime_error("Two timing interfaces disagree");
+        }
         std::ifstream pairs(argv[2]);
         std::ofstream out(argv[3]);
         if (!pairs || !out) throw std::runtime_error("Cannot open probe input/output");

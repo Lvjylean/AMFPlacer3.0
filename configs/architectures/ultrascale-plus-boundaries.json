@@ -1,0 +1,54 @@
+{
+  "schema": "amf-boundary-rules-v1",
+  "version": "ultrascale-plus-1",
+  "part_pattern": "^xc[ku](?:u|[0-9]).*",
+  "family": "UltraScale/UltraScale+",
+  "slr_delay_ns": 1.5,
+  "io_delay_ns": 0.5,
+  "local_ip_delay_ns": 0.5,
+  "io_site_pattern": "^HPIOB_(M|S|SNGL)$",
+  "io_tile_pattern": "^HPIO",
+  "local_ip_site_pattern": "^(CONFIG_SITE|PCIE[0-9].*|CMAC.*)$",
+  "known_support_pattern": "^(BUF.*|BITSLICE.*|RIU_OR|HPIO.*|LAGUNA|GTY.*|GTHE.*|SYSMON.*|PLLE.*|MMCME.*|XIPHY.*)$",
+  "resource_slots": {
+    "SLICEL": {
+      "LUT": 8,
+      "FF": 16,
+      "CARRY": 1,
+      "MUX7": 4,
+      "MUX8": 2,
+      "MUX9": 1
+    },
+    "SLICEM": {
+      "LUT": 8,
+      "FF": 16,
+      "MLUT": 8,
+      "CARRY": 1,
+      "MUX7": 4,
+      "MUX8": 2,
+      "MUX9": 1
+    },
+    "DSP48E2": {
+      "DSP": 1
+    },
+    "RAMBFIFO18": {
+      "BRAM18": 1
+    },
+    "RAMB181": {
+      "BRAM18": 1
+    },
+    "RAMBFIFO36": {
+      "BRAM36": 1
+    },
+    "URAM288": {
+      "URAM": 1
+    }
+  },
+  "notes": [
+    "LUT and MLUT are nested capacities, not additive.",
+    "BRAM18 and BRAM36 views overlap; combined demand is checked in BRAM18 equivalents.",
+    "Local IP envelopes are reported but unproven routing obstacles have no automatic penalty.",
+    "Coefficients are heuristic defaults, not calibrated delays."
+  ]
+}
+

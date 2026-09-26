@@ -91,6 +91,11 @@ def run(args):
     check('u250-default', base, pairs)
     check('u250-explicit', dict(base, SLRBoundaryDelayNs='1.5'), pairs)
     check('u250-disabled', dict(base, SLRBoundaryDelayNs='0'), pairs, penalty=0)
+    physical=dict(base, PhysicalBoundaryMode='true', PhysicalBoundaryAudit='true', SLRBoundaryDelayNs='1.5',
+                  **{'physical boundary model file':str(root/'data/devices/u250-physical-v1/model/physical_structure.tsv'),
+                     'physical device part':'xcu250-figd2104-2L-e'})
+    check('u250-physical-unified',physical,pairs)
+    check('u250-physical-slr-disabled',dict(physical,SLRBoundaryDelayNs='0'),pairs,penalty=0)
     check('u250-configured', dict(base, SLRBoundaryDelayNs='2.5'), pairs, penalty=2.5)
     # IDs need not be ordered or consecutive: count actual seams from geometry.
     remapped = re.sub(r'slr=> (\d+)', lambda m: 'slr=> '+str([30, 20, 70, 10][int(m[1])]), raw)

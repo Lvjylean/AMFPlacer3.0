@@ -1,3 +1,4 @@
+#include <unordered_set>
 /**
  * @file PlacementInfo.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -11,6 +12,7 @@
  *
  */
 #include "PlacementInfo.h"
+#include "RegionCapacityTracker.h"
 #include "readZip.h"
 #include "strPrint.h"
 #include "stringCheck.h"
@@ -2201,4 +2203,62 @@ void PlacementInfo::dumpOverflowClockUtilization()
             }
         }
     }
+}
+
+
+bool PlacementInfo::boundaryClusteringEnabled() const
+{
+    auto it=JSONCfg.find("BoundaryAwareClustering");
+    return it!=JSONCfg.end() && it->second=="true";
+}
+void PlacementInfo::clearRegionPreferences()
+{
+    regionPreferences.clear();
+    PU2ClockRegionCenters.clear();
+    PU2ClockRegionColumn.clear();
+}
+bool PlacementInfo::regionTarget(PlacementUnit *pu,int region,float &x,float &y)
+{
+    auto model=deviceInfo->getPhysicalBoundaryModel();
+    if(!model || region<0 || region>=int(model->getRegions().size()) || pu->isFixed() || pu->isLocked())return false;
+    const auto &r=model->getRegions()[region];
+    float ox0=0,ox1=0,oy0=0,oy1=0;
+    if(auto macro=dynamic_cast<PlacementMacro *>(pu))
+        for(int i=0;i<macro->getNumOfCells();++i)
+        {
+            float ox,oy;DesignInfo::DesignCellType type;
+            macro->getVirtualCellInfo(i,ox,oy,type);
+            ox0=std::min(ox0,ox);ox1=std::max(ox1,ox);
+            oy0=std::min(oy0,oy);oy1=std::max(oy1,oy);
+        }
+    float left=r.x0-ox0+0.25f,right=r.x1-ox1-0.25f;
+    float bottom=r.y0-oy0+0.25f,top=r.y1-oy1-0.25f;
+    if(left>right || bottom>top)return false;
+    x=std::max(left,std::min(right,pu->X()));
+    y=std::max(bottom,std::min(top,pu->Y()));
+    if (std::fabs(x-pu->X())>1e-5 || std::fabs(y-pu->Y())>1e-5)
+        if(!model->nearestSlice(region,x,y,pu->checkHasLUTRAM(),left,right,bottom,top,x,y)) return false;
+    legalizeXYInArea(pu,x,y);
+    return x>=left-1e-4 && x<=right+1e-4 && y>=bottom-1e-4 && y<=top+1e-4;
+}
+void PlacementInfo::refreshRegionPreferences()
+{
+    if(regionPreferences.empty())return;
+    // Compare pointer values before dereferencing: packing can retire PUs.
+    std::unordered_set<PlacementUnit *> live(placementUnits.begin(),placementUnits.end());
+    for(auto it=regionPreferences.begin();it!=regionPreferences.end();)
+        if(!live.count(it->first))it=regionPreferences.erase(it);else ++it;
+    RegionCapacityTracker budget(this);
+    std::vector<PlacementUnit *> ordered;
+    for(auto &entry:regionPreferences)ordered.push_back(entry.first);
+    std::sort(ordered.begin(),ordered.end(),[](PlacementUnit *a,PlacementUnit *b){return a->getId()<b->getId();});
+    int removed=0;
+    for(auto pu:ordered)
+    {
+        auto &pref=regionPreferences.at(pu);
+        float x,y;
+        if(!regionTarget(pu,pref.region,x,y) || !budget.assign({pu},pref.region,true))
+        {regionPreferences.erase(pu);++removed;}
+    }
+    if(removed)print_info("Physical region preferences released for capacity/lifecycle: "+std::to_string(removed));
 }

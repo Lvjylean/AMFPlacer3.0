@@ -3809,13 +3809,16 @@ class PlacementInfo
         getGridXY(targetX, targetY, binIdX, binIdY);
         auto curPU = getPlacementUnitByCellId(curCell->getCellId());
         int targetClockRegionX = -1;
-        if (PU2ClockRegionColumn.find(curPU) != PU2ClockRegionColumn.end() && checkClockRegion)
+        if (!boundaryClusteringEnabled() && PU2ClockRegionColumn.find(curPU) != PU2ClockRegionColumn.end() && checkClockRegion)
         {
             targetClockRegionX = PU2ClockRegionColumn[curPU];
         }
 
+        int searchRounds = 0;
         while (res->size() == 0)
         {
+            if(boundaryClusteringEnabled() && ++searchRounds > 40) break;
+            if(boundaryClusteringEnabled()) displacementThreshold=std::max(0.1f,displacementThreshold);
             auto sharedTypeIds = getPotentialBELTypeIDs(curCell->getCellType());
 
             for (auto sharedTypeId : sharedTypeIds)
@@ -3890,6 +3893,21 @@ class PlacementInfo
             displacementThreshold *= 1.5;
         }
 
+        if(boundaryClusteringEnabled())
+        {
+            auto preference=regionPreferences.find(curPU);
+            if(preference!=regionPreferences.end())
+            {
+                auto model=deviceInfo->getPhysicalBoundaryModel();
+                int wanted=preference->second.region;
+                std::stable_sort(res->begin(),res->end(),[&](DeviceInfo::DeviceSite *a,DeviceInfo::DeviceSite *b){
+                    bool aa=model->siteRegion(a->getName())==wanted;
+                    bool bb=model->siteRegion(b->getName())==wanted;
+                    return aa && !bb;
+                });
+            }
+            if(res->empty()){delete res;throw std::runtime_error("No compatible free site after bounded physical-region search");}
+        }
         return res;
     }
 
@@ -4358,6 +4376,17 @@ class PlacementInfo
         return PU2ClockRegionColumn;
     }
 
+    struct RegionPreference
+    {
+        int region = -1, cluster = -1;
+        float strength = 1.0f;
+    };
+    bool boundaryClusteringEnabled() const;
+    std::map<PlacementUnit *, RegionPreference> &getRegionPreferences() { return regionPreferences; }
+    void clearRegionPreferences();
+    void refreshRegionPreferences();
+    bool regionTarget(PlacementUnit *pu, int region, float &x, float &y);
+
     inline int getLongPathThresholdLevel()
     {
         return longPathThresholdLevel;
@@ -4529,6 +4558,7 @@ class PlacementInfo
 
     std::map<PlacementUnit *, std::pair<float, float>> PU2ClockRegionCenters;
     std::map<PlacementUnit *, int> PU2ClockRegionColumn;
+    std::map<PlacementUnit *, RegionPreference> regionPreferences;
     std::map<DeviceInfo::ClockColumn *, std::set<DesignInfo::DesignNet *>> clockCol2ClockNets;
 
     /**

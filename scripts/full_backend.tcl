@@ -13,6 +13,7 @@ proc timed {name body} {
     puts $timeline "$name\t$seconds"; flush $timeline
     puts "AMF_STAGE_FINISH $name $seconds"; flush stdout
 }
+set physicalAudit [file isdirectory [file join $out physical]]
 array set requested {}
 set f [open [file join $placement requested.tsv] r]
 while {[gets $f line] >= 0} { lassign [split $line "\t"] name target; set requested($name) $target }
@@ -25,11 +26,17 @@ if {[file exists $fixes]} {
     close $f
 }
 proc audit {stage} {
-    global requested originalOverrides out placement
+    global requested originalOverrides out placement physicalAudit
     set cells [get_cells -hierarchical -filter {IS_PRIMITIVE}]
     set names [get_property NAME $cells]
     set locs [get_property LOC $cells]
     set bels [get_property BEL $cells]
+    if {$physicalAudit} {
+        set sf [open [file join $placement ${stage}_cell_sites.tsv] w]
+        puts $sf "cell\tsite"
+        foreach name $names loc $locs {puts $sf "$name\t$loc"}
+        close $sf
+    }
     set placed 0; set present 0; set matched 0;set siteMatched 0;set originalMatched 0
     array set actual {}
     array set actualBel {}
@@ -132,6 +139,10 @@ if {[catch {
         puts $f [format {{"errors":%d,"critical_warnings":%d}} $errors $critical];close $f
     }
     timed checkpoint {write_checkpoint [file join $out getrf_routed.dcp]}
+    if {$physicalAudit} {
+        source [file join [file dirname [info script]] export_boundary_timing_samples.tcl]
+        timed boundary_samples {export_boundary_timing_samples [file join $out physical]}
+    }
     puts "AMF_FULL_FLOW_FINISHED"
 } failure options]} {
     puts stderr "AMF_FULL_FLOW_FAILED: $failure"

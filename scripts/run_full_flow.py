@@ -12,6 +12,8 @@ def configure_outputs(config, directory):
     # simpleJSON prefixes dumpDirectory to every Dump* value, including absolute paths.
     config['dumpDirectory'] = str(directory / 'placement')
     config['DumpCLBPacking'] = 'DumpCLBPacking'
+    if config.get('physical boundary model file'):
+        config['BoundaryReportDirectory'] = str(directory / 'reports/physical')
 
 
 def completed_amf_placement(source):
@@ -35,14 +37,27 @@ def run(root, args):
     config = json.loads(config_path.read_text())
     inputs = {}
     for key in ('vivado extracted device information file', 'vivado extracted design information file',
-                'special pin offset info file', 'clock file', 'mergedSharedCellType2sharedCellType',
+                'physical boundary model file', 'special pin offset info file', 'clock file', 'mergedSharedCellType2sharedCellType',
                 'cellType2fixedAmo file', 'cellType2sharedCellType file', 'sharedCellType2BELtype file',
                 'fixed units file'):
         if config.get(key):
             p = (root / config[key]).resolve()
             inputs[key] = dict(path=str(p), sha256=digest(p))
             config[key] = str(p)
+    if config.get('PhysicalBoundaryMode') == 'true' or config.get('BoundaryAwareClustering') == 'true':
+        if not config.get('physical boundary model file'):
+            raise ValueError('Physical mode requires an explicit boundary model')
+    if config.get('physical boundary model file'):
+        from build_physical_boundaries import validate_model_inputs
+        validate_model_inputs(config['physical boundary model file'], config['vivado extracted device information file'])
     configure_outputs(config, directory)
+    if config.get('physical boundary model file'):
+        physical = directory/'reports/physical'
+        physical.mkdir()
+        model_dir = Path(config['physical boundary model file']).parent
+        for name in ('boundaries.json','physical_regions.svg'):
+            shutil.copy2(model_dir/name,physical/name)
+        save(physical/'effective_parameters.json', {k:v for k,v in config.items() if k.startswith(('Boundary','Physical','SLR')) or k in ('ClockPeriod','physical device part','physical boundary model file')})
     save(directory / 'config.json', config)
     dcp = (root / args.dcp).resolve()
     manifest = dict(schema='amf-full-flow-v1', source_commit=git('rev-parse', 'HEAD'),
@@ -88,6 +103,11 @@ def run(root, args):
         save(directory/'manifest.json',manifest)
         stage('vivado', [machine()['vivado'],'-mode','batch','-notrace','-nojournal','-log',directory/'logs/vivado_internal.log',
                         '-source',script,'-tclargs',dcp,directory/'reports',directory/'placement'])
+        if config.get('physical boundary model file'):
+            from diagnostics.analyze_boundary_timing_samples import analyze, audit_placements
+            model = config['physical boundary model file']
+            analyze(model, directory/'reports/physical', float(config.get('SLRBoundaryDelayNs', '1.5')))
+            audit_placements(directory, model, config['vivado extracted design information file'], config.get('clock file'))
         from summarize_full_flow import summarize
         summary = summarize(directory)
         save(directory/'reports/summary.json',summary)

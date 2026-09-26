@@ -22,6 +22,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <memory>
+#include "PhysicalBoundaryModel.h"
 
 /**
  * @brief Information class related to FPGA device, including the details of BEL/Site/Tile/ClockRegion.
@@ -904,6 +906,8 @@ class DeviceInfo
      */
     // clang-format on
     DeviceInfo(std::map<std::string, std::string> &JSONCfg, std::string _deviceName);
+    bool isPhysicalBoundaryTimingEnabled() const { return physicalBoundaryTiming; }
+    PhysicalBoundaryModel *getPhysicalBoundaryModel() const { return physicalBoundaryModel.get(); }
     ~DeviceInfo()
     {
         for (auto bel : BELs)
@@ -1288,6 +1292,8 @@ class DeviceInfo
     std::vector<float> clockRegionXBounds;
     std::vector<float> clockRegionYBounds;
     std::vector<int> clockRegionYSLRBoundaryCounts;
+    std::unique_ptr<PhysicalBoundaryModel> physicalBoundaryModel;
+    bool physicalBoundaryTiming = false;
 
     std::map<std::string, std::string> &JSONCfg;
     std::string deviceArchievedTextFileName;

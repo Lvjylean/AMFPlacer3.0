@@ -112,11 +112,16 @@ close $f
         adapter_diagnostic_lines=n,assignments_changed=bool(corrections),site_assignments_changed=False,
         bel_corrections=corrections)
     manifest['backend_script_sha256']=digest(script)
+    diagnostic=root/'scripts/diagnostics/export_boundary_timing_samples.tcl'
+    if diagnostic.is_file():
+        shutil.copy2(diagnostic,directory/'inputs'/diagnostic.name)
+        manifest['boundary_diagnostic_sha256']=digest(diagnostic)
     manifest['runner_files_sha256']={}
-    for name in ('run_full_flow.py','run_full_backend.py','summarize_full_flow.py','srl_cascades.py','inspect_amf_inputs.py','amf3.py'):
+    for name in ('run_full_flow.py','run_full_backend.py','summarize_full_flow.py','summarize_face_detect_flow.py','srl_cascades.py','inspect_amf_inputs.py','amf3.py','build_physical_boundaries.py','diagnostics/analyze_boundary_timing_samples.py'):
         origin=root/'scripts'/name
         if origin.is_file():
             snapshot=directory/'inputs'/name
+            snapshot.parent.mkdir(parents=True,exist_ok=True)
             if name != 'run_full_flow.py' or not snapshot.exists():
                 shutil.copy2(origin,snapshot)
             manifest['runner_files_sha256'][name]=digest(snapshot)

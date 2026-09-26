@@ -11,6 +11,10 @@ def routing_complete(counts):
             and bool(failures) and all(v == 0 for v in failures.values()))
 
 
+def missing_clock_source_warning(log):
+    return any(code in log for code in ('[Timing 38-242]', '[Route 35-197]'))
+
+
 def summarize(root):
     reports=root/'reports'
     result={}
@@ -40,7 +44,10 @@ def summarize(root):
     result['timing']=timing(reports/'timing_summary.rpt')
     result['timing_met']=all(result['timing'][k]>=0 for k in ('wns_ns','whs_ns','wpws_ns'))
     log=(root/'logs/vivado.log').read_text(errors='replace')
-    result['missing_ooc_clock_source_warning']='[Timing 38-242]' in log
+    result['missing_ooc_clock_source_warning']=missing_clock_source_warning(log)
+    for name in ('backend_boundaries','timing_sample_analysis','effective_parameters'):
+        path=reports/'physical'/(name+'.json')
+        if path.exists():result[name]=json.loads(path.read_text())
     for name in ('imported_placement','placed_placement','routed_placement'):
         r=result.get(name)
         if r:r['exact_retention_ratio']=r['exact_loc_bel_matches']/r['requested']

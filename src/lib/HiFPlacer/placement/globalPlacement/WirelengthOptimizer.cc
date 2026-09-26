@@ -1032,6 +1032,39 @@ void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
 {
     if (pesudoNetWeight <= 0)
         return;
+    if(placementInfo->boundaryClusteringEnabled())
+    {
+        placementInfo->refreshRegionPreferences();
+        int xTargets=0,yTargets=0;
+        for(auto entry:placementInfo->getRegionPreferences())
+        {
+            auto pu=entry.first;
+            float x,y;
+            if(!placementInfo->regionTarget(pu,entry.second.region,x,y))continue;
+            float weight=pesudoNetWeight*entry.second.strength*std::max(size_t(1),pu->getNetsSetPtr()->size());
+            if(std::fabs(x-pu->X())>1e-4)
+            {
+                ++xTargets;
+                placementInfo->addPseudoNetsInPlacementInfo(
+                    xSolver->solverData.objectiveMatrixTripletList,xSolver->solverData.objectiveMatrixDiag,
+                    xSolver->solverData.objectiveVector,pu,x,weight,y2xRatio,true,false);
+            }
+            if(std::fabs(y-pu->Y())>1e-4)
+            {
+                ++yTargets;
+                placementInfo->addPseudoNetsInPlacementInfo(
+                    ySolver->solverData.objectiveMatrixTripletList,ySolver->solverData.objectiveMatrixDiag,
+                    ySolver->solverData.objectiveVector,pu,y,weight/std::max(0.01f,y2xRatio),y2xRatio,false,true);
+            }
+        }
+        if(!JSONCfg["BoundaryReportDirectory"].empty())
+        {
+            std::ofstream f(JSONCfg["BoundaryReportDirectory"]+"/qp_region_targets.tsv",std::ios::app);
+            if(f.tellp()==0)f<<"preferences\tx_attractions\ty_attractions\tweight\n";
+            f<<placementInfo->getRegionPreferences().size()<<'\t'<<xTargets<<'\t'<<yTargets<<'\t'<<pesudoNetWeight<<'\n';
+        }
+        return;
+    }
     auto &PU2ClockRegionCenter = placementInfo->getPU2ClockRegionCenters();
     auto &PU2ClockRegionColumn = placementInfo->getPU2ClockRegionColumn();
     auto &clockRegions = placementInfo->getDeviceInfo()->getClockRegions();

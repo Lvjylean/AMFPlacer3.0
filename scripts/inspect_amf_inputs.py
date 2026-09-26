@@ -26,13 +26,19 @@ def inspect(root, args, resources=False):
         raise ValueError('Missing AMF binary: ' + str(binary))
     inputs = {}
     for key in ('vivado extracted device information file', 'vivado extracted design information file',
-                'special pin offset info file', 'clock file', 'mergedSharedCellType2sharedCellType',
+                'physical boundary model file', 'special pin offset info file', 'clock file', 'mergedSharedCellType2sharedCellType',
                 'cellType2fixedAmo file', 'cellType2sharedCellType file', 'sharedCellType2BELtype file',
                 'resource initial locations file', 'fixed units file'):
         if config.get(key):
             p = (root / config[key]).resolve()
             inputs[key] = {'path': str(p), 'sha256': digest(p)}
             config[key] = str(p)
+    if config.get('PhysicalBoundaryMode') == 'true' or config.get('BoundaryAwareClustering') == 'true':
+        if not config.get('physical boundary model file'):
+            raise ValueError('Physical mode requires an explicit boundary model')
+    if config.get('physical boundary model file'):
+        from build_physical_boundaries import validate_model_inputs
+        validate_model_inputs(config['physical boundary model file'], config['vivado extracted device information file'])
     directory = root / 'experiments/preflight' / (('resource-legalization-' if resources else 'input-inspection-') + stamp())
     directory.mkdir(parents=True, exist_ok=False)
     save(directory / 'config.json', config)

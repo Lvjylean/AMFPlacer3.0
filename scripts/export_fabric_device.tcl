@@ -2,6 +2,9 @@
 # Usage: ... -tclargs input.dcp out_dir
 #     or ... -tclargs --part xcu250-figd2104-2L-e out_dir
 set_param general.maxThreads 4
+set physicalIndex [lsearch -exact $argv --physical]
+set exportPhysical [expr {$physicalIndex >= 0}]
+if {$exportPhysical} {set argv [lreplace $argv $physicalIndex $physicalIndex]}
 set partMode [expr {[llength $argv] == 3 && [lindex $argv 0] eq "--part"}]
 if {!$partMode && [llength $argv] != 2} {error "Expected input.dcp out_dir, or --part part out_dir"}
 set out [file normalize [lindex $argv end]]
@@ -49,6 +52,47 @@ if {[catch {
         if {$n % 20000 == 0} {puts "AMF_DEVICE_EXPORT_PROGRESS=$n"}
     }
     close $output
+    if {$exportPhysical} {
+        # Structural objects are kept separate from the placer fabric inventory.
+        set output [open $out/structure_sites.tsv w]
+        puts $output "site\tsite_type\trpm_x\trpm_y\tclock_region\tslr\tprohibited\ttile"
+        set allSites [get_sites]
+        foreach site $allSites type [get_property SITE_TYPE $allSites] x [get_property RPM_X $allSites] y [get_property RPM_Y $allSites] cr [get_property CLOCK_REGION $allSites] prohibit [get_property PROHIBIT $allSites] {
+            set slr -1
+            if {[dict exists $crSlr $cr]} {set slr [dict get $crSlr $cr]}
+            set tile [get_tiles -of_objects $site]
+            if {[llength $tile] != 1} {error "Ambiguous physical tile for $site"}
+            puts $output [join [list $site $type $x $y $cr $slr $prohibit $tile] "\t"]
+        }
+        close $output
+        set output [open $out/structure_tiles.tsv w]
+        puts $output "tile\ttile_type\tcolumn\trow\tslr"
+        set allTiles [get_tiles]
+        foreach tile $allTiles type [get_property TYPE $allTiles] column [get_property COLUMN $allTiles] row [get_property ROW $allTiles] slr [get_property SLR_REGION_ID $allTiles] {
+            puts $output [join [list $tile $type $column $row $slr] "\t"]
+        }
+        close $output
+        set output [open $out/clock_regions.tsv w]
+        puts $output "clock_region\tslr"
+        dict for {cr slr} $crSlr {puts $output "$cr\t$slr"}
+        close $output
+        set output [open $out/iobanks.tsv w]
+        puts $output "bank\tclock_regions\tsites"
+        foreach bank [get_iobanks] {
+            puts $output "$bank\t[join [get_clock_regions -of_objects $bank] ,]\t[join [get_sites -of_objects $bank] ,]"
+        }
+        close $output
+        set meta [open $out/structure_metadata.tsv w]
+        puts $meta "part\t[get_property PART [current_design]]"
+        puts $meta "vivado\t[version -short]"
+        puts $meta "scope\tfull-device-sites-and-tiles"
+        puts $meta "availability_source\t[expr {$partMode ? {empty-device-design} : {input-checkpoint}}]"
+        puts $meta "site_count\t[llength $allSites]"
+        puts $meta "tile_count\t[llength $allTiles]"
+        puts $meta "query_gaps\tsites_without_clock_region_are_reported_with_slr_minus_one"
+        close $meta
+        puts "AMF_PHYSICAL_EXPORT_OK=[llength $allSites],[llength $allTiles]"
+    }
     close_design
     puts "AMF_DEVICE_EXPORT_OK=$n"
 } msg opts]} {

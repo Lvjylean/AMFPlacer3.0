@@ -177,3 +177,8 @@ target_link_libraries(partitionHyperGraph  ${Boost_LIBRARIES}  m ${CMAKE_SOURCE_
 add_executable(checkSLRTiming EXCLUDE_FROM_ALL tests/check_slr_timing.cc)
 target_link_libraries(checkSLRTiming DesignInfo DeviceInfo PlacementInfo PlacementTiming Utils
                       pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkPhysicalBoundaries EXCLUDE_FROM_ALL tests/check_physical_boundaries.cc)
+target_link_libraries(checkPhysicalBoundaries DeviceInfo PlacementInfo PlacementTiming DesignInfo Utils pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+add_executable(checkBoundaryClustering EXCLUDE_FROM_ALL tests/check_boundary_clustering.cc)
+target_link_libraries(checkBoundaryClustering DesignInfo DeviceInfo PlacementInfo PlacementTiming Utils pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})

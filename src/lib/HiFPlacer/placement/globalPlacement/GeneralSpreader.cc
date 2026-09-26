@@ -426,8 +426,10 @@ void GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocations(
     //     }
     // }
 
-    // VCU108 Optimization
-    if (enableClockRegionAware)
+    // Physical region targets remain soft: density spreading may leave them.
+    // The next QP/STA refresh rechecks capacity and benefit.
+    // VCU108 Optimization is retained only by the legacy clustering mode.
+    if (enableClockRegionAware && !placementInfo->boundaryClusteringEnabled())
     {
         auto &PU2ClockRegionColumn = placementInfo->getPU2ClockRegionColumn();
         auto &clockRegions = placementInfo->getDeviceInfo()->getClockRegions();

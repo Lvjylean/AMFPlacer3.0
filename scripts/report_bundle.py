@@ -4,7 +4,7 @@ from pathlib import Path, PurePosixPath
 import tarfile
 import tempfile
 
-EXTENSIONS = {'.json', '.rpt', '.log', '.md', '.tsv', '.csv'}
+EXTENSIONS = {'.json', '.rpt', '.log', '.md', '.tsv', '.csv', '.svg'}
 
 
 def eligible_files(root):

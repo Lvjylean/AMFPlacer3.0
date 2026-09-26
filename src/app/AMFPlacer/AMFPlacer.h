@@ -347,14 +347,16 @@ class AMFPlacer
         // enable the timing optimization, start initial placement and global placement.
 
         globalPlacer->clusterPlacement();
-        timingOptimizer->clusterLongPathInOneClockRegion(longPathThr, 0.5);
+        if(placementInfo->boundaryClusteringEnabled()) timingOptimizer->clusterCriticalPathsByPhysicalRegion();
+        else timingOptimizer->clusterLongPathInOneClockRegion(longPathThr, 0.5);
         globalPlacer->GlobalPlacement_fixedCLB(1, 0.0002);
 
         placementInfo->getTimingInfo()->setDSPInnerDelay();
 
         globalPlacer->GlobalPlacement_CLBElements(std::stoi(JSON["GlobalPlacementIteration"]) / 3, false, 5, true, true,
                                                   200, timingOptimizer);
-        timingOptimizer->clusterLongPathInOneClockRegion(longPathThr, 0.5);
+        if(placementInfo->boundaryClusteringEnabled()) timingOptimizer->clusterCriticalPathsByPhysicalRegion();
+        else timingOptimizer->clusterLongPathInOneClockRegion(longPathThr, 0.5);
         globalPlacer->setPseudoNetWeight(globalPlacer->getPseudoNetWeight() * 0.85);
         globalPlacer->setMacroLegalizationParameters(globalPlacer->getMacroPseudoNetEnhanceCnt() * 0.8,
                                                      globalPlacer->getMacroLegalizationWeight() * 0.8);
@@ -363,7 +365,8 @@ class AMFPlacer
         // globalPlacer->spreading(-1);
         globalPlacer->GlobalPlacement_CLBElements(std::stoi(JSON["GlobalPlacementIteration"]) * 2 / 9, true, 5, true,
                                                   true, 200, timingOptimizer);
-        placementInfo->getPU2ClockRegionCenters().clear();
+        if(placementInfo->boundaryClusteringEnabled()) placementInfo->clearRegionPreferences();
+        else placementInfo->getPU2ClockRegionCenters().clear();
         print_info("Current Total HPWL = " + std::to_string(placementInfo->updateB2BAndGetTotalHPWL()));
 
         // pack simple LUT-FF pairs and go through several global placement iterations
@@ -373,7 +376,8 @@ class AMFPlacer
         placementInfo->printStat();
         print_info("Current Total HPWL = " + std::to_string(placementInfo->updateB2BAndGetTotalHPWL()));
 
-        timingOptimizer->clusterLongPathInOneClockRegion(longPathThr, 0.5);
+        if(placementInfo->boundaryClusteringEnabled()) timingOptimizer->clusterCriticalPathsByPhysicalRegion();
+        else timingOptimizer->clusterLongPathInOneClockRegion(longPathThr, 0.5);
 
         globalPlacer->setPseudoNetWeight(globalPlacer->getPseudoNetWeight() * 0.85);
         globalPlacer->setMacroLegalizationParameters(globalPlacer->getMacroPseudoNetEnhanceCnt() * 0.8,
@@ -410,6 +414,8 @@ class AMFPlacer
         // print_info("Current Total HPWL = " + std::to_string(placementInfo->updateB2BAndGetTotalHPWL()));
 
         timingOptimizer->conductStaticTimingAnalysis();
+        // Final packing replaces PUs: retire all transient region preferences.
+        if(placementInfo->boundaryClusteringEnabled()) placementInfo->clearRegionPreferences();
         // finally pack the elements into sites on the FPGA device
         parallelCLBPacker =
             new ParallelCLBPacker(designInfo, deviceinfo, placementInfo, JSON, 3, 10, 0.25, 0.5, 6, 10, 0.02, "first",

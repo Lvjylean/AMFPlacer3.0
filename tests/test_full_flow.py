@@ -8,9 +8,26 @@ import zipfile
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 from run_full_backend import prepare
 from run_full_flow import configure_outputs, completed_amf_placement
-from summarize_full_flow import routing_complete
+from run_boundary_comparison import equivalent_configs
+from summarize_full_flow import routing_complete, missing_clock_source_warning
 
 class FullBackend(unittest.TestCase):
+    def test_both_clock_source_warning_codes_are_reported(self):
+        self.assertTrue(missing_clock_source_warning('WARNING: [Route 35-197] HD.CLK_SRC missing'))
+        self.assertTrue(missing_clock_source_warning('WARNING: [Timing 38-242]'))
+        self.assertFalse(missing_clock_source_warning('ordinary routing warning'))
+
+    def test_physical_report_destination_is_explicit(self):
+        config={'physical boundary model file':'/tmp/model.tsv'}
+        configure_outputs(config,Path('/tmp/experiment'))
+        self.assertEqual(config['BoundaryReportDirectory'],'/tmp/experiment/reports/physical')
+
+    def test_comparison_refuses_different_clock_or_input(self):
+        configs={name:dict(ClockPeriod='10',PhysicalBoundaryMode='true',BoundaryAwareClustering='false') for name in ('control','delay','cluster')}
+        equivalent_configs(configs)
+        configs['cluster']['ClockPeriod']='9'
+        with self.assertRaisesRegex(ValueError,'settings differ'):equivalent_configs(configs)
+
     def test_route_completion_requires_full_coverage_and_zero_errors(self):
         good = {"routable nets":100, "fully routed nets":100, "nets with routing errors":0}
         self.assertTrue(routing_complete(good))

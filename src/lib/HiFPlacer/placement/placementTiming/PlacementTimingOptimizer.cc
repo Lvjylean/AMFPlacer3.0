@@ -11,6 +11,7 @@
  */
 
 #include "PlacementTimingOptimizer.h"
+#include "BoundaryAwareClusterer.h"
 
 #include <cmath>
 #include <codecvt>
@@ -117,7 +118,7 @@ std::vector<int> PlacementTimingOptimizer::findCriticalPath()
     }
 
     std::vector<std::vector<int>> resPaths;
-    auto resPath = timingGraph->backTraceDelayLongestPathFromNode(maxDelayId);
+    auto resPath = maxDelayId >= 0 ? timingGraph->backTraceDelayLongestPathFromNode(maxDelayId) : std::vector<int>{};
 
     return resPath;
 }
@@ -303,7 +304,7 @@ float PlacementTimingOptimizer::conductStaticTimingAnalysis(bool disableOptimist
         }
     }
 
-    auto resPath = timingGraph->backTraceDelayLongestPathFromNode(maxDelayId);
+    auto resPath = maxDelayId >= 0 ? timingGraph->backTraceDelayLongestPathFromNode(maxDelayId) : std::vector<int>{};
 
     std::cout << "An example of long delay path for the current placement:\n";
     for (auto id : resPath)
@@ -379,6 +380,12 @@ float PlacementTimingOptimizer::conductStaticTimingAnalysis(bool disableOptimist
         outfile0.close();
     }
 
+    if(deviceInfo->getPhysicalBoundaryModel())
+    {
+        BoundaryAwareClusterer physical(placementInfo,this,JSONCfg);
+        if(placementInfo->boundaryClusteringEnabled())physical.refresh();
+        physical.audit("sta-"+std::to_string(STA_Cnt));
+    }
     return maxDelay;
 }
 
@@ -527,7 +534,7 @@ void PlacementTimingOptimizer::incrementalStaticTimingAnalysis_forPUWithLocation
         }
     }
 
-    auto resPath = timingGraph->backTraceDelayLongestPathFromNode(maxDelayId);
+    auto resPath = maxDelayId >= 0 ? timingGraph->backTraceDelayLongestPathFromNode(maxDelayId) : std::vector<int>{};
 
     std::cout << "An example of long delay path for the current placement:\n";
     for (auto id : resPath)
@@ -987,4 +994,14 @@ std::vector<float> &PlacementTimingOptimizer::getPUId2Slack(bool update)
         }
     }
     return PUId2Slack;
+}
+
+void PlacementTimingOptimizer::clusterCriticalPathsByPhysicalRegion()
+{
+    placementInfo->updateElementBinGrid();
+    placementInfo->clearRegionPreferences();
+    conductStaticTimingAnalysis();
+    BoundaryAwareClusterer physical(placementInfo,this,JSONCfg);
+    physical.run();
+    physical.audit("cluster-selected");
 }

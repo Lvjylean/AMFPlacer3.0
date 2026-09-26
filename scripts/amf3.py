@@ -167,9 +167,19 @@ def full_run(args):
     run(ROOT, args)
 
 
+def compare_boundaries(args):
+    require_server()
+    from run_boundary_comparison import launch
+    launch(ROOT,args)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
+    p = sub.add_parser('compare-boundaries', help='Launch recorded three-arm GETRF physical-boundary comparison')
+    p.add_argument('--binary', type=Path, default=Path('builds/current/AMFPlacer'))
+    p.add_argument('--parallel', type=int, choices=(1,2,3), default=1)
+    p.set_defaults(action=compare_boundaries)
     p = sub.add_parser('build', help='Create an isolated clean build')
     p.add_argument('--jobs', type=int)
     p.set_defaults(action=build)
