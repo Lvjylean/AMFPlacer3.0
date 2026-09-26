@@ -20,7 +20,8 @@ def equivalent_configs(configs):
 def collect(directory):
     state=json.loads((directory/'manifest.json').read_text());results={}
     for name in VARIANTS:
-        item=state['variants'].get(name,{})
+        progress=directory/(name+'.json')
+        item=state['variants'].get(name,json.loads(progress.read_text()) if progress.exists() else {})
         run=Path(item['run']) if item.get('run') else None
         result=dict(item)
         if run and (run/'status.json').exists():result['status']=json.loads((run/'status.json').read_text())
@@ -47,7 +48,13 @@ def worker(root,directory):
         command=[sys.executable,str(root/'scripts/amf3.py'),'full-run','--config',str(directory/'configs'/VARIANTS[name]),'--binary',state['binary']]
         start=time.monotonic()
         with log.open('w') as f:
-            process=subprocess.Popen(command,cwd=root,stdout=f,stderr=subprocess.STDOUT)
+            process=subprocess.Popen(command,cwd=root,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
+            progress=dict(command=command,pid=process.pid)
+            save(directory/(name+'.json'),progress)
+            for line in process.stdout:
+                f.write(line);f.flush()
+                if line.startswith(str(root/'experiments/runs')+'/') and Path(line.strip()).is_dir():
+                    progress['run']=line.strip();save(directory/(name+'.json'),progress)
             code=process.wait()
         lines=log.read_text(errors='replace').splitlines()
         paths=[line for line in lines if line.startswith(str(root/'experiments/runs')+'/') and Path(line).is_dir()]

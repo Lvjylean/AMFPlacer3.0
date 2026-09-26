@@ -84,6 +84,11 @@ def audit_placements(run,model,netlist,clock_file=None):
     constants=set();cell=None
     with zipfile.ZipFile(netlist) as z,z.open(z.namelist()[0]) as f:
         for raw in f:
+            if raw.startswith(b'curCell=> '):
+                fields=raw.decode().split()
+                if fields[3] in ('VCC','GND'):constants.add(fields[1])
+    with zipfile.ZipFile(netlist) as z,z.open(z.namelist()[0]) as f:
+        for raw in f:
             line=raw.decode().split()
             if not line:continue
             if line[0]=='curCell=>':

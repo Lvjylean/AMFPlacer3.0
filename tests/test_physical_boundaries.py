@@ -6,6 +6,7 @@ import unittest
 import tempfile
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 from build_physical_boundaries import make_geometry, mapped_y, validate_model_inputs, digest
+from diagnostics.analyze_boundary_timing_samples import crossings, distance_delay
 
 RULES=json.loads((Path(__file__).resolve().parents[1]/'configs/architectures/ultrascale-plus-boundaries.json').read_text())
 def fixture(shift=0):
@@ -41,6 +42,13 @@ class GeometryTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'model hash'):validate_model_inputs(model,fabric)
             model.write_text('model');fabric.write_text('changed')
             with self.assertRaisesRegex(ValueError,'fabric'):validate_model_inputs(model,fabric)
+
+    def test_backend_crossing_proxy_matches_seam_endpoint_rules(self):
+        cuts=[dict(kind='SLR',axis='Y',at=239.5,low=0,high=300),dict(kind='IO',axis='X',at=158,low=0,high=960)]
+        self.assertEqual(dict(crossings((150,237),(170,243),cuts)),{'SLR':1,'IO':1})
+        self.assertFalse(crossings((100,237),(100,239.5),cuts))
+        self.assertFalse(crossings((158,100),(170,100),cuts))
+        self.assertAlmostEqual(distance_delay((150,237),(170,243)),distance_delay((100,200),(120,206)))
 
     def test_structural_cuts_and_shared_capacities(self):
         r=geometry(fixture())
