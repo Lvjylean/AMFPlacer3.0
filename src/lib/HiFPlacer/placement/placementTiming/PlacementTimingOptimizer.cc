@@ -659,7 +659,7 @@ void PlacementTimingOptimizer::clusterLongPathInOneClockRegion(int pathLenThr, f
                             break;
                         for (auto curPU : PUsInLongPaths)
                         {
-                            if (!curPU->isFixed() && !curPU->checkHasBRAM() && !curPU->checkHasDSP())
+                            if (!curPU->isFixed() && !curPU->checkHasBRAM() && !curPU->checkHasDSP() && !curPU->checkHasURAM())
                             {
                                 float fX = cX;
                                 float fY = curPU->Y();

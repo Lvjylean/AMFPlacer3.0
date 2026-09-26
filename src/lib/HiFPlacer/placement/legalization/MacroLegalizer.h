@@ -279,37 +279,39 @@ class MacroLegalizer
      * @brief the number of BRAM columns on the target device
      *
      */
-    int BRAMColumnNum = -1;
+    int BRAMColumnNum = 0;
 
     /**
      * @brief the number of DSP columns on the target device
      *
      */
-    int DSPColumnNum = -1;
+    int DSPColumnNum = 0;
+    int URAMColumnNum = 0;
 
     /**
      * @brief the number of CARRY columns on the target device
      *
      */
-    int CARRYColumnNum = -1;
+    int CARRYColumnNum = 0;
 
     /**
      * @brief the number of BRAM rows on the target device
      *
      */
-    int BRAMRowNum = -1;
+    int BRAMRowNum = 0;
 
     /**
      * @brief the number of DSP rows on the target device
      *
      */
-    int DSPRowNum = -1;
+    int DSPRowNum = 0;
+    int URAMRowNum = 0;
 
     /**
      * @brief the number of CARRY rows on the target device
      *
      */
-    int CARRYRowNum = -1;
+    int CARRYRowNum = 0;
 
     /**
      * @brief the floating-point X location of the BRAM columns on the device
@@ -322,6 +324,7 @@ class MacroLegalizer
      *
      */
     std::vector<float> DSPColumnXs;
+    std::vector<float> URAMColumnXs;
 
     /**
      * @brief the floating-point X location of the CARRY columns on the device
@@ -340,6 +343,7 @@ class MacroLegalizer
      *
      */
     std::vector<std::vector<DeviceInfo::DeviceSite *>> DSPColumn2Sites;
+    std::vector<std::vector<DeviceInfo::DeviceSite *>> URAMColumn2Sites;
 
     /**
      * @brief record the sites in each column of CARRY
@@ -358,6 +362,7 @@ class MacroLegalizer
      *
      */
     std::vector<std::deque<PlacementInfo::PlacementUnit *>> DSPColumn2PUs;
+    std::vector<std::deque<PlacementInfo::PlacementUnit *>> URAMColumn2PUs;
 
     /**
      * @brief record the PlacementUnits in each column of CARRY
@@ -376,6 +381,7 @@ class MacroLegalizer
      *
      */
     std::vector<int> DSPColumnUntilization;
+    std::vector<int> URAMColumnUntilization;
 
     /**
      * @brief record the number of cells (Macro contains multiple cells) in each column for CARRY
@@ -394,6 +400,7 @@ class MacroLegalizer
      *
      */
     std::map<DesignInfo::DesignCell *, int> DSPCell2Column;
+    std::map<DesignInfo::DesignCell *, int> URAMCell2Column;
 
     /**
      * @brief record the PlacementUnits in each column of CARRY site
@@ -443,6 +450,7 @@ class MacroLegalizer
      *
      */
     std::set<PlacementInfo::PlacementUnit *> DSPPUs;
+    std::set<PlacementInfo::PlacementUnit *> URAMPUs;
 
     /**
      * @brief the PlacementUnits which shoudl be mapped to CARRY BEL
@@ -452,6 +460,7 @@ class MacroLegalizer
 
     bool enableBRAMLegalization = false;
     bool enableDSPLegalization = false;
+    bool enableURAMLegalization = false;
     bool enableCARRYLegalization = false;
     bool verbose = false;
     float y2xRatio = 1.0;
@@ -713,6 +722,10 @@ class MacroLegalizer
      * @return int
      */
     int getMarcroCellNum(PlacementInfo::PlacementUnit *tmpMacroUnit);
+    bool legalSiteRange(PlacementInfo::PlacementUnit *pu,
+                        const std::vector<DeviceInfo::DeviceSite *> &sites, int first, int count) const;
+    void verifyAvailableCapacity();
+
 
     inline void swapPU(PlacementInfo::PlacementUnit **A, PlacementInfo::PlacementUnit **B)
     {

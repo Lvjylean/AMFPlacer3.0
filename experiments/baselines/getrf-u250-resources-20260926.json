@@ -1,0 +1,42 @@
+{
+  "schema": "amf-resource-stage-baseline-v1",
+  "stage": "partial-hard-resource-legalization",
+  "case": "getrf-u250",
+  "source_base_commit": "35e9dcfdf10a165e996b2cd1f5bdbb045bfb6fa7",
+  "build": "builds/build-20260926-143505-263463-35e9dcfd",
+  "binary_sha256": "060438043f6d862e6fdd224d9adf27c12b03c42803763a58c274b1ec4686624f",
+  "resource_run": "experiments/preflight/resource-legalization-20260926-143704-946049",
+  "vivado_run": "experiments/runs/getrf-u250-resources-20260926-143933-202523",
+  "cell_types": {
+    "URAM288": 256,
+    "DSP48E2": 2816,
+    "RAMB36E2": 515,
+    "RAMB18E2": 1,
+    "CARRY8": 22508
+  },
+  "assigned_cells": 26096,
+  "verified_vivado_locations": 26096,
+  "dedicated_cascade_pairs": {
+    "CARRY8": 10903,
+    "DSP48E2": 1280
+  },
+  "uram_by_slr": [
+    62,
+    65,
+    65,
+    64
+  ],
+  "amf_entry_elapsed_seconds": 74.9845423437655,
+  "vivado_validation_elapsed_seconds": 179.53267968725413,
+  "resource_checks": "experiments/preflight/resource-checks-20260926-1436",
+  "resource_checks_passed": 15,
+  "input_checks": "experiments/preflight/input-regression-20260926-1420",
+  "input_checks_passed": 6,
+  "python_checks_passed": 21,
+  "output_dcp": "experiments/runs/getrf-u250-resources-20260926-143933-202523/reports/getrf_hard_resources_partial.dcp",
+  "output_dcp_sha256": "6933a477ebd71217672f552988f90e25dd4b9176507bcc258ac80ad88d7e5709",
+  "full_placement_executed": false,
+  "routing_executed": false,
+  "full_drc_executed": false,
+  "timing_closure_evaluated": false
+}

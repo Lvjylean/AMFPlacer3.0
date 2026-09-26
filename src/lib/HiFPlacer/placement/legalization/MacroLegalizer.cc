@@ -17,6 +17,8 @@
 #include <cstdlib>
 #include <ctime>
 #include <iostream>
+#include <stdexcept>
+#include "HardResourceUtils.h"
 
 MacroLegalizer::MacroLegalizer(std::string legalizerName, PlacementInfo *placementInfo, DeviceInfo *deviceInfo,
                                std::vector<DesignInfo::DesignCellType> &macroTypesToLegalize,
@@ -64,6 +66,8 @@ void MacroLegalizer::legalize(bool exactLegalization, bool directLegalization, b
         noTarget = true;
         return;
     }
+
+    verifyAvailableCapacity();
 
     if (!directLegalization)
     {
@@ -157,6 +161,7 @@ void MacroLegalizer::finalLegalizeBasedOnDP()
         print_status("MacroLegalizer[" + legalizerName + "] Start finalLegalizeBasedOnDP");
     tmpAverageDisplacement += DPForMinHPWL(BRAMColumnNum, BRAMColumn2Sites, BRAMColumn2PUs);
     tmpAverageDisplacement += DPForMinHPWL(DSPColumnNum, DSPColumn2Sites, DSPColumn2PUs);
+    tmpAverageDisplacement += DPForMinHPWL(URAMColumnNum, URAMColumn2Sites, URAMColumn2PUs);
     tmpAverageDisplacement += DPForMinHPWL(CARRYColumnNum, CARRYColumn2Sites, CARRYColumn2PUs);
     finalAverageDisplacement = tmpAverageDisplacement / PU2X.size();
     if (verbose)
@@ -221,7 +226,7 @@ float MacroLegalizer::DPForMinHPWL(int colNum, std::vector<std::vector<DeviceInf
         for (unsigned int j = totalMacroCellNum - 1; j < curColSites.size(); j++)
         {
             float curHPWLChange = getHPWLChange(curColPU[0], curColSites[j - heightPURow + 1]);
-            if ((curColSites[j]->getSiteY() - curColSites[j - heightPURow + 1]->getSiteY() != heightPURow - 1))
+            if (!legalSiteRange(curColPU[0], curColSites, j - heightPURow + 1, heightPURow))
             {
                 // we need to ensure that there is no occpupied sites in this range
                 curHPWLChange = 1100000000.0;
@@ -265,7 +270,7 @@ float MacroLegalizer::DPForMinHPWL(int colNum, std::vector<std::vector<DeviceInf
                  j++) // j start from heightPURow because PU0 must occupy 1+ site(s)
             {
                 float curHPWLChange = getHPWLChange(curColPU[i], curColSites[j - heightPURow + 1]);
-                if ((curColSites[j]->getSiteY() - curColSites[j - heightPURow + 1]->getSiteY() != heightPURow - 1))
+                if (!legalSiteRange(curColPU[i], curColSites, j - heightPURow + 1, heightPURow))
                 {
                     // we need to ensure that there is no occpupied sites in this range
                     curHPWLChange = 1100000000.0;
@@ -405,7 +410,7 @@ bool MacroLegalizer::macroCanBeFitIn(int colId, std::vector<std::vector<DeviceIn
     for (unsigned int j = totalMacroCellNum - 1; j < curColSites.size(); j++)
     {
         float curHPWLChange = 1;
-        if ((curColSites[j]->getSiteY() - curColSites[j - heightPURow + 1]->getSiteY() != heightPURow - 1))
+        if (!legalSiteRange(curColPU[0], curColSites, j - heightPURow + 1, heightPURow))
         {
             // we need to ensure that there is no occpupied sites in this range
             curHPWLChange = 1100000000.0;
@@ -449,7 +454,7 @@ bool MacroLegalizer::macroCanBeFitIn(int colId, std::vector<std::vector<DeviceIn
              j++) // j start from heightPURow because PU0 must occupy 1+ site(s)
         {
             float curHPWLChange = 1;
-            if ((curColSites[j]->getSiteY() - curColSites[j - heightPURow + 1]->getSiteY() != heightPURow - 1))
+            if (!legalSiteRange(curColPU[i], curColSites, j - heightPURow + 1, heightPURow))
             {
                 // we need to ensure that there is no occpupied sites in this range
                 curHPWLChange = 1100000000.0;
@@ -518,6 +523,7 @@ void MacroLegalizer::getMacrosToLegalize()
     macroUnitsToLegalizeSet.clear();
     BRAMPUs.clear();
     DSPPUs.clear();
+    URAMPUs.clear();
     CARRYPUs.clear();
     for (auto curCell : placementInfo->getCells())
     {
@@ -537,6 +543,10 @@ void MacroLegalizer::getMacrosToLegalize()
                     if (curCell->isDSP())
                     {
                         DSPPUs.insert(curPU);
+                    }
+                    if (curCell->isURAM())
+                    {
+                        URAMPUs.insert(curPU);
                     }
                     if (curCell->isCarry())
                     {
@@ -598,6 +608,17 @@ void MacroLegalizer::findMacroType2AvailableSites()
                     DSPColumnNum = curSite->getSiteX() + 1;
             }
         }
+        if (DesignInfo::isURAM(curCellType))
+        {
+            enableURAMLegalization = true;
+            for (auto curSite : macroType2Sites[curCellType])
+            {
+                if (curSite->getSiteY() + 1 > URAMRowNum)
+                    URAMRowNum = curSite->getSiteY() + 1;
+                if (curSite->getSiteX() + 1 > URAMColumnNum)
+                    URAMColumnNum = curSite->getSiteX() + 1;
+            }
+        }
         if (DesignInfo::isCarry(curCellType))
         {
             enableCARRYLegalization = true;
@@ -653,6 +674,29 @@ void MacroLegalizer::findMacroType2AvailableSites()
                         DSPColumnNum = curSite->getSiteX() + 1;
                     DSPColumnXs[curSite->getSiteX()] = curSite->X();
                     DSPColumn2Sites[curSite->getSiteX()].push_back(curSite);
+                }
+                break;
+            }
+        }
+    }
+    URAMColumnXs.clear();
+    if (enableURAMLegalization)
+    {
+        URAMColumnXs.resize(URAMColumnNum, -1.0);
+        URAMColumn2Sites.clear();
+        URAMColumn2Sites.resize(URAMColumnNum, std::vector<DeviceInfo::DeviceSite *>(0));
+        for (auto curCellType : macroTypesToLegalize)
+        {
+            if (DesignInfo::isURAM(curCellType))
+            {
+                for (auto curSite : macroType2Sites[curCellType])
+                {
+                    if (curSite->getSiteY() + 1 > URAMRowNum)
+                        URAMRowNum = curSite->getSiteY() + 1;
+                    if (curSite->getSiteX() + 1 > URAMColumnNum)
+                        URAMColumnNum = curSite->getSiteX() + 1;
+                    URAMColumnXs[curSite->getSiteX()] = curSite->X();
+                    URAMColumn2Sites[curSite->getSiteX()].push_back(curSite);
                 }
                 break;
             }
@@ -740,6 +784,11 @@ void MacroLegalizer::findPossibleLegalLocation(bool fixedColumn)
                 assert(DSPCell2Column.find(curCell) != DSPCell2Column.end());
                 targetSiteX = DSPCell2Column[curCell];
             }
+            if (curCell->isURAM())
+            {
+                assert(URAMCell2Column.find(curCell) != URAMCell2Column.end());
+                targetSiteX = URAMCell2Column[curCell];
+            }
             if (curCell->isCarry())
             {
                 assert(CARRYCell2Column.find(curCell) != CARRYCell2Column.end());
@@ -760,6 +809,10 @@ void MacroLegalizer::findPossibleLegalLocation(bool fixedColumn)
             else if (DesignInfo::isDSP(curCellType))
             {
                 column2Sites = &DSPColumn2Sites;
+            }
+            else if (DesignInfo::isURAM(curCellType))
+            {
+                column2Sites = &URAMColumn2Sites;
             }
             else if (DesignInfo::isBRAM(curCellType))
             {
@@ -985,6 +1038,17 @@ void MacroLegalizer::dumpMatching(bool fixedColumn, bool enforce)
                                  << "\n";
                     }
                 }
+                for (int i = 0; i < URAMColumnNum; i++)
+                {
+                    int numPUs = URAMColumn2PUs[i].size();
+                    for (int j = 0; j < numPUs; j++)
+                    {
+                        auto PU = URAMColumn2PUs[i][j];
+                        outfile0 << "URAM col#" << i << ": " << PU->getName() << " PUY:" << PU2Y[PU]
+                                 << " numPUs:" << getMarcroCellNum(PU) << " netNum:" << PU->getNetsSetPtr()->size()
+                                 << "\n";
+                    }
+                }
                 for (int i = 0; i < CARRYColumnNum; i++)
                 {
                     int numPUs = CARRYColumn2PUs[i].size();
@@ -1016,6 +1080,8 @@ int MacroLegalizer::getMarcroCellNum(PlacementInfo::PlacementUnit *tmpMacroUnit)
             return macroPU->getBRAMNum();
         else if (macroPU->checkHasDSP())
             return macroPU->getDSPNum();
+        else if (macroPU->checkHasURAM())
+            return macroPU->getURAMNum();
         else if (macroPU->checkHasCARRY())
             return macroPU->getCARRYNum();
         else
@@ -1075,6 +1141,11 @@ void MacroLegalizer::updatePUMatchingLocation(bool isRoughLegalization, bool upd
     {
         DSPColumn2PUs.resize(DSPColumnNum, std::deque<PlacementInfo::PlacementUnit *>(0));
     }
+    URAMColumn2PUs.clear();
+    if (URAMColumnNum > 0)
+    {
+        URAMColumn2PUs.resize(URAMColumnNum, std::deque<PlacementInfo::PlacementUnit *>(0));
+    }
     CARRYColumn2PUs.clear();
     if (CARRYColumnNum > 0)
     {
@@ -1101,6 +1172,10 @@ void MacroLegalizer::updatePUMatchingLocation(bool isRoughLegalization, bool upd
             if (curCell->isDSP())
             {
                 DSPColumn2PUs[matchedSite->getSiteX()].push_back(curPU);
+            }
+            if (curCell->isURAM())
+            {
+                URAMColumn2PUs[matchedSite->getSiteX()].push_back(curPU);
             }
             if (curCell->isCarry())
             {
@@ -1157,6 +1232,10 @@ void MacroLegalizer::updatePUMatchingLocation(bool isRoughLegalization, bool upd
         sortPUsByPU2Y(DSPColumn2PUs[i]);
 
 #pragma omp parallel for
+    for (int i = 0; i < URAMColumnNum; i++)
+        sortPUsByPU2Y(URAMColumn2PUs[i]);
+
+#pragma omp parallel for
     for (int i = 0; i < CARRYColumnNum; i++)
         sortPUsByPU2Y(CARRYColumn2PUs[i]);
 
@@ -1168,6 +1247,7 @@ void MacroLegalizer::spreadMacros(int columnNum, std::vector<int> &columnUntiliz
                                   std::vector<std::deque<PlacementInfo::PlacementUnit *>> &column2PUs,
                                   std::map<DesignInfo::DesignCell *, int> &cell2Column, float globalBudgeRatio)
 {
+    if (columnNum == 0) return;
     std::vector<float> budgetRatios(columnNum, globalBudgeRatio);
     while (true)
     {
@@ -1310,6 +1390,10 @@ void MacroLegalizer::resolveOverflowColumns()
     {
         spreadMacros(DSPColumnNum, DSPColumnUntilization, DSPColumn2Sites, DSPColumn2PUs, DSPCell2Column);
     }
+    if (enableURAMLegalization)
+    {
+        spreadMacros(URAMColumnNum, URAMColumnUntilization, URAMColumn2Sites, URAMColumn2PUs, URAMCell2Column);
+    }
     if (enableCARRYLegalization)
     {
         spreadMacros(CARRYColumnNum, CARRYColumnUntilization, CARRYColumn2Sites, CARRYColumn2PUs, CARRYCell2Column,
@@ -1430,6 +1514,41 @@ void MacroLegalizer::mapMacrosToColumns(bool directLegalization)
             }
         }
     }
+    URAMColumn2PUs.clear();
+    URAMColumnUntilization.clear();
+    if (URAMColumnNum > 0)
+    {
+        URAMColumn2PUs.resize(URAMColumnNum, std::deque<PlacementInfo::PlacementUnit *>(0));
+        URAMColumnUntilization.resize(URAMColumnNum, 0);
+
+        if (directLegalization)
+        {
+            for (auto tmpMacroUnit : URAMPUs)
+            {
+                if (URAMPUs.find(tmpMacroUnit) != URAMPUs.end())
+                {
+                    int colId = findCorrespondingColumn(tmpMacroUnit->X(), URAMColumnXs);
+
+                    URAMColumn2PUs[colId].push_back(tmpMacroUnit);
+                    URAMColumnUntilization[colId] += getMarcroCellNum(tmpMacroUnit);
+                }
+            }
+        }
+        else
+        {
+            for (auto &PUCol_pair : PU2Columns)
+            {
+                auto tmpMacroUnit = PUCol_pair.first;
+                if (URAMPUs.find(tmpMacroUnit) != URAMPUs.end())
+                {
+                    int colId = findIdMaxWithRecurence(0, URAMColumnNum - 1, PUCol_pair.second);
+
+                    URAMColumn2PUs[colId].push_back(tmpMacroUnit);
+                    URAMColumnUntilization[colId] += getMarcroCellNum(tmpMacroUnit);
+                }
+            }
+        }
+    }
 
     CARRYColumn2PUs.clear();
     CARRYColumnUntilization.clear();
@@ -1516,4 +1635,49 @@ void MacroLegalizer::resetSitesMapped()
         }
         PULevelMatching.clear();
     }
+}
+
+bool MacroLegalizer::legalSiteRange(PlacementInfo::PlacementUnit *pu,
+    const std::vector<DeviceInfo::DeviceSite *> &sites, int first, int count) const
+{
+    if (!HardResourceUtils::contiguousWithinSLR(sites, first, count)) return false;
+    if (auto macro = dynamic_cast<PlacementInfo::PlacementMacro *>(pu))
+    {
+        if (macro->getMacroType() != PlacementInfo::PlacementMacro::PlacementMacroType_CARRY &&
+            sites[first]->getClockRegionY() != sites[first+count-1]->getClockRegionY()) return false;
+        if (macro->getMacroType() == PlacementInfo::PlacementMacro::PlacementMacroType_BRAM &&
+            macro->getCells().size() > 1 && sites[first]->getSiteY() % 2) return false;
+    }
+    return true;
+}
+
+void MacroLegalizer::verifyAvailableCapacity()
+{
+    auto verify = [this](const std::set<PlacementInfo::PlacementUnit *> &units,
+                         std::vector<std::vector<DeviceInfo::DeviceSite *>> &columns) {
+        size_t capacity = 0, demand = 0;
+        for (auto &column : columns) { sortSitesBySiteY(column); capacity += column.size(); }
+        std::set<std::pair<int, int>> checked;
+        for (auto pu : units)
+        {
+            int count = getMarcroCellNum(pu);
+            demand += count;
+            auto macro = dynamic_cast<PlacementInfo::PlacementMacro *>(pu);
+            int kind = macro ? static_cast<int>(macro->getMacroType()) : -1;
+            if (!checked.insert({kind, count}).second) continue;
+            bool fits = false;
+            for (const auto &column : columns)
+            {
+                for (int i = 0; i + count <= static_cast<int>(column.size()); ++i)
+                    if (legalSiteRange(pu, column, i, count)) { fits = true; break; }
+                if (fits) break;
+            }
+            if (!fits) throw std::runtime_error("No contiguous same-SLR resource range for: " + pu->getName());
+        }
+        if (demand > capacity) throw std::runtime_error("Hard-resource demand exceeds available site capacity");
+    };
+    verify(URAMPUs, URAMColumn2Sites);
+    verify(DSPPUs, DSPColumn2Sites);
+    verify(BRAMPUs, BRAMColumn2Sites);
+    verify(CARRYPUs, CARRYColumn2Sites);
 }

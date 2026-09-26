@@ -52,7 +52,7 @@ python3 AMFplacer3.0/scripts/sync_reports.py <run-id>
 
 ## 已验证基线
 
-U250 当前开放器件/网表输入检查，完整布局入口尚未开放。输入层实现、验证记录与下一阶段验收条件见 [U250 输入适配](docs/research/u250-input-adaptation.md)。本阶段不接入用户独立项目的 floorplan，不实现 SLL 优化。
+U250 已开放输入检查和独立硬资源分配/合法化，覆盖 URAM 与 Carry/DSP 专用级联 SLR 检查。`amf3.py legalize-resources` 执行本阶段，`amf3.py validate-resources` 用 Vivado 回读部分位置。完整布局入口仍未开放；不接入外部 floorplan，不实现 SLL 优化。输入层记录见 [U250 输入适配](docs/research/u250-input-adaptation.md)，本阶段验证、命令和限制见 [U250 资源合法化](docs/research/u250-resource-legalization.md)。
 
 2026-09-25 的成功轮次为 `faceDetect-benchmark-20260925-144131`：AMF 98.676 秒，Vivado 后端 564.033 秒，113,125 条可布线网络全部完成，路由错误 0；WNS 0.300 ns、TNS 0，hold 违例 0，总线偏斜 8 项通过。约 99.22% 的 AMF 请求位置在最终 DCP 中保留。
 

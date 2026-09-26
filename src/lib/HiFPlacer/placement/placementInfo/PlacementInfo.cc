@@ -292,7 +292,8 @@ void PlacementInfo::PlacementBinInfo::addSiteIntoBin(DeviceInfo::DeviceSite *cur
     if (inRange(curSite->X(), curSite->Y()))
     {
         correspondingSites.push_back(curSite);
-        capacity += compatiblePlacementTable->sharedCellType2BELNames[sharedCellType].size();
+        if (sharedCellType != "URAM_288K_INST" || !curSite->isOccupied())
+            capacity += compatiblePlacementTable->sharedCellType2BELNames[sharedCellType].size();
         setClockRegionX(curSite->getClockRegionX());
     }
     else
@@ -713,7 +714,7 @@ void PlacementInfo::optimizeLongPaths()
         for (auto tmpPU : path)
         {
             float curWeight = 0;
-            if (tmpPU->checkHasBRAM() || tmpPU->checkHasCARRY() || tmpPU->checkHasDSP())
+            if (tmpPU->checkHasBRAM() || tmpPU->checkHasCARRY() || (tmpPU->checkHasDSP() || tmpPU->checkHasURAM()))
             {
                 totalWeight += 20;
                 curWeight = 20;
@@ -730,7 +731,7 @@ void PlacementInfo::optimizeLongPaths()
         float avgY = totalY / totalWeight;
         for (auto tmpPU : path)
         {
-            if (tmpPU->checkHasDSP() || tmpPU->checkHasBRAM())
+            if ((tmpPU->checkHasDSP() || tmpPU->checkHasURAM()) || tmpPU->checkHasBRAM())
                 continue;
             tmpPU->setAnchorLocationAndForgetTheOriginalOne(avgX, avgY);
             enforceLegalizeXYInArea(tmpPU);

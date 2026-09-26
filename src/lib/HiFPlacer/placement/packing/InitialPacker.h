@@ -65,7 +65,7 @@ class InitialPacker
      * @brief extract the macros from the netlist to construction PlacmentMacro
      *
      */
-    void pack();
+    void pack(bool hardResourcesOnly = false);
 
     /**
      * @brief BFS to find the core cells of a macro based on some pre-defined patterns of cascaded cells

@@ -272,7 +272,7 @@ DesignInfo::DesignInfo(std::map<std::string, std::string> &JSONCfg, DeviceInfo *
 
     print_info("#Connected Cell Pairs in Small Nets = " + std::to_string(connectedPinsWithSmallNet.size()));
 
-    if (!type2Cells[CellType_PCIE_3_1].empty())
+    if (type2Cells.count(CellType_PCIE_3_1) && !type2Cells.at(CellType_PCIE_3_1).empty())
     {
         std::string STR_PCIE_3_1 = "PCIE_3_1";
 

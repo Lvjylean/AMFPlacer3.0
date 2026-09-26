@@ -17,6 +17,7 @@
 #include "GlobalPlacer.h"
 #include "IncrementalBELPacker.h"
 #include "InitialPacker.h"
+#include "HardResourceUtils.h"
 #include "ParallelCLBPacker.h"
 #include "PlacementInfo.h"
 #include "PlacementTimingOptimizer.h"
@@ -173,6 +174,87 @@ class AMFPlacer
         print_status("AMF_INPUT_INSPECTION_OK: " + reportPath);
     }
 
+    void legalizeResources(const std::string &directory)
+    {
+        inspectInputs(directory + "/inputs.json");
+        for (const auto &key : {"cellType2fixedAmo file", "cellType2sharedCellType file", "sharedCellType2BELtype file"})
+            if (!JSON.count(key)) throw std::runtime_error(std::string("Missing resource mapping: ") + key);
+        JSON["allow floating placement"] = "true";
+        JSON["dumpDirectory"] = directory;
+        placementInfo = new PlacementInfo(designInfo, deviceinfo, JSON);
+        InitialPacker packer(designInfo, deviceinfo, placementInfo, JSON);
+        packer.pack(true);
+        HardResourceUtils::validateCascadeMacros(placementInfo);
+        float x = (placementInfo->getGlobalMinX() + placementInfo->getGlobalMaxX()) / 2;
+        float y = (placementInfo->getGlobalMinY() + placementInfo->getGlobalMaxY()) / 2;
+        // This standalone stage has no global placement to supply initial positions.
+        // Deterministically spread resource anchors to avoid an artificial all-at-centre matching hotspot.
+        auto radicalInverse = [](unsigned int value, unsigned int base) {
+            double fraction = 1.0, result = 0.0;
+            while (value) { fraction /= base; result += fraction * (value % base); value /= base; }
+            return result;
+        };
+        unsigned int resourceIndex = 0;
+        for (auto pu : placementInfo->getPlacementUnits())
+        {
+            if (pu->isLocked()) continue;
+            float initialX = x, initialY = y;
+            if (pu->checkHasDSP() || pu->checkHasBRAM() || pu->checkHasCARRY() || pu->checkHasURAM())
+            {
+                float height = 0;
+                if (auto macro = dynamic_cast<PlacementInfo::PlacementMacro *>(pu))
+                    for (auto cell : macro->getCells()) height = std::max(height, macro->getCellOffsetYInMacro(cell));
+                ++resourceIndex;
+                initialX = placementInfo->getGlobalMinX() + radicalInverse(resourceIndex, 2) *
+                    (placementInfo->getGlobalMaxX() - placementInfo->getGlobalMinX());
+                initialY = placementInfo->getGlobalMinY() + radicalInverse(resourceIndex, 3) *
+                    std::max(0.0f, placementInfo->getGlobalMaxY() - placementInfo->getGlobalMinY() - height);
+            }
+            pu->setAnchorLocationAndForgetTheOriginalOne(initialX, initialY);
+        }
+        if (JSON.count("resource initial locations file"))
+        {
+            std::ifstream file(JSON["resource initial locations file"]);
+            if (!file) throw std::runtime_error("Cannot open resource initial locations");
+            std::string line, name, extra;
+            std::set<PlacementInfo::PlacementUnit *> seeded;
+            while (std::getline(file, line))
+            {
+                if (line.empty() || line[0] == '#') continue;
+                std::istringstream values(line);
+                if (!(values >> name >> x >> y) || (values >> extra) || !std::isfinite(x) || !std::isfinite(y))
+                    throw std::runtime_error("Invalid resource initial location: " + line);
+                auto cell = designInfo->getCell(name);
+                if (!cell) throw std::runtime_error("Unknown resource seed cell: " + name);
+                auto pu = placementInfo->getPlacementUnitByCell(cell);
+                if (pu->isLocked() || !seeded.insert(pu).second)
+                    throw std::runtime_error("Duplicate or locked resource seed: " + name);
+                if (auto macro = dynamic_cast<PlacementInfo::PlacementMacro *>(pu))
+                {
+                    x -= macro->getCellOffsetXInMacro(cell);
+                    y -= macro->getCellOffsetYInMacro(cell);
+                }
+                pu->setAnchorLocationAndForgetTheOriginalOne(x, y);
+            }
+        }
+        placementInfo->createGridBins(5.0, 5.0);
+        placementInfo->updateElementBinGrid();
+        placementInfo->updateB2BAndGetTotalHPWL();
+        std::vector<DesignInfo::DesignCellType> types{DesignInfo::CellType_RAMB18E2, DesignInfo::CellType_RAMB36E2,
+            DesignInfo::CellType_FIFO18E2, DesignInfo::CellType_FIFO36E2, DesignInfo::CellType_DSP48E2,
+            DesignInfo::CellType_URAM288, DesignInfo::CellType_URAM288_BASE};
+        MacroLegalizer hard("HardResourceStage", placementInfo, deviceinfo, types, JSON);
+        hard.legalize(true, false, true);
+        types = {DesignInfo::CellType_CARRY8};
+        MacroLegalizer carry("CarryResourceStage", placementInfo, deviceinfo, types, JSON);
+        // Column assignment plus exact DP is sufficient for this legality-only stage.
+        carry.legalize(true, true, true);
+        for (auto pair : placementInfo->getPULegalXY().first)
+            pair.first->setAnchorLocationAndForgetTheOriginalOne(pair.second, placementInfo->getPULegalXY().second.at(pair.first));
+        HardResourceUtils::writePlacement(placementInfo, directory);
+        print_status("AMF_HARD_RESOURCE_LEGALIZATION_OK: " + directory);
+    }
+
     void clearSomeAttributesCannotRecord()
     {
         for (auto PU : placementInfo->getPlacementUnits())
@@ -212,6 +294,7 @@ class AMFPlacer
         // we have to pack cells in design info into placement units in placement info with packer
         InitialPacker *initialPacker = new InitialPacker(designInfo, deviceinfo, placementInfo, JSON);
         initialPacker->pack();
+        HardResourceUtils::validateCascadeMacros(placementInfo);
         placementInfo->resetLUTFFDeterminedOccupation();
 
         placementInfo->printStat();

@@ -65,6 +65,8 @@ GlobalPlacer::GlobalPlacer(PlacementInfo *placementInfo, std::map<std::string, s
     macroTypesToLegalize.push_back(DesignInfo::CellType_FIFO18E2);
     macroTypesToLegalize.push_back(DesignInfo::CellType_FIFO36E2);
     macroTypesToLegalize.push_back(DesignInfo::CellType_DSP48E2);
+    macroTypesToLegalize.push_back(DesignInfo::CellType_URAM288);
+    macroTypesToLegalize.push_back(DesignInfo::CellType_URAM288_BASE);
     BRAMDSPLegalizer = new MacroLegalizer("BRAMDSPLegalizer", placementInfo, placementInfo->getDeviceInfo(),
                                           macroTypesToLegalize, JSONCfg);
     macroTypesToLegalize.clear();
@@ -1219,7 +1221,7 @@ int GlobalPlacer::timingDrivenDetailedPlacement_shortestPath_intermediate(Placem
             }
             // std::cout << curCell << " has following candidates: \n";
             if (!curPU->isFixed() && !curPU->isLocked() && !curPU->checkHasLUTRAM() && !curPU->checkHasBRAM() &&
-                !curPU->checkHasDSP())
+                !curPU->checkHasDSP() && !curPU->checkHasURAM())
             {
                 float tmpRange = range;
                 if (curPU->checkHasCARRY())
@@ -1308,7 +1310,7 @@ int GlobalPlacer::timingDrivenDetailedPlacement_shortestPath_intermediate(Placem
 
                 auto &curCandidates = cellId2CandidateLocation[curCellId];
                 if (!curPU->isFixed() && !curPU->isLocked() && !curPU->checkHasLUTRAM() && !curPU->checkHasBRAM() &&
-                    !curPU->checkHasDSP())
+                    !curPU->checkHasDSP() && !curPU->checkHasURAM())
                 {
                     if (auto curMacro = dynamic_cast<PlacementInfo::PlacementMacro *>(curPU))
                     {

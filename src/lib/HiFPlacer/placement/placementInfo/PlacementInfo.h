@@ -1257,6 +1257,9 @@ class PlacementInfo
             return numUnitsDriveThisPU;
         }
 
+        inline void addURAM() { URAMcnt++; }
+        inline bool checkHasURAM() { return URAMcnt; }
+        inline int getURAMNum() { return URAMcnt; }
         inline void addDSP()
         {
             DSPcnt++;
@@ -1315,11 +1318,11 @@ class PlacementInfo
         }
         inline bool hasRegister()
         {
-            return (checkHasFF() || checkHasDSP() || checkHasBRAM() || checkHasLUTRAM());
+            return (checkHasFF() || checkHasDSP() || checkHasURAM() || checkHasBRAM() || checkHasLUTRAM());
         }
         inline bool hasLogic()
         {
-            return (checkHasFF() || checkHasDSP() || checkHasBRAM() || checkHasLUTRAM() || checkHasCARRY() ||
+            return (checkHasFF() || checkHasDSP() || checkHasURAM() || checkHasBRAM() || checkHasLUTRAM() || checkHasCARRY() ||
                     checkHasLUT());
         }
         inline bool isMCLB()
@@ -1414,6 +1417,7 @@ class PlacementInfo
         bool locked = false;
         int weight = 1;
 
+        int URAMcnt = 0;
         int DSPcnt = 0;
         int BRAMcnt = 0;
         int LUTRAMcnt = 0;
@@ -1448,6 +1452,8 @@ class PlacementInfo
                 addBRAM();
             if (cell->isDSP())
                 addDSP();
+            if (cell->isURAM())
+                addURAM();
             if (cell->isFF())
                 addFF();
             if (cell->isLUTRAM() || cell->originallyIsLUTRAM())
@@ -1569,6 +1575,8 @@ class PlacementInfo
                     addBRAM();
                 if (curCell->isDSP())
                     addDSP();
+                if (curCell->isURAM())
+                    addURAM();
                 if (!curCell->isVirtualCell())
                 {
                     if (curCell->isFF())
@@ -1644,6 +1652,8 @@ class PlacementInfo
                 addBRAM();
             if (vCell->isDSP())
                 addDSP();
+            if (vCell->isURAM())
+                addURAM();
             // if (vCell->isFF())
             //     addFF();
             if (vCell->isLUTRAM() || vCell->originallyIsLUTRAM())
@@ -1693,6 +1703,8 @@ class PlacementInfo
                 addBRAM();
             if (vCell->isDSP())
                 addDSP();
+            if (vCell->isURAM())
+                addURAM();
             // if (vCell->isFF())
             //     addFF();
             if (vCell->isLUTRAM() || vCell->originallyIsLUTRAM())
@@ -2482,6 +2494,7 @@ class PlacementInfo
             totalWeight = 0;
             totalBRAMNum = 0;
             totalDSPNum = 0;
+            totalURAMNum = 0;
         }
         ~ClusterUnit(){};
         inline int getWeight()
@@ -2492,6 +2505,7 @@ class PlacementInfo
         {
             return totalBRAMNum;
         };
+        inline int getURAMNum() { return totalURAMNum; }
         inline int getDSPNum()
         {
             return totalDSPNum;
@@ -2503,6 +2517,7 @@ class PlacementInfo
             totalWeight += curPU->getWeight();
             totalBRAMNum += curPU->getBRAMNum();
             totalDSPNum += curPU->getDSPNum();
+            totalURAMNum += curPU->getURAMNum();
         }
 
         inline std::vector<PlacementInfo::PlacementUnit *> &getUnits()
@@ -2517,7 +2532,7 @@ class PlacementInfo
 
       private:
         std::vector<PlacementInfo::PlacementUnit *> PUs;
-        int totalWeight, totalBRAMNum, totalDSPNum;
+        int totalWeight, totalBRAMNum, totalDSPNum, totalURAMNum;
         int id;
     };
 

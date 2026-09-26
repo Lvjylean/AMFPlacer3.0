@@ -593,7 +593,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
                 auto curCell = designInfo->getCells()[cellId];
                 // std::cout << curCell << " has following candidates: \n";
                 if (!curPU->isLocked() && !curPU->checkHasCARRY() && !curPU->checkHasLUTRAM() &&
-                    !curPU->checkHasBRAM() && !curPU->checkHasDSP())
+                    !curPU->checkHasBRAM() && !(curPU->checkHasDSP() || curPU->checkHasURAM()))
                 {
                     float v1x = 0, v1y = 0, v2x = 0, v2y = 0;
                     if (orderI > 0 && orderI < cellIdsInCriticalPath.size() - 1)
@@ -716,7 +716,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
                 }
                 // std::cout << curCell << " has following candidates: \n";
                 if (!curPU->isLocked() && !curPU->checkHasCARRY() && !curPU->checkHasLUTRAM() &&
-                    !curPU->checkHasBRAM() && !curPU->checkHasDSP())
+                    !curPU->checkHasBRAM() && !(curPU->checkHasDSP() || curPU->checkHasURAM()))
                 {
                     std::vector<DeviceInfo::DeviceSite *> *candidateSitesToPlaceTheCell = findNeiborSitesFromBinGrid(
                         DesignInfo::CellType_LUT4, PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
@@ -875,9 +875,9 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
             auto curPU = placementInfo->getPlacementUnitByCellId(curCellId);
             auto nextCellId = cellIdsInCriticalPath[i + 1];
             auto nextPU = placementInfo->getPlacementUnitByCellId(nextCellId);
-            if (curPU->checkHasCARRY() || curPU->checkHasLUTRAM() || curPU->checkHasBRAM() || curPU->checkHasDSP() ||
+            if (curPU->checkHasCARRY() || curPU->checkHasLUTRAM() || curPU->checkHasBRAM() || (curPU->checkHasDSP() || curPU->checkHasURAM()) ||
                 nextPU->checkHasCARRY() || nextPU->checkHasLUTRAM() || nextPU->checkHasBRAM() ||
-                nextPU->checkHasDSP() || PUsTouched.find(curPU) != PUsTouched.end() ||
+                (nextPU->checkHasDSP() || nextPU->checkHasURAM()) || PUsTouched.find(curPU) != PUsTouched.end() ||
                 PUsTouched.find(nextPU) != PUsTouched.end() || curPU == nextPU || curPU->isLocked() ||
                 nextPU->isLocked())
             {
@@ -1073,7 +1073,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSl
 
         PUsTouched.insert(curPU);
         if (!curPU->isLocked() && !curPU->checkHasCARRY() && !curPU->checkHasLUTRAM() && !curPU->checkHasBRAM() &&
-            !curPU->checkHasDSP())
+            !(curPU->checkHasDSP() || curPU->checkHasURAM()))
         {
             float v1x = 0, v1y = 0, v2x = 0, v2y = 0;
 
@@ -1146,7 +1146,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSl
 
         // std::cout << curCell << " has following candidates: \n";
         if (!curPU->isLocked() && !curPU->checkHasCARRY() && !curPU->checkHasLUTRAM() && !curPU->checkHasBRAM() &&
-            !curPU->checkHasDSP())
+            !(curPU->checkHasDSP() || curPU->checkHasURAM()))
         {
             std::vector<DeviceInfo::DeviceSite *> *candidateSitesToPlaceTheCell = findNeiborSitesFromBinGrid(
                 DesignInfo::CellType_LUT4, PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
@@ -1299,7 +1299,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath_intermediate()
             }
             // std::cout << curCell << " has following candidates: \n";
             if (!curPU->isLocked() && !curPU->isFixed() && !curPU->checkHasCARRY() && !curPU->checkHasLUTRAM() &&
-                !curPU->checkHasBRAM() && !curPU->checkHasDSP())
+                !curPU->checkHasBRAM() && !(curPU->checkHasDSP() || curPU->checkHasURAM()))
             {
                 auto curX = cellLoc[cellId].X;
                 auto curY = cellLoc[cellId].Y;
@@ -1379,7 +1379,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath_intermediate()
 
                 auto &curCandidates = cellId2CandidateLocation[curCellId];
                 if (!curPU->isLocked() && !curPU->isFixed() && !curPU->checkHasCARRY() && !curPU->checkHasLUTRAM() &&
-                    !curPU->checkHasBRAM() && !curPU->checkHasDSP())
+                    !curPU->checkHasBRAM() && !(curPU->checkHasDSP() || curPU->checkHasURAM()))
                 {
                     curPU->setAnchorLocationAndForgetTheOriginalOne(curCandidates[bestEndChoice].X,
                                                                     curCandidates[bestEndChoice].Y);
@@ -1608,9 +1608,9 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(int iterId)
             auto curPU = placementInfo->getPlacementUnitByCellId(curCellId);
             auto nextCellId = cellIdsInCriticalPath[i + 1];
             auto nextPU = placementInfo->getPlacementUnitByCellId(nextCellId);
-            if (curPU->checkHasCARRY() || curPU->checkHasLUTRAM() || curPU->checkHasBRAM() || curPU->checkHasDSP() ||
+            if (curPU->checkHasCARRY() || curPU->checkHasLUTRAM() || curPU->checkHasBRAM() || (curPU->checkHasDSP() || curPU->checkHasURAM()) ||
                 nextPU->checkHasCARRY() || nextPU->checkHasLUTRAM() || nextPU->checkHasBRAM() ||
-                nextPU->checkHasDSP() || PUsTouched.find(curPU) != PUsTouched.end() ||
+                (nextPU->checkHasDSP() || nextPU->checkHasURAM()) || PUsTouched.find(curPU) != PUsTouched.end() ||
                 PUsTouched.find(nextPU) != PUsTouched.end() || curPU == nextPU || curPU->isLocked() ||
                 nextPU->isLocked())
             {
@@ -2817,7 +2817,7 @@ void ParallelCLBPacker::addNonCLBPackingSites()
                 deviceSite2PackingSite[targetSite] = tmpPackingSite;
                 packingSites.push_back(tmpPackingSite);
             }
-            else if (curCell->getOriCellType() == DesignInfo::CellType_DSP48E2)
+            else if (curCell->getOriCellType() == DesignInfo::CellType_DSP48E2 || curCell->isURAM())
             {
                 PackingCLBSite *tmpPackingSite =
                     new PackingCLBSite(placementInfo, targetSite, unchangedIterationThr, numNeighbor, deltaD, curD,
@@ -2937,6 +2937,10 @@ void ParallelCLBPacker::dumpDSPBRAMPlacementTcl(std::ofstream &outfileTcl)
                 {
                     placementStr += "  " + curCell->getName() + " " + targetSite->getName() + "/RAMB18E2_L" + "\n";
                 }
+            }
+            else if (curCell->isURAM())
+            {
+                placementStr += "  " + curCell->getName() + " " + targetSite->getName() + "/URAM_288K_INST\n";
             }
             else if (curCell->getOriCellType() == DesignInfo::CellType_DSP48E2)
             {

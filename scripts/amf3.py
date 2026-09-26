@@ -123,6 +123,12 @@ def inspect_inputs(args):
     inspect(ROOT, args)
 
 
+def legalize_resources(args):
+    require_server()
+    from inspect_amf_inputs import inspect
+    inspect(ROOT, args, resources=True)
+
+
 def status(args):
     require_server()
     if args.run:
@@ -143,6 +149,12 @@ def native_run(args):
     launch(ROOT, validate_run_id(args.reference_run), args.dry_run)
 
 
+def validate_resources(args):
+    require_server()
+    from validate_resource_placement import validate
+    validate(ROOT, args)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
@@ -161,6 +173,14 @@ def main():
     p.add_argument('--config', type=Path, required=True)
     p.add_argument('--binary', type=Path, default=Path('builds/current/AMFPlacer'))
     p.set_defaults(action=inspect_inputs)
+    p = sub.add_parser('legalize-resources', help='Legalize URAM/DSP/BRAM/Carry without full CLB placement')
+    p.add_argument('--config', type=Path, required=True)
+    p.add_argument('--binary', type=Path, default=Path('builds/current/AMFPlacer'))
+    p.set_defaults(action=legalize_resources)
+    p = sub.add_parser('validate-resources', help='Vivado audit of partial resource placement')
+    p.add_argument('--resource-run', required=True)
+    p.add_argument('--dcp', default='data/reference/getrf-u250/post_opt.dcp')
+    p.set_defaults(action=validate_resources)
     p = sub.add_parser('status', help='Read experiment status')
     p.add_argument('--run')
     p.set_defaults(action=status)

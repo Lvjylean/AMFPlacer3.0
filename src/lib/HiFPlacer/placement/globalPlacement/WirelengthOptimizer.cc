@@ -359,7 +359,7 @@ void WirelengthOptimizer::addPseudoNetForMacros(float pesudoNetWeight, bool cons
     {
         for (auto pairPUX : PUX)
         {
-            if (!pairPUX.first->checkHasBRAM() && !pairPUX.first->checkHasDSP() && !pairPUX.first->checkHasCARRY())
+            if (!pairPUX.first->checkHasBRAM() && !(pairPUX.first->checkHasDSP() || pairPUX.first->checkHasURAM()) && !pairPUX.first->checkHasCARRY())
                 placementInfo->addPseudoNetsInPlacementInfo(
                     xSolver->solverData.objectiveMatrixTripletList, xSolver->solverData.objectiveMatrixDiag,
                     xSolver->solverData.objectiveVector, pairPUX.first, pairPUX.second,
@@ -380,7 +380,7 @@ void WirelengthOptimizer::addPseudoNetForMacros(float pesudoNetWeight, bool cons
         }
         for (auto pairPUY : PUY)
         {
-            if (!pairPUY.first->checkHasBRAM() && !pairPUY.first->checkHasDSP() && !pairPUY.first->checkHasCARRY())
+            if (!pairPUY.first->checkHasBRAM() && !(pairPUY.first->checkHasDSP() || pairPUY.first->checkHasURAM()) && !pairPUY.first->checkHasCARRY())
                 placementInfo->addPseudoNetsInPlacementInfo(
                     ySolver->solverData.objectiveMatrixTripletList, ySolver->solverData.objectiveMatrixDiag,
                     ySolver->solverData.objectiveVector, pairPUY.first, pairPUY.second,

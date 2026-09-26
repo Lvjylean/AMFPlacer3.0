@@ -1,7 +1,8 @@
-"""Recorded input-only run; does not execute placement or Vivado routing."""
+"""Recorded input inspection or partial hard-resource legalization; no full placement or routing."""
 import datetime as dt
 import hashlib
 import json
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -15,7 +16,7 @@ def digest(path):
     return h.hexdigest()
 
 
-def inspect(root, args):
+def inspect(root, args, resources=False):
     from amf3 import save, stamp, git
     root = Path(root)
     config_path = (root / args.config).resolve()
@@ -25,19 +26,24 @@ def inspect(root, args):
         raise ValueError('Missing AMF binary: ' + str(binary))
     inputs = {}
     for key in ('vivado extracted device information file', 'vivado extracted design information file',
-                'special pin offset info file', 'clock file', 'mergedSharedCellType2sharedCellType'):
+                'special pin offset info file', 'clock file', 'mergedSharedCellType2sharedCellType',
+                'cellType2fixedAmo file', 'cellType2sharedCellType file', 'sharedCellType2BELtype file',
+                'resource initial locations file', 'fixed units file'):
         if config.get(key):
             p = (root / config[key]).resolve()
             inputs[key] = {'path': str(p), 'sha256': digest(p)}
             config[key] = str(p)
-    directory = root / 'experiments/preflight' / ('input-inspection-' + stamp())
+    directory = root / 'experiments/preflight' / (('resource-legalization-' if resources else 'input-inspection-') + stamp())
     directory.mkdir(parents=True, exist_ok=False)
     save(directory / 'config.json', config)
-    command = [str(binary), str(directory / 'config.json'), '--inspect-input', str(directory / 'inputs.json')]
+    command = [str(binary), str(directory / 'config.json')] + (
+        ['--legalize-resources', str(directory)] if resources else ['--inspect-input', str(directory / 'inputs.json')])
+    if resources and shutil.which('stdbuf'):
+        command = [shutil.which('stdbuf'), '-oL', '-eL'] + command
     manifest = dict(schema='amf-input-run-v1', command=command, source_commit=git('rev-parse', 'HEAD'),
                     git_status=git('status', '--porcelain'), binary=str(binary), binary_sha256=digest(binary),
                     inputs=inputs, config_sha256=digest(directory / 'config.json'),
-                    placement_executed=False, started=dt.datetime.now().astimezone().isoformat())
+                    placement_executed=resources, full_placement_executed=False, started=dt.datetime.now().astimezone().isoformat())
     build_manifest = binary.parent.parent / 'manifest.json'
     if build_manifest.is_file():
         manifest['build_manifest'] = str(build_manifest)
@@ -52,5 +58,5 @@ def inspect(root, args):
                   elapsed_seconds=time.monotonic() - start, finished=dt.datetime.now().astimezone().isoformat())
     save(directory / 'status.json', status)
     if result.returncode:
-        raise RuntimeError('Input inspection failed: ' + str(directory / 'amf.log'))
+        raise RuntimeError('AMF input/resource stage failed: ' + str(directory / 'amf.log'))
     print(json.dumps(status))

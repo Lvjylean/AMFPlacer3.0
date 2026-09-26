@@ -12,8 +12,9 @@
  */
 
 #include "InitialPacker.h"
+#include "../legalization/HardResourceUtils.h"
 
-void InitialPacker::pack()
+void InitialPacker::pack(bool hardResourcesOnly)
 {
     cellId2PlacementUnit.clear();
     placementUnits.clear();
@@ -23,18 +24,20 @@ void InitialPacker::pack()
 
     print_status("InitialPacker Finding Macros");
     findCARRYMacros();
-    findMuxMacros();
+    if (!hardResourcesOnly) findMuxMacros();
     findBRAMMacros();
     findDSPMacros();
 
-    if (JSONCfg.find("unpredictable macro file") != JSONCfg.end())
+    if (!hardResourcesOnly && JSONCfg.find("unpredictable macro file") != JSONCfg.end())
     {
         loadOtherCLBMacros(JSONCfg["unpredictable macro file"]);
     }
 
-    findLUTRAMMacros();
-
-    LUTFFPairing();
+    if (!hardResourcesOnly)
+    {
+        findLUTRAMMacros();
+        LUTFFPairing();
+    }
 
     print_status("InitialPacker Finding unpacked units");
     findUnpackedUnits();
@@ -43,7 +46,7 @@ void InitialPacker::pack()
     {
         loadFixedPlacementUnits(JSONCfg["fixed units file"]);
     }
-    else
+    else if (JSONCfg["allow floating placement"] != "true")
     {
         print_error(
             "No fixed cell in the design. Floating placement is not allowed temporarily."); // this can be disabled but
@@ -129,6 +132,8 @@ InitialPacker::BFSExpandViaSpecifiedPorts(std::string portPattern, DesignInfo::D
                 if ((exactMatch && pinBeDriven->getRefPinName() == portPattern) ||
                     (!exactMatch && pinBeDriven->getRefPinName().find(portPattern) == 0))
                 {
+                    if (startCell->isCarry() &&
+                        !HardResourceUtils::isCarryCascade(pinBeDriven->getDriverPin(), pinBeDriven)) continue;
                     DesignInfo::DesignCell *tmpCell = pinBeDriven->getCell();
                     if (startCell->getCellType() != tmpCell->getCellType())
                         continue;
@@ -202,7 +207,7 @@ std::vector<DesignInfo::DesignCell *> InitialPacker::BFSExpandViaSpecifiedPorts(
 // DSP with ACIN*/BCIN*/PCIN* connected to other DSP should be a Macro
 void InitialPacker::findDSPMacros()
 {
-    float DSPHeight = 2.5;
+    float DSPHeight = 2 * HardResourceUtils::resourcePitch(deviceInfo, "DSP48E2");
     std::vector<PlacementInfo::PlacementMacro *> res;
     res.clear();
 
@@ -227,7 +232,8 @@ void InitialPacker::findDSPMacros()
         {
             if (pinBeDriven->getRefPinName().find("ACIN[") == 0 || pinBeDriven->getRefPinName().find("BCIN[") == 0 ||
                 pinBeDriven->getRefPinName().find("PCIN[") == 0 ||
-                pinBeDriven->getRefPinName().find("CARRYCASCIN") == 0)
+                pinBeDriven->getRefPinName().find("CARRYCASCIN") == 0 ||
+                pinBeDriven->getRefPinName() == "MULTSIGNIN")
             {
                 if (pinBeDriven->getDriverPin())
                 {
@@ -240,7 +246,7 @@ void InitialPacker::findDSPMacros()
         if (!noCASInput)
             continue;
 
-        std::vector<std::string> portPatterns{"ACIN[", "BCIN[", "PCIN[", "CARRYCASCIN"};
+        std::vector<std::string> portPatterns{"ACIN[", "BCIN[", "PCIN[", "CARRYCASCIN", "MULTSIGNIN"};
         std::vector<DesignInfo::DesignCell *> curMacroCores = BFSExpandViaSpecifiedPorts(portPatterns, curCell, false);
 
         if (curMacroCores.size())
@@ -825,7 +831,7 @@ void InitialPacker::findCARRYMacros()
             {
                 if (pinBeDriven->getDriverPin())
                 {
-                    if (pinBeDriven->getDriverPin()->getCell()->getCellType() == DesignInfo::CellType_CARRY8)
+                    if (HardResourceUtils::isCarryCascade(pinBeDriven->getDriverPin(), pinBeDriven))
                         noCASInput = false;
                     else
                         AXUsed = true; // non-CARRY CI will use AX

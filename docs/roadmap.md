@@ -6,10 +6,10 @@
 | M1 | DesignSnapshot、NetlistDiff、CheckpointStore | 待开发 |
 | M2 | ImpactAnalyzer、活动/冻结区域、单芯粒局部布局与打包 | 待开发 |
 | M3 | 增量控制器、失败回退、Vivado 接口与复用计量 | 待开发 |
-| M4 | 多 SLR 拓扑、SLL 代价、跨芯粒资源协调 | U250 器件与 URAM 输入层已验证；URAM 放置、级联合法化待开发，floorplan 接入与 SLL 优化暂缓 |
+| M4 | 多 SLR 拓扑、SLL 代价、跨芯粒资源协调 | U250 输入、独立 URAM 资源分配和 Carry/DSP 级联 SLR 合法化已验证；完整布局待适配，floorplan 接入与 SLL 优化暂缓 |
 | M5 | 对照与消融实验、复现说明、交付版本 | 待开发 |
 
-当前阶段决议：PDF 第一步“网表输入处理与初始分析”按用户确认的范围完成；第二步的 AMF 仓库核查见 [第二步评估](research/step-02-topology-floorplanning-assessment.md)。用户独立 `non_dataflow_case` 项目已有多 SLR 资源感知 partition 与 floorplan，能力评估保留在 [跨项目接入评估](research/partition-floorplan-amf-integration-assessment.md)。2026-09-26 用户决定先只修改 AMF，使用原始 GETRF 适配 U250，暂不接入该前端。实施顺序为器件/输入模型 → URAM 资源和合法化 → SLR 专用级联边界 → GETRF 全量布局与 Vivado 后端验证；详见 [当前实现](research/u250-input-adaptation.md)。
+当前阶段决议：PDF 第一步“网表输入处理与初始分析”按用户确认的范围完成；第二步的 AMF 仓库核查见 [第二步评估](research/step-02-topology-floorplanning-assessment.md)。用户独立 `non_dataflow_case` 项目已有多 SLR 资源感知 partition 与 floorplan，能力评估保留在 [跨项目接入评估](research/partition-floorplan-amf-integration-assessment.md)。2026-09-26 用户决定先只修改 AMF，使用原始 GETRF 适配 U250，暂不接入该前端。实施顺序为器件/输入模型 → URAM 资源和合法化 → SLR 专用级联边界 → GETRF 全量布局与 Vivado 后端验证；详见 [输入层](research/u250-input-adaptation.md) 与 [资源合法化](research/u250-resource-legalization.md)。
 
 增量方向的后续顺序仍为：准备可核对变化的 V0/V1 小设计 → 定义快照和差异格式 → 实现只读差异报告 → 接入局部优化。通用宏导出契约和输入诊断作为工程完善项，不再阻塞从 PDF 第一步进入第二步。多芯粒器件和设计数据应提前准备。上表 M0-M5 是工程里程碑，不与 PDF（1）-（9）编号一一对应。
 
