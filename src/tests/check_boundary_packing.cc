@@ -53,7 +53,7 @@ int main(int argc,char **argv){
    mapping[mid->getId()]=nullptr;
   }
   cfg["BoundaryAwareClustering"]="true";
-  require(packer.exceptionPULegalize(mid,12,false),"physical-mode PU could not use the legal neighboring column");
+  require(packer.exceptionPULegalize(mid,right->X()-left->X()+0.5f,false),"physical-mode PU could not use the legal neighboring column");
   std::cout<<"PASS ordinary/cone site search and unmapped/mapped PU search across real CR columns; legacy filters preserved\n";
   return 0;
  }catch(const std::exception &e){std::cerr<<"FAIL "<<e.what()<<'\n';return 1;}
