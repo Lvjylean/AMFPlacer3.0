@@ -10,13 +10,16 @@ int main(int argc,char **argv){
   auto cfg=parseJSONFile(argv[1]);omp_set_num_threads(1);
   DeviceInfo device(cfg,cfg["device"]);DesignInfo design(cfg,&device);PlacementInfo p(&design,&device,cfg);
   std::vector<DeviceInfo::DeviceSite*> row;
-  for(const auto &type : {"SLICEL","SLICEM"})for(auto site:device.getSitesInType(type))if(site->Y()==100)row.push_back(site);
+  for(std::string type : {"SLICEL","SLICEM"})for(auto site:device.getSitesInType(type))if(site->Y()==100)row.push_back(site);
   std::sort(row.begin(),row.end(),[](auto a,auto b){return a->X()<b->X();});
   DeviceInfo::DeviceSite *left=nullptr,*right=nullptr;
   for(size_t i=1;i<row.size();++i)if(row[i-1]->getClockRegionX()!=row[i]->getClockRegionX()){
    left=row[i-1];right=row[i];break;
   }
   require(left&&right&&right->X()-left->X()<10,"missing real adjacent clock-region sites");
+  // The target's clock-region column has no available SLICE; a nearby column does.
+  for(std::string type : {"SLICEL","SLICEM"})for(auto candidate:device.getSitesInType(type))
+   if(candidate!=right)candidate->setOccupied();
   for(auto cell:design.getCells()){
    auto pu=new PlacementInfo::PlacementUnpackedCell(cell->getName(),p.getPlacementUnits().size(),cell);
    pu->setWeight(1);pu->setAnchorLocationAndForgetTheOriginalOne(left->X(),left->Y());
@@ -49,6 +52,10 @@ int main(int argc,char **argv){
    require(bool(nearby.count(mid))==enabled,"mapped PU query retained a hard clock-column fence");
    mapping[mid->getId()]=nullptr;
   }
+  cfg["BoundaryAwareClustering"]="false";
+  require(!packer.exceptionPULegalize(mid,12,false),"legacy fixture unexpectedly crossed columns");
+  cfg["BoundaryAwareClustering"]="true";
+  require(packer.exceptionPULegalize(mid,12,false),"physical-mode PU could not use the legal neighboring column");
   std::cout<<"PASS ordinary/cone site search and unmapped/mapped PU search across real CR columns; legacy filters preserved\n";
   return 0;
  }catch(const std::exception &e){std::cerr<<"FAIL "<<e.what()<<'\n';return 1;}
