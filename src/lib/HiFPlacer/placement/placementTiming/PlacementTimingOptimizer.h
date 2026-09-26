@@ -51,6 +51,7 @@ class PlacementTimingOptimizer
     void setPinsLocation();
     void clusterLongPathInOneClockRegion(int pathLenThr, float clusterThrRatio);
     void clusterCriticalPathsByPhysicalRegion();
+    void auditPhysicalBoundaries(const std::string &stage);
     void dumpClockRegionClusters();
     void stretchClockRegionColumns();
 

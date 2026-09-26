@@ -414,6 +414,7 @@ class AMFPlacer
         // print_info("Current Total HPWL = " + std::to_string(placementInfo->updateB2BAndGetTotalHPWL()));
 
         timingOptimizer->conductStaticTimingAnalysis();
+        timingOptimizer->auditPhysicalBoundaries("amf-before-pack");
         // Final packing replaces PUs: retire all transient region preferences.
         if(placementInfo->boundaryClusteringEnabled()) placementInfo->clearRegionPreferences();
         // finally pack the elements into sites on the FPGA device
@@ -425,6 +426,7 @@ class AMFPlacer
         if (JSON["experimental multi-SLR placement"] == "true")
             HardResourceUtils::writePlacement(placementInfo, JSON["dumpDirectory"]);
         timingOptimizer->conductStaticTimingAnalysis();
+        timingOptimizer->auditPhysicalBoundaries("amf-final-packed");
         placementInfo->checkClockUtilization(true);
         print_info("Current Total HPWL = " + std::to_string(placementInfo->updateB2BAndGetTotalHPWL()));
         placementInfo->resetLUTFFDeterminedOccupation();

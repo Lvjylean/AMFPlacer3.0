@@ -15,9 +15,9 @@ def run(root,binary,out):
     for k in list(base):
         if k.endswith(' file') or k=='mergedSharedCellType2sharedCellType':base[k]=str(root/base[k])
     results=[]
-    for scenario in ('slr','io','xy','inside','dsp','uram'):
+    for scenario in ('slr','io','xy','inside','dsp','uram','unregistered_dsp'):
         d=out/scenario;d.mkdir()
-        typ='DSP48E2' if scenario=='dsp' else 'URAM288' if scenario=='uram' else 'FDRE'
+        typ='DSP48E2' if scenario in ('dsp','unregistered_dsp') else 'URAM288' if scenario=='uram' else 'FDRE'
         pin='P[0]' if typ=='DSP48E2' else 'DOUT_A[0]' if typ=='URAM288' else 'Q'
         text=(cell('source',typ,[(pin,'OUT','a','source/'+pin)])+
               cell('mid','LUT1',[('I0','IN','a','source/'+pin),('O','OUT','b','mid/O')])+
@@ -29,6 +29,11 @@ def run(root,binary,out):
             result=subprocess.run([str(binary),str(d/'config.json'),scenario,str(d/'result.tsv')],
                                   stdout=f,stderr=subprocess.STDOUT,env=dict(os.environ,OMP_NUM_THREADS='1'),timeout=180)
         if result.returncode:raise RuntimeError(scenario+' failed: '+(d/'run.log').read_text()[-4000:])
+        if scenario in ('slr','xy'):
+            import csv
+            paths=list(csv.DictReader((d/'amf_critical_paths.tsv').open(),delimiter='\t'))
+            if not any(int(row['slr_crossings'])==2 and int(row['slr_roundtrips'])==1 for row in paths):
+                raise RuntimeError('Missing AMF roundtrip audit for '+scenario)
         results.append(dict(scenario=scenario,exit_code=result.returncode))
     (out/'results.json').write_text(json.dumps(results,indent=2)+'\n')
     print(json.dumps(results))

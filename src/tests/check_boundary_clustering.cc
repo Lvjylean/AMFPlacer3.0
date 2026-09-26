@@ -15,12 +15,12 @@ int main(int argc,char **argv)
         {
             auto pu=new PlacementInfo::PlacementUnpackedCell(cell->getName(),p.getPlacementUnits().size(),cell);
             pu->setWeight(1);
-            if(cell->isDSP())cell->setHasDSPReg(true);
+            if(cell->isDSP())cell->setHasDSPReg(scenario!="unregistered_dsp");
             bool middle=cell->getName()=="mid";
             float x=100,y=237;
             if(scenario=="io"){x=middle?165:150;y=100;}
             else if(scenario=="xy"){x=middle?165:150;y=middle?243:237;}
-            else if(scenario=="inside"){x=middle?101:100;y=100;}
+            else if(scenario=="inside" || scenario=="unregistered_dsp"){x=middle?101:100;y=100;}
             else if(middle)y=243;
             pu->setAnchorLocationAndForgetTheOriginalOne(x,y);
             if(!middle)pu->setFixed();
@@ -44,7 +44,7 @@ int main(int argc,char **argv)
         std::string middleName="mid";
         auto pu=p.getPlacementUnitByCellId(design.getCell(middleName)->getCellId());
         auto &prefs=p.getRegionPreferences();
-        if(scenario=="inside")
+        if(scenario=="inside" || scenario=="unregistered_dsp")
         {
             if(!prefs.empty())throw std::runtime_error("An in-region path was moved without gain");
         }
@@ -64,6 +64,25 @@ int main(int argc,char **argv)
         auto retired=new PlacementInfo::PlacementUnpackedCell("retired",999999,design.getCell(middleName));
         prefs[retired]={0,999,1};delete retired;p.refreshRegionPreferences();
         if(prefs.count(retired))throw std::runtime_error("Stale PU preference survived");
+        if(scenario=="inside")
+        {
+            // Soft preference must not exclude available sites in another region.
+            prefs[pu]={7,2,1};
+            auto choices=p.findNeiborSiteFromBinGrid(design.getCell(middleName),100,100,2,4,true);
+            if(choices->empty())throw std::runtime_error("Soft region fallback lost all available sites");
+            delete choices;
+            pu->setLocked();
+            float x,y;
+            if(p.regionTarget(pu,0,x,y))throw std::runtime_error("Locked PU acquired a movable target");
+            p.refreshRegionPreferences();
+            if(prefs.count(pu))throw std::runtime_error("Locked preference not released");
+            // Exhaust the actual site's availability to exercise bounded failure.
+            for(auto site:device.getSites())site->setMapped();
+            bool bounded=false;
+            try {auto none=p.findNeiborSiteFromBinGrid(design.getCell(middleName),100,100,1000,4,true);delete none;}
+            catch(const std::runtime_error &e){bounded=std::string(e.what()).find("bounded")!=std::string::npos;}
+            if(!bounded)throw std::runtime_error("Empty-site search did not terminate explicitly");
+        }
         std::ofstream out(argv[3]);out<<"scenario\tpreferences\tpassed\n"<<scenario<<'\t'<<prefs.size()<<"\t1\n";
         return 0;
     }catch(const std::exception &e){std::cerr<<e.what()<<'\n';return 2;}

@@ -309,6 +309,7 @@ float PlacementTimingOptimizer::conductStaticTimingAnalysis(bool disableOptimist
     std::cout << "An example of long delay path for the current placement:\n";
     for (auto id : resPath)
     {
+        if(id<0)continue;
         std::cout << designInfo->getCells()[id] << " X:" << cellLoc[id].X << " Y:" << cellLoc[id].Y
                   << "   [delay]: " << timingGraph->getNodes()[id]->getLatestInputArrival()
                   << "   [required]: " << timingGraph->getNodes()[id]->getRequiredArrivalTime() << "\n";
@@ -1004,4 +1005,9 @@ void PlacementTimingOptimizer::clusterCriticalPathsByPhysicalRegion()
     BoundaryAwareClusterer physical(placementInfo,this,JSONCfg);
     physical.run();
     physical.audit("cluster-selected");
+}
+
+void PlacementTimingOptimizer::auditPhysicalBoundaries(const std::string &stage)
+{
+    if(deviceInfo->getPhysicalBoundaryModel())BoundaryAwareClusterer(placementInfo,this,JSONCfg).audit(stage);
 }

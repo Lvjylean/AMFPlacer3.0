@@ -41,7 +41,9 @@ def stats(values):
     return dict(n=len(values),median=statistics.median(values),mean=statistics.mean(values),min=min(values),max=max(values)) if values else dict(n=0)
 
 def analyze(model,directory,slr_penalty=1.5):
-    sites,cuts=load_model(model);groups=defaultdict(list);unique={};paths=defaultdict(Counter);path_slrs=defaultdict(list);missing=0
+    sites,cuts=load_model(model);slr_y={sid:min(p[1] for p in sites.values() if p[2]==sid) for sid in {p[2] for p in sites.values()}}
+    slr_rank={sid:i for i,sid in enumerate(sorted(slr_y,key=slr_y.get))}
+    groups=defaultdict(list);unique={};paths=defaultdict(Counter);path_slrs=defaultdict(list);missing=0
     for row in rows(directory/'timing_connections.tsv'):
         a=sites.get(row['source_site']);b=sites.get(row['sink_site'])
         if a is None or b is None:missing+=1;continue
@@ -62,10 +64,13 @@ def analyze(model,directory,slr_penalty=1.5):
         seq=path_slrs[row['path']];compressed=[x for i,x in enumerate(seq) if i==0 or seq[i-1]!=x]
         # Returns to a previously visited SLR, distinct from crossing count.
         returns=len(compressed)-len(set(compressed))
-        path_report.append(dict(row,**dict(paths[row['path']]),slr_sequence=compressed,slr_returns=returns))
+        direct=abs(slr_rank[compressed[-1]]-slr_rank[compressed[0]]) if compressed else 0
+        roundtrips=max(0,paths[row['path']]['SLR']-direct)//2
+        path_report.append(dict(row,**dict(paths[row['path']]),slr_sequence=compressed,slr_returns=returns,slr_roundtrips=roundtrips))
     report=dict(schema='boundary-timing-samples-v1',scope='constrained-path sample; geometry uses cell sites, not pin offsets or routed SLL usage',
         model_sha256=hashlib.sha256(Path(model).read_bytes()).hexdigest(),unique_driver_sink_samples=len(unique),missing_site_rows=missing,
         sampling_gaps=sum(1 for _ in rows(directory/'timing_sample_gaps.tsv')),slr_penalty_ns=slr_penalty,
+        roundtrip_definition='(cumulative SLR seams - start/end direct seams)/2; geometric excess crossing pairs',
         conclusion='Coefficients remain heuristic. Groups are observational and confounded by distance, load and routing; no automatic calibration.',
         groups=[dict(distance=key[0],fanout=key[1],source_type=key[2],sink_type=key[3],slr_crossings=key[4],io_crossings=key[5],residual_ns=stats(v)) for key,v in sorted(groups.items())],paths=path_report)
     (directory/'timing_sample_analysis.json').write_text(json.dumps(report,indent=2)+'\n')

@@ -123,6 +123,7 @@ void BoundaryAwareClusterer::run()
         if(slack>nearCriticalFraction*std::max(0.1f,endpoint->getClockPeriod()))continue;
         if(examined++>=maxClusters*4 || accepted>=maxClusters)break;
         auto path=graph->backTraceDelayLongestPathFromNode(endpoint->getId());
+        if(path.empty() || path.back()<0)continue; // No traced launch endpoint.
         // Long paths are split into bounded segments, retaining hard endpoints
         // through affected-edge scoring rather than discarding DSP/URAM paths.
         for(size_t start=0;start<path.size() && accepted<maxClusters;start+=maxPathCells)
@@ -234,5 +235,42 @@ void BoundaryAwareClusterer::audit(const std::string &stage)
     std::ofstream f(config["BoundaryReportDirectory"]+"/amf_boundaries.tsv",std::ios::app);
     if(f.tellp()==0)f<<"stage\tdriver_sink_edges\tslr_crossings\tio_crossings\tcrossing_edges\tregion_preferences\n";
     f<<stage<<'\t'<<valid<<'\t'<<slr<<'\t'<<io<<'\t'<<crossed<<'\t'<<placement->getRegionPreferences().size()<<'\n';
+    graph->sortedEndpointByDelay();
+    auto endpoints=graph->getSortedTimingEndpoints();
+    std::sort(endpoints.begin(),endpoints.end(),[](Node *a,Node *b){
+        float sa=a->getRequiredArrivalTime()-a->getLatestInputArrival();
+        float sb=b->getRequiredArrivalTime()-b->getLatestInputArrival();
+        return sa==sb ? a->getId()<b->getId() : sa<sb;
+    });
+    std::ofstream paths(config["BoundaryReportDirectory"]+"/amf_critical_paths.tsv",std::ios::app);
+    if(paths.tellp()==0)paths<<"stage\trank\tendpoint\tslack_ns\tdriver_sink_edges\tslr_crossings\tio_crossings\tslr_roundtrips\n";
+    int rank=0;
+    for(auto endpoint:endpoints)
+    {
+        if(rank>=200)break;
+        auto trace=graph->backTraceDelayLongestPathFromNode(endpoint->getId());
+        if(trace.size()<2 || trace.back()<0)continue;
+        std::reverse(trace.begin(),trace.end());
+        int s=0,i=0,n=0;bool complete=true;
+        PlacementInfo::Location first{},last{};
+        for(size_t k=1;k<trace.size();++k)
+        {
+            Edge *best=nullptr;
+            for(auto e:graph->getNodes()[trace[k]]->getInEdges())
+                if(e->getSource()->getId()==trace[k-1] && (!best || e->getDelay()>best->getDelay()))best=e;
+            if(!best){complete=false;break;}
+            auto a=pins[best->getSourcePin()->getElementIdInType()],b=pins[best->getSinkPin()->getElementIdInType()];
+            if((a.X<-5 && a.Y<-5)||(b.X<-5 && b.Y<-5)){complete=false;break;}
+            if(n==0)first=a;
+            last=b;++n;
+            s+=model->crossingCount(a.X,a.Y,b.X,b.Y,"SLR");
+            i+=model->crossingCount(a.X,a.Y,b.X,b.Y,"IO");
+        }
+        if(!complete || !n)continue;
+        int direct=model->crossingCount(first.X,first.Y,last.X,last.Y,"SLR");
+        paths<<stage<<'\t'<<rank++<<'\t'<<endpoint->getId()<<'\t'
+             <<endpoint->getRequiredArrivalTime()-endpoint->getLatestInputArrival()<<'\t'
+             <<n<<'\t'<<s<<'\t'<<i<<'\t'<<std::max(0,s-direct)/2<<'\n';
+    }
 }
 
