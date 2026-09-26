@@ -2,7 +2,7 @@
 
 2026-09-27。服务器根目录 `/Projects/jinyang/workspace/AMFplacer3.0`，分支 `codex/device-physical-boundaries`。
 
-A–C 已实现并通过预检。早期 D 容量审计发现并修正了 RAMB36 虚拟占位重复计数，随后旧时序权重导致 control 数值失败；共同数值保护已实现，共同数值保护后的完整 GETRF 三组对照正在运行。尚无新策略布线后的 QoR 结论，默认配置和 `builds/validated-getrf-u250-full` 不变。
+A–C 已实现并通过预检。D 容量审计发现并修正了 RAMB36 虚拟占位重复计数、旧时序权重数值失稳和最终打包遗留的 X 时钟列硬筛选。共同数值保护与打包候选修正后的完整 GETRF 三组对照于 06:34:59 启动，尚无新策略布线后的 QoR 结论，默认配置和 `builds/validated-getrf-u250-full` 不变。
 
 ## A：器件结构与模型
 
@@ -124,7 +124,7 @@ python3 scripts/amf3.py compare-boundaries \
 该 04:13 轮次在首个 QP 暴露稀疏矩阵逐项插入对角线的性能问题，已停止并保存。一次性 triplet 装配修复后重新运行，见下节。结束后同时审阅 `comparison.json`、各组 `status.json` 和 `reports/summary.json`，其中 `numerical_guard` 的累计事件数不是唯一 cell/net 数，必须同时检查回退和不收敛情况。默认配置和验证基线尚未晋升。
 
 
-## 当前 D 对照：一次性稀疏矩阵装配
+## 历史 D 对照：一次性稀疏矩阵装配（已停止）
 
 2026-09-27 04:18:53 启动，比较目录 `experiments/comparisons/getrf-physical-20260927-041853-990282/`。生产提交 `7427f87b`；冻结二进制 `builds/build-20260927-041750-934343-7427f87b/build/AMFPlacer`，SHA-256 `14eeac6ed755c26099b121157030ca699433107e3165de80bc9d6408ab88ca74`。
 
@@ -140,7 +140,7 @@ python3 scripts/amf3.py compare-boundaries \
 
 ## D 暴露的最终打包候选缺口
 
-04:18 对照的 control/delay 已完成 AMF，分别 5459.6/5410.1 s，均覆盖 856,998 个 cell，均无 QP 回退；正在 Vivado 后端。cluster 在最终打包中稳定剩余 3,774 个 PU，扩大搜索半径到 100 以上仍多轮不减。代码审计发现，前面的二维软目标已接通，但 `ParallelCLBPacker` 的普通/方向站点查询及 `PackingCLBSite` 的 PU 查询仍强制同一个 X 时钟区域列，遗漏了下游软回退接口。不能将前面的 C 预检当作完整打包验收。
+04:18 对照的 control/delay 已完成 AMF，分别 5459.6/5410.1 s，均覆盖 856,998 个 cell，均无 QP 回退；两组也完成了 Vivado 导入及导入审计。cluster 在最终打包中稳定剩余 3,774 个 PU，扩大搜索半径到 100 以上仍多轮不减。代码审计发现，前面的二维软目标已接通，但 `ParallelCLBPacker` 的普通/方向站点查询及 `PackingCLBSite` 的 PU 查询仍强制同一个 X 时钟区域列，遗漏了下游软回退接口。不能将前面的 C 预检当作完整打包验收。
 
 补丁增加两个文件的修改：
 
@@ -150,3 +150,19 @@ python3 scripts/amf3.py compare-boundaries \
 新增 `src/tests/check_boundary_packing.cc`，用真实 U250 相邻时钟列验证普通查询、方向查询、未映射/已映射 PU 查询的四个分支，确认旧模式仍有原列筛选；再令目标列无可用 SLICE，仅邻列有站点，验证新模式实际完成跨列合法化。新增目标为 `checkBoundaryPacking`。
 
 早期探针日志保留：API 非 const 引用调用修正；保留站点候选暴露并修正；实际合法化探针半径按既有环形搜索约定修正。新实验需要使用此补丁后的同一二进制重跑三组。此前两个已进入 Vivado 的轮次保留作诊断参考，不与新 cluster 混成“同二进制”最终对照。
+
+该 cluster 旧进程于约 06:34 停止。新旧实验同时运行时，服务器实际内存占用约 100 GiB；为给新版三组留出资源，旧 control/delay 的 Vivado 进程于 06:38:41 主动停止。三个旧目录均保留取消原因和现场，不能将主动取消标成 Vivado 自发失败。U250 的所有 X 时钟列都有 SLICE，不能将此次问题归因为“空 I/O 时钟列”。
+
+## 当前 D 对照：物理区域打包协同
+
+2026-09-27 06:34:59 启动，比较目录 `experiments/comparisons/getrf-physical-20260927-063459-803375/`。启动提交 `49ac3e58`；冻结构建源码 `7a7b5d8b`，二进制 `builds/build-20260927-063221-904893-7a7b5d8b/build/AMFPlacer`，SHA-256 `47e7ba44fac7ac0c5499bbdb2500b100a47323d1a0477cd0b9622659d579ac17`。
+
+| 组 | 完整运行 ID |
+|---|---|
+| control | getrf-u250-full-20260927-063459-912642 |
+| delay | getrf-u250-full-20260927-063459-913333 |
+| cluster | getrf-u250-full-20260927-063459-912759 |
+
+三组同一冻结二进制，8 个 AMF 线程 / 4 个 Vivado 线程并行运行；用户时钟 10 ns、SLR 1.5 ns、I/O 0.5 ns，以及数值保护参数均保持一致。新构建通过 56 项 Python 测试及真实 U250 的 `checkBoundaryPacking`，日志 `experiments/preflight/physical-python-tests-20260927-packing.log`、`experiments/preflight/boundary-packing-20260927-04.log`。前述模型、时序、聚拢、QP 回归所覆盖的实现未再改变。
+
+专项测试证明候选查询和跨列合法化已接通；是否消除 GETRF 的完整打包停滞、最终布线是否合法、QoR 是否改善，仍需本轮真实结果。若出现 `reports/physical/packing_stall.tsv`，立即按 PU/cell 类型和坐标诊断。证据清单保存在 `experiments/evidence/device-physical-packing-preflight-20260927/manifest.json`。
