@@ -15,11 +15,35 @@ def missing_clock_source_warning(log):
     return any(code in log for code in ('[Timing 38-242]', '[Route 35-197]'))
 
 
+def numerical_guard_audit(log):
+    """Counts refer to solver iterations / weight updates, not unique cells or nets."""
+    result={'solver_calls':0,'repaired_row_events':0,'rollback_calls':0,
+            'unconverged_calls':0,'maximum_diagonal_delta':0.0,
+            'weight_updates':0,'saturated_edge_events':0,'invalid_edge_events':0}
+    for line in log.splitlines():
+        if 'QP_GUARD axis=' in line:
+            fields=dict(re.findall(r'(\w+)=([^ ]+)',line))
+            result['solver_calls']+=1
+            result['repaired_row_events']+=int(fields['repaired'])
+            result['rollback_calls']+=int(fields['rollback'])
+            result['unconverged_calls']+=int(fields['converged'])==0
+            result['maximum_diagonal_delta']=max(result['maximum_diagonal_delta'],float(fields['max_diagonal_delta']))
+        if 'TIMING_WEIGHT_GUARD cap=' in line:
+            fields=dict(re.findall(r'(\w+)=([^ ]+)',line))
+            result['weight_updates']+=1
+            result['saturated_edge_events']+=int(fields['saturated_edges'])
+            result['invalid_edge_events']+=int(fields['invalid_edges'])
+            result['enhancement_cap']=float(fields['cap'])
+    return result
+
+
 def summarize(root):
     reports=root/'reports'
     result={}
     manifest=json.loads((root/'manifest.json').read_text())
     result['stages']=manifest['stages']
+    amf_log=root/'logs/amf.log'
+    if amf_log.exists():result['numerical_guard']=numerical_guard_audit(amf_log.read_text(errors='replace'))
     result['vivado_stages_seconds']={}
     for line in (reports/'stages.tsv').read_text().splitlines()[1:]:
         name, seconds=line.split('\t')

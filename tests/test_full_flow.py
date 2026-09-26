@@ -9,9 +9,25 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 from run_full_backend import prepare
 from run_full_flow import configure_outputs, completed_amf_placement
 from run_boundary_comparison import equivalent_configs
-from summarize_full_flow import routing_complete, missing_clock_source_warning
+from summarize_full_flow import routing_complete, missing_clock_source_warning, numerical_guard_audit
 
 class FullBackend(unittest.TestCase):
+    def test_numerical_guard_events_are_not_unique_cell_counts(self):
+        log='QP_GUARD axis=X repaired=2 max_diagonal_delta=0.01 iterations=5 relative_error=0.1 converged=0 rollback=1\nQP_GUARD axis=Y repaired=2 max_diagonal_delta=0.02 iterations=4 relative_error=0 converged=1 rollback=0\nTIMING_WEIGHT_GUARD cap=1000 enhanced_edges=20 saturated_edges=3 invalid_edges=0'
+        result=numerical_guard_audit(log)
+        self.assertEqual(result['solver_calls'],2)
+        self.assertEqual(result['repaired_row_events'],4)
+        self.assertEqual(result['rollback_calls'],1)
+        self.assertEqual(result['unconverged_calls'],1)
+        self.assertEqual(result['saturated_edge_events'],3)
+        self.assertEqual(result['maximum_diagonal_delta'],.02)
+
+    def test_comparison_refuses_different_numerical_protection(self):
+        configs={name:dict(TimingMaxEnhancement='1000',QPStabilityGuard='true') for name in ('control','delay','cluster')}
+        equivalent_configs(configs)
+        configs['cluster']['TimingMaxEnhancement']='100'
+        with self.assertRaisesRegex(ValueError,'settings differ'):equivalent_configs(configs)
+
     def test_both_clock_source_warning_codes_are_reported(self):
         self.assertTrue(missing_clock_source_warning('WARNING: [Route 35-197] HD.CLK_SRC missing'))
         self.assertTrue(missing_clock_source_warning('WARNING: [Timing 38-242]'))
