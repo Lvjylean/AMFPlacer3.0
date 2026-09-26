@@ -76,6 +76,23 @@ int main() {
         spring(bad,2,1);bad.solverData.oriSolution << 1e300,-1e300;
         solve(bad);require(bad.guardDiagnostics.error.empty() && bad.guardDiagnostics.rollback &&
                            bad.solverData.solution.allFinite(),"non-finite candidate propagated");
+        // FPGA-scale assembly smoke check: every diagonal is initially absent from triplets.
+        const int n=100000;
+        QPSolverWrapper large(true,false,0,20,n,false);
+        large.solverSettings.stabilityGuard=true;
+        large.solverData.objectiveMatrixDiag.assign(n,3);
+        large.solverData.objectiveMatrixDiag.front()=2;
+        large.solverData.objectiveMatrixDiag.back()=2;
+        large.solverData.objectiveVector.setConstant(-1);
+        large.solverData.oriSolution.setOnes();
+        for (int i=1;i<n;++i) {
+            large.solverData.objectiveMatrixTripletList.emplace_back(i,i-1,-1);
+            large.solverData.objectiveMatrixTripletList.emplace_back(i-1,i,-1);
+        }
+        solve(large);
+        require(large.guardDiagnostics.error.empty() && large.guardDiagnostics.repairedRows==0 &&
+                large.solverData.solution.allFinite() &&
+                (large.solverData.solution-Eigen::VectorXd::Ones(n)).norm()<1e-8,"large sparse assembly");
         std::cout << "PASS bounded timing weights, legacy equivalence, float anchor repair, worker error, rollback\n";
         return 0;
     } catch (const std::exception &error) {

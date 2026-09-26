@@ -141,9 +141,15 @@ void QPSolverWrapper::solveGuarded(QPSolverWrapper &solver)
 
     // Sum duplicates in double, without changing the stored objective or triplets.
     Eigen::SparseMatrix<double> matrix(n, n);
-    matrix.setFromTriplets(data.objectiveMatrixTripletList.begin(), data.objectiveMatrixTripletList.end());
-    for (int i = 0; i < n; ++i) matrix.coeffRef(i, i) += data.objectiveMatrixDiag[i];
-    matrix.makeCompressed();
+    // Include diagonals before compression: inserting n absent entries into a compressed
+    // FPGA-scale matrix repeatedly shifts its storage and can take quadratic time.
+    std::vector<Eigen::Triplet<double>> entries;
+    entries.reserve(data.objectiveMatrixTripletList.size() + n);
+    for (const auto &entry : data.objectiveMatrixTripletList)
+        entries.emplace_back(entry.row(), entry.col(), double(entry.value()));
+    for (int i = 0; i < n; ++i) entries.emplace_back(i, i, double(data.objectiveMatrixDiag[i]));
+    matrix.setFromTriplets(entries.begin(), entries.end());
+    std::vector<Eigen::Triplet<double>>().swap(entries);
     Eigen::VectorXd offSum = Eigen::VectorXd::Zero(n);
     for (int k = 0; k < matrix.outerSize(); ++k)
         for (Eigen::SparseMatrix<double>::InnerIterator it(matrix, k); it; ++it) {

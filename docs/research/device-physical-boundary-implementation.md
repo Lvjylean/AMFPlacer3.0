@@ -2,7 +2,7 @@
 
 2026-09-27。服务器根目录 `/Projects/jinyang/workspace/AMFplacer3.0`，分支 `codex/device-physical-boundaries`。
 
-A–C 已实现并通过预检。早期 D 容量审计发现并修正了 RAMB36 虚拟占位重复计数，随后旧时序权重导致 control 数值失败；共同数值保护已实现，完整 GETRF 将重新验证。尚无新策略布线后的 QoR 结论，默认配置和 `builds/validated-getrf-u250-full` 不变。
+A–C 已实现并通过预检。早期 D 容量审计发现并修正了 RAMB36 虚拟占位重复计数，随后旧时序权重导致 control 数值失败；共同数值保护已实现，共同数值保护后的完整 GETRF 三组对照正在运行。尚无新策略布线后的 QoR 结论，默认配置和 `builds/validated-getrf-u250-full` 不变。
 
 ## A：器件结构与模型
 
@@ -104,3 +104,21 @@ python3 scripts/amf3.py compare-boundaries \
 - 三组使用同一冻结二进制及上述参数、10 ns 时钟与 SLR 1.5 ns；I/O 惩罚仍为 0.5 ns。故新 control 是“旧边界模型＋共同数值保护”，不是完全未经改动的历史基线。保留关闭开关复现原失败的入口。
 
 新增原生 `checkQPStability` 覆盖普通权重/正常 QP 与旧模式一致、失败 slack、极端 slack、零阈值、参数拒绝、float 锚点丢失、线程错误传递与 NaN 结果回退。完整 GETRF 比较仍待重新运行；不能据此声称时序或布线已经改善。
+
+
+## 当前 D 对照与数值预检
+
+- 启动时间：2026-09-27 04:13:44（服务器时间）。
+- 比较目录：`experiments/comparisons/getrf-physical-20260927-041344-459680/`。
+- 启动提交：`9d92c0b6`；冻结生产源码：`4a9afc6f`，报告汇总增强：`b30bab9a`。
+- 构建：`builds/build-20260927-040853-711621-4a9afc6f/build/AMFPlacer`。
+- 二进制 SHA-256：`5d917544cff902b66c1ad5befe2af6d8666d5f7d8abf0df123c9b428b5483e17`。
+- 56 项 Python 测试、原生物理模型、15 组/157 行原生时序、7 组原生聚拢及 `checkQPStability` 均通过。新预检目录后缀为 `20260927-guarded`，数值测试日志 `experiments/preflight/qp-stability-20260927.log`。
+
+| 组 | 完整运行 ID |
+|---|---|
+| control：旧边界＋共同数值保护 | getrf-u250-full-20260927-041344-552357 |
+| delay：新边界＋共同数值保护 | getrf-u250-full-20260927-041344-564377 |
+| cluster：新边界＋二维聚拢＋共同数值保护 | getrf-u250-full-20260927-041344-557157 |
+
+运行启动不表示 D 验收完成。结束后同时审阅 `comparison.json`、各组 `status.json` 和 `reports/summary.json`，其中 `numerical_guard` 的累计事件数不是唯一 cell/net 数，必须同时检查回退和不收敛情况。默认配置和验证基线尚未晋升。
