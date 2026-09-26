@@ -26,7 +26,8 @@ int main(int argc,char **argv){
   }
   p.updateCells2PlacementUnits();p.reloadNets();p.getCompatiblePlacementTable()->setBELTypeForCells(&design);
   design.updateFFControlSets();p.calculateNetNumDistributionOfPUs();p.createGridBins(5,5);p.updateElementBinGrid();p.buildSimpleTimingGraph();
-  auto mid=p.getPlacementUnitByCellId(design.getCell(std::string("mid"))->getCellId());
+  std::string middleName="mid";
+  auto mid=p.getPlacementUnitByCellId(design.getCell(middleName)->getCellId());
   PlacementTimingOptimizer timing(&p,cfg);
   ParallelCLBPacker packer(&design,&device,&p,cfg,3,10,.25,.5,6,10,.02,"boundary-probe",&timing,nullptr);
   std::vector<ParallelCLBPacker::PackingCLBSite*> mapping(p.getPlacementUnits().size(),nullptr);
