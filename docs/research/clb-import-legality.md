@@ -45,5 +45,20 @@ delay 运行 `experiments/runs/getrf-u250-full-20260927-063459-913333`：输出 
 - 6 项 MUX/SRL 原生回归通过；`clb-legality-mux-20260927-02/results.json`。预期失败的控制不兼容和重复归属案例保持失败。
 - 完整 GETRF 初始打包通过，7983 项 MUX trial/copy/remove/reinsert 检查通过；`experiments/runs/getrf-u250-packing-20260927-124630-816660`。
 - 冻结构建 `builds/build-20260927-124444-562943-a2a94a48` 包含当时工作树 C++ 修复，来源通过其源代码快照及 source_hashes.json 记录，不能只用基线提交号代指修复代码。
+- Carry 初始宏的三个原生正反例通过：特殊 route-through 半区预留、动态 CI 预留、专用 CO[7]→CI 保留正常 FF 打包。结果 `experiments/preflight/clb-initial-native-20260927-04/results.json`；追加测试构建 `build-20260927-125402-193404-1f496daf` 与全流程构建的生产源码哈希完全一致。
+- `carry_rule_coverage.json` 对照全部旧 Carry 报错：OUTMUXC 256/256、FFMUXA1 39/39 被新规则解释，无未解释的同类 site。此结论不是新布局零错误的替代证据。
+- 不可变首轮证据：`experiments/evidence/clb-import-legality-20260927/preflight-01.json`，含输入、二进制、脚本、测试与报告哈希，以及失败诊断夹具的记录。
+
+## 进行中的完整回归
+
+三个实验共用冻结二进制 `build-20260927-124444-562943-a2a94a48/build/AMFPlacer`，源码修复提交 `1f496daf`。服务器并行运行，耗时不能作为隔离速度测量。
+
+| 模式 | 运行目录（`experiments/runs/` 下） | 范围 |
+|---|---|---|
+| delay | getrf-u250-full-20260927-125004-730657 | AMF、严格导入、Vivado placement/routing、DRC、时序 |
+| control | getrf-u250-full-20260927-125907-199280 | AMF、严格导入，`--import-only` |
+| cluster | getrf-u250-full-20260927-125913-760094 | AMF、严格导入，`--import-only` |
+
+仍须等待正式验收，不能将启动运行标记为完成。
 
 架构参考：[AMD UG574 Storage Elements](https://docs.amd.com/r/en-US/ug574-ultrascale-clb/Storage-Elements)、[Carry Logic](https://docs.amd.com/r/en-US/ug574-ultrascale-clb/Carry-Logic)。上述具体路由限制以本项目 Vivado 2024.2 的定点实验为证据。

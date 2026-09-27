@@ -188,3 +188,5 @@ add_executable(checkBoundaryPacking EXCLUDE_FROM_ALL tests/check_boundary_packin
 target_link_libraries(checkBoundaryPacking Packing GlobalPlacer Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 add_executable(checkCLBSiteLegality EXCLUDE_FROM_ALL tests/check_clb_site_legality.cc)
 target_link_libraries(checkCLBSiteLegality DesignInfo DeviceInfo Utils pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+add_executable(checkInitialCLBLegality EXCLUDE_FROM_ALL tests/check_initial_clb_legality.cc)
+target_link_libraries(checkInitialCLBLegality Packing GlobalPlacer Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
