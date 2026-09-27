@@ -2,7 +2,7 @@
 
 ## 状态
 
-2026-09-27：已完成五类错误的原始 DCP 局部复现、首轮 C++ 修复、严格导入关卡及初始打包预检；完整布局、严格导入和布线回归尚待完成。不得把本报告的局部成功解释为零拒绝全设计验收。
+2026-09-27：五类错误的原始 DCP 局部复现、C++ 修复和预检已完成。delay、cluster 已通过全设计严格导入；delay 的 Vivado placement 也保持全部 AMF 位置。delay 布线尚在运行。control 首轮暴露原时钟区域列搜索停滞，已补充修复和原生测试，正在独立目录重跑。完整回归尚未全部验收。
 
 服务器根目录 `/Projects/jinyang/workspace/AMFplacer3.0`，分支 `codex/clb-import-legality`。起点提交 `a2a94a48aeed6a4e56c572441574b07c586121ef`。最终 DCP 仅保留在服务器。
 
@@ -51,14 +51,27 @@ delay 运行 `experiments/runs/getrf-u250-full-20260927-063459-913333`：输出 
 
 ## 进行中的完整回归
 
-三个实验共用冻结二进制 `build-20260927-124444-562943-a2a94a48/build/AMFPlacer`，源码修复提交 `1f496daf`。服务器并行运行，耗时不能作为隔离速度测量。
+首轮三个实验共用冻结二进制 `build-20260927-124444-562943-a2a94a48/build/AMFPlacer`，源码修复提交 `1f496daf`。服务器并行运行，耗时不能作为隔离速度测量。
 
-| 模式 | 运行目录（`experiments/runs/` 下） | 范围 |
+| 模式 | 运行目录（`experiments/runs/` 下） | 范围及当前结果 |
 |---|---|---|
-| delay | getrf-u250-full-20260927-125004-730657 | AMF、严格导入、Vivado placement/routing、DRC、时序 |
-| control | getrf-u250-full-20260927-125907-199280 | AMF、严格导入，`--import-only` |
-| cluster | getrf-u250-full-20260927-125913-760094 | AMF、严格导入，`--import-only` |
+| delay | getrf-u250-full-20260927-125004-730657 | 严格导入通过，placement 后位置仍全部保持；routing、最终 DRC/时序待完成 |
+| control 首轮 | getrf-u250-full-20260927-125907-199280 | AMF 候选搜索达到上限，256 个 PU 未打包，失败记录保留 |
+| cluster | getrf-u250-full-20260927-125913-760094 | `--import-only` 完成，严格导入通过 |
+| control 补充 | getrf-u250-full-20260927-144536-634632 | 使用补充修复构建重跑 AMF、严格导入；待完成 |
 
-仍须等待正式验收，不能将启动运行标记为完成。
+delay 严格导入：856998/856998 个单元存在、已放置、与原 LOC/BEL 完全一致；拒绝事件 0。12183 条硬资源级联和 325 条 SRL 级联违规均为 0。Vivado `place_design` 后上述结果保持，日志报告所有实例均已放置。
+
+delay 当前计时：AMF 4114.210 秒，DCP 读取 87.269 秒，导入 737.461 秒，导入审计 17.939 秒，placement 218.852 秒，placement 审计 20.711 秒。全流程总耗时和最终时序须等待 routing 与报告生成。导入日志仍有 MUX shape 的 INFO 提示，但没有产生拒绝或位置差异。OOC 端口位置和局部 SLL 需求警告在旧基线中也存在；本轮不补造端口/时钟约束，不引入 SLL 容量模型。
+
+## control 补充修复
+
+首轮 control 在重新分配阶段始终剩余 256 个 PU，扩大半径至 300 后触发失败。终止输出与实际器件库关联后，全部单元都属于 X 时钟区域第 3 列。原搜索即使扩大半径，仍只接受同列候选。现有日志并不能单独证明该列总资源耗尽；需要解决的是原列无法满足打包时，搜索不能尝试相邻列的缺口。
+
+`ParallelCLBPacker::exceptionHandling` 现在在连续八轮无进展后解除内部时钟列筛选，并将搜索半径重置到近邻范围；保留实际 BEL、控制组、宏和硬资源约束。两种候选查询都排除未纳入当前 packer 的保留 site。最终搜索失败改为明确异常，避免在关闭断言的构建中继续输出不完整结果。停滞诊断适用于所有模式。
+
+`checkBoundaryPacking --legacy-stall` 使用真实 U250 时钟列，将原列全部 Slice 标记为不可用，只在相邻列保留一个合法 site，验证完整停滞回退实际将中间 LUT 放至该 site。原有四种查询测试与物理模式跨列合法化也通过。证据：`experiments/preflight/clb-column-fallback-20260927-01`；失败单元和时钟列关联记录在 `experiments/evidence/clb-import-legality-20260927/control-stall-02.json`、`control-stall-regions-01.json`。
+
+补充提交 `11b37db4`，冻结构建 `build-20260927-144247-568663-8c570531`。该构建与首轮构建仅有一个生产源码文件差异：`ParallelCLBPacker.cc` 的候选搜索与失败处理。delay 和 cluster 首轮重新分配的剩余数量逐轮减少，均没有连续停滞，因此新增回退条件在这两条已完成的 AMF 执行轨迹上不会触发。两个构建的验证范围分别记录，不能将首轮布线结果冒称为新构建的完整重跑。不可变补充证据：`experiments/evidence/clb-import-legality-20260927/fallback-01.json`。
 
 架构参考：[AMD UG574 Storage Elements](https://docs.amd.com/r/en-US/ug574-ultrascale-clb/Storage-Elements)、[Carry Logic](https://docs.amd.com/r/en-US/ug574-ultrascale-clb/Carry-Logic)。上述具体路由限制以本项目 Vivado 2024.2 的定点实验为证据。
