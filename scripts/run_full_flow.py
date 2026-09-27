@@ -28,6 +28,10 @@ def completed_amf_placement(source):
 def run(root, args):
     from amf3 import save, stamp, git, machine
     root = Path(root)
+    import_only = getattr(args, 'import_only', False)
+    import_policy = 'repair' if getattr(args, 'allow_import_repair', False) else 'strict'
+    if import_only and (args.amf_only or args.packing_only or import_policy != 'strict'):
+        raise ValueError('--import-only requires strict acceptance and cannot combine with AMF-only modes')
     directory = root / 'experiments/runs' / ('getrf-u250-' + ('packing-' if args.packing_only else 'full-') + stamp())
     for name in ('inputs', 'reports', 'logs', 'placement', 'work'):
         (directory / name).mkdir(parents=True, exist_ok=False)
@@ -67,6 +71,8 @@ def run(root, args):
                     started=dt.datetime.now().astimezone().isoformat(), stages=[],
                     amf_clock_period_ns=config['ClockPeriod'], amf_clock_source='explicit experiment configuration',
                     vivado_clock_source='original DCP constraints', placement_run=args.placement_run)
+    manifest['import_policy'] = import_policy
+    manifest['backend_mode'] = 'import-only' if import_only else 'full'
     build_manifest = binary.parent.parent / 'manifest.json'
     if build_manifest.is_file():
         shutil.copy2(build_manifest, directory / 'inputs/build_manifest.json')
@@ -102,7 +108,13 @@ def run(root, args):
         script = prepare(root, source, directory, manifest)
         save(directory/'manifest.json',manifest)
         stage('vivado', [machine()['vivado'],'-mode','batch','-notrace','-nojournal','-log',directory/'logs/vivado_internal.log',
-                        '-source',script,'-tclargs',dcp,directory/'reports',directory/'placement'])
+                        '-source',script,'-tclargs',dcp,directory/'reports',directory/'placement',
+                        import_policy, manifest['backend_mode']])
+        if import_only:
+            save(directory/'status.json',dict(state='completed',strict_import_verified=True,
+                 full_placement_executed=False,routing_executed=False,
+                 finished=dt.datetime.now().astimezone().isoformat()))
+            return
         if config.get('physical boundary model file'):
             from diagnostics.analyze_boundary_timing_samples import analyze, audit_placements
             model = config['physical boundary model file']
@@ -115,6 +127,7 @@ def run(root, args):
         save(directory/'status.json',dict(state='completed',full_placement_executed=True,routing_executed=True,
              routing_complete=summary['routing_complete'],drc_errors=summary['drc_errors'],timing_met=summary['timing_met'],
              amf_export_complete=summary['amf_export_complete'],implementation_verified=summary['implementation_verified'],
+             strict_import_verified=summary['strict_import_verified'],
              output_dcp_sha256=digest(output),finished=dt.datetime.now().astimezone().isoformat()))
     except Exception as error:
         save(directory/'status.json',dict(state='failed',error=str(error),finished=dt.datetime.now().astimezone().isoformat()))

@@ -42,6 +42,15 @@ def summarize(root):
     result={}
     manifest=json.loads((root/'manifest.json').read_text())
     result['stages']=manifest['stages']
+    acceptance=reports/'import_acceptance.tsv'
+    result['strict_import_verified']=None
+    if acceptance.exists():
+        values=dict(line.split('\t') for line in acceptance.read_text().splitlines())
+        result['import_acceptance']={k:(v if k=='policy' else int(v)) for k,v in values.items()}
+        m=result['import_acceptance']
+        result['strict_import_verified']=(m['policy']=='strict'
+            and all(m[k]==m['requested'] for k in ('present','placed','exact_loc_bel_matches','exact_original_loc_bel_matches'))
+            and all(m[k]==0 for k in ('rejection_events','srl_violations','cascade_violations')))
     amf_log=root/'logs/amf.log'
     if amf_log.exists():result['numerical_guard']=numerical_guard_audit(amf_log.read_text(errors='replace'))
     result['vivado_stages_seconds']={}

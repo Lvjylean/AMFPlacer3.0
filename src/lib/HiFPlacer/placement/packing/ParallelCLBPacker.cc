@@ -3039,7 +3039,8 @@ void ParallelCLBPacker::dumpCLBPlacementTcl(std::ofstream &outfileTcl, bool pack
 
         if (tmpPackingSite->getDeterminedClusterInSite())
         {
-
+            if (!CLBSiteLegality::checkControlsAndLUTs(slotMapping))
+                throw std::runtime_error("CLB slot control/LUT legality failed before export: " + CLBSite->getName());
             if (tmpPackingSite->checkIsCarrySite())
             {
                 cnt++;
@@ -3210,8 +3211,10 @@ void ParallelCLBPacker::dumpPlacementTcl(std::string dumpTclFile)
     dumpDSPBRAMPlacementTcl(outfileTcl);
     dumpCLBPlacementTcl(outfileTcl, true);
     // Except LUT6_2 cells, remove the packing information in Vivado and use our packing
-    outfileTcl << "set_property HLUTNM {} [get_cells -hierarchical *]\n";
-    outfileTcl << "set_property SOFT_HLUTNM {} [get_cells -hierarchical *]\n";
+    outfileTcl << "foreach amf_prop {HLUTNM SOFT_HLUTNM} {\n"
+                  "  set amf_grouped [get_cells -quiet -hierarchical -filter \"$amf_prop != \\\"\\\"\"]\n"
+                  "  if {[llength $amf_grouped]} {set_property $amf_prop {} $amf_grouped}\n"
+                  "}\n";
     dumpCLBPlacementTcl(outfileTcl, false);
     // outfileTcl << "place_design\n";
     outfileTcl << "$errorNum\n";

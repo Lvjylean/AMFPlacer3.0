@@ -1,6 +1,11 @@
-# Import AMF assignments, repair/complete placement, and route the same design.
-if {$argc != 3} { error "Expected input.dcp reports-directory placement-directory" }
-lassign $argv input out placement
+# Import AMF assignments, validate them, then optimize placement and route.
+if {$argc < 3 || $argc > 5} { error "Expected input.dcp reports-directory placement-directory ?strict|repair? ?full|import-only?" }
+lassign $argv input out placement importPolicy backendMode
+if {$importPolicy eq ""} {set importPolicy strict}
+if {$backendMode eq ""} {set backendMode full}
+if {$importPolicy ni {strict repair} || $backendMode ni {full import-only}} {error "Invalid backend policy/mode"}
+source [file join [file dirname [info script]] import_acceptance.tcl]
+set amf3_import_error_events 0
 set_param general.maxThreads 4
 set timeline [open [file join $out stages.tsv] w]
 puts $timeline "stage\tseconds"
@@ -26,7 +31,7 @@ if {[file exists $fixes]} {
     close $f
 }
 proc audit {stage} {
-    global requested originalOverrides out placement physicalAudit
+    global requested originalOverrides out placement physicalAudit importMetrics amf3_import_error_events
     set cells [get_cells -hierarchical -filter {IS_PRIMITIVE}]
     set names [get_property NAME $cells]
     set locs [get_property LOC $cells]
@@ -40,6 +45,8 @@ proc audit {stage} {
     set placed 0; set present 0; set matched 0;set siteMatched 0;set originalMatched 0
     array set actual {}
     array set actualBel {}
+    set mismatches [open [file join $out ${stage}_placement_mismatches.tsv] w]
+    puts $mismatches "cell\trequested\tactual_site\tactual_bel"
     foreach name $names loc $locs bel $bels {
         if {![info exists requested($name)]} {continue}
         incr present
@@ -50,9 +57,12 @@ proc audit {stage} {
         lassign [split $requested($name) /] site wantedBel
         if {$loc eq $site} {incr siteMatched}
         if {$loc eq $site && ($wantedBel eq "" || $wantedBel eq $bel)} {incr matched}
+        if {$loc ne $site || ($wantedBel ne "" && $wantedBel ne $bel)} {puts $mismatches "$name\t$requested($name)\t$loc\t$bel"}
         if {[info exists originalOverrides($name)]} {lassign [split $originalOverrides($name) /] site wantedBel}
         if {$loc eq $site && ($wantedBel eq "" || $wantedBel eq $bel)} {incr originalMatched}
     }
+    close $mismatches
+    set importMetrics [dict create requested [array size requested] present $present placed $placed exact_loc_bel_matches $matched exact_original_loc_bel_matches $originalMatched rejection_events $amf3_import_error_events srl_violations 0 cascade_violations 0]
     set f [open [file join $out ${stage}_placement.json] w]
     puts $f [format {{"requested":%d,"present":%d,"placed":%d,"exact_loc_bel_matches":%d,"site_matches":%d,"exact_original_loc_bel_matches":%d,"design_primitive_cells":%d,"unrequested_primitive_cells":%d}} [array size requested] $present $placed $matched $siteMatched $originalMatched [llength $names] [expr {[llength $names]-$present}]]
     close $f
@@ -77,6 +87,7 @@ proc audit {stage} {
         close $f
         set f [open [file join $out ${stage}_srl_cascades.json] w]
         puts $f [format {{"checked":%d,"violations":%d}} $checked $violations];close $f
+        dict set importMetrics srl_violations $violations
         if {$stage ne "imported" && $violations > 0} {error "SRL cascades lack a legal MC31 path: $violations"}
     }
     set hard [file join $placement resources.tsv]
@@ -111,6 +122,7 @@ proc audit {stage} {
             close $f
             set f [open [file join $out ${stage}_cascades.json] w]
             puts $f [format {{"checked":%d,"violations":%d}} $checked $violations];close $f
+            dict set importMetrics cascade_violations $violations
             if {$stage ne "imported" && $violations > 0} {error "Dedicated cascades violate same-SLR adjacency: $violations"}
         }
     }
@@ -123,6 +135,13 @@ if {[catch {
     report_clocks -file [file join $out clocks.rpt]
     timed import {source [file join $placement import_placement.tcl]}
     timed import_audit {audit imported}
+    set f [open [file join $out import_acceptance.tsv] w]
+    dict for {key value} $importMetrics {puts $f "$key\t$value"}
+    puts $f "policy\t$importPolicy";close $f
+    if {$importPolicy eq "strict"} {require_legal_amf_import $importMetrics}
+    if {$backendMode eq "import-only"} {
+        puts "AMF_IMPORT_ONLY_FINISHED";close $timeline;exit 0
+    }
     timed place {place_design}
     timed place_audit {audit placed}
     write_checkpoint [file join $out getrf_placed.dcp]

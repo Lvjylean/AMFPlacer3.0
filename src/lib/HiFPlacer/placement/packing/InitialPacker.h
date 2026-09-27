@@ -97,6 +97,7 @@ class InitialPacker
      *
      */
     void findLUTRAMMacros();
+    void findSRLCascadeMacros();
 
     /**
      * @brief detects BRAM macros and clusters the related cells into PlacementInfo::PlacementMacro

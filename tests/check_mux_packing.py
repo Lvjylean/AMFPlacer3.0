@@ -46,8 +46,9 @@ def run(args):
             assert rows[0]['primitive']==rows[1]['primitive'] and rows[0]['primitive']!=rows[2]['primitive']
         elif name=='srl-cascade-exit':
             rows=list(csv.DictReader((d/'packing.tsv').open(),delimiter='\t'))
-            assert {x['cell']:x['bel'] for x in rows}=={'a':'A6LUT'},rows
-            assert rows[0]['slicem_required']=='1'
+            assert {x['cell']:x['bel'] for x in rows}=={'a':'B6LUT','b':'A6LUT'},rows
+            assert all(x['slicem_required']=='1' for x in rows)
+            assert len({x['macro'] for x in rows})==1
         elif name in ('lut-f7','lut-f8'):
             assert '#Mux Macro: 1' in result.stdout
             assert 'MUX cluster trial-commit checks: 1' in result.stdout

@@ -35,6 +35,7 @@ void InitialPacker::pack(bool hardResourcesOnly)
 
     if (!hardResourcesOnly)
     {
+        findSRLCascadeMacros();
         findLUTRAMMacros();
         LUTFFPairing();
     }
@@ -351,6 +352,61 @@ void InitialPacker::setDSPRegs(std::vector<DesignInfo::DesignCell *> &DSPTailsTo
 
     print_warning(std::to_string(DSPRegCount) + " DSPs have set registered.\n");
     return;
+}
+
+void InitialPacker::findSRLCascadeMacros()
+{
+    using Cell = DesignInfo::DesignCell;
+    std::map<Cell *, Cell *> successor, predecessor;
+    auto netAt = [](Cell *cell, const std::string &ref) -> DesignInfo::DesignNet * {
+        for (auto pin : cell->getInputPins()) if (pin->getRefPinName() == ref) return pin->getNet();
+        return nullptr;
+    };
+    for (auto cell : designInfo->getCells())
+    {
+        if (!cell->originallyIsShifter()) continue;
+        for (auto pin : cell->getInputPins())
+        {
+            auto driver = pin->getDriverPin();
+            if (pin->getRefPinName() != "D" || !driver || driver->getRefPinName() != "Q31") continue;
+            auto source = driver->getCell();
+            if (!source || !source->originallyIsShifter()) continue;
+            // Pre-existing SRL/MUX macros retain their ownership. Standalone
+            // Q31 chains are kept together instead of exported as unrelated RAMs.
+            if (cellInMacros.count(source) || cellInMacros.count(cell)) continue;
+            if (driver->getNet()->getPinsBeDriven().size() != 1)
+                throw std::runtime_error("Unsupported branching standalone SRL chain: " + source->getName());
+            successor[source] = cell; predecessor[cell] = source;
+        }
+    }
+    unsigned groups=0, members=0;
+    for (auto head : designInfo->getCells())
+    {
+        if (!successor.count(head) || predecessor.count(head)) continue;
+        std::vector<Cell *> chain;
+        std::set<Cell *> seen;
+        for (auto cur=head; cur; cur=successor.count(cur)?successor.at(cur):nullptr)
+        {
+            if (!seen.insert(cur).second) throw std::runtime_error("Cyclic SRL cascade: " + head->getName());
+            if (netAt(cur,"CLK") != netAt(head,"CLK") || netAt(cur,"CE") != netAt(head,"CE"))
+                throw std::runtime_error("Standalone SRL chain has incompatible CLK/CE: " + head->getName());
+            chain.push_back(cur);
+        }
+        if (chain.size()>8) throw std::runtime_error("Standalone SRL chain exceeds one SLICEM: " + head->getName());
+        auto macro = new PlacementInfo::PlacementMacro(head->getName(), placementUnits.size(),
+            PlacementInfo::PlacementMacro::PlacementMacroType_MCLB);
+        macro->addOccupiedSite(0,1);
+        for (size_t index=0; index<chain.size(); ++index)
+        {
+            auto cell=chain[index];
+            macro->addCell(cell,cell->getCellType(),0,0);
+            macro->addFixedCellInfo(cell,"SLICEM",std::string(1,static_cast<char>('A'+chain.size()-1-index))+"6LUT");
+            cellInMacros.insert(cell); cellId2PlacementUnit[cell->getCellId()]=macro;
+        }
+        macro->setWeight(16); placementUnits.push_back(macro); placementMacros.push_back(macro);
+        ++groups; members+=chain.size();
+    }
+    print_info("Standalone SRL cascade macros="+std::to_string(groups)+" cells="+std::to_string(members));
 }
 
 void InitialPacker::findLUTRAMMacros()
@@ -778,6 +834,20 @@ void InitialPacker::mapCarryRelatedRouteThru(PlacementInfo::PlacementMacro *CARR
         }
     }
 
+    // A nonconstant carry initialization uses AX (or EX for CI_TOP), also
+    // needed by an unrelated primary FF's bypass input. Reserve that FF slot.
+    for (auto pin : coreCell->getInputPins())
+    {
+        const auto &ref = pin->getRefPinName();
+        if ((ref != "CI" && ref != "CI_TOP") || !pin->getDriverPin()) continue;
+        if (ref == "CI" && HardResourceUtils::isCarryCascade(pin->getDriverPin(), pin)) continue;
+        int half = ref == "CI" ? 0 : 1;
+        if (!slotMapping.FFs[half][0][0])
+            slotMapping.FFs[half][0][0] = CARRYChain->addVirtualCell(
+                coreCell->getName()+"__FF"+std::to_string(half*4), designInfo,
+                DesignInfo::CellType_FDCE, 0, CARRYChainSiteOffset);
+    }
+
     for (int i = 0; i < 2; i++)
         for (int k = 0; k < 4; k++)
         {
@@ -1044,6 +1114,27 @@ void InitialPacker::findCARRYMacros()
 
             std::vector<DesignInfo::DesignCell *> drivenTopFFs;
             std::vector<DesignInfo::DesignCell *> drivenBottomFFs;
+            // O and CO of the same bit share the half-slice route-through
+            // configuration when CO must reach fabric routing. All eight FF
+            // BELs in that half are unavailable to sequential cells. The
+            // virtual O/CO FFs below make mapCarryRelatedRouteThru reserve it.
+            bool routeThroughHalf[2] = {false, false};
+            bool usedO[8] = {}, fabricCO[8] = {};
+            for (auto output : coreCell->getOutputPins())
+            {
+                if (output->isUnconnected() || !output->getNet()) continue;
+                auto ref = output->getRefPinName();
+                auto bracket = ref.find('[');
+                if (bracket == std::string::npos) continue;
+                int bit = ref[bracket+1]-'0';
+                if (bit<0 || bit>=8) continue;
+                if (ref.find("O[")==0) usedO[bit] = !output->getNet()->getPinsBeDriven().empty();
+                else if (ref.find("CO[")==0)
+                    for (auto sink : output->getNet()->getPinsBeDriven())
+                        if (!HardResourceUtils::isCarryCascade(output,sink)) fabricCO[bit]=true;
+            }
+            for (int bit=0;bit<8;++bit)
+                if (usedO[bit] && fabricCO[bit]) routeThroughHalf[bit/4]=true;
             for (DesignInfo::DesignPin *driverPin : coreCell->getOutputPins())
             {
                 if (driverPin->isUnconnected())
@@ -1075,6 +1166,7 @@ void InitialPacker::findCARRYMacros()
                     if (FFcnt == 1 && theFF)
                     {
                         char FFPinCellId = driverPin->getRefPinName()[driverPin->getRefPinName().find("[") + 1] - '0';
+                        if (routeThroughHalf[FFPinCellId/4]) continue;
                         if (FFPinCellId < 4)
                             drivenBottomFFs.push_back(theFF);
                         else

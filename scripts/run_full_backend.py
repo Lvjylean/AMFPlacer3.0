@@ -43,9 +43,9 @@ def prepare(root, source, directory, manifest):
             end=batches[index].end()
             adapted=adapted[:end]+'\nputs "AMF_IMPORT_BATCHES_ATTEMPTED '+str(index+1)+'/'+str(len(batches))+'"; flush stdout'+adapted[end:]
     adapted=re.sub(r'(set result \[catch \{place_cell \{.*?\}\})\]',
-        r'\1 amf3_place_error]\nif {$result} {puts "AMF_IMPORT_REJECTED: $amf3_place_error"}', adapted, flags=re.S)
+        r'\1 amf3_place_error]\nif {$result} {incr amf3_import_error_events; puts "AMF_IMPORT_REJECTED: $amf3_place_error"}', adapted, flags=re.S)
     adapted=adapted.replace('set result [catch {place_cell  $placeBatch }]',
-        'set result [catch {place_cell  $placeBatch } amf3_place_error]\n       if {$result} {puts "AMF_IMPORT_RETRY_REJECTED: $amf3_place_error"}')
+        'set result [catch {place_cell  $placeBatch } amf3_place_error]\n       if {$result} {incr amf3_import_error_events; puts "AMF_IMPORT_RETRY_REJECTED: $amf3_place_error"}')
     raw=directory/'placement/requested.list'
     raw.write_text('\n'.join(re.findall(r'\[catch \{place_cell \{(.*?)\}\}\]',original,re.S)))
     normalizer=directory/'inputs/normalize_placement.tcl'
@@ -107,6 +107,10 @@ close $f
         if source.resolve()!=directory.resolve() and (source/'placement'/name).exists():
             shutil.copy2(source/'placement'/name,directory/'placement'/name)
     script=directory/'inputs/full_backend.tcl';shutil.copy2(root/'scripts/full_backend.tcl',script)
+    acceptance=root/'scripts/import_acceptance.tcl'
+    if acceptance.is_file():
+        shutil.copy2(acceptance,directory/'inputs/import_acceptance.tcl')
+        manifest['import_acceptance_sha256']=digest(acceptance)
     manifest['placement_source']=dict(run=str(source),manifest_snapshot=str(source_manifest),manifest_sha256=digest(source_manifest),
         original_tcl=str(generated),original_tcl_sha256=digest(generated),import_tcl_sha256=digest(directory/'placement/import_placement.tcl'),
         adapter_diagnostic_lines=n,assignments_changed=bool(corrections),site_assignments_changed=False,

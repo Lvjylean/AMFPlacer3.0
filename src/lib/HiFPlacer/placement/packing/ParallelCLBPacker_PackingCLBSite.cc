@@ -973,7 +973,8 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCarrySite(int FFContro
                         int halfCLBId1 = i1 * 2 + j1;
                         auto &CSFF1 =
                             determinedClusterInSite->getFFControlSets()[FFSwapOption[FFControlSetOrderId][halfCLBId1]];
-                        if (CSFF0.compatibleWith(CSFF1.getCSId()))
+                        if (CSFF0.compatibleWith(CSFF1.getCSId()) &&
+                            CLBSiteLegality::canPlaceFF(slotMapping, targetFF, i0, j0))
                         {
                             if (FFSwapOption[FFControlSetOrderId][halfCLBId1] !=
                                 FFSwapOption[FFControlSetOrderId][halfCLBId0])
@@ -1056,7 +1057,8 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCarrySite(int FFContro
                                 {
                                     for (int kk = 0; kk < 4; kk++)
                                     {
-                                        if (!slotMapping.LUTs[ii][jj][kk] && !slotMapping.FFs[ii][jj][kk])
+                                        if (!slotMapping.LUTs[ii][jj][kk] && !slotMapping.FFs[ii][jj][kk] &&
+                                            CLBSiteLegality::canPlaceFF(slotMapping, targetFF, ii, jj))
                                         {
                                             // if (slotMapping.LUTs[ii][1 - jj][kk])
                                             //     continue;
@@ -1573,7 +1575,8 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int 
                         int halfCLBId1 = i1 * 2 + j1;
                         auto &CSFF1 =
                             determinedClusterInSite->getFFControlSets()[FFSwapOption[FFControlSetOrderId][halfCLBId1]];
-                        if (CSFF0.compatibleWith(CSFF1.getCSId()))
+                        if (CSFF0.compatibleWith(CSFF1.getCSId()) &&
+                            CLBSiteLegality::canPlaceFF(slotMapping, targetFF, i0, j0))
                         {
                             if (FFSwapOption[FFControlSetOrderId][halfCLBId1] !=
                                 FFSwapOption[FFControlSetOrderId][halfCLBId0])
@@ -1656,7 +1659,8 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int 
                                 {
                                     for (int kk = 0; kk < 4; kk++)
                                     {
-                                        if (!slotMapping.LUTs[ii][jj][kk] && !slotMapping.FFs[ii][jj][kk])
+                                        if (!slotMapping.LUTs[ii][jj][kk] && !slotMapping.FFs[ii][jj][kk] &&
+                                            CLBSiteLegality::canPlaceFF(slotMapping, targetFF, ii, jj))
                                         {
                                             // if (slotMapping.LUTs[ii][1 - jj][kk])
                                             //     continue;
@@ -2537,7 +2541,8 @@ void ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite(int FFC
                         int halfCLBId1 = i1 * 2 + j1;
                         auto &CSFF1 =
                             determinedClusterInSite->getFFControlSets()[FFSwapOption[FFControlSetOrderId][halfCLBId1]];
-                        if (CSFF0.compatibleWith(CSFF1.getCSId()))
+                        if (CSFF0.compatibleWith(CSFF1.getCSId()) &&
+                            CLBSiteLegality::canPlaceFF(slotMapping, targetFF, i0, j0))
                         {
                             if (FFSwapOption[FFControlSetOrderId][halfCLBId1] !=
                                 FFSwapOption[FFControlSetOrderId][halfCLBId0])
@@ -2620,7 +2625,8 @@ void ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite(int FFC
                                 {
                                     for (int kk = 0; kk < 4; kk++)
                                     {
-                                        if (!slotMapping.LUTs[ii][jj][kk] && !slotMapping.FFs[ii][jj][kk])
+                                        if (!slotMapping.LUTs[ii][jj][kk] && !slotMapping.FFs[ii][jj][kk] &&
+                                            CLBSiteLegality::canPlaceFF(slotMapping, targetFF, ii, jj))
                                         {
                                             // if (slotMapping.LUTs[ii][1 - jj][kk])
                                             //     continue;

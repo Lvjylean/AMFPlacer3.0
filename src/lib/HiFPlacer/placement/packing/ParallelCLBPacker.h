@@ -15,6 +15,7 @@
 #define _PARALLELCLBPACKER_
 
 #include "DesignInfo.h"
+#include "CLBSiteLegality.h"
 #include "DeviceInfo.h"
 #include "KDTree/KDTree.h"
 #include "MaximalCardinalityMatching/MaximalCardinalityMatching.h"
@@ -2216,117 +2217,35 @@ class ParallelCLBPacker
             inline bool canDirectConnectInSlot(DesignInfo::DesignCell *targetLUT,
                                                DesignInfo::DesignCell *targetFF) const
             {
-                for (int i = 0; i < 2; i++)
-                {
-                    for (int j = 0; j < 2; j++)
+                int i, j, k;
+                return findDirectConnectSlot(targetLUT, targetFF, i, j, k);
+            }
+
+            inline bool findDirectConnectSlot(DesignInfo::DesignCell *lut, DesignInfo::DesignCell *ff,
+                                              int &half, int &lane, int &row) const
+            {
+                for (int i = 0; i < 2; ++i)
+                    for (int j = 0; j < 2; ++j)
                     {
-                        bool compatible = true;
-                        if (targetLUT->isLUT6() && j == 1)
-                            continue;
-                        for (int k = 0; k < 4; k++)
-                        {
-                            if (FFs[i][j][k])
+                        if ((lut->isLUT6() && j == 1) || !CLBSiteLegality::canPlaceFF(*this, ff, i, j)) continue;
+                        for (int k = 0; k < 4; ++k)
+                            if (!LUTs[i][j][k] && !FFs[i][j][k] &&
+                                CLBSiteLegality::lutPairCompatible(lut, LUTs[i][1-j][k]))
                             {
-                                if (FFs[i][j][k]->getControlSetInfo())
-                                {
-                                    if (FFs[i][j][k]->getControlSetInfo()->getId() !=
-                                        targetFF->getControlSetInfo()->getId())
-                                    {
-                                        compatible = false;
-                                    }
-                                }
+                                half=i; lane=j; row=k;
+                                return true;
                             }
-                        }
-                        for (int k = 0; k < 4; k++)
-                        {
-                            if (FFs[i][1 - j][k])
-                            {
-                                if (FFs[i][1 - j][k]->getControlSetInfo())
-                                {
-                                    if (FFs[i][1 - j][k]->getControlSetInfo()->getCLK() !=
-                                            targetFF->getControlSetInfo()->getCLK() ||
-                                        FFs[i][1 - j][k]->getControlSetInfo()->getSR() !=
-                                            targetFF->getControlSetInfo()->getSR())
-                                    {
-                                        compatible = false;
-                                    }
-                                }
-                            }
-                        }
-                        if (compatible)
-                        {
-                            for (int k = 0; k < 4; k++)
-                            {
-                                if (!LUTs[i][j][k] && !FFs[i][j][k])
-                                {
-                                    if (targetLUT->isLUT6() && LUTs[i][1 - j][k])
-                                        continue;
-                                    return true;
-                                }
-                            }
-                        }
                     }
-                }
                 return false;
             }
 
-            inline void addLUTFFPair(DesignInfo::DesignCell *targetLUT, DesignInfo::DesignCell *targetFF)
+            inline void addLUTFFPair(DesignInfo::DesignCell *lut, DesignInfo::DesignCell *ff)
             {
-                for (int i = 0; i < 2; i++)
-                {
-                    for (int j = 0; j < 2; j++)
-                    {
-                        bool compatible = true;
-                        if (targetLUT->isLUT6() && j == 1)
-                            continue;
-                        for (int k = 0; k < 4; k++)
-                        {
-                            if (FFs[i][j][k])
-                            {
-                                if (FFs[i][j][k]->getControlSetInfo())
-                                {
-                                    if (FFs[i][j][k]->getControlSetInfo()->getId() !=
-                                        targetFF->getControlSetInfo()->getId())
-                                    {
-                                        compatible = false;
-                                    }
-                                }
-                            }
-                        }
-                        for (int k = 0; k < 4; k++)
-                        {
-                            if (FFs[i][1 - j][k])
-                            {
-                                if (FFs[i][1 - j][k]->getControlSetInfo())
-                                {
-                                    if (FFs[i][1 - j][k]->getControlSetInfo()->getCLK() !=
-                                            targetFF->getControlSetInfo()->getCLK() ||
-                                        FFs[i][1 - j][k]->getControlSetInfo()->getSR() !=
-                                            targetFF->getControlSetInfo()->getSR())
-                                    {
-                                        compatible = false;
-                                    }
-                                }
-                            }
-                        }
-                        if (compatible)
-                        {
-                            for (int k = 0; k < 4; k++)
-                            {
-                                if (!LUTs[i][j][k] && !FFs[i][j][k])
-                                {
-                                    if (targetLUT->isLUT6() && LUTs[i][1 - j][k])
-                                        continue;
-                                    LUTs[i][j][k] = targetLUT;
-                                    FFs[i][j][k] = targetFF;
-                                    return;
-                                }
-                            }
-                        }
-                    }
-                }
-                assert(false && "the LUT-FF pair should be assigned to a slot");
-                return;
+                int i, j, k;
+                if (!findDirectConnectSlot(lut, ff, i, j, k))
+                    throw std::runtime_error("No legal LUT/FF slot at detailed-placement commit");
+                LUTs[i][j][k]=lut;
+                FFs[i][j][k]=ff;
             }
 
             inline void removeLUTFFPair(DesignInfo::DesignCell *targetLUT, DesignInfo::DesignCell *targetFF)

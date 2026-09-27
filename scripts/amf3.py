@@ -209,6 +209,8 @@ def main():
     p.add_argument('--dcp', default='data/reference/getrf-u250/post_opt.dcp')
     p.add_argument('--packing-only', action='store_true')
     p.add_argument('--amf-only', action='store_true')
+    p.add_argument('--import-only', action='store_true', help='Stop after strict Vivado import acceptance')
+    p.add_argument('--allow-import-repair', action='store_true', help='Diagnostic legacy policy: allow rejected imports to reach place_design')
     p.add_argument('--placement-run', help='Completed AMF run to import and route in a new experiment')
     p.set_defaults(action=full_run)
     p = sub.add_parser('validate-packing', help='Vivado audit of SRL/MUX BEL maps')

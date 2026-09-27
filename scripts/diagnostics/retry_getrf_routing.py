@@ -65,6 +65,7 @@ def main():
         inherited.append(origin.name)
     backend = directory / 'inputs/full_backend.tcl'
     backend.write_text(route_script((ROOT / 'scripts/full_backend.tcl').read_text()))
+    shutil.copy2(ROOT/'scripts/import_acceptance.tcl',directory/'inputs/import_acceptance.tcl')
     (directory / 'inputs/working_tree.patch').write_bytes(subprocess.check_output(['git', 'diff', 'HEAD', '--binary'], cwd=ROOT))
     manifest = dict(schema='amf-route-retry-v1', source_commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
         started=dt.datetime.now().astimezone().isoformat(), stages=[], placement_run=str(source),
