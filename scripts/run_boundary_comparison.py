@@ -17,6 +17,29 @@ def equivalent_configs(configs):
     if any(common(c)!=base for c in configs.values()):raise ValueError('Comparison inputs or common placement settings differ')
     return base
 
+def assess_qor(results):
+    summaries={name:results[name].get('summary',{}) for name in VARIANTS}
+    verified=[name for name,s in summaries.items() if s.get('implementation_verified',False)
+              and s.get('drc_counts',{}).get('critical_warnings')==0]
+    passing=[name for name in verified if summaries[name].get('timing_met',False)]
+    def setup_nonregression(candidate,reference):
+        a=summaries[candidate].get('timing',{});b=summaries[reference].get('timing',{})
+        return all(k in a and k in b and a[k]>=b[k] for k in ('wns_ns','tns_ns'))
+    assessment=dict(verified_variants=verified,timing_passing_variants=passing,
+        cluster_setup_nonregression_vs_control=setup_nonregression('cluster','control'),
+        cluster_setup_nonregression_vs_delay=setup_nonregression('cluster','delay'))
+    if len(verified)!=len(VARIANTS):
+        recommendation='retain-current-default; implementation-validation-failed'
+    elif ('cluster' in passing and assessment['cluster_setup_nonregression_vs_control']
+          and assessment['cluster_setup_nonregression_vs_delay']):
+        recommendation='candidate-passes-single-case-QoR-review'
+    elif passing:
+        recommendation='retain-current-default; clustering-remains-experimental'
+    else:
+        recommendation='retain-current-default; no-variant-meets-timing'
+    assessment['single_case_preferred_variant']=passing[0] if len(passing)==1 else None
+    return dict(qor_assessment=assessment,recommendation=recommendation)
+
 def collect(directory):
     state=json.loads((directory/'manifest.json').read_text());results={}
     for name in VARIANTS:
@@ -32,10 +55,7 @@ def collect(directory):
         parallel=state['parallel'],runtime_caveat='Concurrent runs share CPU/memory; elapsed times are observed execution costs, not isolated speedup measurements.' if state['parallel']>1 else 'Runs scheduled serially; other server load is not controlled.',
         variants=results,default_changed=False,recommendation='retain-current-default-pending-complete-QoR')
     if complete:
-        c=results['control'].get('summary',{});n=results['cluster'].get('summary',{})
-        legal=all(v.get('summary',{}).get('implementation_verified',False) and v.get('summary',{}).get('drc_counts',{}).get('critical_warnings')==0 for v in results.values())
-        improved=legal and n['timing']['wns_ns']>=c['timing']['wns_ns'] and n['timing']['tns_ns']>=c['timing']['tns_ns']
-        report['recommendation']='candidate-passes-single-case-QoR-review' if improved else 'retain-current-default; new-strategy-not-validated-as-better'
+        report.update(assess_qor(results))
     from amf3 import save
     save(directory/'comparison.json',report)
     return report

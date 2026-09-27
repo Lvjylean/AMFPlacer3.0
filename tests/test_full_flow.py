@@ -8,8 +8,31 @@ import zipfile
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 from run_full_backend import prepare
 from run_full_flow import configure_outputs, completed_amf_placement
-from run_boundary_comparison import equivalent_configs
+from run_boundary_comparison import equivalent_configs, assess_qor
 from summarize_full_flow import routing_complete, missing_clock_source_warning, numerical_guard_audit
+
+class ComparisonRecommendation(unittest.TestCase):
+    def fixture(self,cluster_wns=-.059,cluster_met=False):
+        return {name:dict(summary=dict(implementation_verified=True,
+            drc_counts=dict(errors=0,critical_warnings=0),timing_met=met,
+            timing=dict(wns_ns=wns,tns_ns=tns))) for name,wns,tns,met in (
+                ('control',-.137,-1.708,False),('delay',.003,0,True),
+                ('cluster',cluster_wns,0 if cluster_met else -.072,cluster_met))}
+
+    def test_relative_improvement_is_not_timing_closure(self):
+        result=assess_qor(self.fixture())
+        self.assertEqual(result['qor_assessment']['single_case_preferred_variant'],'delay')
+        self.assertTrue(result['qor_assessment']['cluster_setup_nonregression_vs_control'])
+        self.assertFalse(result['qor_assessment']['cluster_setup_nonregression_vs_delay'])
+        self.assertIn('clustering-remains-experimental',result['recommendation'])
+
+    def test_candidate_review_requires_timing_and_all_implementations_legal(self):
+        inputs=self.fixture(.1,True)
+        self.assertEqual(assess_qor(inputs)['recommendation'],'candidate-passes-single-case-QoR-review')
+        inputs['cluster']['summary']['timing_met']=False  # e.g. a hold failure
+        self.assertIn('clustering-remains-experimental',assess_qor(inputs)['recommendation'])
+        inputs['cluster']['summary']['drc_counts']['critical_warnings']=1
+        self.assertIn('implementation-validation-failed',assess_qor(inputs)['recommendation'])
 
 class FullBackend(unittest.TestCase):
     def test_numerical_guard_events_are_not_unique_cell_counts(self):
