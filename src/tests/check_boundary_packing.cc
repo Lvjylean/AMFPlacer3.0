@@ -6,7 +6,9 @@
 static void require(bool ok,const char *message){if(!ok)throw std::runtime_error(message);}
 int main(int argc,char **argv){
  try{
-  require(argc==2,"Usage: checkBoundaryPacking toy-config.json");
+  require(argc==2 || (argc==3 && std::string(argv[2])=="--legacy-stall"),
+          "Usage: checkBoundaryPacking toy-config.json [--legacy-stall]");
+  const bool legacyStall=argc==3;
   auto cfg=parseJSONFile(argv[1]);omp_set_num_threads(1);
   DeviceInfo device(cfg,cfg["device"]);DesignInfo design(cfg,&device);PlacementInfo p(&design,&device,cfg);
   std::vector<DeviceInfo::DeviceSite*> row;
@@ -23,7 +25,10 @@ int main(int argc,char **argv){
   for(auto cell:design.getCells()){
    auto pu=new PlacementInfo::PlacementUnpackedCell(cell->getName(),p.getPlacementUnits().size(),cell);
    pu->setWeight(1);pu->setAnchorLocationAndForgetTheOriginalOne(left->X(),left->Y());
-   if(cell->getName()!="mid")pu->setFixed();
+   if(cell->getName()!="mid") {
+    pu->setFixed();
+    if(legacyStall)pu->setLocked();
+   }
    p.getPlacementUnits().push_back(pu);p.getPlacementUnpackedCells().push_back(pu);
    p.getCellId2PlacementUnit()[cell->getCellId()]=pu;
   }
@@ -51,6 +56,16 @@ int main(int argc,char **argv){
    site.findNeiborPUsFromBinGrid(DesignInfo::CellType_LUT4,right->X(),right->Y(),0,12,10,mapping,.4,&nearby,true);
    require(bool(nearby.count(mid))==enabled,"mapped PU query retained a hard clock-column fence");
    mapping[mid->getId()]=nullptr;
+  }
+  if(legacyStall) {
+   cfg["BoundaryAwareClustering"]="false";
+   timing.conductStaticTimingAnalysis();
+   packer.exceptionHandling();
+   packer.setPULocationToPackedSite();
+   require(mid->X()==right->X() && mid->Y()==right->Y(),
+           "stalled legacy packing did not use the legal adjacent-column site");
+   std::cout<<"PASS stalled legacy-column search restarts near the PU and reaches the only legal site\n";
+   return 0;
   }
   cfg["BoundaryAwareClustering"]="true";
   require(packer.exceptionPULegalize(mid,right->X()-left->X()+0.5f,false),"physical-mode PU could not use the legal neighboring column");

@@ -1848,8 +1848,8 @@ void ParallelCLBPacker::exceptionHandling(bool verbose)
         PUPoints.resize(unprocessedCnt);
         stagnantRounds = PUPoints.size() == previousUnpacked ? stagnantRounds + 1 : 0;
         previousUnpacked = PUPoints.size();
-        if (placementInfo->boundaryClusteringEnabled() && stagnantRounds == 8 && !PUPoints.empty()) {
-            print_warning("Physical-region packing made no progress for 8 sweeps; recording remaining PUs");
+        if (stagnantRounds == 8 && !PUPoints.empty()) {
+            print_warning("CLB packing made no progress for 8 sweeps; recording remaining PUs");
             if (JSONCfg.count("BoundaryReportDirectory")) {
                 std::ofstream diagnostic(JSONCfg.at("BoundaryReportDirectory") + "/packing_stall.tsv", std::ios::app);
                 if (diagnostic.tellp() == 0)
@@ -1866,20 +1866,30 @@ void ParallelCLBPacker::exceptionHandling(bool verbose)
                 }
             }
         }
-        Dc += 0.3 * maxD;
+        if (stagnantRounds == 8 && clockRegionAware && !placementInfo->boundaryClusteringEnabled()) {
+            // A clock-region column is an optimization preference, not a user fence.
+            // Restart near the PU: continuing the outer annulus would miss nearby
+            // legal sites in the newly admitted columns.
+            clockRegionAware = false;
+            Dc = std::max(1.0f, maxD * 0.5f);
+            stagnantRounds = 0;
+            print_warning("PACKING_COLUMN_FALLBACK remaining=" + std::to_string(PUPoints.size()) +
+                          " restart_radius=" + std::to_string(Dc));
+        } else {
+            Dc += 0.3 * maxD;
+        }
 
         if (placementInfo->isDensePlacement())
             clockRegionAware = false;
 
         if (Dc > 300)
         {
-            Dc = maxD * 0.5 - 1;
             for (unsigned int i = 0; i < PUPoints.size(); i++)
             {
                 std::cout << PUPoints[i].getPU() << "\n=================================================\n";
             }
-            assert("fail to handle exceptions" && false);
-            break;
+            throw std::runtime_error("CLB packing exceeded bounded search radius with " +
+                                     std::to_string(PUPoints.size()) + " unpacked placement units");
         }
         if (Dc < 1)
             Dc = 1;
@@ -2374,7 +2384,7 @@ ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCell
                     if (siteClockRegionX != clockRegionX && clockRegionAware)
                         continue;
                     // The bin grid can include reserved sites omitted by this packer.
-                    if (physicalRegions && !deviceSite2PackingSite.count(tmpSite))
+                    if (!deviceSite2PackingSite.count(tmpSite))
                         continue;
 
                     res->push_back(tmpSite);
@@ -2500,7 +2510,7 @@ ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCell
                     if (siteClockRegionX != clockRegionX && clockRegionAware)
                         continue;
                     // The bin grid can include reserved sites omitted by this packer.
-                    if (physicalRegions && !deviceSite2PackingSite.count(tmpSite))
+                    if (!deviceSite2PackingSite.count(tmpSite))
                         continue;
 
                     res->push_back(tmpSite);
