@@ -1,8 +1,8 @@
 # 器件物理边界识别与二维关键路径聚拢：修改前方案
 
-状态：**用户已批准 A–D；A–C 已实现并通过预检，D 完整对照运行中**。2026-09-27。代码基点 `b572999ac46095ac56aea851c039bb36ebe7ec09`，服务器 `/Projects/jinyang/workspace/AMFplacer3.0`。本文所有代码路径均相对于该服务器仓库；文件名标注“新增”的尚不存在。
+状态：**用户已批准 A–D；代码、预检及完整 GETRF 三组对照均已完成**。2026-09-27。代码基点 `b572999ac46095ac56aea851c039bb36ebe7ec09`，服务器 `/Projects/jinyang/workspace/AMFplacer3.0`。本文所有代码路径均相对于该服务器仓库；“新增”保留原方案的分类，文件现已实现。
 
-本文保留修改前的设计方案。2026-09-27 用户授权实施；实现和验收状态以 [实施记录](device-physical-boundary-implementation.md) 为准。
+本文保留修改前的设计方案。2026-09-27 用户授权实施；实现过程见 [实施记录](device-physical-boundary-implementation.md)，最终结果和采用建议见 [GETRF 验收报告](device-physical-boundary-getrf-validation.md)。
 
 ## 1. 本轮目标与范围
 

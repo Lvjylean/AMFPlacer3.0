@@ -21,3 +21,5 @@
 - 2026-09-27 用户要求为现有延迟修正补充纵向 SLR 边界惩罚，覆盖上一阶段“暂不实现跨界时序代价”的限制。参数 `SLRBoundaryDelayNs` 默认 1.5 ns/道边界，GETRF 全流程配置显式设置为 1.5；设为 0 可复现旧延迟模型。原 X 方向修正保留，普通时钟区域的 Y 边界不增加惩罚；SLR 边界从器件元数据推导。仍不加入 SLL 容量或估计拥塞、不接入外部 floorplan。该系数是启发式初值，不代表已校准或新一轮 GETRF 布线后的时序结论。实现、测试与构建见 `docs/research/u250-slr-timing-penalty.md`。
 
 - 2026-09-27 用户批准物理边界 A–D 方案。新模式从 Vivado 全器件 site/tile 与统一坐标映射生成模型；U250 已识别三条 SLR 接缝和内部 HPIO 带，形成 8 个区域。`PhysicalBoundaryMode=true` 替换固定 X 列经验项；`BoundaryAwareClustering=true` 要求新模式，并使用容量预留和 X/Y 软目标。局部硬 IP/未知类型只报告，不把包围盒视为必经障碍。架构规则和系数仍为启发式，不包含 SLL 容量/拥塞。新模式完整 GETRF 对照运行中，不能宣称优于旧模式或替换默认验证基线；实施、构建、测试、比较 ID 见 `docs/research/device-physical-boundary-implementation.md`。
+
+- 上条 A–D 已完成完整验收，最终状态以 `docs/research/device-physical-boundary-getrf-validation.md` 为准。三组均全量布通、DRC/级联合法；本例仅延迟模式 WNS +0.003 ns，二维聚拢模式 −0.059 ns，control −0.137 ns。优先显式使用 `getrf-u250-physical-delay.json` 配合冻结构建 `build-20260927-063221-904893-7a7b5d8b`，保留其中共同数值保护；二维聚拢继续实验，不自动修改全局默认或旧验证构建。OOC 时钟来源警告仍存在，不能将本例 3 ps 余量扩大解释为跨设计或板级稳健收敛。新运行与最终 DCP 均按服务器独立实验目录管理；三组比较和最终哈希证据见 `experiments/evidence/device-physical-getrf-20260927/manifest.json`。

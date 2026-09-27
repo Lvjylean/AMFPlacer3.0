@@ -2,7 +2,7 @@
 
 2026-09-27。服务器根目录 `/Projects/jinyang/workspace/AMFplacer3.0`，分支 `codex/device-physical-boundaries`。
 
-A–C 已实现并通过预检。D 容量审计发现并修正了 RAMB36 虚拟占位重复计数、旧时序权重数值失稳和最终打包遗留的 X 时钟列硬筛选。共同数值保护与打包候选修正后的完整 GETRF 三组对照于 06:34:59 启动，尚无新策略布线后的 QoR 结论，默认配置和 `builds/validated-getrf-u250-full` 不变。
+A–D 已实现并完成 U250 / GETRF 三组完整验证，最终结果见 [验收报告](device-physical-boundary-getrf-validation.md)。三组全量布通、DRC/级联检查通过；仅边界延迟版达到 10 ns 时序，二维聚拢版优于 control 但未优于仅延迟版，继续保留实验开关。默认配置和 `builds/validated-getrf-u250-full` 不变。本文以下保留实施过程、修复和失败轮次，历史“运行中”描述不代表最终状态。
 
 ## A：器件结构与模型
 
@@ -153,7 +153,7 @@ python3 scripts/amf3.py compare-boundaries \
 
 该 cluster 旧进程于约 06:34 停止。新旧实验同时运行时，服务器实际内存占用约 100 GiB；为给新版三组留出资源，旧 control/delay 的 Vivado 进程于 06:38:41 主动停止。三个旧目录均保留取消原因和现场，不能将主动取消标成 Vivado 自发失败。U250 的所有 X 时钟列都有 SLICE，不能将此次问题归因为“空 I/O 时钟列”。
 
-## 当前 D 对照：物理区域打包协同
+## 最终 D 对照：物理区域打包协同
 
 2026-09-27 06:34:59 启动，比较目录 `experiments/comparisons/getrf-physical-20260927-063459-803375/`。启动提交 `49ac3e58`；冻结构建源码 `7a7b5d8b`，二进制 `builds/build-20260927-063221-904893-7a7b5d8b/build/AMFPlacer`，SHA-256 `47e7ba44fac7ac0c5499bbdb2500b100a47323d1a0477cd0b9622659d579ac17`。
 
@@ -166,3 +166,23 @@ python3 scripts/amf3.py compare-boundaries \
 三组同一冻结二进制，8 个 AMF 线程 / 4 个 Vivado 线程并行运行；用户时钟 10 ns、SLR 1.5 ns、I/O 0.5 ns，以及数值保护参数均保持一致。新构建通过 56 项 Python 测试及真实 U250 的 `checkBoundaryPacking`，日志 `experiments/preflight/physical-python-tests-20260927-packing.log`、`experiments/preflight/boundary-packing-20260927-04.log`。前述模型、时序、聚拢、QP 回归所覆盖的实现未再改变。
 
 专项测试证明候选查询和跨列合法化已接通；是否消除 GETRF 的完整打包停滞、最终布线是否合法、QoR 是否改善，仍需本轮真实结果。若出现 `reports/physical/packing_stall.tsv`，立即按 PU/cell 类型和坐标诊断。证据清单保存在 `experiments/evidence/device-physical-packing-preflight-20260927/manifest.json`。
+
+08:29 中间验收：三组均以退出码 0 完成 AMF，覆盖 856,998/856,998 个 cell，且进入 Vivado。cluster 的打包剩余 PU 从 7,053 降至 0（AMF elapsed 6402.792 s，搜索半径 62.4），随后完成详细布局；此前 3,774 PU 停滞已在真实 GETRF 上消除，没有产生停滞诊断。
+
+| AMF 指标 | control | delay | cluster |
+|---|---:|---:|---:|
+| 进程耗时（s，包含导出与退出） | 5531.142 | 5467.488 | 6708.648 |
+| 已分配 cell | 856998 | 856998 | 856998 |
+| QP 求解 / 回退 / 未收敛次数 | 228 / 0 / 1 | 226 / 0 / 1 | 230 / 0 / 0 |
+| 非法时序权重事件 | 0 | 0 | 0 |
+| 最终 SLR 几何穿越次数 | 168362 | 148841 | 173747 |
+| 最终 I/O 带几何穿越次数 | 91321 | 109638 | 83764 |
+| 至少跨一种边界的唯一连接 | 229128 | 224909 | 221676 |
+
+共同审计 2,664,613 条唯一 driver-sink timing edge。SLR/I/O 列是穿越次数，最后一列是去重连接数；不是 SLL 用量。cluster 的总体跨界连接较少，但 SLR 次数多于两个对照，因此不能只凭总计声称多 die 时序改善；仍以关键路径与完整布线后 QoR 验收。
+
+## D 后处理时钟标识修复
+
+首个完成的 control 报告暴露了统计口径问题：AMF 的 `clocks` 文件包含驱动引脚 `@PORT/ap_clk`，导出网表对应逻辑网名却为 `n568507`。旧后处理只按逻辑网名排除，导致时钟被混入缺少 site 的连接。提交 `7ba71b3b` 改为同时匹配驱动引脚标识，另行统计无 fabric site 的外部端口；真实缺少位置的数据单元仍作为缺项报告。新增回归覆盖外部时钟、内部 clock buffer、旧逻辑网名、普通外部端口、常量和真正缺少 site 的数据源，57 项 Python 测试通过。
+
+control 的原报告已保存在 `reports/physical/audit-before-clock-filter-fix/`，修订记录为 `reports/physical/audit_revision.json`；只重算统计，没有重跑或修改布局/布线。修复后独立记录 407,718 条时钟连接和 9,020 条无 fabric site 的外部端口连接，布线后的 2,664,613 条数据连接均有位置。几何穿越计数、全部时序和其他布线字段保持原值。其余两组后处理使用同一修正版；报告内保存分析脚本与模型 SHA-256。该后处理提交与冻结 AMF 二进制 `7a7b5d8b` 分别追溯。
