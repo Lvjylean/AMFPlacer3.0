@@ -1,8 +1,41 @@
 import csv
+import importlib.util
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import zipfile
+
+class PlacementAudit(unittest.TestCase):
+    def test_driver_pin_clocks_and_external_ports_are_not_missing_cells(self):
+        script=Path(__file__).resolve().parents[1]/'scripts/diagnostics/analyze_boundary_timing_samples.py'
+        spec=importlib.util.spec_from_file_location('boundary_samples',script)
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);(root/'placement').mkdir();(root/'reports/physical').mkdir(parents=True)
+            model=root/'model.tsv'
+            model.write_text('SITE\tS0\tSLICEL\t0\t0\t0\nSITE\tS1\tSLICEL\t0\t2\t1\nBOUNDARY\tb0\tSLR\tY\t1\t-1\t1\t1.5\t1\n')
+            (root/'placement/routed_cell_sites.tsv').write_text('cell\tsite\nsource\tS0\nsink\tS1\n')
+            clocks=root/'clocks';clocks.write_text('@PORT/ap_clk\nclock_buffer/O\nlegacy_clock_net\n')
+            netlist=root/'netlist.zip'
+            with zipfile.ZipFile(netlist,'w') as z:
+                z.writestr('netlist',
+                    'curCell=> source type=> LUT1\ncurCell=> sink type=> FDRE\n'
+                    'pin=> sink/C refpin=> C dir=> IN net=> n568507 drivepin=> @PORT/ap_clk\n'
+                    'pin=> sink/C2 refpin=> C dir=> IN net=> n42 drivepin=> clock_buffer/O\n'
+                    'pin=> sink/C3 refpin=> C dir=> IN net=> legacy_clock_net drivepin=> old_buffer/O\n'
+                    'pin=> sink/R refpin=> R dir=> IN net=> reset drivepin=> @PORT/ap_rst\n'
+                    'pin=> sink/D refpin=> D dir=> IN net=> data drivepin=> source/O\n'
+                    'pin=> sink/CE refpin=> CE dir=> IN net=> enable drivepin=> missing/O\n'
+                    'pin=> sink/I0 refpin=> I0 dir=> IN net=> gnd drivepin=> constant/G\n'
+                    'curCell=> constant type=> GND\n')
+            report=module.audit_placements(root,model,netlist,clocks)
+            self.assertEqual(report['excluded_input_edges'],{'clock_edges':3,'external_port_edges_without_fabric_site':1,'constant_edges':1})
+            routed=report['stages']['routed']
+            self.assertEqual(routed['driver_sink_edges'],1)
+            self.assertEqual(routed['slr_crossings'],1)
+            self.assertEqual(routed['missing_site_edges'],1)
+            self.assertEqual(report['schema'],'backend-boundaries-v2')
 
 class SamplingCache(unittest.TestCase):
     def test_repeated_path_connection_reuses_query_and_keeps_each_path(self):

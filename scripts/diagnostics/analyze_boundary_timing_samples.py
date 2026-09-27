@@ -86,7 +86,7 @@ def audit_placements(run,model,netlist,clock_file=None):
     for stage in ('imported','placed','routed'):
         path=run/'placement'/f'{stage}_cell_sites.tsv'
         if path.exists():locations[stage]={r['cell']:sites[r['site']] for r in rows(path) if r['site'] in sites};stages[stage]=Counter()
-    constants=set();cell=None
+    constants=set();cell=None;excluded=Counter()
     with zipfile.ZipFile(netlist) as z,z.open(z.namelist()[0]) as f:
         for raw in f:
             if raw.startswith(b'curCell=> '):
@@ -101,14 +101,25 @@ def audit_placements(run,model,netlist,clock_file=None):
                 if line[3] in ('VCC','GND'):constants.add(cell)
             elif line[0]=='pin=>' and 'dir=>' in line and line[line.index('dir=>')+1]=='IN' and 'drivepin=>' in line:
                 d=line[line.index('drivepin=>')+1:];net=line[line.index('net=>')+1]
-                if not d or '/' not in d[0] or net in clocks:continue
+                if not d or '/' not in d[0]:continue
+                # AMF's clock file identifies nets by their driver pin, e.g.
+                # @PORT/ap_clk; the exported logical net name can be n568507.
+                if d[0] in clocks or net in clocks:
+                    excluded['clock_edges']+=1;continue
                 source=d[0].rsplit('/',1)[0]
-                if source in constants:continue
+                if source in constants:
+                    excluded['constant_edges']+=1;continue
+                if d[0].startswith('@PORT/'):
+                    excluded['external_port_edges_without_fabric_site']+=1;continue
                 for stage,loc in locations.items():
                     a=loc.get(source);b=loc.get(cell);c=stages[stage]
                     if a is None or b is None:c['missing_site_edges']+=1;continue
                     c['driver_sink_edges']+=1;cross=crossings(a,b,cuts);c['slr_crossings']+=cross['SLR'];c['io_crossings']+=cross['IO'];c['crossing_edges']+=bool(cross)
-    result=dict(scope='unique input driver-sink pins at actual cell sites; excludes listed clocks/constants; geometric crossings, not SLL usage',stages={k:dict(v) for k,v in stages.items()})
+    result=dict(schema='backend-boundaries-v2',
+        scope='unique data driver-sink pins at actual fabric cell sites; listed clocks, constants and external ports without fabric sites counted separately; geometric crossings, not SLL usage',
+        analysis_script_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        model_sha256=hashlib.sha256(Path(model).read_bytes()).hexdigest(),
+        excluded_input_edges=dict(excluded),stages={k:dict(v) for k,v in stages.items()})
     (run/'reports/physical/backend_boundaries.json').write_text(json.dumps(result,indent=2)+'\n')
     return result
 
