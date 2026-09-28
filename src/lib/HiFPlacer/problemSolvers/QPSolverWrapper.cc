@@ -1,3 +1,4 @@
+#include "../../utils/RuntimeProfiler.h"
 /**
  * @file QPSolverWrapper.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -18,6 +19,7 @@
 
 void QPSolverWrapper::QPSolve(QPSolverWrapper *&curSolver)
 {
+    AMF_PROFILE_FUNCTION("qp_solver");
     if (curSolver->solverSettings.stabilityGuard) {
         curSolver->guardDiagnostics = GuardDiagnostics{};
         try { solveGuarded(*curSolver); }
@@ -123,6 +125,8 @@ void QPSolverWrapper::QPSolve(QPSolverWrapper *&curSolver)
 
 void QPSolverWrapper::solveGuarded(QPSolverWrapper &solver)
 {
+    AMF_PROFILE_FUNCTION("qp_solver");
+    AMF_PROFILE_NAMED(qpValidate, "qp_validation", "QP input validation");
     auto &data = solver.solverData;
     auto &settings = solver.solverSettings;
     auto &diagnostic = solver.guardDiagnostics;
@@ -139,6 +143,8 @@ void QPSolverWrapper::solveGuarded(QPSolverWrapper &solver)
         if (!std::isfinite(diagonal) || diagonal < 0)
             throw std::runtime_error("Invalid QP diagonal");
 
+    AMF_PROFILE_STOP(qpValidate);
+    AMF_PROFILE_NAMED(qpAssemble, "qp_matrix", "QP sparse matrix assembly");
     // Sum duplicates in double, without changing the stored objective or triplets.
     Eigen::SparseMatrix<double> matrix(n, n);
     // Include diagonals before compression: inserting n absent entries into a compressed
@@ -150,6 +156,8 @@ void QPSolverWrapper::solveGuarded(QPSolverWrapper &solver)
     for (int i = 0; i < n; ++i) entries.emplace_back(i, i, double(data.objectiveMatrixDiag[i]));
     matrix.setFromTriplets(entries.begin(), entries.end());
     std::vector<Eigen::Triplet<double>>().swap(entries);
+    AMF_PROFILE_STOP(qpAssemble);
+    AMF_PROFILE_NAMED(qpGuard, "qp_guard", "QP symmetry and diagonal stability guard");
     Eigen::VectorXd offSum = Eigen::VectorXd::Zero(n);
     for (int k = 0; k < matrix.outerSize(); ++k)
         for (Eigen::SparseMatrix<double>::InnerIterator it(matrix, k); it; ++it) {
@@ -178,10 +186,16 @@ void QPSolverWrapper::solveGuarded(QPSolverWrapper &solver)
     }
     if (!objective.allFinite()) throw std::runtime_error("Non-finite regularized QP objective");
     auto &cg = solver.CGSolver;
+    AMF_PROFILE_STOP(qpGuard);
+    AMF_PROFILE_NAMED(qpPrepare, "qp_cg_prepare", "CG preconditioner setup");
     cg.setMaxIterations(settings.maxIters);
     cg.setTolerance(settings.tolerence);
     cg.compute(matrix);
+    AMF_PROFILE_STOP(qpPrepare);
+    AMF_PROFILE_NAMED(qpCG, "qp_cg_iterations", "CG solveWithGuess iterations");
     Eigen::VectorXd candidate = cg.solveWithGuess(-objective, data.oriSolution);
+    AMF_PROFILE_STOP(qpCG);
+    AMF_PROFILE_NAMED(qpAccept, "qp_acceptance", "QP objective acceptance and writeback");
     diagnostic.iterations = cg.iterations();
     diagnostic.relativeError = cg.error();
     diagnostic.converged = cg.info() == Eigen::Success;

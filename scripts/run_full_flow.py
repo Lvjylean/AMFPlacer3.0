@@ -1,6 +1,7 @@
 """Recorded full placement and routing. DCP artifacts remain server-side."""
 import datetime as dt
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -29,6 +30,9 @@ def run(root, args):
     from amf3 import save, stamp, git, machine
     root = Path(root)
     import_only = getattr(args, 'import_only', False)
+    profiling = getattr(args, 'profile', False)
+    if profiling and args.placement_run:
+        raise ValueError('--profile requires a new AMF execution')
     import_policy = 'repair' if getattr(args, 'allow_import_repair', False) else 'strict'
     if import_only and (args.amf_only or args.packing_only or import_policy != 'strict'):
         raise ValueError('--import-only requires strict acceptance and cannot combine with AMF-only modes')
@@ -72,9 +76,12 @@ def run(root, args):
                     amf_clock_period_ns=config['ClockPeriod'], amf_clock_source='explicit experiment configuration',
                     vivado_clock_source='original DCP constraints', placement_run=args.placement_run)
     manifest['import_policy'] = import_policy
+    manifest['runtime_profiling'] = profiling
     manifest['backend_mode'] = 'import-only' if import_only else 'full'
     build_manifest = binary.parent.parent / 'manifest.json'
     if build_manifest.is_file():
+        if profiling and not json.loads(build_manifest.read_text()).get('runtime_profiling'):
+            raise ValueError('--profile requires a build created with amf3.py build --profile')
         shutil.copy2(build_manifest, directory / 'inputs/build_manifest.json')
         manifest['build_manifest_sha256'] = digest(build_manifest)
     (directory / 'inputs/working_tree.patch').write_bytes(subprocess.check_output(['git','diff','HEAD','--binary'],cwd=root))
@@ -85,7 +92,12 @@ def run(root, args):
         save(directory / 'status.json', dict(state='running', stage=name))
         begin = time.monotonic()
         with (directory / 'logs' / (name + '.log')).open('w') as log:
-            result = subprocess.run([str(v) for v in command], cwd=directory / 'work', stdout=log, stderr=subprocess.STDOUT)
+            environment = dict(os.environ)
+            if profiling and name == 'amf':
+                environment['AMF_PROFILE_OUTPUT'] = str(directory/'reports/amf_profile.tsv')
+            else:
+                environment.pop('AMF_PROFILE_OUTPUT', None)
+            result = subprocess.run([str(v) for v in command], cwd=directory / 'work', stdout=log, stderr=subprocess.STDOUT, env=environment)
         manifest['stages'].append(dict(name=name, command=[str(v) for v in command], elapsed_seconds=time.monotonic()-begin, exit_code=result.returncode))
         save(directory / 'manifest.json', manifest)
         if result.returncode:
@@ -97,9 +109,14 @@ def run(root, args):
             if args.packing_only:
                 command += ['--inspect-packing', directory/'reports/packing.tsv']
             stage('amf', command)
+            if profiling:
+                metadata = json.loads((directory/'reports/amf_profile.tsv.meta.json').read_text())
+                if not metadata.get('complete'):
+                    raise RuntimeError('Runtime profile did not close all scopes')
         if args.packing_only or args.amf_only:
             save(directory/'status.json',dict(state='completed', packing_only=args.packing_only,
-                 full_placement_executed=not args.packing_only, routing_executed=False))
+                 full_placement_executed=not args.packing_only, routing_executed=False,
+                 runtime_profiling=profiling, finished=dt.datetime.now().astimezone().isoformat()))
             return
         source = (root / args.placement_run).resolve() if args.placement_run else directory
         if args.placement_run and not completed_amf_placement(source):

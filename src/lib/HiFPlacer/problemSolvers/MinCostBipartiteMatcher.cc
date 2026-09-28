@@ -1,3 +1,4 @@
+#include "../../utils/RuntimeProfiler.h"
 /**
  * @file MinCostBipartiteMatcher.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -15,6 +16,7 @@
 
 void MinCostBipartiteMatcher::solve()
 {
+    AMF_PROFILE_FUNCTION("bipartite_matching");
     int numSolvers = minCostFlowSolvers.size();
 #pragma omp parallel for schedule(dynamic)
     for (int solverId = 0; solverId < numSolvers; solverId++)
@@ -44,6 +46,7 @@ void MinCostBipartiteMatcher::getConnectedSubgraphAdjList(std::vector<std::vecto
                                                           std::vector<int> &leftId2ConnectedSubgraphId,
                                                           int &numConnectedSubgraphs, int maxThreadNum)
 {
+    AMF_PROFILE_FUNCTION("bipartite_matching");
     std::vector<std::vector<int>> inv_adjList;
     inv_adjList.resize(numRightNodes, std::vector<int>());
     for (int i = 0; i < numLeftNodes; i++)

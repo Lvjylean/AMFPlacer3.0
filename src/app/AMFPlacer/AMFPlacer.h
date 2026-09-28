@@ -11,6 +11,7 @@
  */
 
 #include <iomanip>
+#include "../../lib/utils/RuntimeProfiler.h"
 #include <stdexcept>
 #include "DesignInfo.h"
 #include "DeviceInfo.h"
@@ -52,6 +53,7 @@ class AMFPlacer
      */
     AMFPlacer(std::string JSONFileName)
     {
+        AMF_PROFILE_FUNCTION("initialization");
         JSON = parseJSONFile(JSONFileName);
 
         assert(JSON.find("vivado extracted device information file") != JSON.end());
@@ -86,6 +88,7 @@ class AMFPlacer
 
     ~AMFPlacer()
     {
+        AMF_PROFILE_FUNCTION("cleanup");
         delete placementInfo;
         delete designInfo;
         delete deviceinfo;
@@ -277,6 +280,7 @@ class AMFPlacer
      */
     void run(const std::string &packingReport = "")
     {
+        AMF_PROFILE_FUNCTION("placement_orchestration");
         // Full multi-SLR flow remains an explicit experimental opt-in.
         for (auto site : deviceinfo->getSites())
             if (packingReport.empty() && JSON["experimental multi-SLR placement"] != "true" && site->getSLRId() != 0)

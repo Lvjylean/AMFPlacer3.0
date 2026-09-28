@@ -56,7 +56,8 @@ def build(args):
     save(root / 'source_hashes.json', source_hashes)
     record = {'build_id': build_id, 'source_commit': commit, 'git_status': git('status', '--porcelain'),
               'source_snapshot': str(root / 'src'), 'created': dt.datetime.now().astimezone().isoformat(),
-              'jobs': args.jobs or machine()['build_jobs'], 'state': 'building', 'stages': []}
+              'jobs': args.jobs or machine()['build_jobs'], 'state': 'building', 'stages': [],
+              'runtime_profiling': bool(args.profile)}
     record['tool_versions'] = {name: subprocess.check_output(command, text=True).strip()
                                for name, command in [('cmake', ['cmake', '--version']),
                                                      ('cxx', ['c++', '--version']),
@@ -64,6 +65,8 @@ def build(args):
     save(root / 'manifest.json', record)
     commands = [('configure', ['cmake', '-S', str(root / 'src'), '-B', str(root / 'build'), '-G', 'Ninja', '-DCMAKE_CXX_FLAGS=-g']),
                 ('compile', ['cmake', '--build', str(root / 'build'), '--parallel', str(record['jobs']), '--target', 'AMFPlacer', 'partitionHyperGraph'])]
+    if args.profile:
+        commands[0][1].append('-DAMF_ENABLE_RUNTIME_PROFILING=ON')
     for stage, command in commands:
         print(stage + ': ' + str(root), flush=True)
         with (root / (stage + '.log')).open('w') as output:
@@ -77,6 +80,9 @@ def build(args):
     record['binaries'] = {name: hashlib.sha256((root / 'build' / name).read_bytes()).hexdigest()
                           for name in ['AMFPlacer', 'partitionHyperGraph']}
     save(root / 'manifest.json', record)
+    if args.no_set_current:
+        print(json.dumps({'build_id': build_id, 'binary_directory': str(root / 'build'), 'state': 'completed'}))
+        return
     current = ROOT / 'builds/current'
     if current.exists() and not current.is_symlink():
         raise RuntimeError('Refusing to replace non-symlink builds/current')
@@ -182,6 +188,8 @@ def main():
     p.set_defaults(action=compare_boundaries)
     p = sub.add_parser('build', help='Create an isolated clean build')
     p.add_argument('--jobs', type=int)
+    p.add_argument('--profile', action='store_true', help='Enable nested functional runtime profiling')
+    p.add_argument('--no-set-current', action='store_true', help='Preserve the current default build')
     p.set_defaults(action=build)
     p = sub.add_parser('run', help='Launch a configured faceDetect flow')
     p.add_argument('--config', type=Path, default=Path('configs/experiments/faceDetect-baseline.json'))
@@ -204,6 +212,7 @@ def main():
     p.add_argument('--dcp', default='data/reference/getrf-u250/post_opt.dcp')
     p.set_defaults(action=validate_resources)
     p = sub.add_parser('full-run', help='Recorded AMF full placement and Vivado routing')
+    p.add_argument('--profile', action='store_true', help='Collect runtime scopes from a profiling build')
     p.add_argument('--config', default='configs/experiments/getrf-u250-full.json')
     p.add_argument('--binary', default='builds/current/AMFPlacer')
     p.add_argument('--dcp', default='data/reference/getrf-u250/post_opt.dcp')

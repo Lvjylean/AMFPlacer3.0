@@ -1,3 +1,4 @@
+#include "../../utils/RuntimeProfiler.h"
 #include "PhysicalBoundaryModel.h"
 #include "DeviceInfo.h"
 #include <algorithm>
@@ -18,6 +19,7 @@ bool finite(float v) { return std::isfinite(v); }
 }
 PhysicalBoundaryModel::PhysicalBoundaryModel(const std::string &path, DeviceInfo *device)
 {
+    AMF_PROFILE_FUNCTION("input_device");
     std::ifstream input(path);
     require(input.good(), "cannot read " + path);
     std::string line;

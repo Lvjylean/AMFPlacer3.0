@@ -8,6 +8,7 @@
 - 所有实验使用唯一 ID，保留 manifest、status、config、日志和报告。运行成功、时序通过、DRC 检查和位置复用率分别记录，不以一个退出码替代全部结论。
 - 无变化、参数变化、连接变化、增删单元、约束变化和缓存不兼容应分别测试。保持冻结对象和资源占用的一致性；不得将数组编号相同当作跨版本对象匹配。
 - 速度对比须针对同一个 V1 设计与一致工具/参数条件，区分 AMF 阶段加速和端到端加速。
+- 2026-09-28 用户明确要求：AMF 实际布局运行与 Vivado 文件格式适配分别统计，适配时间不计入 placement。DCP→AMF 导出、AMF→Vivado 导出/转换/导入单列；Vivado place_design、route_design、审计/报告/DCP 写出也各自记录。保留 AMF 进程墙钟与端到端总墙钟用于核对，不把进程总时间称为纯算法时间。历史未完整分段的部分标记未单独计时；复用输入缓存说明本轮未执行导出，不伪造首次导出成本。详见 docs/experiment-policy.md。
 - 本次初始化不实现增量算法。既有未提交源代码修改已作为基线保存，不得误记为本次新算法成果。
 - 所有本项目文件放在项目内，遵循 `docs/workspace-layout.md`。Python/Tcl 文件使用 snake_case，新增文档和普通目录使用小写 kebab-case；历史实验 ID 和上游源码命名保持稳定。
 - 单次诊断脚本放在 `scripts/diagnostics/`，预检运行放在 `experiments/preflight/`，诊断证据放在 `experiments/evidence/`。旧脚本仅存于 `archives/legacy-workspace/`，不得当作当前入口。
@@ -23,3 +24,7 @@
 - 2026-09-27 用户批准物理边界 A–D 方案。新模式从 Vivado 全器件 site/tile 与统一坐标映射生成模型；U250 已识别三条 SLR 接缝和内部 HPIO 带，形成 8 个区域。`PhysicalBoundaryMode=true` 替换固定 X 列经验项；`BoundaryAwareClustering=true` 要求新模式，并使用容量预留和 X/Y 软目标。局部硬 IP/未知类型只报告，不把包围盒视为必经障碍。架构规则和系数仍为启发式，不包含 SLL 容量/拥塞。新模式完整 GETRF 对照运行中，不能宣称优于旧模式或替换默认验证基线；实施、构建、测试、比较 ID 见 `docs/research/device-physical-boundary-implementation.md`。
 
 - 上条 A–D 已完成完整验收，最终状态以 `docs/research/device-physical-boundary-getrf-validation.md` 为准。三组均全量布通、DRC/级联合法；本例仅延迟模式 WNS +0.003 ns，二维聚拢模式 −0.059 ns，control −0.137 ns。优先显式使用 `getrf-u250-physical-delay.json` 配合冻结构建 `build-20260927-063221-904893-7a7b5d8b`，保留其中共同数值保护；二维聚拢继续实验，不自动修改全局默认或旧验证构建。OOC 时钟来源警告仍存在，不能将本例 3 ps 余量扩大解释为跨设计或板级稳健收敛。新运行与最终 DCP 均按服务器独立实验目录管理；三组比较和最终哈希证据见 `experiments/evidence/device-physical-getrf-20260927/manifest.json`。
+
+- 2026-09-28 完成 U250/GETRF 的一轮 SA 横纵距离比例数据标定：新配置 `getrf-u250-sa-calibrated.json` 显式使用 `Simulated Annealing y2xRatio=0.71`（有效值，不再乘 0.8），共享 `y2xRatio=0.4`。省略新键时沿用原 SA 计算。正式构建 `build-20260928-002048-349585-d534237b`，报告见 `docs/research/u250-sa-ratio-calibration.md` 和运行 `u250-sa-ratio-calibration-20260928-005532`。1,923 条 routed 连接、保留数据与另一布局验证支持优于旧 0.32 的粗粒度线性代理；不同布局重拟合约 0.55–0.72，不能当作全器件物理常数。本轮未重跑完整 GETRF 布局布线，旧配置仍作对照，不宣称最终 WNS 改善。
+
+- 2026-09-28 随后完成 0.71 的 10 ns 完整实验 `getrf-u250-full-20260928-014049-967020`。与历史严格基线 `getrf-u250-full-20260927-125004-730657`（有效 0.32）相比，总墙钟 147.89→123.88 分钟，AMF 68.57→51.16 分钟，但 WNS +0.111→−0.353 ns、TNS 0→−2.896 ns，26 个 setup 端点违例；hold、全量路由、DRC、级联和 100% 原始 LOC/BEL 保留均通过。最差路径在 SLR 1/2 间跨界五次。0.71 继续作为实验值，不将距离拟合改善表述为端到端 QoR 改善，保留历史 0.32 时序基线。两次构建还存在既有 CLB 打包稳健性差异（本轮未触发列兜底），且服务器负载未严格控制，因此不是纯单变量因果实验。最终 DCP 留在服务器，报告见 `docs/research/u250-sa-ratio-10ns-validation.md`。

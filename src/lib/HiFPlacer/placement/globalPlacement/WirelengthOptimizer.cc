@@ -1,3 +1,4 @@
+#include "../../../utils/RuntimeProfiler.h"
 /**
  * @file WirelengthOptimizer.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -22,6 +23,7 @@ WirelengthOptimizer::WirelengthOptimizer(PlacementInfo *placementInfo, std::map<
                                          bool verbose)
     : placementInfo(placementInfo), JSONCfg(JSONCfg), verbose(verbose)
 {
+    AMF_PROFILE_FUNCTION("qp_model");
     if (JSONCfg.find("MKL") != JSONCfg.end())
     {
         MKLorNot = JSONCfg["MKL"] == "true";
@@ -70,6 +72,7 @@ WirelengthOptimizer::WirelengthOptimizer(PlacementInfo *placementInfo, std::map<
 
 void WirelengthOptimizer::reloadPlacementInfo()
 {
+    AMF_PROFILE_FUNCTION("qp_model");
     if (xSolver)
         delete xSolver;
     if (ySolver)
@@ -106,6 +109,7 @@ void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool fir
                                                  bool considerNetNum, bool enableUserDefinedClusterOpt,
                                                  float displacementLimit, PlacementTimingOptimizer *timingOptimizer)
 {
+    AMF_PROFILE_FUNCTION("qp_model");
     if (verbose)
         print_status("A QP Iteration Started.");
 
@@ -129,10 +133,12 @@ void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool fir
 
     if (verbose)
         print_status("Solver Running.");
+    AMF_PROFILE_NAMED(qpParallel, "qp_solve_wait", "QP X/Y solve including thread join");
     std::thread t1(QPSolverWrapper::QPSolve, std::ref(xSolver));
     std::thread t2(QPSolverWrapper::QPSolve, std::ref(ySolver));
     t1.join();
     t2.join();
+    AMF_PROFILE_STOP(qpParallel);
     if (qpStabilityGuard) {
         for (const auto &axis : {std::make_pair("X", xSolver), std::make_pair("Y", ySolver)}) {
             const auto &d = axis.second->guardDiagnostics;
@@ -156,6 +162,7 @@ void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool fir
 
 void WirelengthOptimizer::solverLoadData()
 {
+    AMF_PROFILE_FUNCTION("qp_model");
     for (unsigned int tmpPUId = 0; tmpPUId < placementInfo->getPlacementUnits().size(); tmpPUId++)
     {
         auto tmpPU = placementInfo->getPlacementUnits()[tmpPUId];
@@ -166,6 +173,7 @@ void WirelengthOptimizer::solverLoadData()
 
 void WirelengthOptimizer::solverLoadFixedData()
 {
+    AMF_PROFILE_FUNCTION("qp_model");
     assert(xSolver->solverSettings.solutionForward == ySolver->solverSettings.solutionForward);
     if (xSolver->solverSettings.solutionForward)
     {
@@ -195,6 +203,7 @@ void WirelengthOptimizer::solverLoadFixedData()
 
 void WirelengthOptimizer::solverWriteBackData(float displacementLimit)
 {
+    AMF_PROFILE_FUNCTION("qp_model");
     bool displacementLimitEnable = displacementLimit > 0;
     assert(xSolver->solverSettings.solutionForward == ySolver->solverSettings.solutionForward);
     unsigned int numPUs = placementInfo->getPlacementUnits().size();
@@ -284,6 +293,7 @@ void WirelengthOptimizer::updateB2BNetWeight(float pesudoNetWeight, bool enableM
                                              bool enableUserDefinedClusterOpt,
                                              PlacementTimingOptimizer *timingOptimizer)
 {
+    AMF_PROFILE_FUNCTION("qp_model");
     if (verbose)
         print_status("update B2B Net Weight Start.");
 
@@ -352,6 +362,7 @@ void WirelengthOptimizer::updateB2BNetWeightWorker(PlacementInfo *placementInfo,
                                                    Eigen::VectorXd &objectiveVector, float generalNetWeight,
                                                    float y2xRatio, bool updateX, bool updateY)
 {
+    AMF_PROFILE_FUNCTION("qp_model");
     objectiveMatrixTripletList.clear();
     objectiveMatrixDiag.clear();
     objectiveMatrixDiag.resize(placementInfo->getPlacementUnits().size(), 0);
@@ -370,6 +381,7 @@ void WirelengthOptimizer::updateB2BNetWeightWorker(PlacementInfo *placementInfo,
 }
 void WirelengthOptimizer::addPseudoNetForMacros(float pesudoNetWeight, bool considerNetNum)
 {
+    AMF_PROFILE_FUNCTION("qp_model");
     std::map<PlacementInfo::PlacementUnit *, float> &PUX = placementInfo->getPULegalXY().first;
     std::map<PlacementInfo::PlacementUnit *, float> &PUY = placementInfo->getPULegalXY().second;
     macroPseudoNetCnt++;
@@ -449,6 +461,7 @@ void WirelengthOptimizer::addPseudoNetForMacros(float pesudoNetWeight, bool cons
 void WirelengthOptimizer::addPseudoNet_SlackBased(float timingWeight, double slackPowFactor,
                                                   PlacementTimingOptimizer *timingOptimizer, bool calculate)
 {
+    AMF_PROFILE_FUNCTION("qp_model");
     if (calculate)
     {
         for (auto list : PNetId2SlackEnhanceTuples)
@@ -696,6 +709,7 @@ void WirelengthOptimizer::addPseudoNet_SlackBased(float timingWeight, double sla
 void WirelengthOptimizer::LUTLUTPairing_TimingDriven(float timingWeight, float disThreshold,
                                                      PlacementTimingOptimizer *timingOptimizer)
 {
+    AMF_PROFILE_FUNCTION("qp_model");
     float w = 2 * timingWeight / std::pow(2, 0.5);
     if (disThreshold < 0)
         return;
@@ -853,6 +867,7 @@ void WirelengthOptimizer::LUTLUTPairing_TimingDriven(float timingWeight, float d
 
 void WirelengthOptimizer::addPseudoNet2LoctionForAllPUs(float pesudoNetWeight, bool considerNetNum)
 {
+    AMF_PROFILE_FUNCTION("qp_model");
     int numPUs = placementInfo->getPlacementUnits().size();
     float minDist = 0.5;
     float powFactor = placementInfo->getProgress() * 0.5 + 0.5;
@@ -987,6 +1002,7 @@ void WirelengthOptimizer::addPseudoNet2LoctionForAllPUs(float pesudoNetWeight, b
 
 void WirelengthOptimizer::updatePseudoNetForUserDefinedClusters(float pesudoNetWeight)
 {
+    AMF_PROFILE_FUNCTION("qp_model");
     userDefinedClusterFadeOutFactor *= 0.9;
     if (userDefinedClusterFadeOutFactor < 0.1)
         return;
@@ -1075,6 +1091,7 @@ void WirelengthOptimizer::updatePseudoNetForUserDefinedClusters(float pesudoNetW
 
 void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
 {
+    AMF_PROFILE_FUNCTION("qp_model");
     if (pesudoNetWeight <= 0)
         return;
     if(placementInfo->boundaryClusteringEnabled())

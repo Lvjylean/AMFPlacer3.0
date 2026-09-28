@@ -1,3 +1,4 @@
+#include "../../../utils/RuntimeProfiler.h"
 /**
  * @file ClusterPlacer.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -22,6 +23,7 @@ ClusterPlacer::ClusterPlacer(PlacementInfo *placementInfo, std::map<std::string,
                              float connectionToFixedFactor)
     : placementInfo(placementInfo), JSONCfg(JSONCfg), connectionToFixedFactor(connectionToFixedFactor)
 {
+    AMF_PROFILE_FUNCTION("clustering");
     if (JSONCfg.find("ClusterPlacerVerbose") != JSONCfg.end())
         verbose = JSONCfg["ClusterPlacerVerbose"] == "true";
     if (JSONCfg.find("y2xRatio") != JSONCfg.end())
@@ -47,6 +49,7 @@ ClusterPlacer::ClusterPlacer(PlacementInfo *placementInfo, std::map<std::string,
 
 void ClusterPlacer::ClusterPlacement()
 {
+    AMF_PROFILE_FUNCTION("clustering");
     print_status("Cluster Placement Start.");
 
     if (!randomInitialPlacement)
@@ -87,6 +90,7 @@ void ClusterPlacer::ClusterPlacement()
 
 void ClusterPlacer::clusterPlacementUnits()
 {
+    AMF_PROFILE_FUNCTION("clustering");
     print_status("Clustering Start.");
 
     hypergraphPartitioning();
@@ -100,6 +104,7 @@ void ClusterPlacer::clusterPlacementUnits()
 
 void ClusterPlacer::hypergraphPartitioning()
 {
+    AMF_PROFILE_FUNCTION("clustering");
     int minClusterCellNum =
         std::min(unsigned(placementInfo->getNumCells() * 0.25),
                  unsigned(avgClusterSizeRequirement)); // 22000 is the rough number of cells in a clock region, Please
@@ -131,6 +136,7 @@ void ClusterPlacer::hypergraphPartitioning()
 
 void ClusterPlacer::createLongPathClusterUnits()
 {
+    AMF_PROFILE_FUNCTION("clustering");
     // handle the long paths
     auto &timingNodes = placementInfo->getTimingInfo()->getSimplePlacementTimingInfo_PathLenSorted();
     // auto simpleTimingGraph = placementInfo->getTimingInfo()->getSimplePlacementTimingGraph();
@@ -222,6 +228,7 @@ void ClusterPlacer::createLongPathClusterUnits()
 
 void ClusterPlacer::createClockBasedClusterUnits()
 {
+    AMF_PROFILE_FUNCTION("clustering");
     if (placementInfo->getDesignInfo()->getClocksInDesign().size() > 20)
         return;
     // add the predefined clusters
@@ -256,6 +263,7 @@ void ClusterPlacer::createClockBasedClusterUnits()
 
 void ClusterPlacer::createUserDefinedClusterBasedClusterUnits()
 {
+    AMF_PROFILE_FUNCTION("clustering");
     std::vector<std::vector<DesignInfo::DesignCell *>> &predefinedCellClusters =
         placementInfo->getDesignInfo()->getPredefinedClusters();
     placementUnitId2ClusterUnitId = std::vector<int>(placementInfo->getPlacementUnits().size(), -1);
@@ -311,6 +319,7 @@ void ClusterPlacer::createUserDefinedClusterBasedClusterUnits()
 
 void ClusterPlacer::createSinglePUClusterUnits()
 {
+    AMF_PROFILE_FUNCTION("clustering");
     for (auto tmpPU : placementInfo->getPlacementUnits())
     {
         if (placementUnitId2ClusterUnitId[tmpPU->getId()] < 0)
@@ -325,6 +334,7 @@ void ClusterPlacer::createSinglePUClusterUnits()
 
 void ClusterPlacer::basicPartitioning(int minClusterCellNum, int eachClusterDSPNum, int eachClusterBRAMNum)
 {
+    AMF_PROFILE_FUNCTION("clustering");
     basicGraphPartitioner =
         new GraphPartitioner<std::vector<PlacementInfo::PlacementUnit *>, std::vector<PlacementInfo::PlacementNet *>>(
             placementInfo->getPlacementUnits(), placementInfo->getPlacementNets(), minClusterCellNum, jobs, verbose);
@@ -349,6 +359,7 @@ void ClusterPlacer::basicPartitioning(int minClusterCellNum, int eachClusterDSPN
 void ClusterPlacer::userDefinedClusterBasedPartitioning(int minClusterCellNum, int eachClusterDSPNum,
                                                         int eachClusterBRAMNum)
 {
+    AMF_PROFILE_FUNCTION("clustering");
     createUserDefinedClusterBasedClusterUnits();
     userDefinedClusterBasedGraphPartitioner =
         new GraphPartitioner<std::vector<PlacementInfo::ClusterUnit *>, std::vector<PlacementInfo::ClusterNet *>>(
@@ -386,6 +397,7 @@ void ClusterPlacer::userDefinedClusterBasedPartitioning(int minClusterCellNum, i
 
 void ClusterPlacer::clockBasedPartitioning(int minClusterCellNum, int eachClusterDSPNum, int eachClusterBRAMNum)
 {
+    AMF_PROFILE_FUNCTION("clustering");
     resetClusterInfo();
 
     createClockBasedClusterUnits();
@@ -444,6 +456,7 @@ void ClusterPlacer::clockBasedPartitioning(int minClusterCellNum, int eachCluste
 
 void ClusterPlacer::refineClustersWithPredefinedClusters()
 {
+    AMF_PROFILE_FUNCTION("clustering");
     std::vector<std::vector<DesignInfo::DesignCell *>> &predefinedCellClusters =
         placementInfo->getDesignInfo()->getPredefinedClusters();
 
@@ -514,6 +527,7 @@ void ClusterPlacer::refineClustersWithPredefinedClusters()
 
 bool ClusterPlacer::isClustersToLarges()
 {
+    AMF_PROFILE_FUNCTION("clustering");
     std::string infoStr = "Recursive partitioning generates " + std::to_string(clusters.size()) +
                           " clusters and the numbers of the placement units for them are: ";
 
@@ -580,6 +594,7 @@ bool containIOCells(PlacementInfo::PlacementUnit *curPU)
 
 void ClusterPlacer::setClusterNetsAdjMat()
 {
+    AMF_PROFILE_FUNCTION("clustering");
     clusterAdjMat = std::vector<std::vector<float>>(clusters.size(), std::vector<float>(clusters.size(), 0));
     clusterCLBCellWeights = std::vector<float>(clusters.size(), 0);
     clusterDSPCellWeights = std::vector<float>(clusters.size(), 0);
@@ -696,6 +711,7 @@ void ClusterPlacer::setClusterNetsAdjMat()
 
 void ClusterPlacer::placeClusters()
 {
+    AMF_PROFILE_FUNCTION("clustering");
     print_status("SA-based Cluster Placement Start.");
     assert(JSONCfg.find("clockRegionXNum") != JSONCfg.end());
     assert(JSONCfg.find("clockRegionYNum") != JSONCfg.end());
@@ -713,8 +729,11 @@ void ClusterPlacer::placeClusters()
     float deviceH = (placementInfo->getGlobalMaxY() - placementInfo->getGlobalMinY());
 
     // SA-based cluster placement
+    const float saY2xRatio = SAPlacer::configuredY2XRatio(JSONCfg, y2xRatio);
+    print_status("SA effective y2xRatio = " + std::to_string(saY2xRatio) +
+                 (JSONCfg.count("Simulated Annealing y2xRatio") ? " (explicit)" : " (legacy y2xRatio * 0.8)"));
     saPlacer = new SAPlacer("ClusterSA", clusterAdjMat, clusterCLBCellWeights, cluster2FixedUnitMat, fixedX, fixedY,
-                            gridH, gridW, deviceH, deviceW, connectionToFixedFactor, y2xRatio * 0.8, SAIterNum, jobs,
+                            gridH, gridW, deviceH, deviceW, connectionToFixedFactor, saY2xRatio, SAIterNum, jobs,
                             restartNum, verbose);
     saPlacer->solve();
     cluster2XY = saPlacer->getCluster2XY();
@@ -727,6 +746,7 @@ void ClusterPlacer::placeClusters()
 
 void ClusterPlacer::placeUnitBaseOnClusterPlacement(const std::vector<std::pair<int, int>> &cluster2XY)
 {
+    AMF_PROFILE_FUNCTION("clustering");
     int gridH = std::stoi(JSONCfg["clockRegionYNum"]);
     int gridW = std::stoi(JSONCfg["clockRegionXNum"]);
 
@@ -764,6 +784,7 @@ void ClusterPlacer::placeUnitBaseOnClusterPlacement(const std::vector<std::pair<
 
 void ClusterPlacer::dumpClusters()
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     std::string dumpClustersFile = JSONCfg["Dump Cluster file"];
     if (dumpClustersFile != "")
     {
@@ -830,6 +851,7 @@ void ClusterPlacer::dumpClusters()
 
 void ClusterPlacer::drawClusters()
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     std::vector<std::pair<int, int>> lines;
     lines.clear();
     for (unsigned int clusterA = 1; clusterA < clusterAdjMat.size(); clusterA++)

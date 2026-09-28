@@ -1,3 +1,4 @@
+#include "../../utils/RuntimeProfiler.h"
 /**
  * @file DeviceInfo.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -32,6 +33,7 @@ bool siteSortCmp(DeviceInfo::DeviceSite *a, DeviceInfo::DeviceSite *b)
 
 DeviceInfo::DeviceInfo(std::map<std::string, std::string> &JSONCfg, std::string _deviceName) : JSONCfg(JSONCfg)
 {
+    AMF_PROFILE_FUNCTION("input_device");
     deviceArchievedTextFileName = std::string(JSONCfg["vivado extracted device information file"]);
     specialPinOffsetFileName = std::string(JSONCfg["special pin offset info file"]);
 
@@ -193,6 +195,7 @@ DeviceInfo::DeviceInfo(std::map<std::string, std::string> &JSONCfg, std::string 
 
 void DeviceInfo::mapClockRegionToArray()
 {
+    AMF_PROFILE_FUNCTION("input_device");
     // U250 SLRs are stacked vertically. Derive seams from site metadata so that
     // legacy exports (all SLR0) and non-consecutive SLR IDs work without constants.
     std::vector<int> rowSLR(clockRegionNumY, -1);
@@ -305,6 +308,7 @@ void DeviceInfo::mapClockRegionToArray()
 
 void DeviceInfo::ClockRegion::mapSiteToClockColumns()
 {
+    AMF_PROFILE_FUNCTION("input_device");
     assert(sites.size() > 0);
     std::sort(sites.begin(), sites.end(), [](DeviceSite *a, DeviceSite *b) -> bool {
         return a->getSiteY() == b->getSiteY() ? (a->getSiteX() < b->getSiteX()) : a->getSiteY() < b->getSiteY();
@@ -435,6 +439,7 @@ void DeviceInfo::recordClockRelatedCell(float locX, float locY, int regionX, int
 
 void DeviceInfo::loadPCIEPinOffset(std::string specialPinOffsetFileName)
 {
+    AMF_PROFILE_FUNCTION("input_device");
 
     std::ifstream infile(specialPinOffsetFileName.c_str());
     assert(infile.good() &&
@@ -507,6 +512,7 @@ void DeviceInfo::DeviceTile::addChildSite(DeviceInfo::DeviceElement *sitePtr)
 
 void DeviceInfo::printStat(bool verbose)
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     print_info("#ExtractedTile= " + std::to_string(tiles.size()));
     print_info("#ExtractedSite= " + std::to_string(sites.size()));
     print_info("#ExtractedBEL= " + std::to_string(BELs.size()));
@@ -611,6 +617,7 @@ void DeviceInfo::addTile(std::string &tileName, std::string &tileType)
 
 void DeviceInfo::loadBELType2FalseBELType(std::string curFileName)
 {
+    AMF_PROFILE_FUNCTION("input_device");
     std::string line;
     std::ifstream infile(curFileName.c_str());
     assert(infile.good() &&

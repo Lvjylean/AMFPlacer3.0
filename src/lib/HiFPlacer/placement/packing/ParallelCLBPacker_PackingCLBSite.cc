@@ -1,3 +1,4 @@
+#include "../../../utils/RuntimeProfiler.h"
 /**
  * @file ParallelCLBPacker_PackingCLBSite.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -15,6 +16,7 @@
 
 void ParallelCLBPacker::PackingCLBSite::refreshPrioryQueue()
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     std::sort(priorityQueue.begin(), priorityQueue.end(), [](PackingCLBCluster *a, PackingCLBCluster *b) -> bool {
         return (a->getScoreInSite() == b->getScoreInSite()) ? a->getHash() > b->getHash()
                                                             : (a->getScoreInSite() > b->getScoreInSite());
@@ -36,6 +38,7 @@ void ParallelCLBPacker::PackingCLBSite::refreshPrioryQueue()
 
 void ParallelCLBPacker::PackingCLBSite::removeInvalidClustersFromPQ()
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     int validCnt = 0;
     for (unsigned int i = 0; i < priorityQueue.size(); i++)
     {
@@ -57,6 +60,7 @@ void ParallelCLBPacker::PackingCLBSite::removeInvalidClustersFromPQ()
 
 void ParallelCLBPacker::PackingCLBSite::removeClustersIncompatibleWithDetClusterFromPQ()
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     if (determinedClusterInSite)
     {
         int validCnt = 0;
@@ -96,6 +100,7 @@ void ParallelCLBPacker::PackingCLBSite::removeClustersIncompatibleWithDetCluster
 
 void ParallelCLBPacker::PackingCLBSite::removeInvalidPUsFromNeighborPUs()
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     std::set<PlacementInfo::PlacementUnit *, Packing_PUcompare> newNbr;
     newNbr.clear();
     for (auto tmpPU : neighborPUs)
@@ -129,6 +134,7 @@ void ParallelCLBPacker::PackingCLBSite::removeInvalidPUsFromNeighborPUs()
 
 void ParallelCLBPacker::PackingCLBSite::updateConsistentPUsInTop()
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     if (priorityQueue.size()) // if there are possible condidates
     {
         PackingCLBCluster *topCluster = priorityQueue[0];
@@ -243,6 +249,7 @@ void ParallelCLBPacker::PackingCLBSite::updateConsistentPUsInTop()
 
 void ParallelCLBPacker::PackingCLBSite::findNewClustersWithNeighborPUs()
 {
+    AMF_PROFILE_FUNCTION("final_packing");
 
     std::set<int> hashIdSet;
     hashIdSet.clear();
@@ -300,6 +307,7 @@ ParallelCLBPacker::PackingCLBSite::findNeiborPUsFromBinGrid(
     float displacementUpperbound, int PUNumThreshold, const std::vector<PackingCLBSite *> &PUId2PackingCLBSite,
     float y2xRatio, std::set<PlacementInfo::PlacementUnit *, Packing_PUcompare> *res, bool clockRegionAware)
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     assert(displacementLowerbound < displacementUpperbound);
     // please note that the input DesignCell is only used to find the corresponding binGrid for site search.
     if (!res)
@@ -421,6 +429,7 @@ ParallelCLBPacker::PackingCLBSite::findNeiborPUsFromBinGrid(
 // Node-centric DL algorithm flow at each computation node
 void ParallelCLBPacker::PackingCLBSite::updateStep(bool initial, bool debug)
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     if (debug)
         setDebug();
     removeInvalidClustersFromPQ();
@@ -531,6 +540,7 @@ bool isLUT6(DesignInfo::DesignCell *cell)
 
 void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCarrySite()
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     assert(checkIsPrePackedSite() && checkIsCarrySite());
     assert(determinedClusterInSite->getSingleLUTs().size() + determinedClusterInSite->getPairedLUTs().size() <= 8);
 
@@ -556,6 +566,7 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCarrySite()
 
 void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCarrySite(int FFControlSetOrderId)
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     assert(isCarrySite);
 
     int FFSwapOption[24][4] = {{0, 1, 2, 3}, {0, 1, 3, 2}, {0, 2, 1, 3}, {0, 2, 3, 1}, {0, 3, 1, 2}, {0, 3, 2, 1},
@@ -1144,6 +1155,7 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCarrySite(int FFContro
 
 void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int FFControlSetOrderId)
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     int FFSwapOption[24][4] = {{0, 1, 2, 3}, {0, 1, 3, 2}, {0, 2, 1, 3}, {0, 2, 3, 1}, {0, 3, 1, 2}, {0, 3, 2, 1},
                                {1, 0, 2, 3}, {1, 0, 3, 2}, {1, 2, 0, 3}, {1, 2, 3, 0}, {1, 3, 0, 2}, {1, 3, 2, 0},
                                {2, 0, 1, 3}, {2, 0, 3, 1}, {2, 1, 0, 3}, {2, 1, 3, 0}, {2, 3, 0, 1}, {2, 3, 1, 0},
@@ -1766,6 +1778,7 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int 
 
 void ParallelCLBPacker::PackingCLBSite::mapMuxF8Macro(int muxF8Offset, PlacementInfo::PlacementMacro *MUXF8Macro)
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     assert(muxF8Offset < 2);
     slotMapping.MuxF8[muxF8Offset] = MUXF8Macro->getCells()[0];
     assert(slotMapping.MuxF8[muxF8Offset]->getOriCellType() == DesignInfo::CellType_MUXF8);
@@ -1909,6 +1922,7 @@ void ParallelCLBPacker::PackingCLBSite::mapMuxF8Macro(int muxF8Offset, Placement
 
 void ParallelCLBPacker::PackingCLBSite::mapMuxF7Macro(int halfCLBOffset, PlacementInfo::PlacementMacro *MUXF7Macro)
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     assert(halfCLBOffset < 2);
     unsigned int F7Offset = 0;
     if (slotMapping.MuxF7[halfCLBOffset][F7Offset])
@@ -2050,6 +2064,7 @@ int ParallelCLBPacker::PackingCLBSite::findMuxFromHalfCLB(PlacementInfo::Placeme
 }
 void ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite()
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     assert(!checkIsPrePackedSite() && checkIsMuxSite());
     assert(fixedPairedLUTs.size() == 0 && conflictLUTs.size() == 0);
     assert(determinedClusterInSite->getSingleLUTs().size() + determinedClusterInSite->getPairedLUTs().size() <= 8);
@@ -2071,6 +2086,7 @@ void ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite()
 
 void ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite(int FFControlSetOrderId)
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     int FFSwapOption[24][4] = {{0, 1, 2, 3}, {0, 1, 3, 2}, {0, 2, 1, 3}, {0, 2, 3, 1}, {0, 3, 1, 2}, {0, 3, 2, 1},
                                {1, 0, 2, 3}, {1, 0, 3, 2}, {1, 2, 0, 3}, {1, 2, 3, 0}, {1, 3, 0, 2}, {1, 3, 2, 0},
                                {2, 0, 1, 3}, {2, 0, 3, 1}, {2, 1, 0, 3}, {2, 1, 3, 0}, {2, 3, 0, 1}, {2, 3, 1, 0},
@@ -2712,6 +2728,7 @@ void ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite(int FFC
 
 void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite()
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     assert(!checkIsPrePackedSite() && !checkIsMuxSite());
     assert(fixedPairedLUTs.size() == 0 && conflictLUTs.size() == 0);
     assert(determinedClusterInSite->getSingleLUTs().size() + determinedClusterInSite->getPairedLUTs().size() <= 8);
@@ -2728,6 +2745,7 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite()
 
 void ParallelCLBPacker::PackingCLBSite::moveLUTToLUT6Slot()
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     if (!determinedClusterInSite)
         return;
 
@@ -2750,6 +2768,7 @@ void ParallelCLBPacker::PackingCLBSite::moveLUTToLUT6Slot()
 
 void ParallelCLBPacker::PackingCLBSite::mapLUTRAMRelatedCellsToSlots(PlacementInfo::PlacementMacro *_LUTRAMMacro)
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     LUTRAMMacro = _LUTRAMMacro;
     isLUTRAMSite = true;
 }
@@ -2757,6 +2776,7 @@ void ParallelCLBPacker::PackingCLBSite::mapLUTRAMRelatedCellsToSlots(PlacementIn
 void ParallelCLBPacker::PackingCLBSite::mapCarryRelatedCellsToSlots(PlacementInfo::PlacementMacro *_CARRYChain,
                                                                     float siteOffset)
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     isCarrySite = true;
     CARRYChain = _CARRYChain;
     CARRYChainSiteOffset = siteOffset;

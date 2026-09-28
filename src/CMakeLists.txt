@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.10)
 
 project(AMFPlacer)
 
+option(AMF_ENABLE_RUNTIME_PROFILING "Record nested wall/CPU times at functional boundaries" OFF)
+if(AMF_ENABLE_RUNTIME_PROFILING)
+  add_definitions(-DAMF_ENABLE_RUNTIME_PROFILING)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 find_package(OpenMP)
 add_compile_options ( -std=c++17 -O3  -fopenmp -Wall )
@@ -171,6 +176,9 @@ target_link_libraries(AMFPlacer GlobalPlacer DesignInfo DeviceInfo PlacementInfo
                         pthread 
                         ${ZLIB_LIBRARIES}  ${Boost_LIBRARIES} ) #GL GLU glut GLEW
 target_link_libraries(partitionHyperGraph  ${Boost_LIBRARIES}  m ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a )
+if(AMF_ENABLE_RUNTIME_PROFILING)
+  target_link_libraries(partitionHyperGraph Utils pthread)
+endif()
 
 
 # Opt-in native model regression, built from the same isolated source snapshot.
@@ -190,3 +198,6 @@ add_executable(checkCLBSiteLegality EXCLUDE_FROM_ALL tests/check_clb_site_legali
 target_link_libraries(checkCLBSiteLegality DesignInfo DeviceInfo Utils pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 add_executable(checkInitialCLBLegality EXCLUDE_FROM_ALL tests/check_initial_clb_legality.cc)
 target_link_libraries(checkInitialCLBLegality Packing GlobalPlacer Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkSAY2XRatio EXCLUDE_FROM_ALL tests/check_sa_y2x_ratio.cc)
+target_link_libraries(checkSAY2XRatio ProblemSolvers Utils pthread ${Boost_LIBRARIES})

@@ -1,3 +1,4 @@
+#include "../../../utils/RuntimeProfiler.h"
 /**
  * @file GlobalPlacer.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -20,6 +21,7 @@ GlobalPlacer::GlobalPlacer(PlacementInfo *placementInfo, std::map<std::string, s
                            bool resetLegalizationInfo)
     : placementInfo(placementInfo), JSONCfg(JSONCfg)
 {
+    AMF_PROFILE_FUNCTION("global_orchestration");
     if (JSONCfg.find("GlobalPlacerVerbose") != JSONCfg.end())
         verbose = JSONCfg["GlobalPlacerVerbose"] == "true";
     if (JSONCfg.find("DumpLUTCoordTrace") != JSONCfg.end() || JSONCfg.find("DumpDSPCoordTrace") != JSONCfg.end() ||
@@ -111,6 +113,7 @@ GlobalPlacer::GlobalPlacer(PlacementInfo *placementInfo, std::map<std::string, s
 
 void GlobalPlacer::clusterPlacement()
 {
+    AMF_PROFILE_FUNCTION("global_orchestration");
     clusterPlacer->ClusterPlacement();
     print_info("ClusterPlacement Total HPWL = " + std::to_string(placementInfo->updateB2BAndGetTotalHPWL()));
 }
@@ -120,6 +123,7 @@ void GlobalPlacer::GlobalPlacement_CLBElements(int iterNum, bool continuePreviou
                                                unsigned int spreadRegionBinNumLimit,
                                                PlacementTimingOptimizer *timingOptimizer)
 {
+    AMF_PROFILE_FUNCTION("global_orchestration");
     print_status("GlobalPlacer GlobalPlacement_CLBElements started");
 
     WLOptimizer->reloadPlacementInfo();
@@ -318,6 +322,7 @@ void GlobalPlacer::GlobalPlacement_CLBElements(int iterNum, bool continuePreviou
 
 void GlobalPlacer::GlobalPlacement_fixedCLB(int iterNum, float pseudoNetWeight)
 {
+    AMF_PROFILE_FUNCTION("global_orchestration");
     print_status("GlobalPlacer GlobalPlacement_fixedCLB started");
     WLOptimizer->reloadPlacementInfo();
 
@@ -372,6 +377,7 @@ void GlobalPlacer::GlobalPlacement_fixedCLB(int iterNum, float pseudoNetWeight)
 
 void GlobalPlacer::dumpCoord()
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     dumpLUTCoordinate();
     dumpCARRYCoordinate();
     dumpDSPCoordinate();
@@ -382,6 +388,7 @@ void GlobalPlacer::dumpCoord()
 
 void GlobalPlacer::printPlacedUnits(std::ostream &os)
 {
+    AMF_PROFILE_FUNCTION("global_orchestration");
     print_info("Placed Units:");
     for (PlacementInfo::PlacementUnit *curPU : placementInfo->getPlacementUnits())
     {
@@ -394,6 +401,7 @@ void GlobalPlacer::printPlacedUnits(std::ostream &os)
 
 void GlobalPlacer::dumpLUTCoordinate()
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     if (JSONCfg.find("DumpLUTCoordTrace") != JSONCfg.end())
     {
         std::string dumpFile = JSONCfg["DumpLUTCoordTrace"] + "-" + std::to_string(LUTCoordinateDumpCnt) + ".gz";
@@ -442,6 +450,7 @@ void GlobalPlacer::dumpLUTCoordinate()
 
 void GlobalPlacer::macroLegalize(int curIteration, bool timingDriven, PlacementTimingOptimizer *timingOptimizer)
 {
+    AMF_PROFILE_FUNCTION("global_orchestration");
     // based on the global placement convergence progress and legalization displacement, select different strategies.
     // TODO: make this part more clean and clear for reader!
     if (macroLegalizationFixed)
@@ -598,6 +607,7 @@ void GlobalPlacer::macroLegalize(int curIteration, bool timingDriven, PlacementT
 
 void GlobalPlacer::spreading(int currentIteration, int spreadRegionSizeLimit, float displacementLimit)
 {
+    AMF_PROFILE_FUNCTION("global_orchestration");
     placementInfo->updateElementBinGrid();
     float supplyRatio = (placementInfo->getBinGridW() < 2.5) ? 0.95 : (0.80 + 0.1 * progressRatio);
 
@@ -648,6 +658,7 @@ void GlobalPlacer::spreading(int currentIteration, int spreadRegionSizeLimit, fl
 
 void GlobalPlacer::updatePseudoNetWeight(float &pseudoNetWeight, int curIter)
 {
+    AMF_PROFILE_FUNCTION("global_orchestration");
     progressRatio = lowerBoundHPWL / upperBoundHPWL;
     if (progressRatio > 1)
         progressRatio = 0.999;
@@ -748,6 +759,7 @@ void GlobalPlacer::updatePseudoNetWeight(float &pseudoNetWeight, int curIter)
 
 void GlobalPlacer::dumpCARRYCoordinate()
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     if (JSONCfg.find("DumpCARRYCoordTrace") != JSONCfg.end())
     {
         std::string dumpFile = JSONCfg["DumpCARRYCoordTrace"] + "-" + std::to_string(CARRYCoordinateDumpCnt) + ".gz";
@@ -796,6 +808,7 @@ void GlobalPlacer::dumpCARRYCoordinate()
 
 void GlobalPlacer::dumpFFCoordinate()
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     if (JSONCfg.find("DumpFFCoordTrace") != JSONCfg.end())
     {
         std::string dumpFile = JSONCfg["DumpFFCoordTrace"] + "-" + std::to_string(FFCoordinateDumpCnt) + ".gz";
@@ -844,6 +857,7 @@ void GlobalPlacer::dumpFFCoordinate()
 
 void GlobalPlacer::dumpAllCellsCoordinate()
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     if (JSONCfg.find("DumpAllCoordTrace") != JSONCfg.end())
     {
         std::string dumpFile = JSONCfg["DumpAllCoordTrace"] + "-" + std::to_string(allCoordinateDumpCnt) + ".gz";
@@ -886,6 +900,7 @@ void GlobalPlacer::dumpAllCellsCoordinate()
 
 void GlobalPlacer::dumpLUTFFCoordinate(bool enforced)
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     if (!enforced)
     {
         if (JSONCfg.find("DumpLUTFFCoordTrace") != JSONCfg.end())
@@ -984,6 +999,7 @@ void GlobalPlacer::dumpLUTFFCoordinate(bool enforced)
 
 void GlobalPlacer::dumpDSPCoordinate(bool enforced)
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     if (!enforced)
     {
         if (JSONCfg.find("DumpDSPCoordTrace") != JSONCfg.end())
@@ -1080,6 +1096,7 @@ void GlobalPlacer::dumpDSPCoordinate(bool enforced)
 
 void GlobalPlacer::dumpBRAMCoordinate(bool enforced)
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     if (!enforced)
     {
         if (JSONCfg.find("DumpBRAMCoordTrace") != JSONCfg.end())
@@ -1176,6 +1193,7 @@ void GlobalPlacer::dumpBRAMCoordinate(bool enforced)
 
 int GlobalPlacer::timingDrivenDetailedPlacement_shortestPath_intermediate(PlacementTimingOptimizer *timingOptimizer)
 {
+    AMF_PROFILE_FUNCTION("detailed_placement");
     float range = 0.75;
     print_status("ParallelCLBPacker: conducting timing-driven detailed placement based on shortest path.");
     auto oriCellIdsInCriticalPaths = timingOptimizer->findCriticalPaths(0.9);

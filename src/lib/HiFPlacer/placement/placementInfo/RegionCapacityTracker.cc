@@ -1,3 +1,4 @@
+#include "../../../utils/RuntimeProfiler.h"
 #include "RegionCapacityTracker.h"
 #include <algorithm>
 #include <cmath>
@@ -8,10 +9,12 @@ RegionCapacityTracker::RegionCapacityTracker(const std::vector<Resources> &caps,
                                              const std::vector<Resources> &occupied)
     : capacity(caps), used(occupied)
 {
+    AMF_PROFILE_FUNCTION("boundary_capacity");
     if (capacity.size()!=used.size()) throw std::runtime_error("Region budget size mismatch");
 }
 RegionCapacityTracker::RegionCapacityTracker(PlacementInfo *p) : placement(p), model(p->getDeviceInfo()->getPhysicalBoundaryModel())
 {
+    AMF_PROFILE_FUNCTION("boundary_capacity");
     if (!model) throw std::runtime_error("Region budget requires physical model");
     for (const auto &r:model->getRegions()) capacity.push_back(r.capacity);
     used.resize(capacity.size());
@@ -115,6 +118,7 @@ void RegionCapacityTracker::release(int key)
 }
 bool RegionCapacityTracker::assign(const std::vector<PU *> &units,int target,bool commit,std::string *reason)
 {
+    AMF_PROFILE_FUNCTION("boundary_capacity");
     if(target<0 || target>=int(used.size()) || units.empty()) return false;
     std::vector<Resources> delta(used.size());
     for(auto pu:units)

@@ -17,17 +17,45 @@
 #include "sysInfo.h"
 #include <assert.h>
 #include <boost/random.hpp>
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <map>
 #include <sstream>
 #include <string>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
 class SAPlacer
 {
   public:
+    // Explicit values are the effective SA ratio, without the legacy 0.8 factor.
+    // Keeping this independent avoids retuning QP, legalizers and packing when
+    // calibrating the coarse cluster-placement distance metric.
+    static float configuredY2XRatio(const std::map<std::string, std::string> &cfg, float inheritedRatio)
+    {
+        const auto entry = cfg.find("Simulated Annealing y2xRatio");
+        float ratio = static_cast<float>(inheritedRatio * 0.8);
+        if (entry != cfg.end())
+        {
+            try
+            {
+                size_t consumed = 0;
+                ratio = std::stof(entry->second, &consumed);
+                if (consumed != entry->second.size())
+                    throw std::invalid_argument("trailing characters");
+            }
+            catch (const std::exception &)
+            {
+                throw std::invalid_argument("Simulated Annealing y2xRatio must be a finite positive number");
+            }
+        }
+        if (!std::isfinite(ratio) || ratio <= 0)
+            throw std::invalid_argument("Simulated Annealing y2xRatio must be a finite positive number");
+        return ratio;
+    }
+
     SAPlacer(std::string placerName, std::vector<std::vector<float>> &clusterAdjMat, std::vector<float> &clusterWeights,
              std::vector<std::vector<float>> &cluster2FixedUnitMat, std::vector<float> &fixedX,
              std::vector<float> &fixedY, int gridH, int gridW, float deviceH, float deviceW,

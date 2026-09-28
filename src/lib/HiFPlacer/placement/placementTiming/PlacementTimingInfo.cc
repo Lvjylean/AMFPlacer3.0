@@ -1,3 +1,4 @@
+#include "../../../utils/RuntimeProfiler.h"
 /**
  * @file PlacementTimingInfo.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -24,6 +25,7 @@ PlacementTimingInfo::PlacementTimingInfo(DesignInfo *designInfo, DeviceInfo *dev
                                          std::map<std::string, std::string> &JSONCfg)
     : designInfo(designInfo), deviceInfo(deviceInfo), JSONCfg(JSONCfg)
 {
+    AMF_PROFILE_FUNCTION("timing");
     if (JSONCfg.find("PlacementTimingInfoVerbose") != JSONCfg.end())
         verbose = JSONCfg["PlacementTimingInfoVerbose"] == "true";
 
@@ -61,6 +63,7 @@ PlacementTimingInfo::PlacementTimingInfo(DesignInfo *designInfo, DeviceInfo *dev
 
 void PlacementTimingInfo::setDSPInnerDelay()
 {
+    AMF_PROFILE_FUNCTION("timing");
     if (!DSPCritical)
         return;
     auto &nodes = simpleTimingGraph->getNodes();
@@ -79,6 +82,7 @@ void PlacementTimingInfo::setDSPInnerDelay()
 
 void PlacementTimingInfo::buildSimpleTimingGraph()
 {
+    AMF_PROFILE_FUNCTION("timing");
     print_status("PlacementTimingInfo: building simple timing graph (TimingNode is DesignCell)");
     simpleTimingGraph = new TimingGraph<DesignInfo::DesignCell>(this);
     simpleTimingGraph->setClockPeriod(clockPeriod);
@@ -173,6 +177,7 @@ void PlacementTimingInfo::buildSimpleTimingGraph()
 
 template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::forwardLevelization()
 {
+    AMF_PROFILE_FUNCTION("timing");
     print_status("PlacementTimingInfo: Timing graph starts forward levalization");
     forwardlevel2NodeIds.clear();
 
@@ -296,6 +301,7 @@ template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::fo
 
 template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::backwardLevelization()
 {
+    AMF_PROFILE_FUNCTION("timing");
     print_status("PlacementTimingInfo: Timing graph starts backward levalization");
     backwardlevel2NodeIds.clear();
 
@@ -386,6 +392,7 @@ template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::ba
 template <typename nodeType>
 std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::traceBackFromNode(int targetId)
 {
+    AMF_PROFILE_FUNCTION("timing");
     std::vector<int> resPath;
     resPath.clear();
     resPath.push_back(targetId);
@@ -416,6 +423,7 @@ std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::traceBackFromNode(i
 template <typename nodeType>
 std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::traceForwardFromNode(int targetId)
 {
+    AMF_PROFILE_FUNCTION("timing");
     std::vector<int> resPath;
     resPath.clear();
     resPath.push_back(targetId);
@@ -449,6 +457,7 @@ std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::DFSFromNode(int sta
                                                                          unsigned int sizeThr,
                                                                          std::set<int> &exceptionCells, int fanoutThr)
 {
+    AMF_PROFILE_FUNCTION("timing");
     std::vector<int> resSucessors;
     std::stack<int> nodeStack;
     std::set<int> nodeSet;
@@ -508,6 +517,7 @@ std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::BFSFromNode(int sta
                                                                          unsigned int sizeThr,
                                                                          std::set<int> &exceptionCells)
 {
+    AMF_PROFILE_FUNCTION("timing");
     std::vector<int> resSucessors;
     std::queue<int> nodeQ;
     std::set<int> nodeSet;
@@ -565,6 +575,7 @@ std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::BFSFromNode(int sta
 
 template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::propogateArrivalTime()
 {
+    AMF_PROFILE_FUNCTION("timing");
     int nodeNum = nodes.size();
 #pragma omp parallel for
     for (int j = 0; j < nodeNum; j++)
@@ -637,6 +648,7 @@ template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::pr
 
 template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::backPropogateRequiredArrivalTime()
 {
+    AMF_PROFILE_FUNCTION("timing");
     int nodeNum = nodes.size();
 #pragma omp parallel for
     for (int j = 0; j < nodeNum; j++)
@@ -672,6 +684,7 @@ template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::ba
 template <typename nodeType>
 std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::backTraceDelayLongestPathFromNode(int curNodeId)
 {
+    AMF_PROFILE_FUNCTION("timing");
     int slowestPredecessorId = curNodeId;
     std::vector<int> resPath;
     resPath.clear();
@@ -693,6 +706,7 @@ bool PlacementTimingInfo::TimingGraph<nodeType>::backTraceDelayLongestPathFromNo
                                                                                    std::vector<int> &resPath,
                                                                                    int converThr)
 {
+    AMF_PROFILE_FUNCTION("timing");
     int slowestPredecessorId = curNodeId;
     resPath.clear();
     resPath.push_back(slowestPredecessorId);

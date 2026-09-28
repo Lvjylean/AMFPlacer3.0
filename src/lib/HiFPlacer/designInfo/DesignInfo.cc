@@ -1,3 +1,4 @@
+#include "../../utils/RuntimeProfiler.h"
 /**
  * @file DesignInfo.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -132,6 +133,7 @@ void DesignInfo::addPinToNet(DesignPin *curPin)
 
 DesignInfo::DesignInfo(std::map<std::string, std::string> &JSONCfg, DeviceInfo *deviceInfo) : JSONCfg(JSONCfg)
 {
+    AMF_PROFILE_FUNCTION("input_netlist");
 
     // curCell=>
     // design_1_i/axis_clock_converter_0/inst/gen_async_conv.axisc_async_clock_converter_0/xpm_fifo_async_inst/gnuram_async_fifo.xpm_fifo_base_inst/FSM_sequential_gen_fwft.curr_fwft_state[0]_i_1
@@ -372,6 +374,7 @@ DesignInfo::DesignInfo(std::map<std::string, std::string> &JSONCfg, DeviceInfo *
 
 void DesignInfo::loadClocks(std::string clockFileName)
 {
+    AMF_PROFILE_FUNCTION("input_netlist");
     std::ifstream clockFile(clockFileName);
     assert(clockFile.good() && "The clock file does not exist and please check your path settings");
 
@@ -425,6 +428,7 @@ void DesignInfo::loadClocks(std::string clockFileName)
 
 void DesignInfo::updateFFControlSets()
 {
+    AMF_PROFILE_FUNCTION("input_netlist");
     if (controlSets.size())
     {
         for (auto CS : controlSets)
@@ -466,6 +470,7 @@ void DesignInfo::updateFFControlSets()
 
 void DesignInfo::enhanceFFControlSetNets()
 {
+    AMF_PROFILE_FUNCTION("input_netlist");
     if (controlSets.size() && controlSets.size() > cells.size() / 5000)
     {
         float enhanceRatio = std::pow((float)controlSets.size(), 0.1);
@@ -487,6 +492,7 @@ void DesignInfo::enhanceFFControlSetNets()
 
 void DesignInfo::loadUserDefinedClusterNets()
 {
+    AMF_PROFILE_FUNCTION("input_netlist");
     if (JSONCfg.find("designCluster") != JSONCfg.end())
     {
         std::string clusterFile = std::string(JSONCfg["designCluster"]);
@@ -640,6 +646,7 @@ DesignInfo::DesignCell *DesignInfo::addCell(DesignCell *curCell)
 
 void DesignInfo::printStat(bool verbose)
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     print_info("#Cell= " + std::to_string(cells.size()));
     print_info("#Net= " + std::to_string(netlist.size()));
 

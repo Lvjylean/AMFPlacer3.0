@@ -1,3 +1,4 @@
+#include "../../../utils/RuntimeProfiler.h"
 /**
  * @file IncrementalBELPacker.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -31,6 +32,7 @@ void IncrementalBELPacker::isLUTsPackable(PlacementInfo::PlacementUnpackedCell *
 
 void IncrementalBELPacker::LUTFFPairing(float disThreshold)
 {
+    AMF_PROFILE_FUNCTION("incremental_packing");
     print_status("IncrementalBELPacker Pairing LUTs and FFs.");
     std::vector<PlacementInfo::Location> &cellLoc = placementInfo->getCellId2location();
     LUTFFPairs.clear();
@@ -240,6 +242,7 @@ void IncrementalBELPacker::LUTFFPairing(float disThreshold)
 
 void IncrementalBELPacker::FFPairing(float disThreshold)
 {
+    AMF_PROFILE_FUNCTION("incremental_packing");
     print_status("IncrementalBELPacker Pairing FFs.");
     std::vector<PlacementInfo::Location> &cellLoc = placementInfo->getCellId2location();
     FF_FFPairs.clear();
@@ -406,6 +409,7 @@ void IncrementalBELPacker::FFPairing(float disThreshold)
 
 void IncrementalBELPacker::dumpPairedLUTFF()
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     if (JSONCfg.find("DumpLUTFFPair") != JSONCfg.end())
     {
         std::string dumpFile = JSONCfg["DumpLUTFFPair"] + "-" + std::to_string(LUTFFPairDumpCnt) + ".gz";

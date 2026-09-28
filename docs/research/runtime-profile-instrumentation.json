@@ -1,0 +1,1332 @@
+{
+  "schema": "amf-profile-inventory-v1",
+  "functions": [
+    {
+      "file": "src/lib/HiFPlacer/designInfo/DesignInfo.cc",
+      "function": "DesignInfo::DesignInfo",
+      "category": "input_netlist"
+    },
+    {
+      "file": "src/lib/HiFPlacer/designInfo/DesignInfo.cc",
+      "function": "DesignInfo::loadClocks",
+      "category": "input_netlist"
+    },
+    {
+      "file": "src/lib/HiFPlacer/designInfo/DesignInfo.cc",
+      "function": "DesignInfo::updateFFControlSets",
+      "category": "input_netlist"
+    },
+    {
+      "file": "src/lib/HiFPlacer/designInfo/DesignInfo.cc",
+      "function": "DesignInfo::enhanceFFControlSetNets",
+      "category": "input_netlist"
+    },
+    {
+      "file": "src/lib/HiFPlacer/designInfo/DesignInfo.cc",
+      "function": "DesignInfo::loadUserDefinedClusterNets",
+      "category": "input_netlist"
+    },
+    {
+      "file": "src/lib/HiFPlacer/designInfo/DesignInfo.cc",
+      "function": "DesignInfo::printStat",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/deviceInfo/DeviceInfo.cc",
+      "function": "DeviceInfo::DeviceInfo",
+      "category": "input_device"
+    },
+    {
+      "file": "src/lib/HiFPlacer/deviceInfo/DeviceInfo.cc",
+      "function": "DeviceInfo::mapClockRegionToArray",
+      "category": "input_device"
+    },
+    {
+      "file": "src/lib/HiFPlacer/deviceInfo/DeviceInfo.cc",
+      "function": "DeviceInfo::ClockRegion::mapSiteToClockColumns",
+      "category": "input_device"
+    },
+    {
+      "file": "src/lib/HiFPlacer/deviceInfo/DeviceInfo.cc",
+      "function": "DeviceInfo::loadPCIEPinOffset",
+      "category": "input_device"
+    },
+    {
+      "file": "src/lib/HiFPlacer/deviceInfo/DeviceInfo.cc",
+      "function": "DeviceInfo::printStat",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/deviceInfo/DeviceInfo.cc",
+      "function": "DeviceInfo::loadBELType2FalseBELType",
+      "category": "input_device"
+    },
+    {
+      "file": "src/lib/HiFPlacer/deviceInfo/PhysicalBoundaryModel.cc",
+      "function": "PhysicalBoundaryModel::PhysicalBoundaryModel",
+      "category": "input_device"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+      "function": "ClusterPlacer::ClusterPlacer",
+      "category": "clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+      "function": "ClusterPlacer::ClusterPlacement",
+      "category": "clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+      "function": "ClusterPlacer::clusterPlacementUnits",
+      "category": "clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+      "function": "ClusterPlacer::hypergraphPartitioning",
+      "category": "clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+      "function": "ClusterPlacer::createLongPathClusterUnits",
+      "category": "clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+      "function": "ClusterPlacer::createClockBasedClusterUnits",
+      "category": "clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+      "function": "ClusterPlacer::createUserDefinedClusterBasedClusterUnits",
+      "category": "clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+      "function": "ClusterPlacer::createSinglePUClusterUnits",
+      "category": "clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+      "function": "ClusterPlacer::basicPartitioning",
+      "category": "clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+      "function": "ClusterPlacer::userDefinedClusterBasedPartitioning",
+      "category": "clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+      "function": "ClusterPlacer::clockBasedPartitioning",
+      "category": "clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+      "function": "ClusterPlacer::refineClustersWithPredefinedClusters",
+      "category": "clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+      "function": "ClusterPlacer::isClustersToLarges",
+      "category": "clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+      "function": "ClusterPlacer::setClusterNetsAdjMat",
+      "category": "clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+      "function": "ClusterPlacer::placeClusters",
+      "category": "clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+      "function": "ClusterPlacer::placeUnitBaseOnClusterPlacement",
+      "category": "clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+      "function": "ClusterPlacer::dumpClusters",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+      "function": "ClusterPlacer::drawClusters",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc",
+      "function": "GeneralSpreader::GeneralSpreader",
+      "category": "spreading"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc",
+      "function": "GeneralSpreader::spreadPlacementUnits",
+      "category": "spreading"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc",
+      "function": "GeneralSpreader::findOverflowBins",
+      "category": "spreading"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc",
+      "function": "GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocationsWorker",
+      "category": "spreading"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc",
+      "function": "GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocations",
+      "category": "spreading"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc",
+      "function": "GeneralSpreader::expandFromABin",
+      "category": "spreading"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc",
+      "function": "GeneralSpreader::SpreadRegion::addBinRegion",
+      "category": "spreading"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc",
+      "function": "GeneralSpreader::recordSpreadedCellLocations",
+      "category": "spreading"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc",
+      "function": "GeneralSpreader::SpreadRegion::SubBox::spreadAndPartition",
+      "category": "spreading"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc",
+      "function": "GeneralSpreader::SpreadRegion::SubBox::spreadCellsH",
+      "category": "spreading"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc",
+      "function": "GeneralSpreader::SpreadRegion::SubBox::spreadCellsV",
+      "category": "spreading"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc",
+      "function": "GeneralSpreader::dumpSiteGridDensity",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc",
+      "function": "GeneralSpreader::dumpLUTFFCoordinate",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc",
+      "function": "GeneralSpreader::DumpCellsCoordinate",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc",
+      "function": "GeneralSpreader::DumpPUCoordinate",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+      "function": "GlobalPlacer::GlobalPlacer",
+      "category": "global_orchestration"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+      "function": "GlobalPlacer::clusterPlacement",
+      "category": "global_orchestration"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+      "function": "GlobalPlacer::GlobalPlacement_CLBElements",
+      "category": "global_orchestration"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+      "function": "GlobalPlacer::GlobalPlacement_fixedCLB",
+      "category": "global_orchestration"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+      "function": "GlobalPlacer::dumpCoord",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+      "function": "GlobalPlacer::printPlacedUnits",
+      "category": "global_orchestration"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+      "function": "GlobalPlacer::dumpLUTCoordinate",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+      "function": "GlobalPlacer::macroLegalize",
+      "category": "global_orchestration"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+      "function": "GlobalPlacer::spreading",
+      "category": "global_orchestration"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+      "function": "GlobalPlacer::updatePseudoNetWeight",
+      "category": "global_orchestration"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+      "function": "GlobalPlacer::dumpCARRYCoordinate",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+      "function": "GlobalPlacer::dumpFFCoordinate",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+      "function": "GlobalPlacer::dumpAllCellsCoordinate",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+      "function": "GlobalPlacer::dumpLUTFFCoordinate",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+      "function": "GlobalPlacer::dumpDSPCoordinate",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+      "function": "GlobalPlacer::dumpBRAMCoordinate",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+      "function": "GlobalPlacer::timingDrivenDetailedPlacement_shortestPath_intermediate",
+      "category": "detailed_placement"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc",
+      "function": "WirelengthOptimizer::WirelengthOptimizer",
+      "category": "qp_model"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc",
+      "function": "WirelengthOptimizer::reloadPlacementInfo",
+      "category": "qp_model"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc",
+      "function": "WirelengthOptimizer::GlobalPlacementQPSolve",
+      "category": "qp_model"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc",
+      "function": "WirelengthOptimizer::solverLoadData",
+      "category": "qp_model"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc",
+      "function": "WirelengthOptimizer::solverLoadFixedData",
+      "category": "qp_model"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc",
+      "function": "WirelengthOptimizer::solverWriteBackData",
+      "category": "qp_model"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc",
+      "function": "WirelengthOptimizer::updateB2BNetWeight",
+      "category": "qp_model"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc",
+      "function": "WirelengthOptimizer::updateB2BNetWeightWorker",
+      "category": "qp_model"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc",
+      "function": "WirelengthOptimizer::addPseudoNetForMacros",
+      "category": "qp_model"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc",
+      "function": "WirelengthOptimizer::addPseudoNet_SlackBased",
+      "category": "qp_model"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc",
+      "function": "WirelengthOptimizer::LUTLUTPairing_TimingDriven",
+      "category": "qp_model"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc",
+      "function": "WirelengthOptimizer::addPseudoNet2LoctionForAllPUs",
+      "category": "qp_model"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc",
+      "function": "WirelengthOptimizer::updatePseudoNetForUserDefinedClusters",
+      "category": "qp_model"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc",
+      "function": "WirelengthOptimizer::updatePseudoNetForClockRegion",
+      "category": "qp_model"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::CLBLegalizer",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::legalize",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::roughlyLegalize",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::fixedColumnLegalize",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::finalLegalizeBasedOnDP",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::DPForMinHPWL",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::getPUsToLegalize",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::findSiteType2AvailableSites",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::findPossibleLegalLocation",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::createBipartiteGraph",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::updateMatchingAndUnmatchedPUs",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::dumpMatching",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::sortPUsByPU2Y",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::sortSitesBySiteY",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::updatePUMatchingLocation",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::spreadPUs",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::resolveOverflowColumns",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::mapPUsToColumns",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::setSitesMapped",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/CLBLegalizer.cc",
+      "function": "CLBLegalizer::resetSitesMapped",
+      "category": "clb_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::MacroLegalizer",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::legalize",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::roughlyLegalize",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::fixedColumnLegalize",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::finalLegalizeBasedOnDP",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::DPForMinHPWL",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::macroCanBeFitIn",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::getMacrosToLegalize",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::findMacroType2AvailableSites",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::findPossibleLegalLocation",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::createBipartiteGraph",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::updateMatchingAndUnmatchedMacroCells",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::dumpMatching",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::sortPUsByPU2Y",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::sortSitesBySiteY",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::updatePUMatchingLocation",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::spreadMacros",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::resolveOverflowColumns",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::mapMacrosToColumns",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::setSitesMapped",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::resetSitesMapped",
+      "category": "macro_legalization"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+      "function": "MacroLegalizer::verifyAvailableCapacity",
+      "category": "validation"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/IncrementalBELPacker.cc",
+      "function": "IncrementalBELPacker::LUTFFPairing",
+      "category": "incremental_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/IncrementalBELPacker.cc",
+      "function": "IncrementalBELPacker::FFPairing",
+      "category": "incremental_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/IncrementalBELPacker.cc",
+      "function": "IncrementalBELPacker::dumpPairedLUTFF",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/InitialPacker.cc",
+      "function": "InitialPacker::pack",
+      "category": "initial_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/InitialPacker.cc",
+      "function": "InitialPacker::enhanceIONets",
+      "category": "initial_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/InitialPacker.cc",
+      "function": "InitialPacker::findDSPMacros",
+      "category": "initial_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/InitialPacker.cc",
+      "function": "InitialPacker::setDSPRegs",
+      "category": "initial_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/InitialPacker.cc",
+      "function": "InitialPacker::findSRLCascadeMacros",
+      "category": "initial_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/InitialPacker.cc",
+      "function": "InitialPacker::findLUTRAMMacros",
+      "category": "initial_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/InitialPacker.cc",
+      "function": "InitialPacker::findBRAMMacros",
+      "category": "initial_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/InitialPacker.cc",
+      "function": "InitialPacker::findCARRYMacros",
+      "category": "initial_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/InitialPacker.cc",
+      "function": "InitialPacker::findMuxMacros",
+      "category": "initial_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/InitialPacker.cc",
+      "function": "InitialPacker::loadOtherCLBMacros",
+      "category": "initial_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/InitialPacker.cc",
+      "function": "InitialPacker::LUTFFPairing",
+      "category": "initial_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/InitialPacker.cc",
+      "function": "InitialPacker::findUnpackedUnits",
+      "category": "initial_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/InitialPacker.cc",
+      "function": "InitialPacker::loadFixedPlacementUnits",
+      "category": "initial_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/InitialPacker.cc",
+      "function": "InitialPacker::dumpMacroHighLight",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::ParallelCLBPacker",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::packCLBsIteration",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::packCLBs",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath",
+      "category": "detailed_placement"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSlotMapping",
+      "category": "detailed_placement"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath_intermediate",
+      "category": "detailed_placement"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::timingDrivenDetailedPlacement_swap",
+      "category": "detailed_placement"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::checkPackedPUsAndUnpackedPUs",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::exceptionHandling",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::exceptionPULegalize",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::ripUpAndLegalizae",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::findNeiborSitesFromBinGrid",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::findNeiborSitesFromBinGrid",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::setPULocationToPackedSite",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::setPUsToBePacked",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::updatePackedMacro",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::addNonCLBPackingSites",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::dumpDSPBRAMPlacementTcl",
+      "category": "export_vivado"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::dumpCLBPlacementTcl",
+      "category": "export_vivado"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::dumpPlacementTcl",
+      "category": "export_vivado"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::dumpFinalPacking",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+      "function": "ParallelCLBPacker::dumpAllCellsCoordinate",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::refreshPrioryQueue",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::removeInvalidClustersFromPQ",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::removeClustersIncompatibleWithDetClusterFromPQ",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::removeInvalidPUsFromNeighborPUs",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::updateConsistentPUsInTop",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::findNewClustersWithNeighborPUs",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::findNeiborPUsFromBinGrid",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::updateStep",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCarrySite",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCarrySite",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::mapMuxF8Macro",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::mapMuxF7Macro",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::moveLUTToLUT6Slot",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::mapLUTRAMRelatedCellsToSlots",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+      "function": "ParallelCLBPacker::PackingCLBSite::mapCarryRelatedCellsToSlots",
+      "category": "final_packing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::PlacementInfo",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::CompatiblePlacementTable::CompatiblePlacementTable",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::CompatiblePlacementTable::setBELTypeForCells",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::CompatiblePlacementTable::resetCellOccupationToDefault",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::printStat",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::createGridBins",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::reloadNets",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::updateLongPaths",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::optimizeLongPaths",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::verifyDeviceForDesign",
+      "category": "validation"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::resetElementBinGrid",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::updateElementBinGrid",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::adjustLUTFFUtilization_Packablity",
+      "category": "density_update"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::adjustLUTFFUtilization_Routability",
+      "category": "density_update"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::adjustLUTFFUtilization_Clocking",
+      "category": "density_update"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::adjustLUTFFUtilization_Routability_Reset",
+      "category": "density_update"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::adjustLUTFFUtilization",
+      "category": "density_update"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::dumpCongestion",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::createSiteBinGrid",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::resetSiteBinGrid",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::updateSiteBinGrid",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::updateCells2PlacementUnits",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::dumpVivadoPlacementTclWithPULegalizationInfo",
+      "category": "export_vivado"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::dumpPlacementUnitInformation",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::loadPlacementUnitInformation",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::enhanceHighFanoutNet",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::enhanceRiskyClockNet",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::enhanceDDRNet",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::checkClockUtilization",
+      "category": "validation"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::dumpOverflowClockUtilization",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::clearRegionPreferences",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+      "function": "PlacementInfo::refreshRegionPreferences",
+      "category": "placement_bookkeeping"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/RegionCapacityTracker.cc",
+      "function": "RegionCapacityTracker::RegionCapacityTracker",
+      "category": "boundary_capacity"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/RegionCapacityTracker.cc",
+      "function": "RegionCapacityTracker::RegionCapacityTracker",
+      "category": "boundary_capacity"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementInfo/RegionCapacityTracker.cc",
+      "function": "RegionCapacityTracker::assign",
+      "category": "boundary_capacity"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/BoundaryAwareClusterer.cc",
+      "function": "BoundaryAwareClusterer::BoundaryAwareClusterer",
+      "category": "boundary_clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/BoundaryAwareClusterer.cc",
+      "function": "BoundaryAwareClusterer::affectedEdges",
+      "category": "boundary_clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/BoundaryAwareClusterer.cc",
+      "function": "BoundaryAwareClusterer::targets",
+      "category": "boundary_clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/BoundaryAwareClusterer.cc",
+      "function": "BoundaryAwareClusterer::score",
+      "category": "boundary_clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/BoundaryAwareClusterer.cc",
+      "function": "BoundaryAwareClusterer::run",
+      "category": "boundary_clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/BoundaryAwareClusterer.cc",
+      "function": "BoundaryAwareClusterer::refresh",
+      "category": "boundary_clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/BoundaryAwareClusterer.cc",
+      "function": "BoundaryAwareClusterer::audit",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingInfo.cc",
+      "function": "PlacementTimingInfo::PlacementTimingInfo",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingInfo.cc",
+      "function": "PlacementTimingInfo::setDSPInnerDelay",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingInfo.cc",
+      "function": "PlacementTimingInfo::buildSimpleTimingGraph",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingInfo.cc",
+      "function": "PlacementTimingInfo::TimingGraph<nodeType>::forwardLevelization",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingInfo.cc",
+      "function": "PlacementTimingInfo::TimingGraph<nodeType>::backwardLevelization",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingInfo.cc",
+      "function": "PlacementTimingInfo::TimingGraph<nodeType>::traceBackFromNode",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingInfo.cc",
+      "function": "PlacementTimingInfo::TimingGraph<nodeType>::traceForwardFromNode",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingInfo.cc",
+      "function": "PlacementTimingInfo::TimingGraph<nodeType>::DFSFromNode",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingInfo.cc",
+      "function": "PlacementTimingInfo::TimingGraph<nodeType>::BFSFromNode",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingInfo.cc",
+      "function": "PlacementTimingInfo::TimingGraph<nodeType>::propogateArrivalTime",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingInfo.cc",
+      "function": "PlacementTimingInfo::TimingGraph<nodeType>::backPropogateRequiredArrivalTime",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingInfo.cc",
+      "function": "PlacementTimingInfo::TimingGraph<nodeType>::backTraceDelayLongestPathFromNode",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingInfo.cc",
+      "function": "PlacementTimingInfo::TimingGraph<nodeType>::backTraceDelayLongestPathFromNode",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc",
+      "function": "PlacementTimingOptimizer::PlacementTimingOptimizer",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc",
+      "function": "PlacementTimingOptimizer::setPinsLocation",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc",
+      "function": "PlacementTimingOptimizer::findCriticalPath",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc",
+      "function": "PlacementTimingOptimizer::findCriticalPaths",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc",
+      "function": "PlacementTimingOptimizer::findCriticalPaths",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc",
+      "function": "PlacementTimingOptimizer::conductStaticTimingAnalysis",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc",
+      "function": "PlacementTimingOptimizer::getSlackThr",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc",
+      "function": "PlacementTimingOptimizer::incrementalStaticTimingAnalysis_forPUWithLocation",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc",
+      "function": "PlacementTimingOptimizer::clusterLongPathInOneClockRegion",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc",
+      "function": "PlacementTimingOptimizer::stretchClockRegionColumns",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc",
+      "function": "PlacementTimingOptimizer::dumpClockRegionClusters",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc",
+      "function": "PlacementTimingOptimizer::propogateArrivalTime",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc",
+      "function": "PlacementTimingOptimizer::getPUId2Slack",
+      "category": "timing"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc",
+      "function": "PlacementTimingOptimizer::clusterCriticalPathsByPhysicalRegion",
+      "category": "boundary_clustering"
+    },
+    {
+      "file": "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc",
+      "function": "PlacementTimingOptimizer::auditPhysicalBoundaries",
+      "category": "diagnostic_output"
+    },
+    {
+      "file": "src/lib/HiFPlacer/problemSolvers/GraphPartitioner.cc",
+      "function": "GraphPartitioner<NodeList, NetList>::solve",
+      "category": "partition"
+    },
+    {
+      "file": "src/lib/HiFPlacer/problemSolvers/GraphPartitioner.cc",
+      "function": "GraphPartitioner<NodeList, NetList>::sortClustersBySize",
+      "category": "partition"
+    },
+    {
+      "file": "src/lib/HiFPlacer/problemSolvers/GraphPartitioner.cc",
+      "function": "GraphPartitioner<NodeList, NetList>::recursiveMinCutPartition",
+      "category": "partition"
+    },
+    {
+      "file": "src/lib/HiFPlacer/problemSolvers/GraphPartitioner.cc",
+      "function": "GraphPartitioner<NodeList, NetList>::minCutBipartition",
+      "category": "partition"
+    },
+    {
+      "file": "src/lib/HiFPlacer/problemSolvers/MinCostBipartiteMatcher.cc",
+      "function": "MinCostBipartiteMatcher::solve",
+      "category": "bipartite_matching"
+    },
+    {
+      "file": "src/lib/HiFPlacer/problemSolvers/MinCostBipartiteMatcher.cc",
+      "function": "MinCostBipartiteMatcher::getConnectedSubgraphAdjList",
+      "category": "bipartite_matching"
+    },
+    {
+      "file": "src/lib/HiFPlacer/problemSolvers/QPSolverWrapper.cc",
+      "function": "QPSolverWrapper::QPSolve",
+      "category": "qp_solver"
+    },
+    {
+      "file": "src/lib/HiFPlacer/problemSolvers/QPSolverWrapper.cc",
+      "function": "QPSolverWrapper::solveGuarded",
+      "category": "qp_solver"
+    },
+    {
+      "file": "src/lib/HiFPlacer/problemSolvers/SAPlacer.cc",
+      "function": "SAPlacer::evaluateClusterPlacement",
+      "category": "sa"
+    },
+    {
+      "file": "src/lib/HiFPlacer/problemSolvers/SAPlacer.cc",
+      "function": "SAPlacer::incrementalEvaluateClusterPlacement",
+      "category": "sa"
+    },
+    {
+      "file": "src/lib/HiFPlacer/problemSolvers/SAPlacer.cc",
+      "function": "SAPlacer::randomSwapInWideRange",
+      "category": "sa"
+    },
+    {
+      "file": "src/lib/HiFPlacer/problemSolvers/SAPlacer.cc",
+      "function": "SAPlacer::randomSwapInWideRangeWithNeighbors",
+      "category": "sa"
+    },
+    {
+      "file": "src/lib/HiFPlacer/problemSolvers/SAPlacer.cc",
+      "function": "SAPlacer::randomShuffleRowColumn",
+      "category": "sa"
+    },
+    {
+      "file": "src/lib/HiFPlacer/problemSolvers/SAPlacer.cc",
+      "function": "SAPlacer::worker",
+      "category": "sa"
+    },
+    {
+      "file": "src/lib/HiFPlacer/problemSolvers/SAPlacer.cc",
+      "function": "SAPlacer::greedyPlaceACluster",
+      "category": "sa"
+    },
+    {
+      "file": "src/lib/HiFPlacer/problemSolvers/SAPlacer.cc",
+      "function": "SAPlacer::greedyFindNextClusterToPlace",
+      "category": "sa"
+    },
+    {
+      "file": "src/lib/HiFPlacer/problemSolvers/SAPlacer.cc",
+      "function": "SAPlacer::greedyInitialize",
+      "category": "sa"
+    },
+    {
+      "file": "src/lib/HiFPlacer/problemSolvers/SAPlacer.cc",
+      "function": "SAPlacer::solve",
+      "category": "sa"
+    }
+  ],
+  "scope": "Functional boundaries, not every inline accessor; excluded helpers are charged to callers.",
+  "note": "The profiling snapshot build-20260928-212843-306388-d534237b contains one inert global scope next to a commented-out implementation. It runs before Session activation and records no timings; removed from current source. Frozen snapshot remains unchanged."
+}

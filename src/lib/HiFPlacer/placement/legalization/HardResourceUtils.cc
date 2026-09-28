@@ -1,4 +1,5 @@
 #include "HardResourceUtils.h"
+#include "../../../utils/RuntimeProfiler.h"
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -79,6 +80,7 @@ static std::vector<Cell *> cores(PlacementInfo::PlacementMacro *macro)
 
 void validateCascadeMacros(PlacementInfo *placement)
 {
+    AMF_PROFILE_FUNCTION("validation");
     for (const auto &edge : cascadeEdges(placement->getDesignInfo()))
     {
         auto sourcePU = placement->getPlacementUnitByCell(edge.source);
@@ -97,6 +99,7 @@ void validateCascadeMacros(PlacementInfo *placement)
 
 CellSites validatePlacement(PlacementInfo *placement)
 {
+    AMF_PROFILE_FUNCTION("validation");
     CellSites assigned;
     std::set<Site *> occupied;
     for (const auto &mapping : placement->getPULegalSite())
@@ -159,6 +162,7 @@ static std::string tclWord(const std::string &value)
 
 void writePlacement(PlacementInfo *placement, const std::string &directory)
 {
+    AMF_PROFILE_FUNCTION("export_vivado");
     auto assigned = validatePlacement(placement);
     std::ofstream tsv(directory + "/resources.tsv"), tcl(directory + "/place_resources.tcl"), report(directory + "/resources.json");
     if (!tsv || !tcl || !report) throw std::runtime_error("Cannot write resource placement report");

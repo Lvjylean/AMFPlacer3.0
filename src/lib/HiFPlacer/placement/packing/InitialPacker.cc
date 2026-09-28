@@ -1,3 +1,4 @@
+#include "../../../utils/RuntimeProfiler.h"
 /**
  * @file InitialPacker.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -16,6 +17,7 @@
 
 void InitialPacker::pack(bool hardResourcesOnly)
 {
+    AMF_PROFILE_FUNCTION("initial_packing");
     cellId2PlacementUnit.clear();
     placementUnits.clear();
     placementMacros.clear();
@@ -87,6 +89,7 @@ void InitialPacker::pack(bool hardResourcesOnly)
 
 void InitialPacker::enhanceIONets()
 {
+    AMF_PROFILE_FUNCTION("initial_packing");
     for (auto net : placementInfo->getPlacementNets())
     {
         if (net->getDriverUnits().size() == 1)
@@ -208,6 +211,7 @@ std::vector<DesignInfo::DesignCell *> InitialPacker::BFSExpandViaSpecifiedPorts(
 // DSP with ACIN*/BCIN*/PCIN* connected to other DSP should be a Macro
 void InitialPacker::findDSPMacros()
 {
+    AMF_PROFILE_FUNCTION("initial_packing");
     float DSPHeight = 2 * HardResourceUtils::resourcePitch(deviceInfo, "DSP48E2");
     std::vector<PlacementInfo::PlacementMacro *> res;
     res.clear();
@@ -301,6 +305,7 @@ void InitialPacker::findDSPMacros()
 
 void InitialPacker::setDSPRegs(std::vector<DesignInfo::DesignCell *> &DSPTailsToBeCheckedRegisterAttr)
 {
+    AMF_PROFILE_FUNCTION("initial_packing");
     int DSPRegCount = 0;
 
     for (auto startCell : DSPTailsToBeCheckedRegisterAttr)
@@ -356,6 +361,7 @@ void InitialPacker::setDSPRegs(std::vector<DesignInfo::DesignCell *> &DSPTailsTo
 
 void InitialPacker::findSRLCascadeMacros()
 {
+    AMF_PROFILE_FUNCTION("initial_packing");
     using Cell = DesignInfo::DesignCell;
     std::map<Cell *, Cell *> successor, predecessor;
     auto netAt = [](Cell *cell, const std::string &ref) -> DesignInfo::DesignNet * {
@@ -411,6 +417,7 @@ void InitialPacker::findSRLCascadeMacros()
 
 void InitialPacker::findLUTRAMMacros()
 {
+    AMF_PROFILE_FUNCTION("initial_packing");
     std::vector<PlacementInfo::PlacementMacro *> res;
     res.clear();
 
@@ -463,6 +470,7 @@ void InitialPacker::findLUTRAMMacros()
 // BRAM with CAS* connected to other BRAM should be a Macro
 void InitialPacker::findBRAMMacros()
 {
+    AMF_PROFILE_FUNCTION("initial_packing");
     float BRAM36Height = 5;
     float BRAM18Height = 2.5;
     std::vector<PlacementInfo::PlacementMacro *> res;
@@ -884,6 +892,7 @@ void InitialPacker::mapCarryRelatedRouteThru(PlacementInfo::PlacementMacro *CARR
 // specific LUT too.
 void InitialPacker::findCARRYMacros()
 {
+    AMF_PROFILE_FUNCTION("initial_packing");
     std::vector<PlacementInfo::PlacementMacro *> res;
     res.clear();
 
@@ -1293,6 +1302,7 @@ void InitialPacker::findCARRYMacros()
 // LUTs and Muxs connected are Macros
 void InitialPacker::findMuxMacros()
 {
+    AMF_PROFILE_FUNCTION("initial_packing");
     // TODO: consider F9MUX
 
     std::vector<PlacementInfo::PlacementMacro *> res;
@@ -1594,6 +1604,7 @@ void InitialPacker::findMuxMacros()
 // LUTs and Muxs connected are Macros
 void InitialPacker::loadOtherCLBMacros(std::string RAMMacroListFromVivadoFileName)
 {
+    AMF_PROFILE_FUNCTION("initial_packing");
     // currently, some macros of distributed RAMs is difficult. However, the good news is that the number of the
     // unpredictable macros is very small. Therefore, temporarily, we load this information extracted from Vivado.
 
@@ -1710,6 +1721,7 @@ void InitialPacker::loadOtherCLBMacros(std::string RAMMacroListFromVivadoFileNam
 
 void InitialPacker::LUTFFPairing()
 {
+    AMF_PROFILE_FUNCTION("initial_packing");
     print_status("InitialPacker Pairing LUTs and FFs.");
 
     std::vector<std::pair<DesignInfo::DesignCell *, DesignInfo::DesignCell *>> LUTFFPairs;
@@ -1786,6 +1798,7 @@ void InitialPacker::LUTFFPairing()
 
 void InitialPacker::findUnpackedUnits()
 {
+    AMF_PROFILE_FUNCTION("initial_packing");
     // const char *celltypestr[] = {CELLTYPESTRS};
     for (DesignInfo::DesignCell *cell : designInfo->getCells())
     {
@@ -1817,6 +1830,7 @@ void packerUtil_StrReplaceAll(std::string &str, const std::string from, const st
 
 void InitialPacker::loadFixedPlacementUnits(std::string fixedPlacementUnitsFromVivadoFileName)
 {
+    AMF_PROFILE_FUNCTION("initial_packing");
     fixedPlacementUnits.clear();
     std::ifstream infile(fixedPlacementUnitsFromVivadoFileName.c_str());
     assert(infile.good() && "Fixed Element file does not exist and please check your path settings");
@@ -1890,6 +1904,7 @@ void InitialPacker::loadFixedPlacementUnits(std::string fixedPlacementUnitsFromV
 
 void InitialPacker::dumpMacroHighLight()
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     std::ofstream tmpColorFile(JSONCfg["dumpDirectory"] + "/color.tcl");
     assert(tmpColorFile.is_open() && tmpColorFile.good() &&
            "The path for dumping elements' highlight colors does not exist and please check your path settings");

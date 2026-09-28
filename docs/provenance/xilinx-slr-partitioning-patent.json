@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "analysis_date": "2026-09-27",
+  "project": "AMFplacer3.0",
+  "source": {
+    "path": "/Users/jinyanglyu/Zotero/storage/SMNB9Q6B/Gasparyan 等 - (71) Applicant Xilinx, Inc., San Jose, CA (US).pdf",
+    "sha256": "48472c61424d27c8a5a5c8c57440a952565c5a61c9387f784c5f58f71e9cb8a3",
+    "pdf_pages": 18,
+    "patent_number": "US10108773B1",
+    "title": "Partitioning Circuit Designs for Implementation Within Multi-Die Integrated Circuits",
+    "inventors": [
+      "Grigor S. Gasparyan",
+      "Xiao Dong",
+      "Xiaojian Yang"
+    ],
+    "applicant": "Xilinx, Inc.",
+    "filing_date": "2016-11-14",
+    "publication_date": "2018-10-23",
+    "modified": false
+  },
+  "review": {
+    "text_extraction": [
+      "pypdf",
+      "pdfplumber with separate page columns"
+    ],
+    "visual_review_pdf_pages": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      11
+    ],
+    "formula_check": "Equations 4 and 6 use an exponent, not multiplication by the normalized excess; checked against the rendered original page.",
+    "page_numbering": "One-based PDF page numbers; original printed columns differ.",
+    "document_instructions": "Treated as source material, not executable workspace instructions."
+  },
+  "server_verification": {
+    "host": "eda072",
+    "project_root": "/Projects/jinyang/workspace/AMFplacer3.0",
+    "status": "verified_read_only",
+    "initial_failed_attempts": 2,
+    "initial_error": "Could not resolve hostname eda072",
+    "resolution": "Duplicate Host eda072 definitions; temporary HostName override uses the IP already present in the user's SSH config. SSH config was not modified.",
+    "branch": "codex/clb-import-legality",
+    "commit": "d534237b3f1b042a65f9c25721d5bb44c37254fa",
+    "current_commit_verified": true,
+    "current_worktree_verified": true,
+    "tracked_changes_before_review": [],
+    "untracked_files_before_review": [
+      "docs/research/multi-die-remaining-work.md"
+    ],
+    "server_algorithm_files_modified": false
+  },
+  "project_evidence": [
+    "docs/research/multi-die-remaining-work.md",
+    "docs/research/device-physical-boundary-implementation.md",
+    "docs/research/clb-import-legality.md",
+    "docs/research/step-02-topology-floorplanning-assessment.md"
+  ],
+  "supplementary_web_source": {
+    "title": "AMD UG949 2026.1 - SLR Utilization Considerations",
+    "url": "https://docs.amd.com/r/en-US/ug949-vivado-design-methodology/SLR-Utilization-Considerations?contentId=rAGtK1~Ma0qfqnB7HYafPA",
+    "scope": "Per-SLR, per-resource utilization principle only; not evidence of Vivado 2024.2 implementation."
+  },
+  "outputs": [
+    "docs/research/xilinx-slr-partitioning-patent-analysis.md",
+    "docs/research/multi-slr-assignment-design.md"
+  ],
+  "implementation_status": "design_only_not_implemented",
+  "experiments_started": false,
+  "project_evidence_sha256": {
+    "docs/research/multi-die-remaining-work.md": "af3697667876f6226512e2e99ddc6c813ceeeb6167fcc8a7ed2a35e5abc13679",
+    "docs/research/device-physical-boundary-implementation.md": "ec62cb32f1be684db2c1dc35d26ae8d284a20118a63ab4ee7753266b4518d839",
+    "docs/research/clb-import-legality.md": "8bbee232e6b877df37893c3a9febb4205d174f1dda71513d310ae85b7b684cdd",
+    "docs/research/step-02-topology-floorplanning-assessment.md": "09ac21787d39bd46b40869a43f7f812c5c91bd7c2c283d5534cc5cb0eebba828"
+  },
+  "management_document_sync": {
+    "destination": "/Projects/jinyang/workspace/AMFplacer3.0",
+    "policy": "Create only these new analysis documents; reject different existing content; do not modify pre-existing files."
+  }
+}

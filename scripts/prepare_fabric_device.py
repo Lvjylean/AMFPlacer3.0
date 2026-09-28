@@ -2,7 +2,8 @@
 """Convert audited Vivado fabric sites into AMF's device input (format v2).
 
 X preserves relative RPM column spacing, normalized by the common slice pitch.
-Y uses slice rows per clock region and evenly spaced resource rows within it.
+Y uses actual tile-row anchors and subdivisions of each resource tile.
+The exported center fields are placement anchors, not physical site centers.
 These are placement metric coordinates, not a calibrated wire-delay model.
 The original RPM coordinates remain in sites.tsv for independent auditing.
 """
@@ -26,7 +27,8 @@ def digest(path):
 
 def convert(source, destination, part, metadata=None):
     source, destination = Path(source), Path(destination)
-    if destination.exists():
+    if any(p.exists() for p in (destination, destination.with_suffix('.coordinates.json'),
+                                  destination.with_suffix('.manifest.json'))):
         raise ValueError('Destination already exists: ' + str(destination))
     exported = None
     if metadata is not None:
@@ -49,6 +51,10 @@ def convert(source, destination, part, metadata=None):
             raise ValueError('Invalid site or clock region: ' + name)
         row['family'], row['site_x'], row['site_y'] = site[1], int(site[2]), int(site[3])
         row['cr_y'] = int(cr[2])
+        tile = re.search(r'_X(\d+)Y(\d+)$', row['tile'])
+        if not tile:
+            raise ValueError('Invalid tile coordinate: ' + row['tile'])
+        row['tile_y'] = int(tile[2])
         row['slr'], row['prohibited'] = int(row['slr']), int(row['prohibited'])
         if row['slr'] < 0 or row['prohibited'] not in (0, 1):
             raise ValueError('Invalid SLR/availability: ' + name)
@@ -71,13 +77,55 @@ def convert(source, destination, part, metadata=None):
         raise ValueError('Need at least two slice columns to determine X pitch')
     x_pitch = pitches.most_common(1)[0][0]
     min_x = min(r['rpm_x'] for r in rows)
-    for group in groups.values():
+    slice_y = sorted({r['tile_y'] for r in rows if r['family'] == 'SLICE'})
+    y_pitches = Counter(b - a for a, b in zip(slice_y, slice_y[1:]))
+    if not y_pitches:
+        raise ValueError('Need at least two SLICE rows')
+    y_pitch = y_pitches.most_common(1)[0][0]
+    y_origin = slice_y[0]
+    cr_origins = {}
+    for (cr, family, _), group in groups.items():
+        if family != 'SLICE':
+            continue
+        tile_rows = sorted(r['tile_y'] for r in group)
+        if any(b - a != y_pitch for a, b in zip(tile_rows, tile_rows[1:])):
+            raise ValueError('Non-contiguous SLICE tile rows: ' + cr)
+        if cr_origins.setdefault(cr, tile_rows[0]) != tile_rows[0]:
+            raise ValueError('Inconsistent SLICE tile origin: ' + cr)
+    resource_geometry = defaultdict(set)
+    for (cr, family, _), group in groups.items():
         group.sort(key=lambda r: r['site_y'])
         if any(b['site_y'] != a['site_y'] + 1 for a, b in zip(group, group[1:])):
             raise ValueError('Non-contiguous site rows; explicit geometry mapping required')
-        for i, row in enumerate(group):
-            row['x'] = (row['rpm_x'] - min_x) / x_pitch
-            row['y'] = row['cr_y'] * height + i * height / len(group)
+        if len({r['rpm_x'] for r in group}) != 1:
+            raise ValueError('Inconsistent RPM X within resource column')
+        by_tile = defaultdict(list)
+        for row in group:
+            by_tile[row['tile_y']].append(row)
+        origins = sorted(by_tile)
+        if cr not in cr_origins:
+            raise ValueError('Resource clock region has no SLICE reference: ' + cr)
+        start, end = cr_origins[cr], cr_origins[cr] + height * y_pitch
+        # Include the final tile's span to the region boundary. Missing tiles
+        # cannot silently enlarge their neighbours or compress the region.
+        spans = {b - a for a, b in zip(origins, origins[1:] + [end])}
+        counts_per_tile = {len(v) for v in by_tile.values()}
+        if origins[0] != start or len(spans) != 1 or min(spans) <= 0 or len(counts_per_tile) != 1:
+            raise ValueError('Irregular resource tile coverage: ' + family + ' ' + cr)
+        span = spans.pop() / y_pitch
+        n = counts_per_tile.pop()
+        resource_geometry[family].add((span, n))
+        for origin in origins:
+            tile_sites = sorted(by_tile[origin], key=lambda r: r['site_y'])
+            if any(b['rpm_y'] <= a['rpm_y'] for a, b in zip(tile_sites, tile_sites[1:])):
+                raise ValueError('RPM/site order mismatch within tile')
+            for i, row in enumerate(tile_sites):
+                row['x'] = (row['rpm_x'] - min_x) / x_pitch
+                row['y'] = (origin - y_origin) / y_pitch + i * span / n
+    if any(len(v) != 1 for v in resource_geometry.values()):
+        raise ValueError('Inconsistent resource tile geometry across columns/regions')
+    geometry = {family: dict(tile_span_rows=next(iter(v))[0], sites_per_tile=next(iter(v))[1])
+                for family, v in resource_geometry.items()}
     counts, prohibited = defaultdict(Counter), defaultdict(Counter)
     destination.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(destination, 'x', zipfile.ZIP_DEFLATED, compresslevel=6) as z:
@@ -93,7 +141,8 @@ def convert(source, destination, part, metadata=None):
                 f.write(line.encode())
     manifest = dict(schema='amf-fabric-device-v2', part=part, scope='fabric-sites',
                     source_sha256=digest(source), device_sha256=digest(destination),
-                    coordinate_model='normalized-rpm-x-clock-region-rows-v1',
+                    coordinate_model='normalized-rpm-x-tile-row-anchors-v2',
+                    converter_sha256=digest(Path(__file__)), resource_geometry=geometry,
                     x_pitch=x_pitch, slice_rows_per_clock_region=height,
                     site_count=len(rows), slr_count=len(counts), sites_by_slr=dict(counts),
                     unavailable_by_slr=dict(prohibited), clock_region_slr=cr_slr)
@@ -109,7 +158,9 @@ def convert(source, destination, part, metadata=None):
     mapping = dict(schema='amf-coordinate-map-v1', part=part,
                    model=manifest['coordinate_model'], rpm_x_origin=min_x,
                    rpm_x_pitch=x_pitch, rpm_y_anchors=anchor_rows,
-                   slice_rows_per_clock_region=height)
+                   slice_rows_per_clock_region=height, tile_y_origin=y_origin, tile_y_pitch=y_pitch,
+                   reference_point='lower resource-row anchor; not physical center',
+                   resource_geometry=geometry)
     mapping_path = destination.with_suffix('.coordinates.json')
     mapping_path.write_text(json.dumps(mapping, indent=2) + '\n')
     manifest['coordinate_map_sha256'] = digest(mapping_path)

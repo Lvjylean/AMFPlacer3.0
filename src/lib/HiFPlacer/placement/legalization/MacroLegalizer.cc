@@ -1,3 +1,4 @@
+#include "../../../utils/RuntimeProfiler.h"
 /**
  * @file MacroLegalizer.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -28,6 +29,7 @@ MacroLegalizer::MacroLegalizer(std::string legalizerName, PlacementInfo *placeme
       compatiblePlacementTable(placementInfo->getCompatiblePlacementTable()),
       macroTypesToLegalize(macroTypesToLegalize), cellLoc(placementInfo->getCellId2location()), JSONCfg(JSONCfg)
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     macroCellsToLegalize.clear();
     PU2X.clear();
     PU2Y.clear();
@@ -53,6 +55,7 @@ MacroLegalizer::MacroLegalizer(std::string legalizerName, PlacementInfo *placeme
 
 void MacroLegalizer::legalize(bool exactLegalization, bool directLegalization, bool _timingDrivenLegalize)
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     if (verbose)
         print_status("MacroLegalizer[" + legalizerName + "] Started Legalization.");
 
@@ -96,6 +99,7 @@ void MacroLegalizer::legalize(bool exactLegalization, bool directLegalization, b
 
 void MacroLegalizer::roughlyLegalize()
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     while (macroCellsToLegalize.size())
     {
         findMacroCell2SitesInDistance(clockRegionAware);
@@ -121,6 +125,7 @@ void MacroLegalizer::roughlyLegalize()
 
 void MacroLegalizer::fixedColumnLegalize(bool directLegalization)
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     mapMacrosToColumns(directLegalization);
     resolveOverflowColumns();
 
@@ -153,6 +158,7 @@ void MacroLegalizer::fixedColumnLegalize(bool directLegalization)
 
 void MacroLegalizer::finalLegalizeBasedOnDP()
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     PU2X.clear();
     PU2Y.clear();
     PU2LegalSites.clear();
@@ -177,6 +183,7 @@ void MacroLegalizer::finalLegalizeBasedOnDP()
 float MacroLegalizer::DPForMinHPWL(int colNum, std::vector<std::vector<DeviceInfo::DeviceSite *>> &Column2Sites,
                                    std::vector<std::deque<PlacementInfo::PlacementUnit *>> &Column2PUs)
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     // final Legalization DP
     // i th macro (start from 0), j th row (start from 0)
     // f[i][j] = min(f[i-1][j-row[i]]+HPWLChange[i][j-row[i]+1],f[i][j-1])
@@ -384,6 +391,7 @@ float MacroLegalizer::DPForMinHPWL(int colNum, std::vector<std::vector<DeviceInf
 bool MacroLegalizer::macroCanBeFitIn(int colId, std::vector<std::vector<DeviceInfo::DeviceSite *>> &Column2Sites,
                                      std::deque<PlacementInfo::PlacementUnit *> Column2PUs)
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     int c = colId;
 
     int numPUs = Column2PUs.size();
@@ -520,6 +528,7 @@ bool MacroLegalizer::macroCanBeFitIn(int colId, std::vector<std::vector<DeviceIn
 
 void MacroLegalizer::getMacrosToLegalize()
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     macroCellsToLegalize.clear();
     macroUnitsToLegalizeSet.clear();
     BRAMPUs.clear();
@@ -562,6 +571,7 @@ void MacroLegalizer::getMacrosToLegalize()
 
 void MacroLegalizer::findMacroType2AvailableSites()
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     macroType2Sites.clear();
     for (auto curCellType : macroTypesToLegalize)
     {
@@ -731,6 +741,7 @@ void MacroLegalizer::findMacroType2AvailableSites()
 
 void MacroLegalizer::findPossibleLegalLocation(bool fixedColumn)
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     macro2Sites.clear();
 
     for (auto curCell : macroCellsToLegalize)
@@ -890,6 +901,7 @@ void MacroLegalizer::findPossibleLegalLocation(bool fixedColumn)
 
 void MacroLegalizer::createBipartiteGraph()
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     rightSiteIds.clear();
     adjList.resize(macroCellsToLegalize.size());
     siteList.clear();
@@ -934,6 +946,7 @@ void MacroLegalizer::createBipartiteGraph()
 
 void MacroLegalizer::updateMatchingAndUnmatchedMacroCells()
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
 
     for (unsigned int leftCellId = 0; leftCellId < macroCellsToLegalize.size(); leftCellId++)
     {
@@ -963,6 +976,7 @@ void MacroLegalizer::updateMatchingAndUnmatchedMacroCells()
 
 void MacroLegalizer::dumpMatching(bool fixedColumn, bool enforce)
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     if (JSONCfg.find("DumpMacroLegalization") != JSONCfg.end() || enforce)
     {
         std::string dumpFile = "";
@@ -1097,6 +1111,7 @@ int MacroLegalizer::getMarcroCellNum(PlacementInfo::PlacementUnit *tmpMacroUnit)
 
 void MacroLegalizer::sortPUsByPU2Y(std::deque<PlacementInfo::PlacementUnit *> &PUs)
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     int numPUs = PUs.size();
     for (int i = 0; i < numPUs; i++)
         for (int j = i + 1; j < numPUs; j++)
@@ -1106,6 +1121,7 @@ void MacroLegalizer::sortPUsByPU2Y(std::deque<PlacementInfo::PlacementUnit *> &P
 
 void MacroLegalizer::sortSitesBySiteY(std::vector<DeviceInfo::DeviceSite *> &sites)
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     int numSites = sites.size();
     bool ordered = true;
     for (int i = 1; i < numSites; i++)
@@ -1126,6 +1142,7 @@ void MacroLegalizer::sortSitesBySiteY(std::vector<DeviceInfo::DeviceSite *> &sit
 
 void MacroLegalizer::updatePUMatchingLocation(bool isRoughLegalization, bool updateDisplacement)
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     PU2X.clear();
     PU2Y.clear();
     PU2Columns.clear();
@@ -1248,6 +1265,7 @@ void MacroLegalizer::spreadMacros(int columnNum, std::vector<int> &columnUntiliz
                                   std::vector<std::deque<PlacementInfo::PlacementUnit *>> &column2PUs,
                                   std::map<DesignInfo::DesignCell *, int> &cell2Column, float globalBudgeRatio)
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     if (columnNum == 0) return;
     std::vector<float> budgetRatios(columnNum, globalBudgeRatio);
     while (true)
@@ -1386,6 +1404,7 @@ void MacroLegalizer::spreadMacros(int columnNum, std::vector<int> &columnUntiliz
 
 void MacroLegalizer::resolveOverflowColumns()
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     if (enableBRAMLegalization)
     {
         spreadMacros(BRAMColumnNum, BRAMColumnUntilization, BRAMColumn2Sites, BRAMColumn2PUs, BRAMCell2Column, 0.9);
@@ -1448,6 +1467,7 @@ int MacroLegalizer::findCorrespondingColumn(float curX, std::vector<float> &Xs)
 
 void MacroLegalizer::mapMacrosToColumns(bool directLegalization)
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     BRAMColumn2PUs.clear();
     BRAMColumnUntilization.clear();
     if (BRAMColumnNum > 0)
@@ -1592,6 +1612,7 @@ void MacroLegalizer::mapMacrosToColumns(bool directLegalization)
 
 void MacroLegalizer::setSitesMapped()
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     if (PULevelMatching.size() == 0)
     {
         for (auto matchedPair : cellLevelMatching)
@@ -1617,6 +1638,7 @@ void MacroLegalizer::setSitesMapped()
 
 void MacroLegalizer::resetSitesMapped()
 {
+    AMF_PROFILE_FUNCTION("macro_legalization");
     if (PULevelMatching.size() == 0)
     {
         for (auto matchedPair : cellLevelMatching)
@@ -1657,6 +1679,7 @@ bool MacroLegalizer::legalSiteRange(PlacementInfo::PlacementUnit *pu,
 
 void MacroLegalizer::verifyAvailableCapacity()
 {
+    AMF_PROFILE_FUNCTION("validation");
     auto verify = [this](const std::set<PlacementInfo::PlacementUnit *> &units,
                          std::vector<std::vector<DeviceInfo::DeviceSite *>> &columns) {
         size_t capacity = 0, demand = 0;

@@ -1,3 +1,4 @@
+#include "../../../utils/RuntimeProfiler.h"
 /**
  * @file GeneralSpreader.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -26,6 +27,7 @@ GeneralSpreader::GeneralSpreader(PlacementInfo *placementInfo, std::map<std::str
       currentIteration(currentIteration), capacityShrinkRatio(capacityShrinkRatio), verbose(verbose),
       binGrid(placementInfo->getBinGrid(placementInfo->getSharedBELTypeId(sharedCellType)))
 {
+    AMF_PROFILE_FUNCTION("spreading");
     overflowBins.clear();
     if (JSONCfg.find("jobs") != JSONCfg.end())
     {
@@ -40,6 +42,7 @@ GeneralSpreader::GeneralSpreader(PlacementInfo *placementInfo, std::map<std::str
 void GeneralSpreader::spreadPlacementUnits(float forgetRatio, bool enableClockRegionAware, float displacementLimit,
                                            unsigned int spreadRegionBinSizeLimit)
 {
+    AMF_PROFILE_FUNCTION("spreading");
     if (verbose) // usually commented for debug
         print_status("GeneralSpreader: starts to spreadPlacementUnits for type: [" + sharedCellType + "]");
 
@@ -254,6 +257,7 @@ bool siteSortCmp(PlacementInfo::PlacementBinInfo *a, PlacementInfo::PlacementBin
 
 void GeneralSpreader::findOverflowBins(float overflowThreshold)
 {
+    AMF_PROFILE_FUNCTION("spreading");
     overflowBins.clear();
     overflowBinSet.clear();
     for (auto &row : binGrid)
@@ -297,6 +301,7 @@ void GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocationsWorker(
     std::set<DesignInfo::DesignCell *> &involvedCells, std::vector<PlacementInfo::PlacementUnit *> &involvedPUVec,
     float forgetRatio, float displacementLimit, int startId, int endId)
 {
+    AMF_PROFILE_FUNCTION("spreading");
     bool displacementLimitEnable = displacementLimit > 0;
     std::vector<PlacementInfo::Location> &cellLoc = placementInfo->getCellId2location();
     for (int curPUID = startId; curPUID < endId; curPUID++)
@@ -404,6 +409,7 @@ void GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocations(
     std::vector<PlacementInfo::PlacementUnit *> &involvedPUVec, float forgetRatio, bool enableClockRegionAware,
     float displacementLimit)
 {
+    AMF_PROFILE_FUNCTION("spreading");
     std::vector<PlacementInfo::Location> &cellLoc = placementInfo->getCellId2location();
     bool displacementLimitEnable = displacementLimit > 0;
     // if (enableClockRegionAware)
@@ -602,7 +608,8 @@ void GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocations(
 
 GeneralSpreader::SpreadRegion *GeneralSpreader::expandFromABin(PlacementInfo::PlacementBinInfo *curBin,
                                                                float capacityShrinkRatio, unsigned int numBinThr)
-{ // Our Region Expanding (1.4x faster)
+{
+    AMF_PROFILE_FUNCTION("spreading"); // Our Region Expanding (1.4x faster)
     GeneralSpreader::SpreadRegion *resRegion =
         new GeneralSpreader::SpreadRegion(curBin, placementInfo, binGrid, capacityShrinkRatio);
 
@@ -647,6 +654,7 @@ void GeneralSpreader::SpreadRegion::addBinRegion(int newRegionTopBinY, int newRe
                                                  int newRegionRightBinX,
                                                  std::set<PlacementInfo::PlacementBinInfo *> &coveredBinSet)
 {
+    AMF_PROFILE_FUNCTION("spreading");
     assert(!isRegionOverlap(newRegionTopBinY, newRegionBottomBinY, newRegionLeftBinX, newRegionRightBinX));
     if (newRegionTopBinY > topBinY)
         topBinY = newRegionTopBinY;
@@ -687,6 +695,7 @@ void GeneralSpreader::SpreadRegion::addBinRegion(int newRegionTopBinY, int newRe
 
 void GeneralSpreader::recordSpreadedCellLocations()
 {
+    AMF_PROFILE_FUNCTION("spreading");
     for (auto tmpPU : placementInfo->getPlacementUnits())
     {
         tmpPU->recordSpreadLocatin();
@@ -695,6 +704,7 @@ void GeneralSpreader::recordSpreadedCellLocations()
 
 void GeneralSpreader::SpreadRegion::SubBox::spreadAndPartition()
 {
+    AMF_PROFILE_FUNCTION("spreading");
     if (level == 0)
         return;
     if (topBinY - bottomBinY < minExpandSize - 1 && rightBinX - leftBinX < minExpandSize - 1)
@@ -741,6 +751,7 @@ void GeneralSpreader::SpreadRegion::SubBox::spreadAndPartition()
 
 void GeneralSpreader::SpreadRegion::SubBox::spreadCellsH(SubBox **boxA, SubBox **boxB)
 {
+    AMF_PROFILE_FUNCTION("spreading");
     // refer to paper of POLAR and RippleFPGA
 
     if (cellIds.size() == 0)
@@ -975,6 +986,7 @@ void GeneralSpreader::SpreadRegion::SubBox::spreadCellsH(SubBox **boxA, SubBox *
 
 void GeneralSpreader::SpreadRegion::SubBox::spreadCellsV(SubBox **boxA, SubBox **boxB)
 {
+    AMF_PROFILE_FUNCTION("spreading");
     // refer to paper of POLAR and RippleFPGA
     if (cellIds.size() == 0)
         return;
@@ -1245,6 +1257,7 @@ const std::string currentDateTime()
 
 void GeneralSpreader::dumpSiteGridDensity(std::string dumpFileName)
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     dumpFileName =
         dumpFileName + "-" + sharedCellType + "-" + currentDateTime() + "-" + std::to_string(dumpSiteGridDensityCnt);
     print_status("GeneralSpreader: dumping density to: " + dumpFileName);
@@ -1268,6 +1281,7 @@ void GeneralSpreader::dumpSiteGridDensity(std::string dumpFileName)
 
 void GeneralSpreader::dumpLUTFFCoordinate()
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     if (JSONCfg.find("DumpLUTFFCoordTrace-GeneralSpreader") != JSONCfg.end())
     {
         std::string dumpFile = JSONCfg["DumpLUTFFCoordTrace-GeneralSpreader"] + "-" + sharedCellType + "-" +
@@ -1324,6 +1338,7 @@ std::ostream &operator<<(std::ostream &os, GeneralSpreader::SpreadRegion::SubBox
 
 void GeneralSpreader::DumpCellsCoordinate(std::string dumpFileName, GeneralSpreader::SpreadRegion *curRegion)
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     if (dumpFileName != "")
     {
         dumpCnt++;
@@ -1343,6 +1358,7 @@ void GeneralSpreader::DumpCellsCoordinate(std::string dumpFileName, GeneralSprea
 void GeneralSpreader::DumpPUCoordinate(std::string dumpFileName,
                                        std::vector<PlacementInfo::PlacementUnit *> &involvedPUVec)
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     if (dumpFileName != "")
     {
         dumpCnt++;

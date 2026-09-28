@@ -1,3 +1,4 @@
+#include "../../../utils/RuntimeProfiler.h"
 #include "BoundaryAwareClusterer.h"
 #include "RegionCapacityTracker.h"
 #include <algorithm>
@@ -28,6 +29,7 @@ BoundaryAwareClusterer::BoundaryAwareClusterer(PlacementInfo *p,PlacementTimingO
                                                std::map<std::string,std::string> &cfg)
     : placement(p),timing(t),model(p->getDeviceInfo()->getPhysicalBoundaryModel()),config(cfg)
 {
+    AMF_PROFILE_FUNCTION("boundary_clustering");
     if(!model)throw std::runtime_error("Boundary clustering requires a physical model");
     y2xRatio=number(cfg,"y2xRatio",0.4f);
     maxClusters=int(number(cfg,"BoundaryMaxClusters",512));
@@ -42,6 +44,7 @@ BoundaryAwareClusterer::BoundaryAwareClusterer(PlacementInfo *p,PlacementTimingO
 }
 std::vector<BoundaryAwareClusterer::Edge *> BoundaryAwareClusterer::affectedEdges(const std::vector<PU *> &units) const
 {
+    AMF_PROFILE_FUNCTION("boundary_clustering");
     auto graph=placement->getTimingInfo()->getSimplePlacementTimingGraph();
     std::map<int,Edge *> unique;
     for(auto pu:units)for(auto cell:puCells(pu))
@@ -59,6 +62,7 @@ std::vector<BoundaryAwareClusterer::Edge *> BoundaryAwareClusterer::affectedEdge
 bool BoundaryAwareClusterer::targets(const std::vector<PU *> &units,int region,
                                      std::map<PU *,std::pair<float,float>> &positions) const
 {
+    AMF_PROFILE_FUNCTION("boundary_clustering");
     positions.clear();
     for(auto pu:units)
     {
@@ -72,6 +76,7 @@ bool BoundaryAwareClusterer::targets(const std::vector<PU *> &units,int region,
 BoundaryAwareClusterer::Score BoundaryAwareClusterer::score(const std::vector<Edge *> &edges,
                                        const std::map<PU *,std::pair<float,float>> &positions) const
 {
+    AMF_PROFILE_FUNCTION("boundary_clustering");
     Score s;
     const auto &pins=placement->getPinId2location();
     auto moved=[&](DesignInfo::DesignPin *pin) {
@@ -100,6 +105,7 @@ BoundaryAwareClusterer::Score BoundaryAwareClusterer::score(const std::vector<Ed
 }
 void BoundaryAwareClusterer::run()
 {
+    AMF_PROFILE_FUNCTION("boundary_clustering");
     placement->clearRegionPreferences();
     RegionCapacityTracker budget(placement);
     auto graph=placement->getTimingInfo()->getSimplePlacementTimingGraph();
@@ -199,6 +205,7 @@ void BoundaryAwareClusterer::run()
 }
 void BoundaryAwareClusterer::refresh()
 {
+    AMF_PROFILE_FUNCTION("boundary_clustering");
     placement->refreshRegionPreferences();
     std::map<int,std::vector<PU *>> groups;
     for(auto entry:placement->getRegionPreferences())groups[entry.second.cluster].push_back(entry.first);
@@ -221,6 +228,7 @@ void BoundaryAwareClusterer::refresh()
 }
 void BoundaryAwareClusterer::audit(const std::string &stage)
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     if(config["BoundaryReportDirectory"].empty())return;
     auto graph=placement->getTimingInfo()->getSimplePlacementTimingGraph();
     const auto &pins=placement->getPinId2location();

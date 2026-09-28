@@ -1,3 +1,4 @@
+#include "../../utils/RuntimeProfiler.h"
 /**
  * @file SAPlacer.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -20,6 +21,7 @@
 double SAPlacer::evaluateClusterPlacement(const std::vector<std::vector<std::vector<int>>> &grid2clusters,
                                           const std::vector<std::pair<int, int>> &cluster2XY)
 {
+    AMF_PROFILE_FUNCTION("sa");
 
     float regionW = deviceW / gridW;
     float regionH = deviceH / gridH;
@@ -77,6 +79,7 @@ double SAPlacer::evaluateClusterPlacement(const std::vector<std::vector<std::vec
 double SAPlacer::incrementalEvaluateClusterPlacement(const std::vector<std::vector<std::vector<int>>> &grid2clusters,
                                                      const std::vector<std::pair<int, int>> &cluster2XY)
 {
+    AMF_PROFILE_FUNCTION("sa");
     std::vector<bool> placed;
     placed.clear();
     float regionW = deviceW / gridW;
@@ -167,6 +170,7 @@ void SAPlacer::randomSwapInWideRange(const std::vector<std::vector<std::vector<i
                                      std::vector<std::pair<int, int>> &new_cluster2XY, float temperature,
                                      boost::mt19937 &rng)
 {
+    AMF_PROFILE_FUNCTION("sa");
     int gridY0 = rng() % (gridH * gridW) / gridW;
     int gridX0 = rng() % (gridH * gridW) % gridW;
 
@@ -304,6 +308,7 @@ void SAPlacer::randomSwapInWideRangeWithNeighbors(const std::vector<std::vector<
                                                   std::vector<std::pair<int, int>> &new_cluster2XY, float temperature,
                                                   boost::mt19937 &rng)
 {
+    AMF_PROFILE_FUNCTION("sa");
     int gridY0 = rng() % (gridH * gridW) / gridW;
     int gridX0 = rng() % (gridH * gridW) % gridW;
 
@@ -392,6 +397,7 @@ void SAPlacer::randomShuffleRowColumn(const std::vector<std::vector<std::vector<
                                       const std::vector<std::pair<int, int>> &cluster2XY,
                                       std::vector<std::pair<int, int>> &new_cluster2XY, boost::mt19937 &rng)
 {
+    AMF_PROFILE_FUNCTION("sa");
     new_grid2clusters = grid2clusters;
     new_cluster2XY = cluster2XY;
 
@@ -433,6 +439,7 @@ void SAPlacer::worker(SAPlacer *saPlacer, std::vector<std::vector<std::vector<in
                       std::vector<std::pair<int, int>> &opt_cluster2XY, int &totalIterNum, int &workers_randomSeed,
                       double &resE)
 {
+    AMF_PROFILE_FUNCTION("sa");
     std::vector<std::pair<int, int>> cur_cluster2XY = init_cluster2XY;
     std::vector<std::vector<std::vector<int>>> cur_grid2clusters = init_grid2clusters;
     std::vector<std::pair<int, int>> new_cluster2XY;
@@ -484,6 +491,7 @@ void SAPlacer::greedyPlaceACluster(const std::vector<std::pair<int, int>> &init_
                                    std::vector<std::pair<int, int>> &res_cluster2XY,
                                    std::vector<std::vector<std::vector<int>>> &res_grid2clusters, int clusterIdToPlace)
 {
+    AMF_PROFILE_FUNCTION("sa");
     std::vector<bool> placed;
     placed.clear();
 
@@ -546,6 +554,7 @@ void SAPlacer::greedyPlaceACluster(const std::vector<std::pair<int, int>> &init_
 int SAPlacer::greedyFindNextClusterToPlace(std::vector<std::pair<int, int>> &tmp_cluster2XY,
                                            std::vector<std::vector<std::vector<int>>> &tmp_grid2clusters)
 {
+    AMF_PROFILE_FUNCTION("sa");
     std::vector<bool> placed;
     std::vector<int> unplacedClusterIds;
     unplacedClusterIds.clear();
@@ -597,6 +606,7 @@ int SAPlacer::greedyFindNextClusterToPlace(std::vector<std::pair<int, int>> &tmp
 void SAPlacer::greedyInitialize(std::vector<std::pair<int, int>> &init_cluster2XY,
                                 std::vector<std::vector<std::vector<int>>> &init_grid2clusters, int initOffset)
 {
+    AMF_PROFILE_FUNCTION("sa");
     for (unsigned int clusterId = 0; clusterId < clusterAdjMat.size(); clusterId++)
     {
         init_cluster2XY.push_back(std::pair<int, int>(-1, -1));
@@ -678,6 +688,7 @@ void SAPlacer::greedyInitialize(std::vector<std::pair<int, int>> &init_cluster2X
 
 void SAPlacer::solve()
 {
+    AMF_PROFILE_FUNCTION("sa");
     resE = 1e13;
     std::string dumpSAFile = "";
     if (verbose)

@@ -1,3 +1,4 @@
+#include "../../utils/RuntimeProfiler.h"
 /**
  * @file GraphPartitioner.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -19,6 +20,7 @@
 template <class NodeList, class NetList>
 void GraphPartitioner<NodeList, NetList>::solve(int eachClusterDSPNum, int eachClusterBRAMNum)
 {
+    AMF_PROFILE_FUNCTION("partition");
     clusters.clear();
     std::vector<int> inputCluster;
     inputCluster.clear();
@@ -32,6 +34,7 @@ void GraphPartitioner<NodeList, NetList>::solve(int eachClusterDSPNum, int eachC
 
 template <class NodeList, class NetList> void GraphPartitioner<NodeList, NetList>::sortClustersBySize()
 {
+    AMF_PROFILE_FUNCTION("partition");
     // std::vector<std::vector<int>>
     int numClusters = clusters.size();
     for (int i = 0; i < numClusters; i++)
@@ -54,6 +57,7 @@ void GraphPartitioner<NodeList, NetList>::recursiveMinCutPartition(
     std::vector<int> &inputCluster, GraphPartitioner<NodeList, NetList> *graphPartitioner, int eachClusterDSPNum,
     int eachClusterBRAMNum)
 {
+    AMF_PROFILE_FUNCTION("partition");
 
     std::array<std::vector<int>, 2> outputClusters;
 
@@ -98,6 +102,7 @@ unsigned GraphPartitioner<NodeList, NetList>::minCutBipartition(const std::vecto
                                                                 GraphPartitioner<NodeList, NetList> *graphPartitioner,
                                                                 int eachClusterDSPNum, int eachClusterBRAMNum)
 {
+    AMF_PROFILE_FUNCTION("partition");
 
     static int cnt = 0;
 

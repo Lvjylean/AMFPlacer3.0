@@ -11,9 +11,12 @@
  */
 
 #include "AMFPlacer.h"
+#include "../../lib/utils/RuntimeProfiler.h"
 
 int main(int argc, const char **argv)
 {
+    amf_profile::Session profileSession;
+    AMF_PROFILE_FUNCTION("process_control");
     if (argc != 2 && !(argc == 4 && (std::string(argv[2]) == "--inspect-packing" || std::string(argv[2]) == "--inspect-input" || std::string(argv[2]) == "--legalize-resources")))
     {
         std::cerr << "Usage: " << argv[0] << " <config JSON file> [--inspect-input <report.json> | --legalize-resources <directory>]\n";

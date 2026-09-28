@@ -1,3 +1,4 @@
+#include "../../../utils/RuntimeProfiler.h"
 /**
  * @file ParallelCLBPacker.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -57,6 +58,7 @@ ParallelCLBPacker::ParallelCLBPacker(DesignInfo *designInfo, DeviceInfo *deviceI
       placementMacros(placementInfo->getPlacementMacros()), cellInMacros(placementInfo->getCellInMacros()),
       cellId2PlacementUnit(placementInfo->getCellId2PlacementUnit())
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     if (JSONCfg.find("y2xRatio") != JSONCfg.end())
     {
         y2xRatio = std::stof(JSONCfg["y2xRatio"]);
@@ -116,6 +118,7 @@ ParallelCLBPacker::ParallelCLBPacker(DesignInfo *designInfo, DeviceInfo *deviceI
 
 void ParallelCLBPacker::packCLBsIteration(bool initial, bool debug)
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     int numClockCols = clockColumns2PackingSites.size();
 #pragma omp parallel for schedule(dynamic, 16)
     for (int i = 0; i < numClockCols; i++)
@@ -275,6 +278,7 @@ void ParallelCLBPacker::packCLBsIteration(bool initial, bool debug)
 
 void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool debug)
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     placementInfo->updateB2BAndGetTotalHPWL();
     placementInfo->updateElementBinGrid(); // we don't need utilization information here, we can update LUT/FF
                                            // utilization when needed.
@@ -526,6 +530,7 @@ inline float getAngle(float v1x, float v1y, float v2x, float v2y)
 
 int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, float displacementRatio)
 {
+    AMF_PROFILE_FUNCTION("detailed_placement");
     print_status("ParallelCLBPacker: conducting timing-driven detailed placement based on shortest path.");
     auto oriCellIdsInCriticalPaths = timingOptimizer->findCriticalPaths(0.9);
     std::set<PlacementInfo::PlacementUnit *> PUsTouched;
@@ -980,6 +985,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
 
 int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSlotMapping()
 {
+    AMF_PROFILE_FUNCTION("detailed_placement");
     print_status("ParallelCLBPacker: re-place some LUT-FF pairs since they are not connected via internal nets.");
     auto oriCellIdsInCriticalPaths = timingOptimizer->findCriticalPaths(1, false, 100);
 
@@ -1250,6 +1256,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSl
 
 int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath_intermediate()
 {
+    AMF_PROFILE_FUNCTION("detailed_placement");
     print_status("ParallelCLBPacker: conducting timing-driven detailed placement based on shortest path.");
     auto oriCellIdsInCriticalPaths = timingOptimizer->findCriticalPaths(1);
     std::set<PlacementInfo::PlacementUnit *> PUsTouched;
@@ -1397,6 +1404,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath_intermediate()
 
 int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(int iterId)
 {
+    AMF_PROFILE_FUNCTION("detailed_placement");
     print_status("ParallelCLBPacker: conducting timing-driven detailed placement based on swaping.");
     auto oriCellIdsInCriticalPaths = timingOptimizer->findCriticalPaths(0.9);
     std::set<PlacementInfo::PlacementUnit *> PUsTouched;
@@ -1709,6 +1717,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(int iterId)
 
 void ParallelCLBPacker::checkPackedPUsAndUnpackedPUs()
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     packedPUs.clear();
     for (auto packingSite : packingSites)
     {
@@ -1753,6 +1762,7 @@ void ParallelCLBPacker::checkPackedPUsAndUnpackedPUs()
 
 void ParallelCLBPacker::exceptionHandling(bool verbose)
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     checkPackedPUsAndUnpackedPUs();
     print_status("ParallelCLBPacker: start exceptionHandling.");
 
@@ -1951,6 +1961,7 @@ void ParallelCLBPacker::exceptionHandling(bool verbose)
 bool ParallelCLBPacker::exceptionPULegalize(PlacementInfo::PlacementUnit *curPU, float displacementThreshold,
                                             bool verbose)
 {
+    AMF_PROFILE_FUNCTION("final_packing");
 
     std::vector<DeviceInfo::DeviceSite *> *candidateSitesToPlaceThePU = nullptr;
     if (displacementThreshold < 4)
@@ -2071,6 +2082,7 @@ bool ParallelCLBPacker::ripUpAndLegalizae(
     PackingCLBSite *curTargetPackingSite, PlacementInfo::PlacementUnit *curPU, float displacementThreshold,
     std::map<PackingCLBSite *, PackingCLBSite::PackingCLBCluster *> &packingSite2DeterminedCluster, bool verbose)
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     PackingCLBSite::PackingCLBCluster *backup_determinedCluster = nullptr;
 
     if (curTargetPackingSite->getDeterminedClusterInSite())
@@ -2326,6 +2338,7 @@ ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCell
                                               float y2xRatio, bool clockRegionAware, float v1x, float v1y, float v2x,
                                               float v2y, int numLimit)
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     assert(displacementLowerbound < displacementUpperbound);
     // Physical regions are soft preferences; ordinary clock-region columns are not placement fences.
     const bool physicalRegions = placementInfo->boundaryClusteringEnabled();
@@ -2459,6 +2472,7 @@ ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCell
                                               float displacementLowerbound, float displacementUpperbound,
                                               float y2xRatio, bool clockRegionAware)
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     assert(displacementLowerbound < displacementUpperbound);
     // Physical regions are soft preferences; ordinary clock-region columns are not placement fences.
     const bool physicalRegions = placementInfo->boundaryClusteringEnabled();
@@ -2549,6 +2563,7 @@ ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCell
 
 void ParallelCLBPacker::setPULocationToPackedSite()
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     for (auto packingSite : packingSites)
     {
         if (packingSite)
@@ -2573,6 +2588,7 @@ void ParallelCLBPacker::setPULocationToPackedSite()
 
 void ParallelCLBPacker::setPUsToBePacked()
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     for (auto packingSite : packingSites)
     {
         if (packingSite)
@@ -2593,6 +2609,7 @@ void ParallelCLBPacker::setPUsToBePacked()
 
 void ParallelCLBPacker::updatePackedMacro(bool setPUPseudoNetToCLBSite, bool setCLBFixed)
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     std::vector<PlacementInfo::PlacementUnit *> packedPUs;
     std::vector<PlacementInfo::Location> &cellLoc = placementInfo->getCellId2location();
     std::map<PlacementInfo::PlacementUnit *, float> PU2X, PU2Y;
@@ -2774,6 +2791,7 @@ bool hasLUT62(ParallelCLBPacker::PackingCLBSite::SiteBELMapping &slots)
 
 void ParallelCLBPacker::addNonCLBPackingSites()
 {
+    AMF_PROFILE_FUNCTION("final_packing");
     for (auto &DSPBRAM_LegalSitePair : placementInfo->getPULegalSite())
     {
         if (auto tmpMacro = dynamic_cast<PlacementInfo::PlacementMacro *>(DSPBRAM_LegalSitePair.first))
@@ -2896,6 +2914,7 @@ void ParallelCLBPacker::addNonCLBPackingSites()
 
 void ParallelCLBPacker::dumpDSPBRAMPlacementTcl(std::ofstream &outfileTcl)
 {
+    AMF_PROFILE_FUNCTION("export_vivado");
     for (auto &DSPBRAM_LegalSitePair : placementInfo->getPULegalSite())
     {
         std::string placementStr = "";
@@ -3038,6 +3057,7 @@ bool containLUTRAMCells(PlacementInfo::PlacementUnit *curPU)
 
 void ParallelCLBPacker::dumpCLBPlacementTcl(std::ofstream &outfileTcl, bool packingRelatedToLUT6_2)
 {
+    AMF_PROFILE_FUNCTION("export_vivado");
     std::string placementStr = "";
     int cnt = 0;
     for (auto tmpPackingSite : packingSites)
@@ -3212,6 +3232,7 @@ void ParallelCLBPacker::dumpCLBPlacementTcl(std::ofstream &outfileTcl, bool pack
 
 void ParallelCLBPacker::dumpPlacementTcl(std::string dumpTclFile)
 {
+    AMF_PROFILE_FUNCTION("export_vivado");
     std::ofstream outfileTcl(dumpTclFile);
     assert(outfileTcl.is_open() && outfileTcl.good() &&
            "The path for placement Tcl dumping does not exist and please check your path settings");
@@ -3255,6 +3276,7 @@ void ParallelCLBPacker::dumpPlacementTcl(std::string dumpTclFile)
 
 void ParallelCLBPacker::dumpFinalPacking()
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     if (JSONCfg.find("DumpCLBPacking") != JSONCfg.end())
     {
         std::string dumpTclFile =
@@ -3450,6 +3472,7 @@ void ParallelCLBPacker::dumpFinalPacking()
 
 void ParallelCLBPacker::dumpAllCellsCoordinate()
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     if (JSONCfg.find("DumpAllCoordTrace") != JSONCfg.end())
     {
         std::string dumpFile =

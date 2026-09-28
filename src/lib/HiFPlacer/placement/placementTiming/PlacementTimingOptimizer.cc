@@ -1,3 +1,4 @@
+#include "../../../utils/RuntimeProfiler.h"
 /**
  * @file PlacementTimingOptimizer.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -21,6 +22,7 @@ PlacementTimingOptimizer::PlacementTimingOptimizer(PlacementInfo *placementInfo,
                                                    std::map<std::string, std::string> &JSONCfg)
     : placementInfo(placementInfo), timingInfo(placementInfo->getTimingInfo()), JSONCfg(JSONCfg)
 {
+    AMF_PROFILE_FUNCTION("timing");
     if (JSONCfg.find("PlacementTimingOptimizerVerbose") != JSONCfg.end())
         verbose = JSONCfg["PlacementTimingOptimizerVerbose"] == "true";
     if (JSONCfg.find("y2xRatio") != JSONCfg.end())
@@ -52,6 +54,7 @@ PlacementTimingOptimizer::PlacementTimingOptimizer(PlacementInfo *placementInfo,
 
 void PlacementTimingOptimizer::setPinsLocation()
 {
+    AMF_PROFILE_FUNCTION("timing");
     auto &cellLoc = placementInfo->getCellId2location();
     auto &pinLoc = placementInfo->getPinId2location();
     pinLoc = std::vector<PlacementInfo::Location>(designInfo->getPins().size());
@@ -103,6 +106,7 @@ float PlacementTimingOptimizer::getWorstSlackOfCell(DesignInfo::DesignCell *srcC
 
 std::vector<int> PlacementTimingOptimizer::findCriticalPath()
 {
+    AMF_PROFILE_FUNCTION("timing");
 
     assert(timingInfo);
     auto timingGraph = timingInfo->getSimplePlacementTimingGraph();
@@ -126,6 +130,7 @@ std::vector<int> PlacementTimingOptimizer::findCriticalPath()
 std::vector<std::vector<int>> PlacementTimingOptimizer::findCriticalPaths(float criticalRatio, bool checkOverlap,
                                                                           int pathNumThr, int converThr)
 {
+    AMF_PROFILE_FUNCTION("timing");
 
     assert(timingInfo);
     auto timingGraph = timingInfo->getSimplePlacementTimingGraph();
@@ -178,6 +183,7 @@ std::vector<std::vector<int>> PlacementTimingOptimizer::findCriticalPaths(float 
 std::vector<std::vector<int>>
 PlacementTimingOptimizer::findCriticalPaths(float criticalRatio, std::vector<bool> &FFDirectlyDrivenButNotInOneSlot)
 {
+    AMF_PROFILE_FUNCTION("timing");
 
     assert(timingInfo);
     auto timingGraph = timingInfo->getSimplePlacementTimingGraph();
@@ -224,6 +230,7 @@ PlacementTimingOptimizer::findCriticalPaths(float criticalRatio, std::vector<boo
 
 float PlacementTimingOptimizer::conductStaticTimingAnalysis(bool disableOptimisticTiming)
 {
+    AMF_PROFILE_FUNCTION("timing");
     print_status("PlacementTimingOptimizer: conducting Static Timing Analysis");
 
     unsigned int highFanoutThr = 10000;
@@ -392,6 +399,7 @@ float PlacementTimingOptimizer::conductStaticTimingAnalysis(bool disableOptimist
 
 float PlacementTimingOptimizer::getSlackThr()
 {
+    AMF_PROFILE_FUNCTION("timing");
     assert(placementInfo->getTimingInfo());
 
     // float maxEnhanceRatio = 0;
@@ -497,6 +505,7 @@ float PlacementTimingOptimizer::getSlackThr()
 void PlacementTimingOptimizer::incrementalStaticTimingAnalysis_forPUWithLocation(PlacementInfo::PlacementUnit *curPU,
                                                                                  float targetX, float targetY)
 {
+    AMF_PROFILE_FUNCTION("timing");
     print_status("PlacementTimingOptimizer: conducting incremental Static Timing Analysis");
 
     assert(timingInfo);
@@ -548,6 +557,7 @@ void PlacementTimingOptimizer::incrementalStaticTimingAnalysis_forPUWithLocation
 
 void PlacementTimingOptimizer::clusterLongPathInOneClockRegion(int pathLenThr, float clusterThrRatio)
 {
+    AMF_PROFILE_FUNCTION("timing");
     // if (DSPCritical)
     //     return;
     placementInfo->updateElementBinGrid();
@@ -755,6 +765,7 @@ void PlacementTimingOptimizer::clusterLongPathInOneClockRegion(int pathLenThr, f
 
 void PlacementTimingOptimizer::stretchClockRegionColumns()
 {
+    AMF_PROFILE_FUNCTION("timing");
     auto &binGrid = placementInfo->getGlobalBinGrid();
     auto &PU2ClockRegionColumn = placementInfo->getPU2ClockRegionColumn();
     auto YX2ClockRegion = deviceInfo->getClockRegions();
@@ -870,6 +881,7 @@ void PlacementTimingOptimizer::stretchClockRegionColumns()
 
 void PlacementTimingOptimizer::dumpClockRegionClusters()
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     std::string dumpClockRegionClustersFile = JSONCfg["Dump Cluster file"] + "-clockRegion";
     if (dumpClockRegionClustersFile != "")
     {
@@ -908,12 +920,14 @@ void PlacementTimingOptimizer::dumpClockRegionClusters()
 
 void PlacementTimingOptimizer::propogateArrivalTime()
 {
+    AMF_PROFILE_FUNCTION("timing");
     assert(timingInfo);
     // auto timingGraph = timingInfo->getSimplePlacementTimingGraph();
 }
 
 std::vector<float> &PlacementTimingOptimizer::getPUId2Slack(bool update)
 {
+    AMF_PROFILE_FUNCTION("timing");
     if (update)
     {
         auto timingNodes = placementInfo->getTimingInfo()->getSimplePlacementTimingInfo();
@@ -999,6 +1013,7 @@ std::vector<float> &PlacementTimingOptimizer::getPUId2Slack(bool update)
 
 void PlacementTimingOptimizer::clusterCriticalPathsByPhysicalRegion()
 {
+    AMF_PROFILE_FUNCTION("boundary_clustering");
     placementInfo->updateElementBinGrid();
     placementInfo->clearRegionPreferences();
     conductStaticTimingAnalysis();
@@ -1009,5 +1024,6 @@ void PlacementTimingOptimizer::clusterCriticalPathsByPhysicalRegion()
 
 void PlacementTimingOptimizer::auditPhysicalBoundaries(const std::string &stage)
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     if(deviceInfo->getPhysicalBoundaryModel())BoundaryAwareClusterer(placementInfo,this,JSONCfg).audit(stage);
 }

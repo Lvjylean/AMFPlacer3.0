@@ -1,3 +1,4 @@
+#include "../../../utils/RuntimeProfiler.h"
 /**
  * @file CLBLegalizer.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -24,6 +25,7 @@ CLBLegalizer::CLBLegalizer(std::string legalizerName, PlacementInfo *placementIn
       compatiblePlacementTable(placementInfo->getCompatiblePlacementTable()), siteTypesToLegalize(siteTypesToLegalize),
       cellLoc(placementInfo->getCellId2location()), JSONCfg(JSONCfg)
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
     PUsToLegalize.clear();
     PU2Site2HPWLIncrease.clear();
     PU2X.clear();
@@ -65,6 +67,7 @@ CLBLegalizer::CLBLegalizer(std::string legalizerName, PlacementInfo *placementIn
 
 void CLBLegalizer::legalize(bool exactLegalization)
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
     if (verbose)
         print_status("CLBLegalizer Started Legalization.");
     PU2Site2HPWLIncrease.clear();
@@ -101,6 +104,7 @@ void CLBLegalizer::legalize(bool exactLegalization)
 
 void CLBLegalizer::roughlyLegalize()
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
     while (PUsToLegalize.size())
     {
         findPU2SitesInDistance();
@@ -126,6 +130,7 @@ void CLBLegalizer::roughlyLegalize()
 
 void CLBLegalizer::fixedColumnLegalize()
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
     mapPUsToColumns();
     resolveOverflowColumns();
 
@@ -155,6 +160,7 @@ void CLBLegalizer::fixedColumnLegalize()
 
 void CLBLegalizer::finalLegalizeBasedOnDP()
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
     PU2X.clear();
     PU2Y.clear();
     resetSettings();
@@ -175,6 +181,7 @@ void CLBLegalizer::finalLegalizeBasedOnDP()
 float CLBLegalizer::DPForMinHPWL(int colNum, std::vector<std::vector<DeviceInfo::DeviceSite *>> &Column2Sites,
                                  std::vector<std::deque<PlacementInfo::PlacementUnit *>> &Column2PUs)
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
     // final Legalization DP
     // i th macro (start from 0), j th row (start from 0)
     // f[i][j] = min(f[i-1][j-row[i]]+HPWLChange[i][j-row[i]+1],f[i][j-1])
@@ -323,6 +330,7 @@ float CLBLegalizer::DPForMinHPWL(int colNum, std::vector<std::vector<DeviceInfo:
 
 void CLBLegalizer::getPUsToLegalize()
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
     PUsToLegalize.clear();
     PUsToLegalizeSet.clear();
     MCLBPUs.clear();
@@ -361,6 +369,7 @@ void CLBLegalizer::getPUsToLegalize()
 
 void CLBLegalizer::findSiteType2AvailableSites()
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
     siteType2Sites.clear();
     for (auto siteTypeToLegalize : siteTypesToLegalize)
     {
@@ -459,6 +468,7 @@ void CLBLegalizer::findSiteType2AvailableSites()
 
 void CLBLegalizer::findPossibleLegalLocation(bool fixedColumn)
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
     PU2Sites.clear();
 
     for (auto curPU : PUsToLegalize)
@@ -543,6 +553,7 @@ void CLBLegalizer::findPossibleLegalLocation(bool fixedColumn)
 
 void CLBLegalizer::createBipartiteGraph()
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
     rightSiteIds.clear();
     adjList.resize(PUsToLegalize.size());
     siteList.clear();
@@ -587,6 +598,7 @@ void CLBLegalizer::createBipartiteGraph()
 
 void CLBLegalizer::updateMatchingAndUnmatchedPUs()
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
     for (unsigned int leftCellId = 0; leftCellId < PUsToLegalize.size(); leftCellId++)
     {
         int rightNode = minCostBipartiteMatcher->getMatchedRightNode(leftCellId);
@@ -615,6 +627,7 @@ void CLBLegalizer::updateMatchingAndUnmatchedPUs()
 
 void CLBLegalizer::dumpMatching(bool fixedColumn, bool enforce)
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     if (JSONCfg.find("DumpCLBLegalization") != JSONCfg.end() || enforce)
     {
         std::string dumpFile = "";
@@ -677,6 +690,7 @@ int CLBLegalizer::getPUSiteNum(PlacementInfo::PlacementUnit *tmpMacroUnit)
 
 void CLBLegalizer::sortPUsByPU2Y(std::deque<PlacementInfo::PlacementUnit *> &PUs)
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
     int numPUs = PUs.size();
     for (int i = 0; i < numPUs; i++)
         for (int j = i + 1; j < numPUs; j++)
@@ -686,6 +700,7 @@ void CLBLegalizer::sortPUsByPU2Y(std::deque<PlacementInfo::PlacementUnit *> &PUs
 
 void CLBLegalizer::sortSitesBySiteY(std::vector<DeviceInfo::DeviceSite *> &sites)
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
     int numSites = sites.size();
     bool ordered = true;
     for (int i = 1; i < numSites; i++)
@@ -706,6 +721,7 @@ void CLBLegalizer::sortSitesBySiteY(std::vector<DeviceInfo::DeviceSite *> &sites
 
 void CLBLegalizer::updatePUMatchingLocation(bool isRoughLegalization, bool updateDisplacement)
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
     PU2X.clear();
     PU2Y.clear();
     PU2Columns.clear();
@@ -800,6 +816,7 @@ void CLBLegalizer::spreadPUs(int columnNum, std::vector<int> &columnUntilization
                              std::vector<std::deque<PlacementInfo::PlacementUnit *>> &column2PUs,
                              std::map<PlacementInfo::PlacementUnit *, int> &cell2Column)
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
     while (true)
     {
         int overflowColId = -1;
@@ -891,6 +908,7 @@ void CLBLegalizer::spreadPUs(int columnNum, std::vector<int> &columnUntilization
 
 void CLBLegalizer::resolveOverflowColumns()
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
     if (enableMCLBLegalization)
     {
         spreadPUs(MCLBColumnNum, MCLBColumnUntilization, MCLBColumn2Sites, MCLBColumn2PUs, MCLB2Column);
@@ -926,6 +944,7 @@ int CLBLegalizer::findIdMaxWithRecurence(int minId, int maxId, std::vector<int> 
 
 void CLBLegalizer::mapPUsToColumns()
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
 
     MCLBColumn2PUs.clear();
     MCLBColumnUntilization.clear();
@@ -976,6 +995,7 @@ void CLBLegalizer::mapPUsToColumns()
 
 void CLBLegalizer::setSitesMapped()
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
     for (auto matchedPair : PULevelMatching)
     {
         auto targetPU = matchedPair.first;
@@ -989,6 +1009,7 @@ void CLBLegalizer::setSitesMapped()
 
 void CLBLegalizer::resetSitesMapped()
 {
+    AMF_PROFILE_FUNCTION("clb_legalization");
 
     for (auto matchedPair : PULevelMatching)
     {

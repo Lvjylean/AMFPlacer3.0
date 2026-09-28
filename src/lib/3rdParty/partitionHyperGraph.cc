@@ -1,10 +1,13 @@
 
 #include "../utils/ProcessFuncInterface.h"
+#include "../utils/RuntimeProfiler.h"
 #include "PaToH/patoh.h"
 #include <iostream>
 
 int main(int argc, const char **argv)
 {
+    amf_profile::Session profileSession("partition");
+    AMF_PROFILE_FUNCTION("partition_child");
 
     key_t shmId = std::stoull(std::string(argv[1]));
     unsigned int shmSize = std::stoul(std::string(argv[2]));
@@ -39,10 +42,14 @@ int main(int argc, const char **argv)
     args.final_imbal = final_imbal;
     args.seed = 20213654;
     PaToH_Check_User_Parameters(&args, true);
+    AMF_PROFILE_NAMED(patohAlloc, "partition_allocate", "PaToH_Alloc");
     PaToH_Alloc(&args, numHyperNodes, numPlacementNets, 1, cwghts, NULL, xpins, pins);
+    AMF_PROFILE_STOP(patohAlloc);
     // Processing
+    AMF_PROFILE_NAMED(patohPart, "partition_solve", "PaToH_Part");
     PaToH_Part(&args, numHyperNodes, numPlacementNets, 1, 1, cwghts, NULL, xpins, pins, NULL, partvec, partweights,
                cut);
+    AMF_PROFILE_STOP(patohPart);
     // Free
     PaToH_Free();
 

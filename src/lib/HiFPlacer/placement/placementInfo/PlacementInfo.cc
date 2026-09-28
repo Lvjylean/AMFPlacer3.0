@@ -1,3 +1,4 @@
+#include "../../../utils/RuntimeProfiler.h"
 #include <unordered_set>
 /**
  * @file PlacementInfo.cc
@@ -26,6 +27,7 @@ PlacementInfo::PlacementInfo(DesignInfo *designInfo, DeviceInfo *deviceInfo,
                              std::map<std::string, std::string> &JSONCfg)
     : designInfo(designInfo), deviceInfo(deviceInfo), JSONCfg(JSONCfg)
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
 
     cellType2fixedAmoFileName = std::string(JSONCfg["cellType2fixedAmo file"]);
     cellType2sharedCellTypeFileName = std::string(JSONCfg["cellType2sharedCellType file"]);
@@ -77,6 +79,7 @@ PlacementInfo::CompatiblePlacementTable::CompatiblePlacementTable(std::string ce
                                                                   DesignInfo *designInfo, DeviceInfo *deviceInfo)
     : designInfo(designInfo), deviceInfo(deviceInfo)
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
 
     realBELTypes.clear();
     realBELTypeName2ID.clear();
@@ -200,6 +203,7 @@ PlacementInfo::CompatiblePlacementTable::CompatiblePlacementTable(std::string ce
 
 void PlacementInfo::CompatiblePlacementTable::setBELTypeForCells(DesignInfo *designInfo)
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
     cellId2SharedCellBELTypeID.resize(designInfo->getNumCells());
     cellId2Occupation.resize(designInfo->getNumCells());
     cellId2InfationRatio.resize(designInfo->getNumCells());
@@ -224,6 +228,7 @@ void PlacementInfo::CompatiblePlacementTable::setBELTypeForCells(DesignInfo *des
 
 void PlacementInfo::CompatiblePlacementTable::resetCellOccupationToDefault()
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
     cellId2Occupation = defaultCellId2Occupation;
     for (unsigned int i = 0; i < cellId2Occupation.size(); i++)
     {
@@ -277,6 +282,7 @@ float PlacementInfo::getMaxYFromSites(std::vector<DeviceInfo::DeviceSite *> &sit
 
 void PlacementInfo::printStat(bool verbose)
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     print_info("globalMinX: " + std::to_string(globalMinX));
     print_info("globalMinY: " + std::to_string(globalMinY));
     print_info("globalMaxX: " + std::to_string(globalMaxX));
@@ -309,6 +315,7 @@ void PlacementInfo::PlacementBinInfo::addSiteIntoBin(DeviceInfo::DeviceSite *cur
 
 void PlacementInfo::createGridBins(float _binWidth, float _binHeight)
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
     startX = round(globalMinX) - deviceInfo->getBoundaryTolerance();
     startY = round(globalMinY) - deviceInfo->getBoundaryTolerance();
     endX = round(globalMaxX) + deviceInfo->getBoundaryTolerance();
@@ -491,6 +498,7 @@ void PlacementInfo::createGridBins(float _binWidth, float _binHeight)
 
 void PlacementInfo::reloadNets()
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
     if (!placementNets.empty())
     {
         for (auto net : placementNets)
@@ -619,6 +627,7 @@ void PlacementInfo::reloadNets()
 
 void PlacementInfo::updateLongPaths()
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
     print_status("updating long paths and #PUsContainingFF=" + std::to_string(PUsContainingFF.size()));
     std::set<PlacementUnit *> visitedPUs;
 
@@ -707,6 +716,7 @@ void PlacementInfo::updateLongPaths()
 
 void PlacementInfo::optimizeLongPaths()
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
     return;
     for (auto &path : longPaths)
     {
@@ -775,6 +785,7 @@ void PlacementInfo::PlacementNet::drawNet(float generalWeight)
 
 void PlacementInfo::verifyDeviceForDesign()
 {
+    AMF_PROFILE_FUNCTION("validation");
     for (DesignInfo::DesignCell *curCell : designInfo->getCells())
     {
         DesignInfo::DesignCellType cellType = curCell->getCellType();
@@ -883,6 +894,7 @@ std::ostream &operator<<(std::ostream &os, PlacementInfo::PlacementUnit *curPU)
 
 void PlacementInfo::resetElementBinGrid()
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
     for (auto &typeGrid : SharedBELTypeBinGrid)
         for (auto &curRow : typeGrid)
             for (auto curBin : curRow)
@@ -891,6 +903,7 @@ void PlacementInfo::resetElementBinGrid()
 
 void PlacementInfo::updateElementBinGrid()
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
     resetElementBinGrid();
     cellId2location.resize(designInfo->getNumCells());
 
@@ -1061,6 +1074,7 @@ void PlacementInfo::updateElementBinGrid()
 
 void PlacementInfo::adjustLUTFFUtilization_Packablity(float neighborDisplacementUpperbound, bool enfore)
 {
+    AMF_PROFILE_FUNCTION("density_update");
     assert(getProgress() > 0.3);
     // based on progress, set the frequency of adjustment
     bool doUpdate = false;
@@ -1261,6 +1275,7 @@ void PlacementInfo::adjustLUTFFUtilization_Packablity(float neighborDisplacement
 // refer to RippleFPGA's implementation
 void PlacementInfo::adjustLUTFFUtilization_Routability(bool enfore)
 {
+    AMF_PROFILE_FUNCTION("density_update");
     print_status("PlacementInfo: adjusting LUT/FF utilization based on Routability");
 
     // calculate the congestion ratio for the bin grid
@@ -1397,6 +1412,7 @@ void PlacementInfo::adjustLUTFFUtilization_Routability(bool enfore)
 
 void PlacementInfo::adjustLUTFFUtilization_Clocking()
 {
+    AMF_PROFILE_FUNCTION("density_update");
     print_status("PlacementInfo: adjusting FF utilization based on Clock Utilization");
 
     float infateRatio = 1.5;
@@ -1499,6 +1515,7 @@ void PlacementInfo::adjustLUTFFUtilization_Clocking()
 
 void PlacementInfo::adjustLUTFFUtilization_Routability_Reset()
 {
+    AMF_PROFILE_FUNCTION("density_update");
     // sometime, the HPWL increase too much, we need to reset the adjustion
     std::vector<float> &compatiblePlacementTable_cellId2InfationRatio =
         compatiblePlacementTable->getcellId2InfationRatio();
@@ -1532,6 +1549,7 @@ void PlacementInfo::adjustLUTFFUtilization_Routability_Reset()
 
 void PlacementInfo::adjustLUTFFUtilization(float neighborDisplacementUpperbound, bool enfore)
 {
+    AMF_PROFILE_FUNCTION("density_update");
     if (neighborDisplacementUpperbound > 0)
     {
         print_status("PlacementInfo: adjusting LUT/FF Utilization");
@@ -1550,6 +1568,7 @@ void PlacementInfo::adjustLUTFFUtilization(float neighborDisplacementUpperbound,
 
 void PlacementInfo::dumpCongestion(std::string dumpFileName)
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     dumpFileName = dumpFileName;
     print_status("PlacementInfo: dumping congestion rate to: " + dumpFileName);
     std::vector<std::vector<PlacementInfo::PlacementBinInfo *>> &curBinGrid = globalBinGrid;
@@ -1570,6 +1589,7 @@ void PlacementInfo::dumpCongestion(std::string dumpFileName)
 
 void PlacementInfo::createSiteBinGrid()
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
     // std::vector<std::string> checkSiteNameList{"SLICEL", "SLICEM", "DSP48E2", "RAMBFIFO18"};
     std::vector<std::string> checkSiteNameList{"SLICEL", "SLICEM"};
     siteGridForMacros.clear();
@@ -1638,6 +1658,7 @@ void PlacementInfo::PlacementSiteBinInfo::addSiteIntoBin(DeviceInfo::DeviceSite 
 
 void PlacementInfo::resetSiteBinGrid()
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
     for (auto curRow : siteGridForMacros)
         for (auto curBin : curRow)
             curBin->reset();
@@ -1645,6 +1666,7 @@ void PlacementInfo::resetSiteBinGrid()
 
 void PlacementInfo::updateSiteBinGrid()
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
     assert(false && "unimplemented");
     // resetSiteBinGrid();
     // for (auto curMacro : placementMacros)
@@ -1671,6 +1693,7 @@ void PlacementInfo::updateSiteBinGrid()
 
 void PlacementInfo::updateCells2PlacementUnits()
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
     cellId2PlacementUnitVec.resize(designInfo->getNumCells());
     cellId2CellBinInfo.resize(designInfo->getNumCells());
     for (int i = 0; i < designInfo->getNumCells(); i++)
@@ -1684,6 +1707,7 @@ void PlacementInfo::updateCells2PlacementUnits()
 
 void PlacementInfo::dumpVivadoPlacementTclWithPULegalizationInfo(std::string dumpFile)
 {
+    AMF_PROFILE_FUNCTION("export_vivado");
     print_status("PlacementInfo: dumping placment Tcl commands archieve to: " + dumpFile);
     dumpPlacementUnitLocationCnt++;
     if (dumpFile != "")
@@ -1711,6 +1735,7 @@ void PlacementInfo::dumpVivadoPlacementTclWithPULegalizationInfo(std::string dum
 
 void PlacementInfo::dumpPlacementUnitInformation(std::string dumpFile)
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
     dumpFile += ".gz";
     print_status("PlacementInfo: dumping PU information archieve to: " + dumpFile);
     dumpPlacementUnitLocationCnt++;
@@ -1740,6 +1765,7 @@ void PlacementInfo::dumpPlacementUnitInformation(std::string dumpFile)
 // TODO: implement a checkpoint mechanism here
 void PlacementInfo::loadPlacementUnitInformation(std::string locFile)
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
     print_status("loading PU coordinate archieve from: " + locFile);
     print_warning("Please note that the loaded PU location information should be compatible with the other"
                   "information in the placer! Otherwise, there could be potential errors");
@@ -2007,6 +2033,7 @@ void PlacementInfo::loadPlacementUnitInformation(std::string locFile)
 
 void PlacementInfo::enhanceHighFanoutNet()
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
     for (auto curPNet : placementNets)
     {
         if (auto curNet = curPNet->getDesignNet())
@@ -2022,6 +2049,7 @@ void PlacementInfo::enhanceHighFanoutNet()
 
 void PlacementInfo::enhanceRiskyClockNet()
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
     for (auto curClockNet : clockNets)
     {
         int leftId, rightId, topId, bottomId;
@@ -2061,6 +2089,7 @@ void PlacementInfo::enhanceRiskyClockNet()
 
 void PlacementInfo::enhanceDDRNet()
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
     for (auto curPNet : placementNets)
     {
         if (auto curNet = curPNet->getDesignNet())
@@ -2075,6 +2104,7 @@ void PlacementInfo::enhanceDDRNet()
 
 bool PlacementInfo::checkClockUtilization(bool dump)
 {
+    AMF_PROFILE_FUNCTION("validation");
     clockNetCoverages.clear();
     clockRegionUtilization.clear();
     clockRegionUtilization.resize(deviceInfo->getClockRegionNumY(),
@@ -2151,6 +2181,7 @@ bool PlacementInfo::checkClockUtilization(bool dump)
 
 void PlacementInfo::dumpOverflowClockUtilization()
 {
+    AMF_PROFILE_FUNCTION("diagnostic_output");
 
     for (int i = deviceInfo->getClockRegionNumY() - 1; i >= 0; i--)
     {
@@ -2213,6 +2244,7 @@ bool PlacementInfo::boundaryClusteringEnabled() const
 }
 void PlacementInfo::clearRegionPreferences()
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
     regionPreferences.clear();
     PU2ClockRegionCenters.clear();
     PU2ClockRegionColumn.clear();
@@ -2243,6 +2275,7 @@ bool PlacementInfo::regionTarget(PlacementUnit *pu,int region,float &x,float &y)
 }
 void PlacementInfo::refreshRegionPreferences()
 {
+    AMF_PROFILE_FUNCTION("placement_bookkeeping");
     if(regionPreferences.empty())return;
     // Compare pointer values before dereferencing: packing can retire PUs.
     std::unordered_set<PlacementUnit *> live(placementUnits.begin(),placementUnits.end());
