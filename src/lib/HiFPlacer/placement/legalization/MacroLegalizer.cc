@@ -51,6 +51,14 @@ MacroLegalizer::MacroLegalizer(std::string legalizerName, PlacementInfo *placeme
     }
 
     clockRegionAware = false;
+    if (JSONCfg.count("MacroCandidateSelection"))
+    {
+        const auto &selection = JSONCfg.at("MacroCandidateSelection");
+        if (selection != "legacy" && selection != "cached_topk")
+            throw std::invalid_argument("MacroCandidateSelection must be legacy or cached_topk");
+        cachedCandidateSelection = selection == "cached_topk";
+    }
+    verifyCandidateCosts = JSONCfg.count("VerifyMacroCandidateCosts") && JSONCfg.at("VerifyMacroCandidateCosts") == "true";
 }
 
 void MacroLegalizer::legalize(bool exactLegalization, bool directLegalization, bool _timingDrivenLegalize)
@@ -108,7 +116,8 @@ void MacroLegalizer::roughlyLegalize()
 
         createBipartiteGraph();
         minCostBipartiteMatcher = new MinCostBipartiteMatcher(macro2Sites.size(), rightSiteIds.size(),
-                                                              macro2Sites.size(), adjList, nJobs, verbose);
+                                                              macro2Sites.size(), adjList, nJobs, verbose,
+                JSONCfg.count("BipartiteMatchingBackend") ? JSONCfg.at("BipartiteMatchingBackend") : "component_assignment");
 
         minCostBipartiteMatcher->solve();
         updateMatchingAndUnmatchedMacroCells();
@@ -138,7 +147,8 @@ void MacroLegalizer::fixedColumnLegalize(bool directLegalization)
         resetMacroCell2SitesInDistance();
         createBipartiteGraph();
         minCostBipartiteMatcher = new MinCostBipartiteMatcher(macro2Sites.size(), rightSiteIds.size(),
-                                                              macro2Sites.size(), adjList, nJobs, verbose);
+                                                              macro2Sites.size(), adjList, nJobs, verbose,
+                JSONCfg.count("BipartiteMatchingBackend") ? JSONCfg.at("BipartiteMatchingBackend") : "component_assignment");
 
         minCostBipartiteMatcher->solve();
         updateMatchingAndUnmatchedMacroCells();
@@ -750,6 +760,8 @@ void MacroLegalizer::findPossibleLegalLocation(bool fixedColumn)
     }
 
     int numMacroCells = macroCellsToLegalize.size();
+    selectedCandidateCosts.clear();
+    selectedCandidateCosts.resize(numMacroCells);
 
     if (verbose)
     {
@@ -888,11 +900,34 @@ void MacroLegalizer::findPossibleLegalLocation(bool fixedColumn)
                 }
             }
         }
-        if (macro2Sites[curCell].size() > 1)
-            quick_sort_WLChange(curCell, macro2Sites[curCell], 0, macro2Sites[curCell].size() - 1,
-                                cellLoc[curCell->getCellId()]);
-        if (macro2Sites[curCell].size() > (unsigned int)maxNumCandidate)
-            macro2Sites[curCell].resize(maxNumCandidate);
+        auto &sites = macro2Sites[curCell];
+        if (cachedCandidateSelection)
+        {
+            std::vector<std::pair<float, std::size_t>> ranked;
+            ranked.reserve(sites.size());
+            for (std::size_t candidate = 0; candidate < sites.size(); ++candidate)
+                ranked.emplace_back(getHPWLChange(curCell, sites[candidate]), candidate);
+            const std::size_t keep = std::min(sites.size(), static_cast<std::size_t>(maxNumCandidate));
+            // Equal costs retain candidate-search order. The old quicksort had
+            // a different tie order, so this mode is validated as a QoR change.
+            std::partial_sort(ranked.begin(), ranked.begin() + keep, ranked.end());
+            std::vector<DeviceInfo::DeviceSite *> selected;
+            selected.reserve(keep);
+            auto &costs = selectedCandidateCosts[i];
+            costs.reserve(keep);
+            for (std::size_t candidate = 0; candidate < keep; ++candidate)
+            {
+                selected.push_back(sites[ranked[candidate].second]);
+                costs.push_back(ranked[candidate].first);
+            }
+            sites.swap(selected);
+        }
+        else
+        {
+            if (sites.size() > 1)
+                quick_sort_WLChange(curCell, sites, 0, sites.size() - 1, cellLoc[curCell->getCellId()]);
+            if (sites.size() > static_cast<unsigned int>(maxNumCandidate)) sites.resize(maxNumCandidate);
+        }
     }
 
     // print_info("#total macro cell = " + std::to_string(macro2Sites.size()));
@@ -912,15 +947,20 @@ void MacroLegalizer::createBipartiteGraph()
     {
         auto curCell = macroCellsToLegalize[leftCellId];
         adjList[leftCellId].clear();
-        for (auto curSite : macro2Sites[curCell])
+        const auto &candidates = macro2Sites[curCell];
+        for (std::size_t candidate = 0; candidate < candidates.size(); ++candidate)
         {
+            auto curSite = candidates[candidate];
             if (rightSiteIds.find(curSite) == rightSiteIds.end())
             {
                 int curSiteCnt = rightSiteIds.size();
                 rightSiteIds[curSite] = curSiteCnt;
                 siteList.push_back(curSite);
             }
-            float tmpCost = getHPWLChange(curCell, curSite);
+            float tmpCost = cachedCandidateSelection ? selectedCandidateCosts.at(leftCellId).at(candidate)
+                                                     : getHPWLChange(curCell, curSite);
+            if (cachedCandidateSelection && verifyCandidateCosts && tmpCost != getHPWLChange(curCell, curSite))
+                throw std::logic_error("Macro candidate cost changed between selection and graph construction");
             adjList[leftCellId].emplace_back(rightSiteIds[curSite], tmpCost);
             if (tmpCost < minCost)
             {

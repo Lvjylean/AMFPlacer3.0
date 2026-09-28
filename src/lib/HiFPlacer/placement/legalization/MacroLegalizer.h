@@ -212,6 +212,10 @@ class MacroLegalizer
      *
      */
     std::map<DesignInfo::DesignCell *, std::vector<DeviceInfo::DeviceSite *>> macro2Sites;
+    bool cachedCandidateSelection = true;
+    bool verifyCandidateCosts = false;
+    // Rebuilt for each search; indices follow macroCellsToLegalize and macro2Sites.
+    std::vector<std::vector<float>> selectedCandidateCosts;
 
     /**
      * @brief a cache record the candidate sites within a given displacement threshold for each cell in the macros
@@ -761,7 +765,7 @@ class MacroLegalizer
         float newHPWL = 0.0;
         auto tmpPU = placementInfo->getPlacementUnitByCell(curCell);
         float PUX = 0.0, PUY = 0.0;
-        auto nets = placementInfo->getPlacementUnitId2Nets()[tmpPU->getId()];
+        const auto &nets = placementInfo->getPlacementUnitId2Nets()[tmpPU->getId()];
         float numCellsInMacro = 1.0;
         if (dynamic_cast<PlacementInfo::PlacementUnpackedCell *>(tmpPU))
         {
@@ -803,7 +807,7 @@ class MacroLegalizer
         float oriHPWL = 0.0;
         float newHPWL = 0.0;
         float PUX = 0.0, PUY = 0.0;
-        auto nets = placementInfo->getPlacementUnitId2Nets()[tmpPU->getId()];
+        const auto &nets = placementInfo->getPlacementUnitId2Nets()[tmpPU->getId()];
 
         PUX = curSite->X();
         PUY = curSite->Y();
@@ -837,7 +841,7 @@ class MacroLegalizer
             return std::fabs(PUX - tmpPU->X()) + y2xRatio * std::fabs(PUY - tmpPU->Y());
         float oriHPWL = 0.0;
         float newHPWL = 0.0;
-        auto nets = placementInfo->getPlacementUnitId2Nets()[tmpPU->getId()];
+        const auto &nets = placementInfo->getPlacementUnitId2Nets()[tmpPU->getId()];
 
         for (auto curNet : nets)
         {

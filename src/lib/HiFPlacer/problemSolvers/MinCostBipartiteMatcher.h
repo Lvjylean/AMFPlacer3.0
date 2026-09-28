@@ -13,9 +13,10 @@
 #ifndef _MinCostBipartiteMatcher
 #define _MinCostBipartiteMatcher
 
-#include "PlacementInfo.h"
 #include "minCostFlow/MinCostFlow.h"
 #include "sysInfo.h"
+#include <cstring>
+#include <stdexcept>
 #include <assert.h>
 #include <fstream>
 #include <iostream>
@@ -32,10 +33,19 @@ class MinCostBipartiteMatcher
 {
   public:
     MinCostBipartiteMatcher(int numLeftNodes, int numRightNodes, int numExpectedMatches,
-                            std::vector<std::vector<std::pair<int, float>>> &adjList, int maxThreadNum, bool verbose)
+                            std::vector<std::vector<std::pair<int, float>>> &adjList, int maxThreadNum, bool verbose,
+                            const std::string &backend = "component_assignment")
         : numLeftNodes(numLeftNodes), numRightNodes(numRightNodes), numExpectedMatches(numExpectedMatches),
-          adjList(adjList), maxThreadNum(maxThreadNum), verbose(verbose)
+          adjList(adjList), maxThreadNum(maxThreadNum), verbose(verbose), backend(backend)
     {
+        if (numLeftNodes < 0 || numRightNodes < 0 || numExpectedMatches < 0 || numExpectedMatches > numLeftNodes ||
+            maxThreadNum < 1 || adjList.size() != static_cast<std::size_t>(numLeftNodes))
+            throw std::invalid_argument("Invalid bipartite matcher dimensions or thread count");
+        if (backend != "legacy" && backend != "component_ssp" && backend != "component_spfa" && backend != "component_assignment")
+            throw std::invalid_argument("BipartiteMatchingBackend must be legacy, component_ssp, component_spfa, or component_assignment");
+        left2right.assign(numLeftNodes, -1);
+        right2left.assign(numRightNodes, -1);
+        if (backend != "legacy" || numExpectedMatches == 0) return;
 
         std::vector<int> leftId2ConnectedSubgraphId(0);
         leftId2ConnectedSubgraphId.resize(numLeftNodes, -1);
@@ -121,6 +131,7 @@ class MinCostBipartiteMatcher
     int maxThreadNum;
     int threadNum = 1;
     bool verbose;
+    std::string backend;
 
     std::vector<MinCostFlow *> minCostFlowSolvers;
     int srcNode;

@@ -12,11 +12,57 @@
  */
 
 #include "MinCostBipartiteMatcher.h"
+#include "SparseMinCostMatching.h"
+#include <atomic>
+#include <cstdlib>
+#include <iomanip>
 #include <omp.h>
 
 void MinCostBipartiteMatcher::solve()
 {
     AMF_PROFILE_FUNCTION("bipartite_matching");
+    // Optional diagnostic snapshots are replayable without loading a device or
+    // netlist. They are disabled in normal runs and never change candidate edges.
+    if (const char *directory = std::getenv("AMF_MATCHER_DUMP_DIR"))
+    {
+        const char *threshold = std::getenv("AMF_MATCHER_DUMP_MIN_LEFT");
+        const char *limit = std::getenv("AMF_MATCHER_DUMP_MAX_FILES");
+        static std::atomic<int> dumped{0};
+        if (numLeftNodes >= (threshold ? std::stoi(threshold) : 10000))
+        {
+            const int id = dumped.fetch_add(1);
+            if (id < (limit ? std::stoi(limit) : 3))
+            {
+                AMF_PROFILE_SCOPE("diagnostics", "matching_graph_snapshot");
+                std::ofstream output(std::string(directory) + "/matching-" + std::to_string(id) + ".txt");
+                if (!output) throw std::runtime_error("Cannot create matching graph snapshot");
+                output << "AMF_MATCHING_V1 " << numLeftNodes << ' ' << numRightNodes << ' ' << numExpectedMatches << '\n';
+                output << std::setprecision(std::numeric_limits<float>::max_digits10);
+                for (int left = 0; left < numLeftNodes; ++left)
+                    for (const auto &edge : adjList[left]) output << left << ' ' << edge.first << ' ' << edge.second << '\n';
+            }
+        }
+    }
+    const auto started = amf_matching::Clock::now();
+    if (backend != "legacy")
+    {
+        auto result = amf_matching::solve(adjList, numRightNodes, numExpectedMatches, maxThreadNum,
+                                          backend == "component_ssp", backend == "component_assignment");
+        left2right = std::move(result.leftToRight);
+        std::fill(right2left.begin(), right2left.end(), -1);
+        for (int left = 0; left < numLeftNodes; ++left)
+            if (left2right[left] >= 0) right2left[left2right[left]] = left;
+        std::ostringstream summary;
+        summary << "AMF_MATCHER backend=" << backend << " left=" << numLeftNodes << " right=" << numRightNodes
+                << " edges=" << result.edges << " components=" << result.components
+                << " largest_left=" << result.largestLeft << " largest_edges=" << result.largestEdges
+                << " matched=" << result.cardinality << " cost=" << std::setprecision(12) << result.cost
+                << " prepare_s=" << result.preparationSeconds << " kernel_s=" << result.solveSeconds
+                << " longest_task_s=" << result.longestTaskSeconds << " solve_s=" << amf_matching::seconds(started);
+        print_info(summary.str());
+        return;
+    }
+    if (numExpectedMatches == 0) return;
     int numSolvers = minCostFlowSolvers.size();
 #pragma omp parallel for schedule(dynamic)
     for (int solverId = 0; solverId < numSolvers; solverId++)
@@ -40,6 +86,8 @@ void MinCostBipartiteMatcher::solve()
             }
         }
     }
+    print_info("AMF_MATCHER backend=legacy left=" + std::to_string(numLeftNodes) +
+               " right=" + std::to_string(numRightNodes) + " solve_s=" + std::to_string(amf_matching::seconds(started)));
 }
 
 void MinCostBipartiteMatcher::getConnectedSubgraphAdjList(std::vector<std::vector<std::pair<int, float>>> &adjList,

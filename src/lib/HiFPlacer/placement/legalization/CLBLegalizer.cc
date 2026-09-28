@@ -113,7 +113,8 @@ void CLBLegalizer::roughlyLegalize()
 
         createBipartiteGraph();
         minCostBipartiteMatcher =
-            new MinCostBipartiteMatcher(PU2Sites.size(), rightSiteIds.size(), PU2Sites.size(), adjList, nJobs, verbose);
+            new MinCostBipartiteMatcher(PU2Sites.size(), rightSiteIds.size(), PU2Sites.size(), adjList, nJobs, verbose,
+                JSONCfg.count("BipartiteMatchingBackend") ? JSONCfg.at("BipartiteMatchingBackend") : "component_assignment");
 
         minCostBipartiteMatcher->solve();
         updateMatchingAndUnmatchedPUs();
@@ -143,7 +144,8 @@ void CLBLegalizer::fixedColumnLegalize()
         resetPU2SitesInDistance();
         createBipartiteGraph();
         minCostBipartiteMatcher =
-            new MinCostBipartiteMatcher(PU2Sites.size(), rightSiteIds.size(), PU2Sites.size(), adjList, nJobs, verbose);
+            new MinCostBipartiteMatcher(PU2Sites.size(), rightSiteIds.size(), PU2Sites.size(), adjList, nJobs, verbose,
+                JSONCfg.count("BipartiteMatchingBackend") ? JSONCfg.at("BipartiteMatchingBackend") : "component_assignment");
 
         minCostBipartiteMatcher->solve();
         updateMatchingAndUnmatchedPUs();

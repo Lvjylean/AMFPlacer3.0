@@ -201,3 +201,6 @@ target_link_libraries(checkInitialCLBLegality Packing GlobalPlacer Legalization 
 
 add_executable(checkSAY2XRatio EXCLUDE_FROM_ALL tests/check_sa_y2x_ratio.cc)
 target_link_libraries(checkSAY2XRatio ProblemSolvers Utils pthread ${Boost_LIBRARIES})
+
+add_executable(checkBipartiteMatching EXCLUDE_FROM_ALL tests/check_bipartite_matching.cc)
+target_link_libraries(checkBipartiteMatching ProblemSolvers Utils pthread ${Boost_LIBRARIES})
