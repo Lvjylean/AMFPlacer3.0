@@ -1,5 +1,7 @@
 # U250 适配：输入与器件模型
 
+> 本页记录2026-09-26输入移植阶段的历史行为与复现命令；其中RPM模式现在需显式传入 `--x-model rpm`。当前U250列构造规则与使用配置以 `coordinate-unification.md` 为准。
+
 2026-09-26，开发分支 `codex/u250-uram`。本阶段实现 U250 器件数据和 URAM 网表读取；完整 U250 布局、URAM 合法化和布线验证仍待后续阶段完成。
 
 ## 当前范围
@@ -31,7 +33,7 @@ python3 scripts/amf3.py build --jobs 8
   -tclargs --part xcu250-figd2104-2L-e <new-device-directory>
 python3 scripts/prepare_fabric_device.py \
   <new-device-directory>/sites.tsv <new-device.zip> \
-  --part xcu250-figd2104-2L-e --metadata <new-device-directory>/metadata.tsv
+  --part xcu250-figd2104-2L-e --metadata <new-device-directory>/metadata.tsv --x-model rpm
 python3 scripts/amf3.py inspect --config <input-config.json> --binary <build>/AMFPlacer
 ```
 

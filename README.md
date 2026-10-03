@@ -52,6 +52,8 @@ python3 AMFplacer3.0/scripts/sync_reports.py <run-id>
 
 U250 GETRF 完整流程使用 `python3 scripts/amf3.py full-run`，后端重试使用 `full-run --placement-run experiments/runs/<completed-amf-run>`。实现、复现命令与限制见 [GETRF 完整流程](docs/research/u250-getrf-full-flow.md)。
 
+按 2026-09-30 用户决定，`full-run` 默认允许 Vivado 修复 AMF 导入中的位置冲突，再执行完整布局布线；`--allow-import-repair` 保留兼容。需要严格导入诊断时显式使用 `--strict-import`，或用 `--import-only` 只验证严格导入。两种策略都保存导入差异、最终位置保留率、DRC、布线与时序结果，详见 [实验策略](docs/experiment-policy.md)。
+
 ## 已验证基线
 
 U250 已开放输入检查和独立硬资源分配/合法化，覆盖 URAM 与 Carry/DSP 专用级联 SLR 检查。`amf3.py legalize-resources` 执行本阶段，`amf3.py validate-resources` 用 Vivado 回读部分位置。已新增实验性 `amf3.py full-run` 入口并修复 GETRF 的 SRL/MUX 初始打包与最终 CLB 映射问题，修复版 AMF 全部 856,998 个单元导出及 Vivado 全量实现已通过：928,432 条可布线网络全部完成，DRC 错误/严重警告为 0，99.7855% 原始 LOC/BEL 保留。本次 10 ns 下 WNS −2.886 ns，setup 时序仍未收敛。固定基线见 `experiments/baselines/getrf-u250-full-20260926.json`；验证二进制为 `builds/validated-getrf-u250-full/AMFPlacer`。外部 floorplan 接入和 AMF SLL 代价留待后续。输入层记录见 [U250 输入适配](docs/research/u250-input-adaptation.md)，本阶段验证、命令和限制见 [U250 资源合法化](docs/research/u250-resource-legalization.md)。

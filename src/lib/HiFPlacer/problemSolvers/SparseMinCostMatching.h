@@ -15,8 +15,9 @@
 #include <utility>
 #include <vector>
 
-// Unit-capacity bipartite matching. Maximize cardinality up to the requested
-// limit, then minimize the sum of the original candidate-edge costs.
+// Unit-capacity bipartite matching. With zero forward bias, maximize cardinality
+// then minimize the original edge cost. A positive asymmetric residual bias is
+// an experimental path-selection heuristic, not the same minimum-cost objective.
 namespace amf_matching
 {
 using Adjacency = std::vector<std::vector<std::pair<int, float>>>;
@@ -71,22 +72,23 @@ struct Component
     std::size_t edges = 0;
 };
 
-// Consecutive forward/reverse edges avoid per-edge allocation. Reverse cost
-// is exactly -forward cost; there is no path-length-dependent epsilon penalty.
+// Consecutive forward/reverse edges avoid per-edge allocation. Optional bias
+// reproduces c + bias / -c rather than c + bias / -(c + bias).
 class Network
 {
     struct Edge { int to; double cost; bool available; };
     std::vector<Edge> edges;
     std::vector<std::vector<int>> outgoing;
+    double forwardBias;
   public:
-    Network(int nodes, std::size_t forwardEdges) : outgoing(nodes)
+    Network(int nodes, std::size_t forwardEdges, double bias = 0) : outgoing(nodes), forwardBias(bias)
     {
         edges.reserve(2 * forwardEdges);
     }
     int add(int from, int to, double cost)
     {
         const int id = static_cast<int>(edges.size());
-        edges.push_back({to, cost, true});
+        edges.push_back({to, cost + forwardBias, true});
         edges.push_back({from, -cost, false});
         outgoing[from].push_back(id);
         outgoing[to].push_back(id + 1);
@@ -192,10 +194,12 @@ class Network
 // row. Private dummy columns make deficient candidate graphs feasible. Their
 // penalty exceeds every possible real-edge total, so maximizing the number of
 // real assignments takes precedence over minimizing cost. No dense matrix is
-// created. The primal/dual invariant is u[row] + v[column] <= edge cost, with
-// equality on assigned edges and v == 0 on unassigned columns.
+// created. At zero bias, matched edges are tight. With positive bias, forward
+// reduced cost is c + bias - u - v and matched reverse cost is u + v - c;
+// reverse transitions can no longer be collapsed to zero length. Free columns
+// retain v == 0. Implicit source/sink arcs add the same 2*bias to every path.
 inline void solveAssignment(const Component &component, const Adjacency &adjacency,
-                            const std::vector<int> &rightLocal, std::vector<int> &matches)
+                            const std::vector<int> &rightLocal, std::vector<int> &matches, double forwardBias = 0)
 {
     const int rows = static_cast<int>(component.left.size());
     const int realColumns = static_cast<int>(component.right.size());
@@ -203,10 +207,11 @@ inline void solveAssignment(const Component &component, const Adjacency &adjacen
     double maximumCost = 0;
     for (int left : component.left)
         for (const auto &edge : adjacency[left]) maximumCost = std::max(maximumCost, double(edge.second));
-    const double dummyCost = (rows + 1.0) * (maximumCost + 1.0);
+    const double dummyCost = (rows + 1.0) * (maximumCost + 1.0 + forwardBias);
     const double infinity = std::numeric_limits<double>::infinity();
     std::vector<double> rowDual(rows, 0), columnDual(columns, 0), distance(columns, infinity);
     std::vector<int> rowColumn(rows, -1), columnRow(columns, -1), predecessor(columns, -1);
+    std::vector<double> assignedCost(rows, 0), predecessorCost(columns, 0), rowDistance(rows, 0);
     std::vector<unsigned char> settled(columns, 0);
     std::vector<int> touched, visited;
     // Free columns win ties, avoiding unnecessary zero-cost alternating trees.
@@ -217,13 +222,13 @@ inline void solveAssignment(const Component &component, const Adjacency &adjacen
     heap.reserve(columns);
     for (int root = 0; root < rows; ++root)
     {
-        rowDual[root] = dummyCost - columnDual[realColumns + root];
+        rowDual[root] = dummyCost + forwardBias - columnDual[realColumns + root];
         for (const auto &edge : adjacency[component.left[root]])
-            rowDual[root] = std::min(rowDual[root], double(edge.second) - columnDual[rightLocal[edge.first]]);
+            rowDual[root] = std::min(rowDual[root], double(edge.second) + forwardBias - columnDual[rightLocal[edge.first]]);
         auto relaxRow = [&](int row, double baseDistance) {
             auto offer = [&](int column, double cost) {
                 if (settled[column]) return;
-                double reduced = cost - rowDual[row] - columnDual[column];
+                double reduced = cost + forwardBias - rowDual[row] - columnDual[column];
                 if (reduced < 0)
                 {
                     const double tolerance = 64 * std::numeric_limits<double>::epsilon() *
@@ -237,6 +242,7 @@ inline void solveAssignment(const Component &component, const Adjacency &adjacen
                     if (!std::isfinite(distance[column])) touched.push_back(column);
                     distance[column] = candidate;
                     predecessor[column] = row;
+                    predecessorCost[column] = cost;
                     heap.emplace_back(candidate, columnRow[column] < 0 ? 0 : 1, column);
                     std::push_heap(heap.begin(), heap.end(), std::greater<Entry>());
                 }
@@ -256,7 +262,22 @@ inline void solveAssignment(const Component &component, const Adjacency &adjacen
             settled[column] = 1;
             visited.push_back(column);
             if (columnRow[column] < 0) { endpoint = column; break; }
-            relaxRow(columnRow[column], distance[column]);
+            const int row = columnRow[column];
+            double reverseReduced = 0;
+            if (forwardBias > 0)
+            {
+                reverseReduced = rowDual[row] + columnDual[column] - assignedCost[row];
+                const double tolerance = 64 * std::numeric_limits<double>::epsilon() *
+                    (1 + std::abs(rowDual[row]) + std::abs(columnDual[column]) + std::abs(assignedCost[row]));
+                if (reverseReduced < -tolerance)
+                    throw std::logic_error("assignment: infeasible reverse residual potential");
+                reverseReduced = std::max(0.0, reverseReduced);
+            }
+            // Each assigned row has exactly one incoming reverse edge. Its
+            // shortest distance is known when that column is settled, even if
+            // the positive reverse cost puts it beyond the eventual endpoint.
+            rowDistance[row] = distance[column] + reverseReduced;
+            relaxRow(row, rowDistance[row]);
         }
         if (endpoint < 0) throw std::logic_error("assignment: private dummy column was not reachable");
         const double pathCost = distance[endpoint];
@@ -264,7 +285,11 @@ inline void solveAssignment(const Component &component, const Adjacency &adjacen
         for (int column : visited)
         {
             const double delta = pathCost - distance[column];
-            if (columnRow[column] >= 0) rowDual[columnRow[column]] += delta;
+            if (columnRow[column] >= 0)
+            {
+                const int row = columnRow[column];
+                rowDual[row] += forwardBias > 0 ? std::max(0.0, pathCost - rowDistance[row]) : delta;
+            }
             columnDual[column] -= delta;
         }
         for (int column = endpoint; column >= 0; )
@@ -274,6 +299,7 @@ inline void solveAssignment(const Component &component, const Adjacency &adjacen
             const int previousColumn = rowColumn[row];
             rowColumn[row] = column;
             columnRow[column] = row;
+            assignedCost[row] = predecessorCost[column];
             column = previousColumn;
         }
         for (int column : touched)
@@ -295,7 +321,7 @@ inline void solveAssignment(const Component &component, const Adjacency &adjacen
 
 inline void solveComponent(const Component &component, const Adjacency &adjacency,
                            const std::vector<int> &rightLocal, int limit, std::vector<int> &matches,
-                           bool useDijkstra, bool useAssignment)
+                           bool useDijkstra, bool useAssignment, double forwardBias)
 {
     if (component.edges == 0 || limit == 0) return;
     if (component.left.size() == 1)
@@ -323,12 +349,12 @@ inline void solveComponent(const Component &component, const Adjacency &adjacenc
     const int leftCount = static_cast<int>(component.left.size());
     if (useAssignment && limit >= leftCount)
     {
-        solveAssignment(component, adjacency, rightLocal, matches);
+        solveAssignment(component, adjacency, rightLocal, matches, forwardBias);
         return;
     }
     const int source = leftCount + static_cast<int>(component.right.size());
     const int sink = source + 1;
-    Network network(sink + 1, component.edges + source);
+    Network network(sink + 1, component.edges + source, forwardBias);
     // The edge ID table is linear in the candidate count, with no global-node
     // arrays inside a task. Extraction retains the original candidate identity.
     std::vector<std::vector<int>> candidateEdges(leftCount);
@@ -355,12 +381,14 @@ inline void solveComponent(const Component &component, const Adjacency &adjacenc
 } // namespace detail
 
 inline Result solve(const Adjacency &adjacency, int rightCount, int requested, int threads,
-                    bool useDijkstra = true, bool useAssignment = false)
+                    bool useDijkstra = true, bool useAssignment = false, double forwardBias = 0)
 {
     const auto started = Clock::now();
     const int leftCount = static_cast<int>(adjacency.size());
     if (rightCount < 0 || requested < 0 || requested > leftCount || threads < 1)
         throw std::invalid_argument("matching: invalid dimensions, target, or thread count");
+    if (!std::isfinite(forwardBias) || forwardBias < 0)
+        throw std::invalid_argument("matching: forward bias must be finite and nonnegative");
     Result result;
     result.leftToRight.assign(leftCount, -1);
     detail::DisjointSet sets(leftCount + rightCount);
@@ -425,7 +453,7 @@ inline Result solve(const Adjacency &adjacency, int rightCount, int requested, i
         try
         {
             detail::solveComponent(components[order[task]], adjacency, rightLocal, requested,
-                                   result.leftToRight, useDijkstra, useAssignment);
+                                   result.leftToRight, useDijkstra, useAssignment, forwardBias);
         }
         catch (...) { errors[task] = std::current_exception(); }
         taskTimes[task] = seconds(taskStarted);

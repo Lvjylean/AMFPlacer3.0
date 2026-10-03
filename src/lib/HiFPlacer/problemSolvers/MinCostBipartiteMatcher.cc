@@ -47,7 +47,7 @@ void MinCostBipartiteMatcher::solve()
     if (backend != "legacy")
     {
         auto result = amf_matching::solve(adjList, numRightNodes, numExpectedMatches, maxThreadNum,
-                                          backend == "component_ssp", backend == "component_assignment");
+                                          backend == "component_ssp", backend == "component_assignment", forwardBias);
         left2right = std::move(result.leftToRight);
         std::fill(right2left.begin(), right2left.end(), -1);
         for (int left = 0; left < numLeftNodes; ++left)
@@ -56,7 +56,8 @@ void MinCostBipartiteMatcher::solve()
         summary << "AMF_MATCHER backend=" << backend << " left=" << numLeftNodes << " right=" << numRightNodes
                 << " edges=" << result.edges << " components=" << result.components
                 << " largest_left=" << result.largestLeft << " largest_edges=" << result.largestEdges
-                << " matched=" << result.cardinality << " cost=" << std::setprecision(12) << result.cost
+                << " matched=" << result.cardinality << " forward_bias=" << forwardBias
+                << " cost=" << std::setprecision(12) << result.cost
                 << " prepare_s=" << result.preparationSeconds << " kernel_s=" << result.solveSeconds
                 << " longest_task_s=" << result.longestTaskSeconds << " solve_s=" << amf_matching::seconds(started);
         print_info(summary.str());

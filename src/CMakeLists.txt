@@ -204,3 +204,14 @@ target_link_libraries(checkSAY2XRatio ProblemSolvers Utils pthread ${Boost_LIBRA
 
 add_executable(checkBipartiteMatching EXCLUDE_FROM_ALL tests/check_bipartite_matching.cc)
 target_link_libraries(checkBipartiteMatching ProblemSolvers Utils pthread ${Boost_LIBRARIES})
+
+# Device-specific coefficient regression; no placement or routing.
+add_executable(checkDelayCoefficients EXCLUDE_FROM_ALL tests/check_delay_coefficients.cc)
+target_link_libraries(checkDelayCoefficients DesignInfo DeviceInfo PlacementInfo PlacementTiming Utils
+                      pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+# Verify the production spreading displacement limiter without a device/netlist.
+add_executable(checkSpreadDisplacement EXCLUDE_FROM_ALL tests/check_spread_displacement.cc)
+
+add_executable(checkEmptyLegalization EXCLUDE_FROM_ALL tests/check_empty_legalization.cc)
+target_link_libraries(checkEmptyLegalization Packing GlobalPlacer Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})

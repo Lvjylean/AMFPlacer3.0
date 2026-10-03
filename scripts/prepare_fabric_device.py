@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Convert audited Vivado fabric sites into AMF's device input (format v2).
 
-X preserves relative RPM column spacing, normalized by the common slice pitch.
+X uses ordered tile-column bases, +/-0.25 subslots and audited special columns.
+The previous normalized-RPM mode is explicit, for historical reproduction only.
 Y uses actual tile-row anchors and subdivisions of each resource tile.
 The exported center fields are placement anchors, not physical site centers.
 These are placement metric coordinates, not a calibrated wire-delay model.
@@ -15,6 +16,7 @@ import json
 from pathlib import Path
 import re
 import zipfile
+from fabric_x_coordinates import derive_x_map, mapped_x
 
 
 def digest(path):
@@ -25,7 +27,8 @@ def digest(path):
     return h.hexdigest()
 
 
-def convert(source, destination, part, metadata=None):
+def convert(source, destination, part, metadata=None, *, x_model='tile-columns',
+            structure_sites=None, structure_tiles=None):
     source, destination = Path(source), Path(destination)
     if any(p.exists() for p in (destination, destination.with_suffix('.coordinates.json'),
                                   destination.with_suffix('.manifest.json'))):
@@ -71,12 +74,13 @@ def convert(source, destination, part, metadata=None):
     height = next(iter(heights))
     if not height:
         raise ValueError('No slice rows')
-    slice_x = sorted({r['rpm_x'] for r in rows if r['family'] == 'SLICE'})
-    pitches = Counter(b - a for a, b in zip(slice_x, slice_x[1:]) if b > a)
-    if not pitches:
-        raise ValueError('Need at least two slice columns to determine X pitch')
-    x_pitch = pitches.most_common(1)[0][0]
-    min_x = min(r['rpm_x'] for r in rows)
+    if x_model == 'rpm':
+        slice_x = sorted({r['rpm_x'] for r in rows if r['family'] == 'SLICE'})
+        pitches = Counter(b - a for a, b in zip(slice_x, slice_x[1:]) if b > a)
+        if not pitches:
+            raise ValueError('Need at least two slice columns to determine X pitch')
+        x_pitch = pitches.most_common(1)[0][0]
+        min_x = min(r['rpm_x'] for r in rows)
     slice_y = sorted({r['tile_y'] for r in rows if r['family'] == 'SLICE'})
     y_pitches = Counter(b - a for a, b in zip(slice_y, slice_y[1:]))
     if not y_pitches:
@@ -120,12 +124,31 @@ def convert(source, destination, part, metadata=None):
             if any(b['rpm_y'] <= a['rpm_y'] for a, b in zip(tile_sites, tile_sites[1:])):
                 raise ValueError('RPM/site order mismatch within tile')
             for i, row in enumerate(tile_sites):
-                row['x'] = (row['rpm_x'] - min_x) / x_pitch
                 row['y'] = (origin - y_origin) / y_pitch + i * span / n
     if any(len(v) != 1 for v in resource_geometry.values()):
         raise ValueError('Inconsistent resource tile geometry across columns/regions')
     geometry = {family: dict(tile_span_rows=next(iter(v))[0], sites_per_tile=next(iter(v))[1])
                 for family, v in resource_geometry.items()}
+    if x_model == 'tile-columns':
+        if structure_sites is None or structure_tiles is None:
+            raise ValueError('Tile-column coordinates require full structure sites and tiles')
+        x_mapping = derive_x_map(rows, structure_sites, structure_tiles)
+        coordinate_model = 'tile-columns-subsites-v3'
+    elif x_model == 'rpm':
+        x_mapping = dict(x_kind='rpm-affine', rpm_x_origin=min_x, rpm_x_pitch=x_pitch)
+        coordinate_model = 'normalized-rpm-x-tile-row-anchors-v2'
+    else:
+        raise ValueError('Unknown X model: ' + x_model)
+    anchors = {}
+    for row in rows:
+        row['x'] = mapped_x(row['rpm_x'], x_mapping)
+        if row['family'] == 'SLICE':
+            old = anchors.setdefault(row['rpm_y'], row['y'])
+            if abs(old - row['y']) > 1e-6:
+                raise ValueError('Ambiguous RPM Y to AMF Y mapping')
+    anchor_rows = sorted(anchors.items())
+    if any(b[1] <= a[1] for a, b in zip(anchor_rows, anchor_rows[1:])):
+        raise ValueError('Non-monotone RPM Y mapping')
     counts, prohibited = defaultdict(Counter), defaultdict(Counter)
     destination.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(destination, 'x', zipfile.ZIP_DEFLATED, compresslevel=6) as z:
@@ -141,25 +164,23 @@ def convert(source, destination, part, metadata=None):
                 f.write(line.encode())
     manifest = dict(schema='amf-fabric-device-v2', part=part, scope='fabric-sites',
                     source_sha256=digest(source), device_sha256=digest(destination),
-                    coordinate_model='normalized-rpm-x-tile-row-anchors-v2',
+                    coordinate_model=coordinate_model,
                     converter_sha256=digest(Path(__file__)), resource_geometry=geometry,
-                    x_pitch=x_pitch, slice_rows_per_clock_region=height,
+                    x_helper_sha256=digest(Path(__file__).with_name('fabric_x_coordinates.py')),
+                    slice_rows_per_clock_region=height,
                     site_count=len(rows), slr_count=len(counts), sites_by_slr=dict(counts),
                     unavailable_by_slr=dict(prohibited), clock_region_slr=cr_slr)
-    anchors = {}
-    for row in rows:
-        if row['family'] == 'SLICE':
-            old = anchors.setdefault(row['rpm_y'], row['y'])
-            if abs(old - row['y']) > 1e-6:
-                raise ValueError('Ambiguous RPM Y to AMF Y mapping')
-    anchor_rows = sorted(anchors.items())
-    if any(b[1] <= a[1] for a, b in zip(anchor_rows, anchor_rows[1:])):
-        raise ValueError('Non-monotone RPM Y mapping')
-    mapping = dict(schema='amf-coordinate-map-v1', part=part,
-                   model=manifest['coordinate_model'], rpm_x_origin=min_x,
-                   rpm_x_pitch=x_pitch, rpm_y_anchors=anchor_rows,
+    if x_model == 'rpm':
+        manifest['x_pitch'] = x_pitch
+    else:
+        manifest['x_sources'] = {name: dict(path=str(Path(p).resolve()), sha256=digest(p))
+            for name, p in [('structure_sites', structure_sites), ('structure_tiles', structure_tiles)]}
+        manifest['tile_column_count'] = len(x_mapping['tile_columns'])
+        manifest['special_column_count'] = len(x_mapping['special_columns'])
+    mapping = dict(schema='amf-coordinate-map-v2', part=part,
+                   model=manifest['coordinate_model'], **x_mapping, rpm_y_anchors=anchor_rows,
                    slice_rows_per_clock_region=height, tile_y_origin=y_origin, tile_y_pitch=y_pitch,
-                   reference_point='lower resource-row anchor; not physical center',
+                   reference_point='X: column subslot; Y: lower resource-row anchor; not physical center',
                    resource_geometry=geometry)
     mapping_path = destination.with_suffix('.coordinates.json')
     mapping_path.write_text(json.dumps(mapping, indent=2) + '\n')
@@ -177,5 +198,10 @@ if __name__ == '__main__':
     p.add_argument('output', type=Path)
     p.add_argument('--part', required=True)
     p.add_argument('--metadata', required=True, type=Path)
+    p.add_argument('--x-model', choices=['tile-columns', 'rpm'], default='tile-columns')
+    p.add_argument('--structure-sites', type=Path)
+    p.add_argument('--structure-tiles', type=Path)
     args = p.parse_args()
-    print(json.dumps(convert(args.sites, args.output, args.part, args.metadata), indent=2))
+    print(json.dumps(convert(args.sites, args.output, args.part, args.metadata,
+        x_model=args.x_model, structure_sites=args.structure_sites,
+        structure_tiles=args.structure_tiles), indent=2))

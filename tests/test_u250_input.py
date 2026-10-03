@@ -6,9 +6,11 @@ from pathlib import Path
 import tempfile
 import unittest
 import zipfile
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'scripts'))
 
 
 def load(name):
@@ -53,7 +55,7 @@ class U250InputTests(unittest.TestCase):
 
     def test_slr_and_unavailable_sites_survive_conversion(self):
         p = self.write_device(self.device_rows())
-        result = device.convert(p, self.root / 'device.zip', 'test')
+        result = device.convert(p, self.root / 'device.zip', 'test', x_model='rpm')
         self.assertEqual(result['slr_count'], 2)
         self.assertEqual(result['sites_by_slr'][0]['URAM288'], 1)
         self.assertEqual(result['unavailable_by_slr'][1]['URAM288'], 1)

@@ -11,6 +11,7 @@ import math
 from pathlib import Path
 import re
 import zipfile
+from fabric_x_coordinates import mapped_x, validate_x_map
 
 RESOURCE_KEYS = ('LUT','FF','MLUT','CARRY','MUX7','MUX8','MUX9','DSP','BRAM18','BRAM36','URAM')
 FABRIC_RE = re.compile(r'site=> (\S+) tile=> (\S+) clockRegionName=> (\S+) sitetype=> (\S+) tiletype=> (\S+) centerx=> (\S+) centery=> (\S+).* slr=> (\d+) prohibited=> ([01])$')
@@ -51,7 +52,8 @@ def make_geometry(fabric,sites,tiles,mapping,rules,part):
     anchors=mapping['rpm_y_anchors']
     if len(anchors)<2 or any(b[0]<=a[0] or b[1]<=a[1] for a,b in zip(anchors,anchors[1:])):
         raise ValueError('Non-monotone coordinate anchors')
-    if mapping['part']!=part or mapping['rpm_x_pitch']<=0:
+    validate_x_map(mapping)
+    if mapping['part']!=part:
         raise ValueError('Coordinate map mismatch')
     raw={s['site']:s for s in sites}
     if len(raw)!=len(sites): raise ValueError('Duplicate raw physical site')
@@ -62,7 +64,7 @@ def make_geometry(fabric,sites,tiles,mapping,rules,part):
     for row in fabric:
         s=raw.get(row['site'])
         if not s: raise ValueError('Missing raw fabric site: '+row['site'])
-        x=(float(s['rpm_x'])-mapping['rpm_x_origin'])/mapping['rpm_x_pitch']
+        x=mapped_x(float(s['rpm_x']),mapping)
         if abs(x-row['x'])>1e-5 or int(s['slr'])!=row['slr']:
             raise ValueError('Fabric coordinate/SLR mismatch: '+row['site'])
         if row['site_type'] in ('SLICEL','SLICEM') and abs(mapped_y(float(s['rpm_y']),mapping)-row['y'])>1e-5:
@@ -97,7 +99,7 @@ def make_geometry(fabric,sites,tiles,mapping,rules,part):
             candidates.append(dict(site=s['site'],kind='LOCAL_IP',site_type=typ,slr=int(s['slr']),
                 tile=s['tile'],tile_type=t['tile_type'] if t else None,
                 raw_rpm=[float(s['rpm_x']),float(s['rpm_y'])],
-                amf=[(float(s['rpm_x'])-mapping['rpm_x_origin'])/mapping['rpm_x_pitch'],
+                amf=[mapped_x(float(s['rpm_x']),mapping),
                      mapped_y(float(s['rpm_y']),mapping)],
                 configured_penalty_ns=rules['local_ip_delay_ns'],active=False,
                 reason='local footprint does not establish an unavoidable crossing'))
@@ -107,7 +109,7 @@ def make_geometry(fabric,sites,tiles,mapping,rules,part):
     # recognized tiles, complete CR-row coverage and fabric on both sides in each SLR.
     active_x=[]
     for io_id,(rpm_x,group) in enumerate(sorted(io_groups.items())):
-        x=(rpm_x-mapping['rpm_x_origin'])/mapping['rpm_x_pitch']
+        x=mapped_x(rpm_x,mapping)
         failures=[]
         expected_rows={int(re.fullmatch(r'X\d+Y(\d+)',r['clock_region'])[1]) for r in slice_rows}
         observed_rows=set()
@@ -195,6 +197,8 @@ def build(raw_dir,fabric_path,coordinates,rules_path,out):
         **{name:raw_dir/name for name in ('structure_sites.tsv','structure_tiles.tsv','structure_metadata.tsv','clock_regions.tsv','iobanks.tsv')}
         }.items()}
     report['sources']=sources
+    report['generator_sha256']=digest(Path(__file__))
+    report['x_helper_sha256']=digest(Path(__file__).with_name('fabric_x_coordinates.py'))
     report['export_metadata']=metadata
     report['rules_version']=rules['version']
     out.mkdir(parents=True)
@@ -232,4 +236,3 @@ if __name__=='__main__':
     a=p.parse_args()
     result=build(a.raw_dir,a.fabric,a.coordinates,a.rules,a.out)
     print(json.dumps({k:result[k] for k in ('part','regions','boundaries','unknown_site_types','model_sha256')},indent=2))
-

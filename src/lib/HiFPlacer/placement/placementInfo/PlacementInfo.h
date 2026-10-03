@@ -1096,7 +1096,7 @@ class PlacementInfo
             {
                 assert(forgetRatio <= 1);
                 float disX = std::fabs(x - lastSpreadX) * forgetRatio;
-                float disY = std::fabs(x - lastSpreadX) * forgetRatio;
+                float disY = std::fabs(y - lastSpreadY) * forgetRatio;
                 float dis = std::sqrt(disX * disX + disY * disY);
                 if (dis / limitDisplacement > 1)
                     forgetRatio /= (dis / limitDisplacement);

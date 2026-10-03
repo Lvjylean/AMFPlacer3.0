@@ -30,7 +30,7 @@ class CoordinateScaleTests(unittest.TestCase):
         source=self.root/'sites.tsv'
         with source.open('w') as f:
             w=csv.DictWriter(f,self.rows[0].keys(),delimiter='\t');w.writeheader();w.writerows(self.rows)
-        return candidate.convert(source,self.root/'device.zip','xcu250-figd2104-2L-e',self.meta)
+        return candidate.convert(source,self.root/'device.zip','xcu250-figd2104-2L-e',self.meta,x_model='rpm')
     def test_common_scale_and_geometry_survive(self):
         m=self.run_conversion()
         self.assertEqual(m['x_pitch'],16)

@@ -82,6 +82,8 @@ class MacroLegalizer
      */
     inline float getAverageDisplacementOfExactLegalization()
     {
+        if (noTarget)
+            return 0.0f;
         if (finalAverageDisplacement > 1000)
             return finalAverageDisplacement;
         float tmpAverageDisplacement = 0.0;
@@ -104,6 +106,8 @@ class MacroLegalizer
      */
     inline float getAverageDisplacementOfRoughLegalization()
     {
+        if (noTarget)
+            return 0.0f;
         return roughAverageDisplacement;
     }
 

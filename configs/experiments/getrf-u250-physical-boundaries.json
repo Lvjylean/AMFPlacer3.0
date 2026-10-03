@@ -38,5 +38,6 @@
   "BoundaryMinGainNs": "0.05",
   "BoundaryDisplacementCost": "0.0001",
   "TimingMaxEnhancement": "1000",
-  "QPStabilityGuard": "true"
+  "QPStabilityGuard": "true",
+  "BipartiteMatchingBackend": "legacy"
 }

@@ -18,6 +18,7 @@
 #include "PlacementInfo.h"
 #include "PlacementTimingInfo.h"
 #include "dumpZip.h"
+#include <array>
 #include <assert.h>
 #include <fstream>
 #include <iostream>
@@ -107,8 +108,9 @@ class PlacementTimingOptimizer
     }
 
     const float timingC0[10] = {95.05263521, -26.50563359, 77.42394117, 106.29195883, -14.975527};
-    const float timingC1[10] = {123.05017047, -169.25614191, -117.28028144, 208.53573639, 174.2573465};
-    const float timingC2[10] = {234.7694101, -433.99467294, -64.96319998, 373.78606257, 139.45226658};
+    // Selected once per device; both delay interfaces use these same coefficients.
+    const std::array<float, 10> timingC1;
+    const std::array<float, 10> timingC2;
 
     inline float getDelayByModel_conservative(float X1, float Y1, float X2, float Y2)
     {

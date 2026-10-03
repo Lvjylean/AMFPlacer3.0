@@ -16,6 +16,7 @@
 #include "minCostFlow/MinCostFlow.h"
 #include "sysInfo.h"
 #include <cstring>
+#include <cmath>
 #include <stdexcept>
 #include <assert.h>
 #include <fstream>
@@ -34,15 +35,17 @@ class MinCostBipartiteMatcher
   public:
     MinCostBipartiteMatcher(int numLeftNodes, int numRightNodes, int numExpectedMatches,
                             std::vector<std::vector<std::pair<int, float>>> &adjList, int maxThreadNum, bool verbose,
-                            const std::string &backend = "component_assignment")
+                            const std::string &backend = "legacy", double forwardBias = 0)
         : numLeftNodes(numLeftNodes), numRightNodes(numRightNodes), numExpectedMatches(numExpectedMatches),
-          adjList(adjList), maxThreadNum(maxThreadNum), verbose(verbose), backend(backend)
+          adjList(adjList), maxThreadNum(maxThreadNum), verbose(verbose), backend(backend), forwardBias(forwardBias)
     {
         if (numLeftNodes < 0 || numRightNodes < 0 || numExpectedMatches < 0 || numExpectedMatches > numLeftNodes ||
             maxThreadNum < 1 || adjList.size() != static_cast<std::size_t>(numLeftNodes))
             throw std::invalid_argument("Invalid bipartite matcher dimensions or thread count");
         if (backend != "legacy" && backend != "component_ssp" && backend != "component_spfa" && backend != "component_assignment")
             throw std::invalid_argument("BipartiteMatchingBackend must be legacy, component_ssp, component_spfa, or component_assignment");
+        if (!std::isfinite(forwardBias) || forwardBias < 0 || (backend == "legacy" && forwardBias != 0))
+            throw std::invalid_argument("Forward bias must be finite/nonnegative and is only configurable for new backends; legacy retains its built-in 0.01");
         left2right.assign(numLeftNodes, -1);
         right2left.assign(numRightNodes, -1);
         if (backend != "legacy" || numExpectedMatches == 0) return;
@@ -132,6 +135,7 @@ class MinCostBipartiteMatcher
     int threadNum = 1;
     bool verbose;
     std::string backend;
+    double forwardBias;
 
     std::vector<MinCostFlow *> minCostFlowSolvers;
     int srcNode;

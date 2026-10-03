@@ -13,6 +13,7 @@
  */
 
 #include "InitialPacker.h"
+#include "DSPRegisteredOutputs.h"
 #include "../legalization/HardResourceUtils.h"
 
 void InitialPacker::pack(bool hardResourcesOnly)
@@ -29,6 +30,23 @@ void InitialPacker::pack(bool hardResourcesOnly)
     if (!hardResourcesOnly) findMuxMacros();
     findBRAMMacros();
     findDSPMacros();
+    auto dspMetadata = JSONCfg.find("DSP registered outputs file");
+    if (dspMetadata != JSONCfg.end())
+    {
+        std::ifstream input(dspMetadata->second);
+        if (!input.good())
+            throw std::runtime_error("Cannot read DSP registered-output metadata: " + dspMetadata->second);
+        std::map<std::string, std::vector<std::string>> usedOutputs;
+        for (auto cell : designInfo->getCells())
+            if (cell->isDSP())
+                for (auto pin : cell->getOutputPins())
+                    if (pin->getNet() && !pin->getNet()->getPinsBeDriven().empty())
+                        usedOutputs[cell->getName()].push_back(pin->getRefPinName());
+        const auto names = readRegisteredDSPOutputs(input, usedOutputs);
+        for (auto name : names)
+            designInfo->getCell(name)->setHasDSPReg(true);
+        print_info("DCP-certified registered DSP outputs: " + std::to_string(names.size()));
+    }
 
     if (!hardResourcesOnly && JSONCfg.find("unpredictable macro file") != JSONCfg.end())
     {

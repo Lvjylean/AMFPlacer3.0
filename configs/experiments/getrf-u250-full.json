@@ -24,5 +24,6 @@
   "DSPCritical": "true",
   "MKL": "true",
   "GlobalPlacerPrintHPWL": "true",
-  "SLRBoundaryDelayNs": "1.5"
+  "SLRBoundaryDelayNs": "1.5",
+  "BipartiteMatchingBackend": "legacy"
 }

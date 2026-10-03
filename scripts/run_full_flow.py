@@ -2,6 +2,7 @@
 import datetime as dt
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -26,6 +27,15 @@ def completed_amf_placement(source):
     return any(s.get('name') == 'amf' and s.get('exit_code') == 0 for s in manifest['stages'])
 
 
+def resolve_import_policy(args):
+    strict = getattr(args, 'strict_import', False)
+    repair = getattr(args, 'allow_import_repair', False)
+    import_only = getattr(args, 'import_only', False)
+    if repair and (strict or import_only):
+        raise ValueError('--allow-import-repair cannot combine with --strict-import or --import-only')
+    return 'strict' if strict or import_only else 'repair'
+
+
 def run(root, args):
     from amf3 import save, stamp, git, machine
     root = Path(root)
@@ -33,10 +43,16 @@ def run(root, args):
     profiling = getattr(args, 'profile', False)
     if profiling and args.placement_run:
         raise ValueError('--profile requires a new AMF execution')
-    import_policy = 'repair' if getattr(args, 'allow_import_repair', False) else 'strict'
+    import_policy = resolve_import_policy(args)
+    upstream_backend = getattr(args, 'upstream_backend', False)
+    if upstream_backend and (import_policy != 'repair' or profiling or getattr(args, 'release_fixed_clock_buffers', False)):
+        raise ValueError('Upstream backend requires original repair policy, without profiling or clock release')
     if import_only and (args.amf_only or args.packing_only or import_policy != 'strict'):
         raise ValueError('--import-only requires strict acceptance and cannot combine with AMF-only modes')
-    directory = root / 'experiments/runs' / ('getrf-u250-' + ('packing-' if args.packing_only else 'full-') + stamp())
+    prefix = getattr(args, 'run_prefix', 'getrf-u250')
+    if not re.fullmatch(r'[a-z0-9][a-z0-9-]*', prefix):
+        raise ValueError('Invalid run prefix')
+    directory = root / 'experiments/runs' / (prefix + '-' + ('packing-' if args.packing_only else 'full-') + stamp())
     for name in ('inputs', 'reports', 'logs', 'placement', 'work'):
         (directory / name).mkdir(parents=True, exist_ok=False)
     shutil.copy2(Path(__file__), directory / 'inputs/run_full_flow.py')
@@ -47,7 +63,7 @@ def run(root, args):
     for key in ('vivado extracted device information file', 'vivado extracted design information file',
                 'physical boundary model file', 'special pin offset info file', 'clock file', 'mergedSharedCellType2sharedCellType',
                 'cellType2fixedAmo file', 'cellType2sharedCellType file', 'sharedCellType2BELtype file',
-                'fixed units file'):
+                'fixed units file', 'unpredictable macro file', 'designCluster', 'DSP registered outputs file'):
         if config.get(key):
             p = (root / config[key]).resolve()
             inputs[key] = dict(path=str(p), sha256=digest(p))
@@ -76,14 +92,34 @@ def run(root, args):
                     amf_clock_period_ns=config['ClockPeriod'], amf_clock_source='explicit experiment configuration',
                     vivado_clock_source='original DCP constraints', placement_run=args.placement_run)
     manifest['import_policy'] = import_policy
+    manifest['upstream_backend'] = upstream_backend
     manifest['runtime_profiling'] = profiling
     manifest['backend_mode'] = 'import-only' if import_only else 'full'
+    manifest['release_fixed_clock_buffers'] = bool(getattr(args, 'release_fixed_clock_buffers', False))
+    provenance = getattr(args, 'input_provenance', None)
+    if provenance:
+        provenance = (root / provenance).resolve()
+        record = json.loads(provenance.read_text())
+        if record['input_dcp_sha256'] != manifest['input_dcp_sha256']:
+            raise ValueError('Input provenance belongs to a different DCP')
+        shutil.copy2(provenance, directory / 'inputs/input_provenance.json')
+        manifest['input_provenance'] = record
+        manifest['input_provenance_sha256'] = digest(provenance)
+        manifest['vivado_clock_source'] = record['vivado_clock_source']
     build_manifest = binary.parent.parent / 'manifest.json'
     if build_manifest.is_file():
+        build_record = json.loads(build_manifest.read_text())
+        manifest['algorithm_build_manifest'] = str(build_manifest)
+        manifest['algorithm_source_commit'] = build_record.get('source_commit') or build_record.get('source', {}).get('commit')
         if profiling and not json.loads(build_manifest.read_text()).get('runtime_profiling'):
             raise ValueError('--profile requires a build created with amf3.py build --profile')
         shutil.copy2(build_manifest, directory / 'inputs/build_manifest.json')
         manifest['build_manifest_sha256'] = digest(build_manifest)
+    if upstream_backend:
+        if not build_manifest.is_file() or build_record.get('source_modified') is not False or build_record.get('binaries', {}).get('AMFPlacer') != manifest['binary_sha256']:
+            raise ValueError('Upstream backend requires a verified unmodified upstream build')
+        if config.get('physical boundary model file'):
+            raise ValueError('Original upstream flow does not use the AMF3 physical boundary model')
     (directory / 'inputs/working_tree.patch').write_bytes(subprocess.check_output(['git','diff','HEAD','--binary'],cwd=root))
     save(directory / 'manifest.json', manifest)
     print(directory, flush=True)
@@ -122,7 +158,11 @@ def run(root, args):
         if args.placement_run and not completed_amf_placement(source):
             raise ValueError('Source AMF placement has not completed')
         from run_full_backend import prepare
+        save(directory/'status.json', dict(state='running', stage='amf_to_vivado_adapter'))
+        adapter_begin = time.monotonic()
         script = prepare(root, source, directory, manifest)
+        manifest['stages'].append(dict(name='amf_to_vivado_adapter', function='run_full_backend.prepare',
+            elapsed_seconds=time.monotonic()-adapter_begin, exit_code=0))
         save(directory/'manifest.json',manifest)
         stage('vivado', [machine()['vivado'],'-mode','batch','-notrace','-nojournal','-log',directory/'logs/vivado_internal.log',
                         '-source',script,'-tclargs',dcp,directory/'reports',directory/'placement',

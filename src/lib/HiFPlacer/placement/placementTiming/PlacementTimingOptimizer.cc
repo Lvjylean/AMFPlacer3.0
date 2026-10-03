@@ -20,7 +20,19 @@
 
 PlacementTimingOptimizer::PlacementTimingOptimizer(PlacementInfo *placementInfo,
                                                    std::map<std::string, std::string> &JSONCfg)
-    : placementInfo(placementInfo), timingInfo(placementInfo->getTimingInfo()), JSONCfg(JSONCfg)
+    // U250 coefficients were fitted with tile-columns-subsites-v3 coordinates.
+    // Keep the original coefficients on VCU108/095 and all other devices.
+    : timingC1(placementInfo->getDeviceInfo()->getDeviceName() == "U250"
+                   ? std::array<float, 10>{160.1553292055571, -64.94911625084538, 22.807442252015385,
+                                           120.36632967195294, 27.120924804902547}
+                   : std::array<float, 10>{123.05017047, -169.25614191, -117.28028144,
+                                           208.53573639, 174.2573465}),
+      timingC2(placementInfo->getDeviceInfo()->getDeviceName() == "U250"
+                   ? std::array<float, 10>{202.12777470189823, -146.96155453685554, -131.59702340956898,
+                                           163.46881911227194, 136.17523346378107}
+                   : std::array<float, 10>{234.7694101, -433.99467294, -64.96319998,
+                                           373.78606257, 139.45226658}),
+      placementInfo(placementInfo), timingInfo(placementInfo->getTimingInfo()), JSONCfg(JSONCfg)
 {
     AMF_PROFILE_FUNCTION("timing");
     if (JSONCfg.find("PlacementTimingOptimizerVerbose") != JSONCfg.end())
@@ -49,6 +61,9 @@ PlacementTimingOptimizer::PlacementTimingOptimizer(PlacementInfo *placementInfo,
 
     designInfo = placementInfo->getDesignInfo();
     deviceInfo = placementInfo->getDeviceInfo();
+    print_info(std::string("Timing distance coefficients=") +
+               (deviceInfo->getDeviceName() == "U250" ? "u250-tile-columns-20260929 (near legacy, middle/far fitted)"
+                                                      : "legacy-095"));
     initPois();
 }
 

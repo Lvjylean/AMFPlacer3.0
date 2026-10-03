@@ -1,56 +1,128 @@
 # xcvu095 与 U250 坐标规则与实现
 
-用户已确认：统一的是坐标生成规则和参考点语义；U250 按自身资源结构生成坐标，不要求数值或尺寸匹配 xcvu095。延迟系数后续单独校准。VCU108 的旧器件是 xcvu095，并非 Zynq 的 zu095。
+2026-09-29。统一的是坐标构造约定：**器件自身的 tile 列基准＋列内位置＋独立特殊资源列**。U250 不复制 xcvu095 的固定列号，不匹配其总宽度或 CR 宽度。VCU108 的旧器件是 xcvu095，并非 Zynq 的 zu095。
 
-## 本次修订
+## 当前实现与此前误差
 
-正式转换入口为 `scripts/prepare_fabric_device.py`，模型为 `normalized-rpm-x-tile-row-anchors-v2`。新导出存于服务器 `data/devices/u250-coordinate-rules-v2/`，配套物理模型在其 `model/` 下；使用配置 `configs/experiments/getrf-u250-coordinate-rules.json`。历史实验和输入保持可复现。
+正式转换入口为 `scripts/prepare_fabric_device.py`，默认模型为 `tile-columns-subsites-v3`；X 映射实现位于 `scripts/fabric_x_coordinates.py`。新器件在服务器 `data/devices/u250-tile-columns-v3/`，配套边界在其 `model/` 下。独立使用配置为 `configs/experiments/getrf-u250-tile-columns.json`。
 
-此前 `u250-legacy-shared-scale-v1-experimental` 候选误将统一理解为复现旧数值，现已停用。原入口明确报错，源码保存在 `archives/legacy-workspace/scripts/prepare_legacy_scale_device.py`，旧实验仅作追溯。其 X×0.5、DSP/BRAM18 的 +0.925、BRAM36 的 +2 与奇偶 +0.35 均不进入新规则。
+此前 `normalized-rpm-x-tile-row-anchors-v2` 的 X=(RPM_X−48)/16 仍是 RPM 归一化，**没有实现用户要求的 095 式列构造统一**；它与更早的 U250 坐标数值相同，也是上轮 placement 未变的输入层原因。现在该模型仅保留 `--x-model rpm` 显式复现入口，旧输入、实验和校准产物保留。
 
-## 统一的生成规则
+更早的 `u250-legacy-shared-scale-v1-experimental` 候选误将统一理解为直接 X×0.5 并套用095的特殊Y偏移，已停用。本次不是重新启用该候选。
 
-参考点统一为资源行起始锚点。输入格式仍沿用 `centerx/centery` 字段名，但这不是硅片几何中心，也不是微米或已标定的传播时间。
+## 从 U250 数据恢复列结构
 
-设 pX 为全器件不同 SLICE RPM_X 相邻差的众数，x0 为 fabric 的最小 RPM_X，则：
+数据来自 Vivado 2024.2 的 `xcu250-figd2104-2L-e` 全器件导出。三个输入各司其职：
 
-`X(site) = (RPM_X(site) - x0) / pX`。
+- `sites.tsv`：237632 个 fabric site、所属 tile、RPM、CR、SLR、BEL、禁用属性。
+- `structure_sites.tsv`：完整器件的 site，识别 CMAC、HPIO、PCIe、配置资源的位置。
+- `structure_tiles.tsv`：用真实物理 COLUMN 区分同一普通列间隙内的独立特殊列。
 
-设 pY 为不同 SLICE tile_Y 相邻差的众数，y0 为最小 SLICE tile_Y。一个资源 tile 的起点为 tY，跨度为 h 个 SLICE 行，同一资源族在其中有 n 个 site，按 site_Y 递增排序，序号 i 从 0 开始：
+普通 fabric 从 tile 名称中提取 tX，连续覆盖 0–147，共148个基准列。这里的 tX **不是**物理导出中的 COLUMN：COLUMN只用于识别和核对特殊列，不直接作为布局距离。
 
-`Y(site) = (tY - y0) / pY + i * h / n`。
+同一 tX 内按 RPM_X 排序恢复左右两个位置，左侧 −0.25，右侧 +0.25；只有一个位置的列，依据同一 tile 类型在已观测双位置列中的侧别。RPM 在这里仅用于顺序/归属核验，不用于统一线性缩放。
 
-h 来自同资源列相邻 tile 的实际起点间隔，并与末 tile 到当前 clock region 的 SLICE 上边界间隔校验；n 来自每 tile 的真实 site 数。CR 编号用于分组，不再以 `CR_Y * 60` 代替实际位置。物理 tile 坐标中的间隔保留，不将缺失资源均分压缩。
+|U250 tile 类型|列内偏移 s|
+|---|---:|
+|CLEM、CLEM_R、CLEL_L、BRAM|−0.25|
+|CLEL_R、DSP、URAM_URAM_FT、URAM_URAM_DELAY_FT|+0.25|
 
-当前转换器适用规则资源列：SLICE 参考列完整，资源 tile 等跨度、等 site 数且覆盖所在 CR。遇到不完整导出、非连续 site 编号、不一致 tile 跨度、列内 RPM_X 变化或 RPM/site 排序冲突会报错；不能据此声称支持所有未来 FPGA 的不规则资源列。
+尤其 `CLEM_R` 的真实观测位置为左侧，不能凭名字中的 `_R` 判定右侧。BRAM18/BRAM36 是同一位置的容量视图，不重复占 X 列宽。
 
-## U250 真实数据得到的参数
+## 特殊资源位置与最终 X
 
-Part：`xcu250-figd2104-2L-e`，Vivado 2024.2。x0=48、pX=16、y0=0、pY=1；每 CR 为 60 个 SLICE 行，4 个 SLR。这些值来自数据，不为匹配 095 设定。
+对没有被普通 tX 骨架表示、且有实际 site 的已识别特殊物理 COLUMN，按每个独立 COLUMN 补一个单位列。一个 COLUMN 中的多个 site 不重复加宽；PCIe 与配置资源虽然在同一间隙，却占两个不同物理 COLUMN。
 
-|资源|tile 跨度 h|每 tile 同族 site 数 n|tile 内 Y 偏移|连续同列资源间距|
-|---|---:|---:|---|---:|
-|SLICE|1|1|0|1|
-|DSP48E2|5|2|0、2.5|2.5|
-|RAMB18|5|2|0、2.5|2.5|
-|RAMB36|5|1|0|5|
-|URAM288|15|4|0、3.75、7.5、11.25|3.75|
+|特殊资源|物理 COLUMN|RPM_X|位于普通 tX 之间|补列基准|列内偏移|最终 X|site数|
+|---|---:|---:|---|---:|---:|---:|---:|
+|CMAC|86|312|7 / 8|8|0|8|12|
+|HPIO_L|369|2576|73 / 74|75|−0.25|74.75|832|
+|PCIe|697|4832|139 / 140|142|0|142|4|
+|配置资源|698|4840|139 / 140|143|0|143|4|
 
-RAMB36 与下半 RAMB18 共用行起始锚点；两个 RAMB18 表示同一 BRAM tile 的上下半，不能与 RAMB36 当成独立容量重复累加。现有打包器用 BRAM18Height=2.5、BRAM36Height=5 构造宏，与此约定相容。DSP 间距从器件数据读取。此次没有修改 C++、pin 偏移或延迟模型。
+完整硬块的坐标取补列基准；明确标为左半列的 HPIO_L 使用 −0.25。**“每个独立特殊列占1单位”是本次选择的单位列坐标约定，不是测量得到的硅片宽度，也不等于该资源形成全高度路由阻塞。** 插入条件来自当前器件数据，转换器没有写死 8/74/140；下式是对实际导出结果的归纳：
 
-本次全部 237632 个 fabric site 的坐标与原始 U250 导出数值一致；新实现增加实际 tile 几何来源、版本标识和异常检查。与已否定的缩放候选相比，X 恢复原尺度，Y 去除人为中心偏移。HPIO 带 X=158，SLR 接缝 Y=239.5/479.5/719.5，均通过配套模型重新生成。
+```text
+B(tX) = tX + I(tX >= 8) + I(tX >= 74) + 2*I(tX >= 140)
+X(site) = B(tX) + s(site)
+```
 
-## 验证与限制
+这与095的“列基准＋列内偏移＋特殊列插入”表达方式一致，具体列数和间隙取自U250。例如：
 
-独立验证目录：服务器 `experiments/preflight/20260928-u250-coordinate-rules-v2/`。本地仅同步轻量证据到 `experiments/evidence/20260928-u250-coordinate-rules-v2/`。
+|site所在位置|tX|新 X|
+|---|---:|---:|
+|起始 CLEL_R|0|0.25|
+|CLEM / DSP|1|0.75 / 1.25|
+|CMAC左侧 CLEM|7|6.75|
+|CMAC右侧 CLEL_R|8|9.25|
+|HPIO左侧 CLEM / CLEL_R|73|73.75 / 74.25|
+|HPIO右侧 CLEL_R|74|76.25|
+|PCIe/CFG左侧 CLEM|139|140.75|
+|PCIe/CFG右侧 CLEL_R|140|144.25|
+|最右 CLEM_R|147|150.75|
 
-- 全部 site 身份、坐标、类型、BEL、CR、SLR、禁用属性与原 U250 导出一致。
-- 按独立 U250 公式检查全部坐标；检查 2688 个 BRAM tile 的 18K/36K 锚点关系。
-- 重新生成物理边界，检查源文件、坐标、器件与模型哈希绑定。
-- 回归测试覆盖资源间距、禁用属性、拒绝覆写、不规则 tile、缺失资源、RPM 列冲突、物理 tile 间隙保留与旧候选入口停用。
-- GETRF 原生输入检查通过（退出 0，29.01 秒），硬资源合法化通过（退出 0，77.17 秒）；6 项针对性 Python 测试通过。结果见 validation-manifest.json。使用已有冻结二进制，未将其声称为当前 dirty 源码的重新构建。
+双位置普通列的间距为0.5，跨特殊列按插入结构增加间隔；这不是旧 RPM 坐标乘一个常数。全部237632个fabric site的X均发生变化。
 
-不以这些检查代替完整 CLB 布局、Vivado 路由或时序校准。保持 ClockPeriod=10 ns 和现有延迟系数；统一坐标规则不证明历史回归系数可复用。095 旧导出保持历史复现语义；若以后将 095 也迁移到新规则，需要重新导出其 RPM/tile 数据，不能直接宣称旧示意中心已采用新锚点规则。
+## 器件和 CR 的实际跨度
+
+fabric site锚点的X范围从旧模型0–316变为0.25–150.75，跨度150.5。这里报的是资源锚点的最大值减最小值，不是硅片轮廓宽度。095旧fabric的对应范围是0.25–85.75，跨度85.5；二者不需要相等。
+
+|U250 CR列|fabric X范围|锚点跨度|
+|---|---|---:|
+|X0|0.25–20.25|20|
+|X1|20.75–37.25|16.5|
+|X2|37.75–60.25|22.5|
+|X3|60.75–74.25|13.5|
+|X4|76.25–94.25|18|
+|X5|94.75–113.25|18.5|
+|X6|113.75–132.25|18.5|
+|X7|132.75–150.75|18|
+
+这八组范围在16个CR行上一致。CR的坐标跨度自然不相同；没有按CR分别归一化或缩放。
+
+## Y、边界与下游数据的一致性
+
+本次针对X构造修订。Y继续使用上一版实际tile行锚点，不复制095历史图示矩形的中心偏移：
+
+`Y = (tile_Y − y0) / pY + i * h / n`。
+
+当前U250的y0=0、pY=1。SLICE的h/n=1/1；DSP与RAMB18为5/2；RAMB36为5/1；URAM为15/4。i是同一资源tile内按site_Y排序的序号。每CR覆盖60个SLICE行，SLICE锚点0–59，CR行节距60。整个Y范围0–959。这是下端资源行锚点语义，与095某些硬资源的历史图示中心偏移不同，不能声称旧Y常数已被原样统一。
+
+物理边界生成器复用同一个新X映射。fabric与已识别特殊资源的X均使用准确锚点；其余非fabric资源只在需要时做RPM分段插值/端点线性外推，不能解释为已验证的具体子位置。
+
+HPIO带由旧X=158改为74.75；SLR接缝仍为Y=239.5/479.5/719.5。边界惩罚保持1.5ns/SLR与0.5ns/HPIO。CMAC/PCIe/CFG仍只是局部IP候选，不自动收费，也不将其包围盒视为必经障碍。坐标更改与新增边界惩罚是两件事。
+
+## 验证、使用与限制
+
+证据目录：服务器 `experiments/preflight/20260929-u250-tile-columns-v3/`；本地轻量证据 `experiments/evidence/20260929-u250-tile-columns-v3/`。
+
+- 全部237632站点按列基准＋侧别独立复算，最大误差0。
+- 导出文本删除X字段后与v2逐行完全相同：Y、tile、CR、SLR、BEL与禁用属性均保持。
+- 重新生成物理模型，并验证原始器件/坐标/规则/模型的哈希绑定。
+- 36项Python回归通过，覆盖非均匀RPM、特殊列、多资源同列、误导性的_R名称、缺失结构拒绝处理、全器件源冲突、边界映射与历史输入兼容。
+- 原生输入检查退出0，进程墙钟33.83秒；硬资源合法化退出0，进程墙钟85.59秒。分配26096个资源单元，12183对Carry/DSP专用级联保持同SLR、同列且相邻；占用唯一、禁用站点与BRAM18/36重叠槽检查通过。详见 `validation-manifest.json`。这些是进程墙钟，不是纯布局算法计时。使用冻结构建 `build-20260928-002048-349585-d534237b`，完整CLB布局与Vivado未运行。
+
+新配置保留10ns、共享与SA的y2xRatio=0.71、BoundaryAwareClustering=false，作为输入/合法化验证条件；**0.71在新X尺度下未经校准**。前一轮三段延迟候选同样绑定旧RPM坐标，不能直接迁移。X变化会影响dx、近/中/远段归属及距离函数，必须在新坐标下重新评估；本次不修改C++系数，也不宣称placement或时序改善。已经取消的10ns布线实验不会恢复。
+
+转换器对非连续tX、同一类型左右侧冲突、无法推断的单位置列、重叠/外部特殊资源列等不支持结构显式报错，不静默退回RPM。未知资源并非自动按1单位补列，需要增加架构识别规则和验证。
+
+服务器重现示例，输出目录必须尚不存在：
+
+```bash
+python3 scripts/prepare_fabric_device.py \
+  data/devices/u250-physical-v1/raw/sites.tsv \
+  data/devices/u250-tile-columns-v3/exportSiteLocation.zip \
+  --part xcu250-figd2104-2L-e \
+  --metadata data/devices/u250-physical-v1/raw/metadata.tsv \
+  --structure-sites data/devices/u250-physical-v1/raw/structure_sites.tsv \
+  --structure-tiles data/devices/u250-physical-v1/raw/structure_tiles.tsv
+python3 scripts/build_physical_boundaries.py \
+  --raw-dir data/devices/u250-physical-v1/raw \
+  --fabric data/devices/u250-tile-columns-v3/exportSiteLocation.zip \
+  --coordinates data/devices/u250-tile-columns-v3/exportSiteLocation.coordinates.json \
+  --rules configs/architectures/ultrascale-plus-boundaries.json \
+  --out data/devices/u250-tile-columns-v3/model
+```
 
 ## 旧版规则（已经核验）
 

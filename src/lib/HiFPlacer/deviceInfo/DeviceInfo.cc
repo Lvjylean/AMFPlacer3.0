@@ -19,6 +19,41 @@
 #include <algorithm>
 #include <assert.h>
 
+namespace
+{
+bool isClockGeometryFabricSite(DeviceInfo::DeviceSite *site)
+{
+    const auto &type = site->getSiteType();
+    return type == "SLICEL" || type == "SLICEM" || type == "DSP48E2" ||
+           type == "RAMBFIFO18" || type == "RAMB181" || type == "URAM288";
+}
+}
+
+void DeviceInfo::ClockRegion::resetBoundsFromFabric()
+{
+    bool first = true;
+    for (auto site : sites)
+    {
+        if (!isClockGeometryFabricSite(site))
+            continue;
+        if (first)
+        {
+            leftX = rightX = site->X();
+            bottomY = topY = site->Y();
+            first = false;
+        }
+        leftX = std::min(leftX, site->X());
+        rightX = std::max(rightX, site->X());
+        if (site->getName().find("SLICE") != std::string::npos)
+        {
+            bottomY = std::min(bottomY, site->Y());
+            topY = std::max(topY, site->Y());
+        }
+    }
+    if (first)
+        throw std::runtime_error("ClockRegionFabricGeometry requires fabric in every clock region");
+}
+
 bool siteSortCmp(DeviceInfo::DeviceSite *a, DeviceInfo::DeviceSite *b)
 {
     const float eps = 1e-3;
@@ -225,6 +260,8 @@ void DeviceInfo::mapClockRegionToArray()
             std::pair<int, int> clockRegionCoord(j, i);
             assert(coord2ClockRegion.find(clockRegionCoord) != coord2ClockRegion.end());
             clockRegions[i][j] = coord2ClockRegion[clockRegionCoord];
+            if (JSONCfg["ClockRegionFabricGeometry"] == "true")
+                clockRegions[i][j]->resetBoundsFromFabric();
         }
     }
     for (int i = 0; i < clockRegionNumY; i++)
@@ -285,7 +322,7 @@ void DeviceInfo::mapClockRegionToArray()
             assert(clockRegions[i][j]->getLeft() == clockRegionXBounds[j]);
             assert(clockRegions[i][j]->getBottom() == clockRegionYBounds[i]);
             // std::cout << "dealing with clock region : X " << j << " Y " << i << "\n";
-            clockRegions[i][j]->mapSiteToClockColumns();
+            clockRegions[i][j]->mapSiteToClockColumns(JSONCfg["ClockRegionFabricGeometry"] == "true");
         }
     }
 
@@ -304,9 +341,36 @@ void DeviceInfo::mapClockRegionToArray()
             }
         }
     }
+    // Optional audit: fixed interfaces must not perturb the R10 fabric geometry.
+    if (!JSONCfg["clock geometry report file"].empty())
+    {
+        std::ofstream report(JSONCfg["clock geometry report file"]);
+        if (!report) throw std::runtime_error("Cannot open clock geometry report");
+        report.precision(9);
+        for (int y = 0; y < clockRegionNumY; ++y)
+            for (int x = 0; x < clockRegionNumX; ++x)
+            {
+                auto region = clockRegions[y][x];
+                report << "REGION\t" << x << '\t' << y << '\t' << region->getLeft() << '\t'
+                       << region->getRight() << '\t' << region->getBottom() << '\t' << region->getTop() << '\n';
+                int cy = 0;
+                for (auto &row : region->getClockColumns())
+                {
+                    int cx = 0;
+                    for (auto column : row)
+                    {
+                        report << "COLUMN\t" << x << '\t' << y << '\t' << cx++ << '\t' << cy << '\t'
+                               << column->getSites().size() << '\t' << column->getLeft() << '\t'
+                               << column->getRight() << '\t' << column->getBottom() << '\t' << column->getTop() << '\n';
+                    }
+                    ++cy;
+                }
+            }
+    }
+
 }
 
-void DeviceInfo::ClockRegion::mapSiteToClockColumns()
+void DeviceInfo::ClockRegion::mapSiteToClockColumns(bool fabricOnlyGeometry)
 {
     AMF_PROFILE_FUNCTION("input_device");
     assert(sites.size() > 0);
@@ -336,6 +400,8 @@ void DeviceInfo::ClockRegion::mapSiteToClockColumns()
 
     for (unsigned int i = 0; i < sites.size(); i++)
     {
+        if (fabricOnlyGeometry && !isClockGeometryFabricSite(sites[i]))
+            continue;
         if (sites[i]->getTile()->getTileIdX() < leftTileIdX)
         {
             leftTileIdX = sites[i]->getTile()->getTileIdX();

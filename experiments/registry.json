@@ -148,6 +148,32 @@
       "outcome": "stopped_after_verified_default_success",
       "implementation_verified": false,
       "algorithm_failure": false
+    },
+    {
+      "id": "getrf-u250-full-20260929-133345-334380",
+      "label": "R10",
+      "kind": "full-flow-profile",
+      "directory": "experiments/runs/getrf-u250-full-20260929-133345-334380",
+      "status_file": "experiments/runs/getrf-u250-full-20260929-133345-334380/status.json",
+      "build_directory": "/Projects/jinyang/workspace/AMFplacer3.0/builds/build-20260929-132823-663969-c70df682/build",
+      "created": "2026-09-29T13:33:45.312741+08:00"
+    },
+    {
+      "id": "vivado-minimap2-u250-full-8ns-20261001-100640-485573",
+      "kind": "vivado-native",
+      "directory": "experiments/runs/vivado-minimap2-u250-full-8ns-20261001-100640-485573",
+      "status_file": "experiments/runs/vivado-minimap2-u250-full-8ns-20261001-100640-485573/status.json",
+      "reference_run": "amf3-minimap2-u250-full-r10-import-repair-full-20260930-211203-742548",
+      "created": "2026-10-01T10:06:40.402304+08:00"
+    },
+    {
+      "id": "vivado-minimap2-u250-route-recovery-8ns-20261001-110835-819552",
+      "kind": "vivado-native-route-recovery",
+      "directory": "experiments/runs/vivado-minimap2-u250-route-recovery-8ns-20261001-110835-819552",
+      "status_file": "experiments/runs/vivado-minimap2-u250-route-recovery-8ns-20261001-110835-819552/status.json",
+      "parent_run": "vivado-minimap2-u250-full-8ns-20261001-100640-485573",
+      "reference_run": "amf3-minimap2-u250-full-r10-import-repair-full-20260930-211203-742548",
+      "created": "2026-10-01T11:08:35+08:00"
     }
   ]
 }

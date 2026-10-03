@@ -34,7 +34,9 @@ delay 运行 `experiments/runs/getrf-u250-full-20260927-063459-913333`：输出 
 
 `CLBSiteLegality.h` 复用 LUT 配对、FF 半区/控制组合法性；最终 Tcl 导出前再检查控制集和 LUT 组合。内部通路通过初始宏的资源预留实现，Vivado 仍是最终导入判据。
 
-`full-run` 默认 strict：导入审计之后、`place_design` 之前，必须请求单元全部存在、全部放置、原 LOC/BEL 完全一致、拒绝事件为零、SRL/硬资源级联违规为零。失败保留差异表并退出。`--import-only` 只运行该关卡；`--allow-import-repair` 仅供显式历史诊断，并单独标记，不能冒充严格验收。
+2026-09-30 用户将常规 `full-run` 默认改为 repair：导入审计后直接允许 Vivado `place_design` 修复，再继续布线。`--allow-import-repair` 保留兼容，不再限于历史诊断。以下历史验收记录仍按当时的严格策略解释。
+
+严格关卡通过 `--strict-import` 显式选择：导入审计之后、`place_design` 之前，必须请求单元全部存在、全部放置、原 LOC/BEL 完全一致、拒绝事件为零、SRL/硬资源级联违规为零。失败保留差异表并退出。`--import-only` 仍只运行该严格关卡。repair 与 strict 均保留审计，修复结果不能冒充严格验收；当前约定见 [实验策略](../experiment-policy.md)。
 
 `reports/import_acceptance.tsv` 与阶段位置报告一起保存；完整汇总单独给出 `strict_import_verified`、DRC、布线完成、时序与最终位置保持率。即使严格导入通过，仍保留 Vivado `place_design`，是否可去掉属于另一项验证。
 

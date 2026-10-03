@@ -152,7 +152,7 @@ def summarize(run):
             'PaToH child CPU is separate from the parent process CPU; child walls overlap one another and the parent wait.',
             'This is functional-scope instrumentation, not timings of every STL/Eigen/inline helper. Unexecuted scopes are listed.',
             'Instrumentation and shared-server load can affect timing and nondeterministic placement; no constant overhead subtraction was applied.',
-            'Original DCP export was cached. Vivado import/place/route were not executed in this profiling run.'
+            'Original DCP export was cached. Vivado import/place/route are separate stages; read full-flow reports for their execution status and elapsed time.'
         ])
     (report/'profile_summary.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
     lines=['# GETRF / U250：AMF 功能运行时间 Profiling','',f'运行：`{run.name}`。',

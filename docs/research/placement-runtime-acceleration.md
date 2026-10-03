@@ -1,5 +1,7 @@
 # Placement 第一批加速：匹配与候选选择
 
+> 2026-09-29 恢复记录：用户已结束新匹配内核实验，常规模式恢复 `legacy`，保留候选缓存／top-K。本文保留历史实验条件；当前状态见 [加速改动清单](placement-acceleration-inventory.md)。
+
 基准版本：`33d881d0`，标签 `多die_修正比例_修正延迟_修正扩散策略`。
 开发分支：`codex/placement-runtime-acceleration`。
 正式目录：`/Projects/jinyang/workspace/AMFplacer3.0`。
@@ -36,7 +38,7 @@ python3 scripts/amf3.py full-run \
   --binary builds/<本次构建ID>/build/AMFPlacer
 ```
 
-只测 AMF 时增加 `--amf-only`。完整流程仍先执行严格导入验收，再调用 Vivado placement/router。最终 DCP 保存在运行目录的 `reports/`。
+只测 AMF 时增加 `--amf-only`。按 2026-09-30 用户决定，完整流程保存导入审计后默认允许 Vivado placement 修复并继续 routing；增加 `--strict-import` 可选用严格导入关卡。最终 DCP 保存在运行目录的 `reports/`。
 
 ## 当前验证
 

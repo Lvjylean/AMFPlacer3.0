@@ -1,0 +1,238 @@
+{
+  "schema": "amf-u250-local-distance-calibration-v2",
+  "status": "reviewed local candidate; not loaded by placer",
+  "coordinate_model": "tile-columns-subsites-v3",
+  "coordinate_map_sha256": "2ef92b1113f9e99fc8cfbe9b4db6407b703a768b8de14047e2edbb39656c6cff",
+  "physical_model_sha256": "d1116390e6bce6e879fb40ee50c9f3cef80645e77d7d6b0bc94b271bd8a645fa",
+  "coefficient_unit": "ps before /1000",
+  "formula": "max(0.05,(c0+c1*(2dx)^0.3+c2*dy^0.3+c3*(2dx)^0.5+c4*dy^0.5)/1000); boundary penalties unchanged",
+  "squared_distance_thresholds": [
+    9,
+    36
+  ],
+  "floor_ns": 0.05,
+  "scope": {
+    "endpoints": "LUT/FF ordinary data pins",
+    "fanout": [
+      1,
+      8
+    ],
+    "same_slr": true,
+    "endpoint_boundary_crossings": 0,
+    "observed_slrs": [
+      0,
+      1,
+      2
+    ]
+  },
+  "old_coefficients_ps": {
+    "near": [
+      95.05263521,
+      -26.50563359,
+      77.42394117,
+      106.29195883,
+      -14.975527
+    ],
+    "middle": [
+      123.05017047,
+      -169.25614191,
+      -117.28028144,
+      208.53573639,
+      174.2573465
+    ],
+    "far": [
+      234.7694101,
+      -433.99467294,
+      -64.96319998,
+      373.78606257,
+      139.45226658
+    ]
+  },
+  "fitted_coefficients_ps": {
+    "near": [
+      88.76150614434388,
+      -30.165830149771836,
+      76.74712129430073,
+      103.9558152447441,
+      -14.646491323031846
+    ],
+    "middle": [
+      160.1553292055571,
+      -64.94911625084538,
+      22.807442252015385,
+      120.36632967195294,
+      27.120924804902547
+    ],
+    "far": [
+      202.12777470189823,
+      -146.96155453685554,
+      -131.59702340956898,
+      163.46881911227194,
+      136.17523346378107
+    ]
+  },
+  "recommended_local_candidate_coefficients_ps": {
+    "near": [
+      95.05263521,
+      -26.50563359,
+      77.42394117,
+      106.29195883,
+      -14.975527
+    ],
+    "middle": [
+      160.1553292055571,
+      -64.94911625084538,
+      22.807442252015385,
+      120.36632967195294,
+      27.120924804902547
+    ],
+    "far": [
+      202.12777470189823,
+      -146.96155453685554,
+      -131.59702340956898,
+      163.46881911227194,
+      136.17523346378107
+    ]
+  },
+  "decision": {
+    "near": {
+      "use_candidate": false,
+      "reason": "retain defaults: candidate not supported by validation",
+      "external_p95_increased": true
+    },
+    "middle": {
+      "use_candidate": true,
+      "reason": "local validation and paired RMSE interval pass",
+      "external_p95_increased": true
+    },
+    "far": {
+      "use_candidate": true,
+      "reason": "local validation and paired RMSE interval pass",
+      "external_p95_increased": false
+    }
+  },
+  "training_sample_extents": {
+    "near": {
+      "dx": [
+        0.0,
+        2.5
+      ],
+      "dy": [
+        0.0,
+        2.0
+      ]
+    },
+    "middle": {
+      "dx": [
+        0.0,
+        5.5
+      ],
+      "dy": [
+        0.0,
+        5.0
+      ]
+    },
+    "far": {
+      "dx": [
+        0.0,
+        54.0
+      ],
+      "dy": [
+        0.0,
+        168.0
+      ]
+    }
+  },
+  "training_distance_hulls": {
+    "near": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        2.5,
+        0.0
+      ],
+      [
+        2.5,
+        1.0
+      ],
+      [
+        2.0,
+        2.0
+      ],
+      [
+        0.0,
+        2.0
+      ]
+    ],
+    "middle": [
+      [
+        0.0,
+        3.0
+      ],
+      [
+        3.0,
+        0.0
+      ],
+      [
+        5.5,
+        0.0
+      ],
+      [
+        5.5,
+        2.0
+      ],
+      [
+        5.0,
+        3.0
+      ],
+      [
+        3.0,
+        5.0
+      ],
+      [
+        0.0,
+        5.0
+      ]
+    ],
+    "far": [
+      [
+        0.0,
+        6.0
+      ],
+      [
+        6.0,
+        0.0
+      ],
+      [
+        43.5,
+        0.0
+      ],
+      [
+        54.0,
+        26.0
+      ],
+      [
+        31.5,
+        99.0
+      ],
+      [
+        5.0,
+        168.0
+      ],
+      [
+        0.0,
+        146.0
+      ]
+    ]
+  },
+  "boundary_penalties": "unchanged",
+  "defaults_modified": false,
+  "new_placement_or_routing_executed": false,
+  "evidence": {
+    "fit.json": "ae150d9edfb2d0afabdae3960557ee09a98a3314066e9f3ad01cb9052ef13b2b",
+    "fit-audit.json": "320aa4f04262005955bfcfd843525d419d477a47b2d6c22eff24f45346e50187",
+    "coordinate-review.json": "bc636cc5eb613f81ee8126661bcdea1a186d1ac7f4cbdea81188cb9b5534e327"
+  }
+}

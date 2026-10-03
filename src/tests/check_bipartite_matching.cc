@@ -45,6 +45,14 @@ static void compareOracle(const Adjacency &adj, int rights, int target)
         require(actual.cardinality == expected.first, "cardinality differs from exhaustive enumeration");
         require(std::abs(actual.cost - expected.second) <= 1e-9 * (1 + std::abs(expected.second)),
                 "cost differs from exhaustive enumeration");
+        auto biased = amf_matching::solve(adj, rights, target, 1, kernel == 1, kernel == 2, 0.01);
+        require(biased.cardinality == expected.first, "forward bias changed maximum cardinality");
+        // The biased heuristic need not minimize original costs. This small-graph
+        // bound allows the residual path penalties, while catching gross errors.
+        require(biased.cost + 1e-9 * (1 + std::abs(expected.second)) >= expected.second &&
+                biased.cost <= expected.second + 0.01 * (3 * adj.size() + 1) +
+                               1e-9 * (1 + std::abs(expected.second)),
+                "biased matching cost outside bounded residual perturbation");
     }
 }
 
@@ -69,10 +77,11 @@ static Adjacency synthetic(const std::string &shape, int count, int &rights)
     return adj;
 }
 
-static void benchmark(Adjacency &adj, int rights, int target, const std::string &backend, int threads)
+static void benchmark(Adjacency &adj, int rights, int target, const std::string &backend, int threads,
+                      double forwardBias = 0)
 {
     const auto start = amf_matching::Clock::now();
-    MinCostBipartiteMatcher matcher(adj.size(), rights, target, adj, threads, false, backend);
+    MinCostBipartiteMatcher matcher(adj.size(), rights, target, adj, threads, false, backend, forwardBias);
     const double buildSeconds = amf_matching::seconds(start);
     matcher.solve();
     const double totalSeconds = amf_matching::seconds(start);
@@ -96,7 +105,7 @@ static void benchmark(Adjacency &adj, int rights, int target, const std::string 
     require(count <= target, "exceeded requested matching count");
     std::cout << std::setprecision(15) << "{\"backend\":\"" << backend << "\",\"left\":" << adj.size()
               << ",\"right\":" << rights << ",\"threads\":" << threads << ",\"matched\":" << count
-              << ",\"cost\":" << cost << ",\"build_seconds\":" << buildSeconds
+              << ",\"forward_bias\":" << forwardBias << ",\"cost\":" << cost << ",\"build_seconds\":" << buildSeconds
               << ",\"total_seconds\":" << totalSeconds << ",\"assignment_hash\":\"" << hash << "\"}\n";
 }
 
@@ -104,14 +113,14 @@ int main(int argc, char **argv)
 {
     try
     {
-        if (argc == 6 && std::string(argv[1]) == "--benchmark")
+        if ((argc == 6 || argc == 7) && std::string(argv[1]) == "--benchmark")
         {
             int rights;
             auto adj = synthetic(argv[2], std::stoi(argv[3]), rights);
-            benchmark(adj, rights, adj.size(), argv[4], std::stoi(argv[5]));
+            benchmark(adj, rights, adj.size(), argv[4], std::stoi(argv[5]), argc == 7 ? std::stod(argv[6]) : 0);
             return 0;
         }
-        if (argc == 5 && std::string(argv[1]) == "--replay")
+        if ((argc == 5 || argc == 6) && std::string(argv[1]) == "--replay")
         {
             std::ifstream input(argv[2]);
             std::string magic;
@@ -127,10 +136,29 @@ int main(int argc, char **argv)
                 adj[left].emplace_back(right, cost);
             }
             require(input.eof(), "malformed snapshot edge");
-            benchmark(adj, rights, target, argv[3], std::stoi(argv[4]));
+            benchmark(adj, rights, target, argv[3], std::stoi(argv[4]), argc == 6 ? std::stod(argv[5]) : 0);
             return 0;
         }
-        require(argc == 1, "usage: checkBipartiteMatching [--benchmark shape count backend threads | --replay file backend threads]");
+        require(argc == 1, "usage: checkBipartiteMatching [--benchmark shape count backend threads [bias] | --replay file backend threads [bias]]");
+        for (int kernel : {0, 1, 2})
+        {
+            // A constant shift of all candidate costs would still swap these
+            // rows. c+.01 / -c must retain the diagonal instead (gain < .01).
+            Adjacency nearTie{{{0, 1}, {1, 1.001f}}, {{0, 1}, {1, 1.009f}}};
+            auto unbiased = amf_matching::solve(nearTie, 2, 2, 1, kernel == 1, kernel == 2, 0);
+            auto biased = amf_matching::solve(nearTie, 2, 2, 1, kernel == 1, kernel == 2, 0.01);
+            require(unbiased.leftToRight == std::vector<int>({1, 0}) &&
+                    biased.leftToRight == std::vector<int>({0, 1}),
+                    "asymmetric perturbation did not penalize reversal");
+            nearTie[1][1].second = 1.02f;
+            biased = amf_matching::solve(nearTie, 2, 2, 1, kernel == 1, kernel == 2, 0.01);
+            require(biased.leftToRight == std::vector<int>({1, 0}),
+                    "forward bias blocked a worthwhile reversal");
+            Adjacency chain{{{0, 1}, {1, 1.001f}}, {{1, 1}, {2, 1.001f}}, {{0, 1}, {2, 1.015f}}};
+            biased = amf_matching::solve(chain, 3, 3, 1, kernel == 1, kernel == 2, 0.01);
+            require(biased.leftToRight == std::vector<int>({0, 1, 2}),
+                    "two-reversal path did not accumulate two forward penalties");
+        }
         compareOracle({}, 0, 0);
         compareOracle(Adjacency(4), 0, 4);
         compareOracle({{{0, 1}}, {{0, 1}}}, 1, 2);
@@ -168,6 +196,10 @@ int main(int argc, char **argv)
             try { amf_matching::solve({{{0, invalid}}}, 1, 1, 1); }
             catch (const std::invalid_argument &) { rejected = true; }
             require(rejected, "invalid edge cost accepted");
+            rejected = false;
+            try { amf_matching::solve({{{0, 1}}}, 1, 1, 1, true, true, invalid); }
+            catch (const std::invalid_argument &) { rejected = true; }
+            require(rejected, "invalid forward bias accepted");
         }
         int rights;
         auto separated = synthetic("disconnected", 2000, rights);
@@ -178,8 +210,12 @@ int main(int argc, char **argv)
             require(serial.leftToRight == parallel.leftToRight && serial.cost == parallel.cost,
                     "component scheduling changes the matching");
             require(parallel.components == 500 && parallel.largestLeft == 4, "component decomposition mismatch");
+            auto biasedSerial = amf_matching::solve(separated, rights, separated.size(), 1, kernel == 1, kernel == 2, 0.01);
+            auto biasedParallel = amf_matching::solve(separated, rights, separated.size(), 8, kernel == 1, kernel == 2, 0.01);
+            require(biasedSerial.leftToRight == biasedParallel.leftToRight && biasedSerial.cost == biasedParallel.cost,
+                    "component scheduling changes biased matching");
         }
-        std::cout << "PASS: " << cases << " exhaustive-oracle cases for all three kernels, invalid costs, and serial/parallel determinism\n";
+        std::cout << "PASS: " << cases << " oracle/cardinality cases for all three kernels with bias 0 and .01, asymmetric reversal fixtures, invalid inputs, and serial/parallel determinism\n";
         return 0;
     }
     catch (const std::exception &error)

@@ -71,6 +71,7 @@ void MacroLegalizer::legalize(bool exactLegalization, bool directLegalization, b
     resetSettings();
     findMacroType2AvailableSites();
     getMacrosToLegalize();
+    noTarget = initialMacrosToLegalize.empty();
 
     if (initialMacrosToLegalize.size() == 0)
     {
@@ -117,7 +118,8 @@ void MacroLegalizer::roughlyLegalize()
         createBipartiteGraph();
         minCostBipartiteMatcher = new MinCostBipartiteMatcher(macro2Sites.size(), rightSiteIds.size(),
                                                               macro2Sites.size(), adjList, nJobs, verbose,
-                JSONCfg.count("BipartiteMatchingBackend") ? JSONCfg.at("BipartiteMatchingBackend") : "component_assignment");
+                JSONCfg.count("BipartiteMatchingBackend") ? JSONCfg.at("BipartiteMatchingBackend") : "legacy",
+                JSONCfg.count("BipartiteMatchingForwardBias") ? std::stod(JSONCfg.at("BipartiteMatchingForwardBias")) : 0.0);
 
         minCostBipartiteMatcher->solve();
         updateMatchingAndUnmatchedMacroCells();
@@ -148,7 +150,8 @@ void MacroLegalizer::fixedColumnLegalize(bool directLegalization)
         createBipartiteGraph();
         minCostBipartiteMatcher = new MinCostBipartiteMatcher(macro2Sites.size(), rightSiteIds.size(),
                                                               macro2Sites.size(), adjList, nJobs, verbose,
-                JSONCfg.count("BipartiteMatchingBackend") ? JSONCfg.at("BipartiteMatchingBackend") : "component_assignment");
+                JSONCfg.count("BipartiteMatchingBackend") ? JSONCfg.at("BipartiteMatchingBackend") : "legacy",
+                JSONCfg.count("BipartiteMatchingForwardBias") ? std::stod(JSONCfg.at("BipartiteMatchingForwardBias")) : 0.0);
 
         minCostBipartiteMatcher->solve();
         updateMatchingAndUnmatchedMacroCells();
@@ -1017,6 +1020,8 @@ void MacroLegalizer::updateMatchingAndUnmatchedMacroCells()
 void MacroLegalizer::dumpMatching(bool fixedColumn, bool enforce)
 {
     AMF_PROFILE_FUNCTION("diagnostic_output");
+    if (noTarget)
+        return;
     if (JSONCfg.find("DumpMacroLegalization") != JSONCfg.end() || enforce)
     {
         std::string dumpFile = "";

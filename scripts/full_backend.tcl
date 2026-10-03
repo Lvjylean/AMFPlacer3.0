@@ -1,9 +1,10 @@
 # Import AMF assignments, validate them, then optimize placement and route.
 if {$argc < 3 || $argc > 5} { error "Expected input.dcp reports-directory placement-directory ?strict|repair? ?full|import-only?" }
 lassign $argv input out placement importPolicy backendMode
-if {$importPolicy eq ""} {set importPolicy strict}
 if {$backendMode eq ""} {set backendMode full}
+if {$importPolicy eq ""} {set importPolicy [expr {$backendMode eq "import-only" ? "strict" : "repair"}]}
 if {$importPolicy ni {strict repair} || $backendMode ni {full import-only}} {error "Invalid backend policy/mode"}
+if {$backendMode eq "import-only" && $importPolicy ne "strict"} {error "Import-only requires strict acceptance"}
 source [file join [file dirname [info script]] import_acceptance.tcl]
 set amf3_import_error_events 0
 set_param general.maxThreads 4
@@ -20,6 +21,7 @@ proc timed {name body} {
 }
 set physicalAudit [file isdirectory [file join $out physical]]
 array set requested {}
+array set releasedClockBuffers {}
 set f [open [file join $placement requested.tsv] r]
 while {[gets $f line] >= 0} { lassign [split $line "\t"] name target; set requested($name) $target }
 close $f
@@ -31,7 +33,7 @@ if {[file exists $fixes]} {
     close $f
 }
 proc audit {stage} {
-    global requested originalOverrides out placement physicalAudit importMetrics amf3_import_error_events
+    global requested originalOverrides out placement physicalAudit importMetrics amf3_import_error_events releasedClockBuffers
     set cells [get_cells -hierarchical -filter {IS_PRIMITIVE}]
     set names [get_property NAME $cells]
     set locs [get_property LOC $cells]
@@ -43,11 +45,15 @@ proc audit {stage} {
         close $sf
     }
     set placed 0; set present 0; set matched 0;set siteMatched 0;set originalMatched 0
+    set primaryMatched 0;set compositeAliases 0
+    set unexpectedMoves 0
     array set actual {}
     array set actualBel {}
     set mismatches [open [file join $out ${stage}_placement_mismatches.tsv] w]
     puts $mismatches "cell\trequested\tactual_site\tactual_bel"
-    foreach name $names loc $locs bel $bels {
+    set aliases [open [file join $out ${stage}_composite_bel_aliases.tsv] w]
+    puts $aliases "cell\trequested\tactual_primary_bel\tverified_occupied_bels"
+    foreach cell $cells name $names loc $locs bel $bels {
         if {![info exists requested($name)]} {continue}
         incr present
         set actual($name) $loc
@@ -56,15 +62,34 @@ proc audit {stage} {
         if {$loc ne ""} {incr placed}
         lassign [split $requested($name) /] site wantedBel
         if {$loc eq $site} {incr siteMatched}
-        if {$loc eq $site && ($wantedBel eq "" || $wantedBel eq $bel)} {incr matched}
-        if {$loc ne $site || ($wantedBel ne "" && $wantedBel ne $bel)} {puts $mismatches "$name\t$requested($name)\t$loc\t$bel"}
+        set primaryMatch [expr {$loc eq $site && ($wantedBel eq "" || $wantedBel eq $bel)}]
+        set aliasMatch 0
+        if {$primaryMatch} {incr primaryMatched} elseif {$loc eq $site && $wantedBel eq "H6LUT" && $bel eq "G6LUT"} {
+            set kind [get_property REF_NAME $cell]
+            if {$kind eq "RAM32X1D"} {
+                set occupied [get_bels -quiet -of_objects $cell]
+                set aliasMatch [amf3_ram32x1d_anchor_match $kind $site $wantedBel $loc $bel $occupied]
+                if {$aliasMatch} {
+                    incr compositeAliases
+                    puts $aliases "$name\t$requested($name)\t$loc/$bel\t[join [lsort $occupied] ,]"
+                }
+            }
+        }
+        if {$primaryMatch || $aliasMatch} {incr matched}
+        if {!$primaryMatch && !$aliasMatch} {
+            puts $mismatches "$name\t$requested($name)\t$loc\t$bel"
+            if {![info exists releasedClockBuffers($name)]} {incr unexpectedMoves}
+        }
         if {[info exists originalOverrides($name)]} {lassign [split $originalOverrides($name) /] site wantedBel}
-        if {$loc eq $site && ($wantedBel eq "" || $wantedBel eq $bel)} {incr originalMatched}
+        if {$loc eq $site && ($wantedBel eq "" || $wantedBel eq $bel || ($aliasMatch && $wantedBel eq "H6LUT"))} {incr originalMatched}
     }
-    close $mismatches
-    set importMetrics [dict create requested [array size requested] present $present placed $placed exact_loc_bel_matches $matched exact_original_loc_bel_matches $originalMatched rejection_events $amf3_import_error_events srl_violations 0 cascade_violations 0]
+    close $mismatches;close $aliases
+    if {$stage ne "imported" && [array size releasedClockBuffers] && $unexpectedMoves} {
+        error "Clock-only relocation policy moved $unexpectedMoves other AMF assignments"
+    }
+    set importMetrics [dict create requested [array size requested] present $present placed $placed exact_loc_bel_matches $matched exact_original_loc_bel_matches $originalMatched primary_bel_matches $primaryMatched composite_bel_alias_matches $compositeAliases rejection_events $amf3_import_error_events srl_violations 0 cascade_violations 0]
     set f [open [file join $out ${stage}_placement.json] w]
-    puts $f [format {{"requested":%d,"present":%d,"placed":%d,"exact_loc_bel_matches":%d,"site_matches":%d,"exact_original_loc_bel_matches":%d,"design_primitive_cells":%d,"unrequested_primitive_cells":%d}} [array size requested] $present $placed $matched $siteMatched $originalMatched [llength $names] [expr {[llength $names]-$present}]]
+    puts $f [format {{"requested":%d,"present":%d,"placed":%d,"exact_loc_bel_matches":%d,"site_matches":%d,"exact_original_loc_bel_matches":%d,"primary_bel_matches":%d,"composite_bel_alias_matches":%d,"design_primitive_cells":%d,"unrequested_primitive_cells":%d}} [array size requested] $present $placed $matched $siteMatched $originalMatched $primaryMatched $compositeAliases [llength $names] [expr {[llength $names]-$present}]]
     close $f
     puts "AMF_PLACEMENT_AUDIT $stage requested=[array size requested] present=$present placed=$placed matched=$matched"
     if {$present != [array size requested]} { error "Requested cells missing from Vivado design" }
@@ -142,9 +167,30 @@ if {[catch {
     if {$backendMode eq "import-only"} {
         puts "AMF_IMPORT_ONLY_FINISHED";close $timeline;exit 0
     }
+    set clockRelease [file join $placement clock_buffer_release.tsv]
+    if {[file exists $clockRelease]} {
+        timed clock_buffer_release {
+            set f [open $clockRelease r];gets $f header
+            while {[gets $f line] >= 0} {
+                lassign [split $line "\t"] name site
+                set cell [get_cells -quiet $name]
+                if {[llength $cell] != 1 || [get_property REF_NAME $cell] ne "BUFGCE" || [get_property LOC $cell] ne $site} {
+                    error "Clock buffer release does not match the audited input: $name"
+                }
+                set releasedClockBuffers($name) $site
+                set_property IS_LOC_FIXED false $cell
+                set_property IS_BEL_FIXED false $cell
+                reset_property LOC $cell
+                reset_property BEL $cell
+                unplace_cell $cell
+            }
+            close $f
+            puts "AMF_CLOCK_BUFFERS_RELEASED [array size releasedClockBuffers]"
+        }
+    }
     timed place {place_design}
     timed place_audit {audit placed}
-    write_checkpoint [file join $out getrf_placed.dcp]
+    timed placed_checkpoint {write_checkpoint [file join $out getrf_placed.dcp]}
     timed route {route_design}
     timed route_audit {audit routed}
     timed reports {

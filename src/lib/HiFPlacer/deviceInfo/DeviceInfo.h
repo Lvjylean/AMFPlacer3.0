@@ -768,7 +768,8 @@ class DeviceInfo
          * @brief for the clock column constraints, we need to map site to columns.
          *
          */
-        void mapSiteToClockColumns();
+        void resetBoundsFromFabric();
+        void mapSiteToClockColumns(bool fabricOnlyGeometry = false);
 
         /**
          * @brief reset the clock utilization for each column in the clock region

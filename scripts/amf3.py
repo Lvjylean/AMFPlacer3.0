@@ -45,6 +45,14 @@ def validate_run_id(value):
 
 def build(args):
     require_server()
+    if args.source_repository or args.source_ref:
+        if not (args.source_repository and args.source_ref):
+            raise ValueError('--source-repository and --source-ref must be supplied together')
+        if args.profile:
+            raise ValueError('Pristine upstream builds do not add profiling instrumentation')
+        from build_upstream_snapshot import build_upstream
+        build_upstream(ROOT, args.source_repository, args.source_ref, args.jobs or machine()['build_jobs'])
+        return
     commit = git('rev-parse', 'HEAD')
     build_id = 'build-' + stamp() + '-' + commit[:8]
     root = ROOT / 'builds' / build_id
@@ -179,9 +187,26 @@ def compare_boundaries(args):
     launch(ROOT,args)
 
 
+def vivado_run(args):
+    require_server()
+    from run_vivado_baseline import run
+    run(ROOT, args)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
+    p = sub.add_parser('vivado-run', help='Native Vivado placement/routing from a recorded full-run input')
+    p.add_argument('--reference-run', required=True)
+    p.add_argument('--run-prefix', default='vivado-native')
+    p.add_argument('--opt-design', action='store_true', help='Explicitly add logic optimization before placement')
+    p.add_argument('--release-io', action='store_true', help='Let Vivado reassign automatic package pins; preserve IOSTANDARD')
+    p.add_argument('--preserve-input-constraints', action='store_true', help='Place directly from the input DCP, preserving board/IP locations and mixed clocks')
+    p.add_argument('--core-clock', help='Exact core clock name to validate when preserving input constraints')
+    p.add_argument('--clock-period', type=float, help='Expected core period in ns; validate without overriding DCP clocks')
+    p.add_argument('--physical-audit', action='store_true', help='Export the same 200 critical-path boundary samples as the AMF backend')
+    p.add_argument('--resume-native-run', help='Resume routing from a recorded native placed checkpoint; preserve the original input and placement provenance')
+    p.set_defaults(action=vivado_run)
     p = sub.add_parser('compare-boundaries', help='Launch recorded three-arm GETRF physical-boundary comparison')
     p.add_argument('--binary', type=Path, default=Path('builds/current/AMFPlacer'))
     p.add_argument('--parallel', type=int, choices=(1,2,3), default=1)
@@ -190,6 +215,8 @@ def main():
     p.add_argument('--jobs', type=int)
     p.add_argument('--profile', action='store_true', help='Enable nested functional runtime profiling')
     p.add_argument('--no-set-current', action='store_true', help='Preserve the current default build')
+    p.add_argument('--source-repository', type=Path, help='Build committed upstream sources, excluding all working-tree changes; never changes builds/current')
+    p.add_argument('--source-ref', help='Exact upstream Git revision to freeze with --source-repository')
     p.set_defaults(action=build)
     p = sub.add_parser('run', help='Launch a configured faceDetect flow')
     p.add_argument('--config', type=Path, default=Path('configs/experiments/faceDetect-baseline.json'))
@@ -212,6 +239,8 @@ def main():
     p.add_argument('--dcp', default='data/reference/getrf-u250/post_opt.dcp')
     p.set_defaults(action=validate_resources)
     p = sub.add_parser('full-run', help='Recorded AMF full placement and Vivado routing')
+    p.add_argument('--run-prefix', default='getrf-u250', help='Case label for the unique experiment directory')
+    p.add_argument('--input-provenance', type=Path, help='Recorded input adaptation and timing-constraint provenance')
     p.add_argument('--profile', action='store_true', help='Collect runtime scopes from a profiling build')
     p.add_argument('--config', default='configs/experiments/getrf-u250-full.json')
     p.add_argument('--binary', default='builds/current/AMFPlacer')
@@ -219,8 +248,12 @@ def main():
     p.add_argument('--packing-only', action='store_true')
     p.add_argument('--amf-only', action='store_true')
     p.add_argument('--import-only', action='store_true', help='Stop after strict Vivado import acceptance')
-    p.add_argument('--allow-import-repair', action='store_true', help='Diagnostic legacy policy: allow rejected imports to reach place_design')
+    policy = p.add_mutually_exclusive_group()
+    policy.add_argument('--allow-import-repair', action='store_true', help='Allow Vivado placement to repair rejected imports (default; retained for existing commands)')
+    policy.add_argument('--strict-import', action='store_true', help='Require exact legal AMF import before Vivado placement; optional diagnostic')
+    p.add_argument('--upstream-backend', action='store_true', help='Preserve the original upstream Tcl handoff, without fixed-cell or BEL corrections; requires repair policy')
     p.add_argument('--placement-run', help='Completed AMF run to import and route in a new experiment')
+    p.add_argument('--release-fixed-clock-buffers', action='store_true', help='After import, let Vivado relocate declared fixed BUFGCE sources; retain the clock-only movement audit')
     p.set_defaults(action=full_run)
     p = sub.add_parser('validate-packing', help='Vivado audit of SRL/MUX BEL maps')
     p.add_argument('--packing-run', required=True)

@@ -74,6 +74,7 @@ void CLBLegalizer::legalize(bool exactLegalization)
     resetSettings();
     findSiteType2AvailableSites();
     getPUsToLegalize();
+    noTarget = initialPUsToLegalize.empty();
     if (initialPUsToLegalize.size() == 0)
     {
         print_warning("CLBLegalizer find no target elements.");
@@ -114,7 +115,8 @@ void CLBLegalizer::roughlyLegalize()
         createBipartiteGraph();
         minCostBipartiteMatcher =
             new MinCostBipartiteMatcher(PU2Sites.size(), rightSiteIds.size(), PU2Sites.size(), adjList, nJobs, verbose,
-                JSONCfg.count("BipartiteMatchingBackend") ? JSONCfg.at("BipartiteMatchingBackend") : "component_assignment");
+                JSONCfg.count("BipartiteMatchingBackend") ? JSONCfg.at("BipartiteMatchingBackend") : "legacy",
+                JSONCfg.count("BipartiteMatchingForwardBias") ? std::stod(JSONCfg.at("BipartiteMatchingForwardBias")) : 0.0);
 
         minCostBipartiteMatcher->solve();
         updateMatchingAndUnmatchedPUs();
@@ -145,7 +147,8 @@ void CLBLegalizer::fixedColumnLegalize()
         createBipartiteGraph();
         minCostBipartiteMatcher =
             new MinCostBipartiteMatcher(PU2Sites.size(), rightSiteIds.size(), PU2Sites.size(), adjList, nJobs, verbose,
-                JSONCfg.count("BipartiteMatchingBackend") ? JSONCfg.at("BipartiteMatchingBackend") : "component_assignment");
+                JSONCfg.count("BipartiteMatchingBackend") ? JSONCfg.at("BipartiteMatchingBackend") : "legacy",
+                JSONCfg.count("BipartiteMatchingForwardBias") ? std::stod(JSONCfg.at("BipartiteMatchingForwardBias")) : 0.0);
 
         minCostBipartiteMatcher->solve();
         updateMatchingAndUnmatchedPUs();
@@ -630,6 +633,8 @@ void CLBLegalizer::updateMatchingAndUnmatchedPUs()
 void CLBLegalizer::dumpMatching(bool fixedColumn, bool enforce)
 {
     AMF_PROFILE_FUNCTION("diagnostic_output");
+    if (noTarget)
+        return;
     if (JSONCfg.find("DumpCLBLegalization") != JSONCfg.end() || enforce)
     {
         std::string dumpFile = "";

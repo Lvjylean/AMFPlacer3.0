@@ -32,5 +32,7 @@
   "BoundaryAwareClustering": "true",
   "TimingMaxEnhancement": "1000",
   "QPStabilityGuard": "true",
-  "Simulated Annealing y2xRatio": "0.71"
+  "Simulated Annealing y2xRatio": "0.71",
+  "BipartiteMatchingBackend": "legacy",
+  "MacroCandidateSelection": "cached_topk"
 }

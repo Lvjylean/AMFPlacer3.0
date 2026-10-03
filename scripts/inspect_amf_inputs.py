@@ -28,7 +28,7 @@ def inspect(root, args, resources=False):
     for key in ('vivado extracted device information file', 'vivado extracted design information file',
                 'physical boundary model file', 'special pin offset info file', 'clock file', 'mergedSharedCellType2sharedCellType',
                 'cellType2fixedAmo file', 'cellType2sharedCellType file', 'sharedCellType2BELtype file',
-                'resource initial locations file', 'fixed units file'):
+                'resource initial locations file', 'fixed units file', 'DSP registered outputs file'):
         if config.get(key):
             p = (root / config[key]).resolve()
             inputs[key] = {'path': str(p), 'sha256': digest(p)}

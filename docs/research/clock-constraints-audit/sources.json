@@ -1,0 +1,243 @@
+{
+  "checked_at": "2026-10-03T22:52:14.819220+08:00",
+  "server_root": "/Projects/jinyang/workspace/AMFplacer3.0",
+  "amf_worktree_commit": "c70df682d8b4bdbe9b71b56008d1087d52ddad51",
+  "openparf_commit": "eb1b6bce9be9da992b285a85d572a7f9c76fe92a",
+  "files": {
+    "src/app/AMFPlacer/AMFPlacer.h": {
+      "sha256": "b6e41fe399fa437716265e012cbccc7e306132617875bce1dce50335165b7b96",
+      "excerpts": [
+        {
+          "first_line": 424,
+          "last_line": 454,
+          "text": "        // finally pack the elements into sites on the FPGA device\n        parallelCLBPacker =\n            new ParallelCLBPacker(designInfo, deviceinfo, placementInfo, JSON, 3, 10, 0.25, 0.5, 6, 10, 0.02, \"first\",\n                                  timingOptimizer, globalPlacer->getWirelengthOptimizer());\n        parallelCLBPacker->packCLBs(30, true);\n        parallelCLBPacker->setPULocationToPackedSite();\n        if (JSON[\"experimental multi-SLR placement\"] == \"true\")\n            HardResourceUtils::writePlacement(placementInfo, JSON[\"dumpDirectory\"]);\n        timingOptimizer->conductStaticTimingAnalysis();\n        timingOptimizer->auditPhysicalBoundaries(\"amf-final-packed\");\n        placementInfo->checkClockUtilization(true);\n        print_info(\"Current Total HPWL = \" + std::to_string(placementInfo->updateB2BAndGetTotalHPWL()));\n        placementInfo->resetLUTFFDeterminedOccupation();\n        parallelCLBPacker->updatePackedMacro(true, true);\n        placementInfo->dumpOverflowClockUtilization();\n        placementInfo->adjustLUTFFUtilization(1, true);\n        placementInfo->dumpCongestion(JSON[\"dumpDirectory\"] + \"/congestionInfo\");\n\n        if (parallelCLBPacker)\n        {\n            delete parallelCLBPacker;\n            parallelCLBPacker = nullptr;\n        }\n\n        // currently, some fixed/packed flag cannot be stored in the check-point (TODO)\n        clearSomeAttributesCannotRecord();\n        placementInfo->dumpPlacementUnitInformation(JSON[\"dumpDirectory\"] + \"/PUInfoFinal\");\n        placementInfo->checkClockUtilization(true);\n\n        print_status(\"Placement Done\");\n        print_info(\"Current Total HPWL = \" + std::to_string(placementInfo->updateB2BAndGetTotalHPWL()));"
+        }
+      ]
+    },
+    "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc": {
+      "sha256": "f307fa4542b02eb4450f1281afe88e73057248595b46432b77b5c09132d3384b",
+      "excerpts": [
+        {
+          "first_line": 1436,
+          "last_line": 1468,
+          "text": "    for (int i = deviceInfo->getClockRegionNumY() - 1; i >= 0; i--)\n    {\n        for (int j = 0; j < deviceInfo->getClockRegionNumX(); j++)\n        {\n            for (auto &row : clockRegions[i][j]->getClockColumns())\n            {\n                for (auto clockColumn : row)\n                {\n                    if ((clockRegionUtilization[i][j] > 12 && clockColumn->getClockNum() > 10))\n                    {\n                        clockLegalizationRisky = true;\n                        for (auto &pair : clockColumn->getClockNetId2CellIds())\n                        {\n                            for (auto cellId : pair.second)\n                            {\n                                assert(cellId < (int)cells.size());\n                                if (cells[cellId]->isFF())\n                                {\n                                    if (addedCells.find(cellId) == addedCells.end())\n                                    {\n                                        if (compatiblePlacementTable_cellId2InfationRatio[cellId] < 4)\n                                            compatiblePlacementTable_cellId2InfationRatio[cellId] *= infateRatio;\n                                        addedCells.insert(cellId);\n                                        std::pair<int, int> rloc(i, j);\n                                        clockRegion2Inflat.insert(rloc);\n                                    }\n                                }\n                            }\n                        }\n                    }\n                }\n            }\n        }"
+        },
+        {
+          "first_line": 2105,
+          "last_line": 2185,
+          "text": "bool PlacementInfo::checkClockUtilization(bool dump)\n{\n    AMF_PROFILE_FUNCTION(\"validation\");\n    clockNetCoverages.clear();\n    clockRegionUtilization.clear();\n    clockRegionUtilization.resize(deviceInfo->getClockRegionNumY(),\n                                  std::vector<int>(deviceInfo->getClockRegionNumX(), 0));\n    auto &clockRegions = deviceInfo->getClockRegions();\n\n    for (int i = deviceInfo->getClockRegionNumY() - 1; i >= 0; i--)\n    {\n        for (int j = 0; j < deviceInfo->getClockRegionNumX(); j++)\n        {\n            clockRegions[i][j]->resetClockUtilizationInfo();\n        }\n    }\n\n    for (auto curClockNet : clockNets)\n    {\n        int leftId, rightId, topId, bottomId;\n        deviceInfo->getClockRegionByLocation(curClockNet->getLeftPinX(), curClockNet->getBottomPinY(), leftId,\n                                             bottomId);\n        deviceInfo->getClockRegionByLocation(curClockNet->getRightPinX(), curClockNet->getTopPinY(), rightId, topId);\n        assert(leftId >= 0 && leftId < deviceInfo->getClockRegionNumX());\n        assert(rightId >= 0 && rightId < deviceInfo->getClockRegionNumX());\n        assert(topId >= 0 && topId < deviceInfo->getClockRegionNumY());\n        assert(bottomId >= 0 && bottomId < deviceInfo->getClockRegionNumY());\n        for (int i = bottomId; i <= topId; i++)\n        {\n            for (int j = leftId; j <= rightId; j++)\n            {\n                clockRegionUtilization[i][j] += 1;\n            }\n        }\n    }\n\n    for (auto curClockNet : clockNets)\n    {\n        auto designNet = curClockNet->getDesignNet();\n        for (auto curPin : designNet->getPins())\n        {\n            auto curCell = curPin->getCell();\n            auto loc = cellId2location[curCell->getCellId()];\n            int regionX, regionY;\n            deviceInfo->getClockRegionByLocation(loc.X, loc.Y, regionX, regionY);\n            deviceInfo->recordClockRelatedCell(loc.X, loc.Y, regionX, regionY, curCell->getCellId(),\n                                               designNet->getElementIdInType());\n        }\n    }\n\n    bool isLegal = true;\n    print_info(\"Clock region untilization:\");\n    for (int i = deviceInfo->getClockRegionNumY() - 1; i >= 0; i--)\n    {\n        for (int j = 0; j < deviceInfo->getClockRegionNumX(); j++)\n        {\n            std::cout << std::left << std::setw(4) << clockRegionUtilization[i][j];\n            isLegal &= ((clockRegionUtilization[i][j]) <= 24);\n        }\n        std::cout << \"\\n\";\n    }\n\n    print_info(\"Clock column rough max untilization in each clock region:\");\n    for (int i = deviceInfo->getClockRegionNumY() - 1; i >= 0; i--)\n    {\n        for (int j = 0; j < deviceInfo->getClockRegionNumX(); j++)\n        {\n            int halfColumnUtil = deviceInfo->getMaxUtilizationOfClockColumns_InClockRegion(j, i);\n            std::cout << std::left << std::setw(4) << halfColumnUtil;\n            isLegal &= (halfColumnUtil <= 12);\n        }\n        std::cout << \"\\n\";\n    }\n\n    return isLegal;\n}\n\nvoid PlacementInfo::dumpOverflowClockUtilization()\n{\n    AMF_PROFILE_FUNCTION(\"diagnostic_output\");\n"
+        }
+      ]
+    },
+    "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.h": {
+      "sha256": "ae44faf507c7a3c4834ada939fba0ca7d0714864d3368f79369b18e2dc625e8d",
+      "excerpts": [
+        {
+          "first_line": 4263,
+          "last_line": 4274,
+          "text": "    inline bool checkClockColumnLegalization(PlacementInfo::PlacementUnit *curPU, DeviceInfo::DeviceSite *curSite)\n    {\n        auto clockColumn = curSite->getClockHalfColumn();\n        auto curSetOfClocks = clockCol2ClockNets[clockColumn];\n        auto curPUClocks = curPU->getClockNets();\n        for (auto clockNet : curPUClocks)\n            curSetOfClocks.insert(clockNet);\n\n        if (curSetOfClocks.size() <= clockColumn->getClockNumLimit())\n            return true;\n        else\n            return false;"
+        },
+        {
+          "first_line": 4322,
+          "last_line": 4329,
+          "text": "    void addPUIntoClockColumn(PlacementInfo::PlacementUnit *curPU, DeviceInfo::DeviceSite *curSite)\n    {\n        auto clockColumn = curSite->getClockHalfColumn();\n        auto &curSetOfClocks = clockCol2ClockNets[clockColumn];\n        auto &curPUClocks = curPU->getClockNets();\n        for (auto clockNet : curPUClocks)\n            curSetOfClocks.insert(clockNet);\n        assert(curSetOfClocks.size() <= clockColumn->getClockNumLimit());"
+        }
+      ]
+    },
+    "data/reference/openparf-2.0/openparf/ops/clock_network_planner/clock_network_planner.py": {
+      "sha256": "d2afffd863930f07302e09131d18ee870e1c004cf35ccf52ef2b88e33332c6d5",
+      "excerpts": [
+        {
+          "first_line": 15,
+          "last_line": 63,
+          "text": "class ClockNetworkPlanner:\n    \"\"\" \n    @brief Deal with clock constraints. Currently only the assignment of clock regions is implemented\n    The pos here is only to supply the type\n\n    Because PyTorch only binds at::Tensor, and not its other types, I'll just\n    pass a string\n    https://discuss.pytorch.org/t/how-to-pass-python-device-and-dtype-to-c/69577/2\n    \"\"\"\n    def __init__(self, placedb, float_type : str, maximum_clock_per_clock_region): \n        \"\"\"\n        @brief initialization \n        @param[in] placedb class PlaceDB, the placement database\n        @param[in] float_type The datatype the position vector uses.\n        \"\"\"\n        self.param = ClockNetworkPlannerParam()\n        self.param.maximum_clock_per_clock_region = maximum_clock_per_clock_region\n        self.placedb = placedb\n        assert(float_type.lower() in [\"float64\", \"float32\"])\n        clock_network_planner_cpp.init(self.placedb, float_type.lower())\n\n    def forward(self, pos):\n        \"\"\"\n        @brief Assign clock regions based on the current position of instance\n               The goal is to satisfy global clock constraints while minimizing \n               the movement needed to move the instances into their respective clock regions. \n\n               See UTPlaceF 2.0: A High-Performance Clock-Aware FPGA Placement Engine\n               doi:10.1145/3174849 for more detail. This implementation is directly\n               ported for UTPlaceF 2.0\n        \n        @param[in] pos Current position of the instances, #(num_insts, 2) shaped torch.Tensor\n        @return A map of clock nets to the bounding box of its clock region.\n        @return 1st tensor: nodeToCRclock, a #(num_insts) torch.Tensor. res[i] is the clock region id to which instance i is assigned.\n                2nd tensor: clkAvailCR, a #(num_clk_nets, clk_region_width, clk_region_height) shaped torch.Tensor. If res[clk_idx][x][y] is 1, then clock clk_id is allowed in x, y, otherwise clk_idx is not allowed in x, y.\n        \"\"\"    \n        # The algorithm is too complex to reimplement in CUDA. \n        # TODO: consider implementing it in CUDA, should the runtime be great\n        # Further more, it's simply not worth it, considering the already short runtime.\n        if pos.is_cuda:\n            local_pos = pos.cpu()\n        else:\n            local_pos = pos\n        t = torch.zeros([2, 4], dtype=torch.float64)\n        return clock_network_planner_cpp.forward(\n                self.placedb, \n                self.param,\n                local_pos,\n                t)"
+        }
+      ]
+    },
+    "data/reference/openparf-2.0/openparf/ops/direct_lg/src/direct_lg.cpp": {
+      "sha256": "9fb91d79db7388ce77b65332c4ceb787613704aea651d6d408a7caeaac9f515d",
+      "excerpts": [
+        {
+          "first_line": 42,
+          "last_line": 46,
+          "text": "  auto                pos                        = at::zeros({placedb.numInsts(), 3}, init_pos.options());\n  DirectLegalizeParam param                      = DirectLegalizeParam::ParseFromPyObject(pyparam);\n  param.honorHalfColumnConstraint                = false;\n  param.honorClockRegionConstraint               = false;\n  auto                              hc_avail_map = at::zeros({1}, torch::dtype(torch::kUInt8));"
+        },
+        {
+          "first_line": 92,
+          "last_line": 96,
+          "text": "  auto                pos   = at::zeros({placedb.numInsts(), 3}, init_pos.options());\n  DirectLegalizeParam param = DirectLegalizeParam::ParseFromPyObject(pyparam);\n  auto hc_avail_map = at::zeros({placedb.numClockNets(), placedb.numHalfColumnRegions()}, torch::dtype(torch::kUInt8));\n  param.honorHalfColumnConstraint  = true;\n  param.honorClockRegionConstraint = true;"
+        }
+      ]
+    },
+    "data/reference/openparf-2.0/openparf/ops/direct_lg/src/dl_solver.cpp": {
+      "sha256": "52f3164c562d9f3efa62126c35bd027f88d1df465f4e40e89c2c58bb507eadfe",
+      "excerpts": [
+        {
+          "first_line": 305,
+          "last_line": 329,
+          "text": "void DLSolver::initClockConstraints() {\n  openparfPrint(kDebug, \"%i clock nets, %i half columns\\n\", _param.numClockNet, _param.numHalfColumn);\n  for (IndexType i = 0; i < _param.numHalfColumn; i++) {\n    _hcsbArray.emplace_back(_param.numClockNet);\n  }\n  // Make all clock available at first\n  for (auto &sb : _hcsbArray) {\n    std::fill(sb.isAvail.begin(), sb.isAvail.end(), 1);\n  }\n\n  std::vector<uint32_t> fixed_clk_per_hc(_param.numHalfColumn, 0);\n  // We must alway consider the clocks of the DONTCARE instances in the halfcolumn scoreboard, like DSPs and RAMs.\n  // These instances must be placed with in one half column as well as one clock region.\n  for (auto const &inst : _instArray) {\n    if (inst.type == DLInstanceType::DONTCARE && !inst.isFixed) {\n      auto  hc_id = _xy_to_half_column_functor(inst.x(), inst.y());\n      auto &sb    = _hcsbArray.at(hc_id);\n      for (auto &clk : _instClockIndex[inst.origId]) {\n        if (sb.isFixed.at(clk) != 1) fixed_clk_per_hc.at(hc_id)++;\n        sb.isFixed.at(clk) = 1;\n        openparfAssertMsg(fixed_clk_per_hc.at(hc_id) <= _param.maxClockNetPerHalfColumn,\n                          \"DONTCARE instances already have %i clock nets in half column %i\",\n                          fixed_clk_per_hc.at(hc_id),\n                          hc_id);\n      }"
+        },
+        {
+          "first_line": 361,
+          "last_line": 395,
+          "text": "// Check whether the half column constraint is satisfied.\n// While doing so, prohibit the least costly clock in every half column region that\n// does not satisfy the half column constraint.\nbool DLSolver::checkHalfColumnSatAndPruneClock() {\n  bool isLegal = true;\n  for (IndexType hcId = 0; hcId < _hcsbArray.size(); hcId++) {\n    auto     &sb           = _hcsbArray.at(hcId);\n    // count the number of clk in this hc\n    IndexType cnt          = 0;\n    IndexType pruneClockId = kIndexTypeMax;\n    IndexType minCost      = kIndexTypeMax;\n    for (IndexType i = 0; i < sb.clockCost.size(); i++) {\n      openparfAssertMsg(sb.isAvail[i] || (std::abs(sb.clockCost[i]) < 1e-6),\n                        \"Clk %i is in hc %i when it's not available.\",\n                        i,\n                        hcId);\n      if (sb.isFixed[i] || sb.clockCost[i] > 1e-6) {\n        cnt++;\n      }\n      if (!sb.isFixed[i] && sb.clockCost[i] > 1e-6) {\n        if (sb.clockCost[i] < minCost) {\n          minCost      = sb.clockCost[i];\n          pruneClockId = i;\n        }\n      }\n    }\n    if (cnt <= _param.maxClockNetPerHalfColumn) continue;\n    openparfAssertMsg(pruneClockId != kIndexTypeMax,\n                      \"All clock are fixed and none can be pruned. This should not happen.\");\n    // If clock number exceeds what is allowed, we disable the clock with the lowest non zero cost\n    openparfPrint(kDebug, \"prune clk %i in hc region %i\\n\", pruneClockId, hcId);\n    sb.isAvail.at(pruneClockId) = 0;\n    isLegal                     = false;\n  }\n  return isLegal;"
+        },
+        {
+          "first_line": 421,
+          "last_line": 438,
+          "text": "    }\n    status = runDLSync();\n\n    ++_dlIter;\n    printDLStatus();\n  }\n  printDLStatistics();\n\n  // Iteratively perform post legalization to legalize remaining instances & to conform with\n  // clock region constraints. Also conform with hc constraints by using a scoreboard relaxation\n  // method.\n  do {\n    if (!ripupLegalization()) {\n      openparfAssertMsg(false, \"Legalization fails\");\n    }\n    calculateHalfColumnScoreBoardCost();\n  } while (!checkHalfColumnSatAndPruneClock());\n"
+        }
+      ]
+    },
+    "data/reference/openparf-2.0/openparf/ops/clock_network_planner/src/utplacefx/ClockNetworkPlanner.cpp": {
+      "sha256": "4bf7ab9c2c9cf58f67345c4cd63c3b44af8a332881c77166815ca0bd92be4334",
+      "excerpts": [
+        {
+          "first_line": 634,
+          "last_line": 677,
+          "text": "    // Perform D-Layer routing using the clock assignment got from the node assignment result\n    //    if (!runDLayerRouting(nodeAssignRes.clockAssign, sol.dRouteArray)) {\n    //        // No legal D-layer routing solution is found\n    //        sol.type = SolutionType::DROUTE_FAIL;\n    //        return;\n    //    }\n\n    // Perform R-Layer routing using the D-layer routing solution\n    //    if (!runRLayerRouting(sol.dRouteArray, sol.rRouteArray)) {\n    //        // No legal R-layer routing solution is found\n    //        sol.type = SolutionType::RROUTE_FAIL;\n    //        return;\n    //    }\n\n    runBBoxRouting(nodeAssignRes.clockAssign, sol.clkAvailCR);\n\n    int32_t num_cr_x    = _db->numCrX();\n    int32_t num_cr_y    = _db->numCrY();\n    auto &  cr_ck_count = sol.crCkCountMap;\n    cr_ck_count.clear();\n    cr_ck_count.resize(num_cr_x, num_cr_y, 0);\n    for (IndexType ckIdx = 0; ckIdx < _nlPtr->numClockNets(); ++ckIdx) {\n        auto &availGrid = sol.clkAvailCR.ckIdxToAvailGrid().at(ckIdx);\n        for (int i = 0; i < num_cr_x; i++) {\n            for (int j = 0; j < num_cr_y; j++) {\n                if (availGrid.at(i, j) == 1) { cr_ck_count.at(i, j)++; }\n            }\n        }\n    }\n    openparfPrint(kDebug, \"**** CR-CK Count:\\n\");\n    for (int i = 0; i < num_cr_x; i++) {\n        std::stringstream ss;\n        for (int j = 0; j < num_cr_y; j++) { ss << cr_ck_count.at(i, j) << \" \"; }\n        openparfPrint(kDebug, \"%s\\n\", ss.str().c_str());\n    }\n\n    for (int i = 0; i < num_cr_x; i++) {\n        for (int j = 0; j < num_cr_y; j++) {\n            if (cr_ck_count.at(i, j) > Parameters::archClockRegionClockCapacity) {\n                sol.type = SolutionType::BBOX_FAIL;\n                return;\n            }\n        }\n    }"
+        },
+        {
+          "first_line": 1915,
+          "last_line": 1927,
+          "text": "    XY<IndexType> targetCrXY;\n    IndexType     maxOverflow = 0;\n    for (IndexType crI = 0; crI < _db->numCrX(); crI++) {\n        for (IndexType crJ = 0; crJ < _db->numCrY(); crJ++) {\n            if (sol.crCkCountMap.at(crI, crJ) > maxOverflow) {\n                maxOverflow = sol.crCkCountMap.at(crI, crJ);\n                targetCrXY  = XY<IndexType>(crI, crJ);\n            }\n        }\n    }\n    openparfPrint(kDebug, \"target CR: (%d, %d)\\n\", targetCrXY.x(), targetCrXY.y());\n    openparfAssert(maxOverflow > Parameters::archClockRegionClockCapacity);\n    createNewClockMaskSetsToResolveBBoxOverflow(sol, targetCrXY, maxCost, cmsPool, newCMSArray);"
+        }
+      ]
+    },
+    "data/reference/openparf-2.0/openparf/ops/legality_check/src/legality_check.hpp": {
+      "sha256": "1a76aca38ef0a403358a2b924ba8f1dd32d250f83c9824dafc7d814a19c3e983",
+      "excerpts": [
+        {
+          "first_line": 189,
+          "last_line": 260,
+          "text": "  // Check clock region and half column constraints\n  if (max_clk_per_clock_region != 0 || max_clk_per_half_column != 0) {\n    std::vector<geometry::Box<uint32_t>>      clk_bbox(db.numClockNets());\n    std::unordered_set<uint32_t>              seen_clks;\n    std::vector<std::unordered_set<uint32_t>> clock_per_hc(layout.numHalfColumnRegions());\n    // First, we count the clocks.\n    for (auto inst_id = range.first; inst_id < range.second; ++inst_id) {\n      if (db.isInstClockSource(inst_id)) continue;\n      auto const& inst   = netlist.inst(db.oldInstId(inst_id));\n      auto&       clocks = db.instToClocks()[inst_id];\n      if (clocks.empty()) continue;\n      auto inst_x = pos[inst_id * 3];\n      auto inst_y = pos[inst_id * 3 + 1];\n      auto inst_z = pos[inst_id * 3 + 2];\n      auto cr_idx = db.XyToCrIndex(inst_x, inst_y);\n      auto cr_x   = cr_idx / db.numCrY();\n      auto cr_y   = cr_idx % db.numCrY();\n      for (auto clk : clocks) {\n        auto& b = clk_bbox[clk];\n        if (seen_clks.find(clk) != seen_clks.end()) {\n          if (cr_x < b.xl()) {\n            b.setXL(cr_x);\n          } else if (cr_x > b.xh()) {\n            b.setXH(cr_x);\n          }\n          if (cr_y < b.yl()) {\n            b.setYL(cr_y);\n          } else if (cr_y > b.yh()) {\n            b.setYH(cr_y);\n          }\n        } else {\n          seen_clks.insert(clk);\n          b.setXL(cr_x);\n          b.setXH(cr_x);\n          b.setYL(cr_y);\n          b.setYH(cr_y);\n        }\n      }\n\n      auto hc_idx = db.XyToHcIndex(inst_x, inst_y);\n      for (auto clk : clocks) {\n        clock_per_hc[hc_idx].insert(clk);\n      }\n    }\n    std::vector<uint32_t> cr_clock_cnt(db.numCr(), 0);\n    for (auto& bx : clk_bbox) {\n      for (uint32_t x = bx.xl(); x <= bx.xh(); x++) {\n        for (uint32_t y = bx.yl(); y <= bx.yh(); y++) {\n          uint32_t cr_id = x * db.numCrY() + y;\n          cr_clock_cnt[cr_id]++;\n        }\n      }\n    }\n    // Then, we check if the constraints are met\n    if (max_clk_per_clock_region != 0) {\n      for (uint32_t i = 0; i < cr_clock_cnt.size(); i++) {\n        if (cr_clock_cnt[i] > max_clk_per_clock_region) {\n          openparfPrint(kError, \"Placement not legal, %i clock nets in clock region %i\\n\", cr_clock_cnt[i], i);\n          legal = false;\n        }\n      }\n    }\n    if (max_clk_per_half_column != 0) {\n      for (uint32_t i = 0; i < clock_per_hc.size(); i++) {\n        if (clock_per_hc[i].size() > max_clk_per_half_column) {\n          openparfPrint(kError,\n                        \"Placement not legal, %i clock nets in half column region %i\\n\",\n                        clock_per_hc[i].size(),\n                        i);\n          legal = false;\n        }\n      }"
+        }
+      ]
+    },
+    "data/reference/openparf-2.0/openparf/placement/placer.py": {
+      "sha256": "b59ad5787c472d5dc154a06a21f0c0a1ca2c9ac27dbcd1808397601b9a5252dc",
+      "excerpts": [
+        {
+          "first_line": 765,
+          "last_line": 776,
+          "text": "            if cnp_algo == \"utplacefx\":\n                # TODO(Runzhe Tao, rztao@my.swjtu.edu.cn): Refine SLR-aware CNP for balanced performance across varied cases\n                self.op_cls.clock_network_planner_op.reset_slr_aware_flag(slr_aware_flag=False)\n                # TODO: add logic to decide when to assign clock region\n                (\n                    movable_and_fixed_inst_to_clock_region,\n                    self.data_cls.clock_available_clock_region,\n                    movable_and_fixed_inst_cr_avail_map,\n                    movable_and_fixed_avail_crs,\n                    movable_and_fixed_inst_sll_optim_mask,\n                ) = self.op_cls.clock_network_planner_op.forward(\n                    pos=lb_corner_pos["
+        },
+        {
+          "first_line": 842,
+          "last_line": 884,
+          "text": "            self.op_cls.fence_region_op.reset_instance(\n                inst_areas=movable_inst_areas,\n                inst_sizes=movable_inst_sizes_max,\n                inst_cr_avail_map=self.data_cls.movable_inst_cr_avail_map.to(\n                    self.device\n                ),\n                energy_function_exponents=self.data_cls.fence_region_cost_parameters.energy_function_exponent.to(\n                    self.device\n                ),\n                inst_to_super_logic_region=self.data_cls.movable_inst_to_super_logic_region.to(\n                    self.device\n                ),\n                inst_cnp_sll_optim_mask=self.data_cls.movable_inst_cnp_sll_optim_mask.to(\n                    self.device\n                ),\n                slr_aware_flag=self.params.slr_aware_flag\n            )\n\n            # Reset the fence region checker operator\n            self.op_cls.fence_region_checker_op.reset(\n                fence_region_boxes=self.data_cls.fence_region_boxes,\n                inst_sizes=movable_inst_sizes_max,\n                inst_avail_crs=self.movable_inst_avail_crs,\n            )\n\n            # Reset the SSSR(single-site-single-resource) legalization operator\n            self.op_cls.ssr_legalize_op.reset_honor_fence_region_constraints(True)\n            self.op_cls.ssr_legalize_op.reset_clock_available_clock_region(\n                self.data_cls.clock_available_clock_region\n            )\n\n            # Reset the direct legalization operator\n            self.op_cls.direct_lg_op.reset_honor_fence_region_constraints(True)\n            self.op_cls.direct_lg_op.reset_clock_available_clock_region(\n                self.data_cls.clock_available_clock_region\n            )\n\n            self.op_cls.ism_dp_op.reset_honor_clock_constraints(True)\n            self.op_cls.ism_dp_op.reset_clock_available_clock_region(\n                self.data_cls.clock_available_clock_region\n            )\n\n            movable_pos = pos["
+        },
+        {
+          "first_line": 1903,
+          "last_line": 1912,
+          "text": "            if self.params.confine_clock_region_flag:\n                self.op_cls.ism_dp_op.reset_honor_clock_constraints(\n                    self.params.confine_clock_region_flag\n                )\n                self.op_cls.ism_dp_op.reset_clock_available_clock_region(\n                    self.data_cls.clock_available_clock_region\n                )\n                self.op_cls.ism_dp_op.reset_half_column_available_clock_region(\n                    self.data_cls.half_column_available_clock_region\n                )"
+        },
+        {
+          "first_line": 1855,
+          "last_line": 1864,
+          "text": "            if not legality_check_done:\n                if self.params.architecture_name == \"xarch\":\n                    legal = self.op_cls.legality_check_op(\n                        self.data_cls.inst_locs_xyz, arch=\"xarch\"\n                    )\n                else:\n                    legal = self.op_cls.legality_check_op(self.data_cls.inst_locs_xyz)\n                if not legal:\n                    logger.warning(\"Placement is not LEGAL\")\n                legality_check_done = True"
+        },
+        {
+          "first_line": 1898,
+          "last_line": 1912,
+          "text": "            if not legality_check_done:\n                legal = self.op_cls.legality_check_op(self.data_cls.inst_locs_xyz)\n                if not legal:\n                    logger.warning(\"Placement is not LEGAL\")\n                legality_check_done = True\n            if self.params.confine_clock_region_flag:\n                self.op_cls.ism_dp_op.reset_honor_clock_constraints(\n                    self.params.confine_clock_region_flag\n                )\n                self.op_cls.ism_dp_op.reset_clock_available_clock_region(\n                    self.data_cls.clock_available_clock_region\n                )\n                self.op_cls.ism_dp_op.reset_half_column_available_clock_region(\n                    self.data_cls.half_column_available_clock_region\n                )"
+        },
+        {
+          "first_line": 1950,
+          "last_line": 1955,
+          "text": "            legality_check_done = False\n            if not legality_check_done:\n                legal = self.op_cls.legality_check_op(self.data_cls.inst_locs_xyz)\n                if not legal:\n                    logger.warning(\"Placement is not LEGAL\")\n                legality_check_done = True"
+        }
+      ]
+    },
+    "data/reference/openparf-2.0/unittest/regression/ispd2017/CLK-FPGA01.json": {
+      "sha256": "4e1818f3adb8c5fdbb90abcd03e9a58d26aa9c82980c158d5d0455499f13a157",
+      "excerpts": [
+        {
+          "first_line": 60,
+          "last_line": 75,
+          "text": "  \"gp_adjust_area_types\" : [\"LUT\", \"FF\"],\n  \"gp_max_adjust_area_iters\": 6,\n  \"gp_adjust_route_area\": 1,\n  \"gp_adjust_area_route_opt_adjust_exponent\": 2.0,\n  \"gp_adjust_area_max_route_opt_adjust_rate\": 2.0,\n  \"gp_adjust_pin_area\": 1,\n  \"gp_adjust_area_max_pin_opt_adjust_rate\": 1.6,\n  \"confine_clock_region_flag\": 1,\n  \"honor_clock_region_constraints\": 1,\n  \"honor_half_column_constraints\": 1,\n  \"dump_before_clock_refinement_flag\": 0,\n  \"dump_before_ssir_legalization_flag\": 0,\n  \"load_global_place_init_file\": \"\",\n  \"dump_global_place_solution_flag\": 0,\n  \"load_global_place_solution_file\": \"\",\n  \"dump_legalize_solution_flag\": 0,"
+        }
+      ]
+    },
+    "builds/upstream-amf2-20260930-101827-215260/src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.h": {
+      "sha256": "7c76b9d3228bc0e25134b86cd1d44328460fb60c51e3e34766411ecf3af50a2f",
+      "excerpts": [
+        {
+          "first_line": 4242,
+          "last_line": 4253,
+          "text": "    inline bool checkClockColumnLegalization(PlacementInfo::PlacementUnit *curPU, DeviceInfo::DeviceSite *curSite)\n    {\n        auto clockColumn = curSite->getClockHalfColumn();\n        auto curSetOfClocks = clockCol2ClockNets[clockColumn];\n        auto curPUClocks = curPU->getClockNets();\n        for (auto clockNet : curPUClocks)\n            curSetOfClocks.insert(clockNet);\n\n        if (curSetOfClocks.size() <= clockColumn->getClockNumLimit())\n            return true;\n        else\n            return false;"
+        },
+        {
+          "first_line": 4300,
+          "last_line": 4310,
+          "text": "     */\n    void addPUIntoClockColumn(PlacementInfo::PlacementUnit *curPU, DeviceInfo::DeviceSite *curSite)\n    {\n        auto clockColumn = curSite->getClockHalfColumn();\n        auto &curSetOfClocks = clockCol2ClockNets[clockColumn];\n        auto &curPUClocks = curPU->getClockNets();\n        for (auto clockNet : curPUClocks)\n            curSetOfClocks.insert(clockNet);\n        assert(curSetOfClocks.size() <= clockColumn->getClockNumLimit());\n    }\n"
+        }
+      ]
+    },
+    "data/reference/openparf-2.0/openparf/placement/op_collections.py": {
+      "sha256": "189b5e8b39c1890828ba78ec82e522799b01d026e5ff084c03183999e6a37d2f",
+      "excerpts": [
+        {
+          "first_line": 62,
+          "last_line": 77,
+          "text": "def build_legality_check_op(params, placedb, data_cls):\n    \"\"\"legality check\"\"\"\n    if params.confine_clock_region_flag:\n        max_clk_per_clock_region = params.maximum_clock_per_clock_region\n        max_clk_per_half_column = params.maximum_clock_per_half_column\n    else:\n        max_clk_per_clock_region = 0\n        max_clk_per_half_column = 0\n\n    return legality_check.LegalityCheck(\n        placedb=placedb,\n        data_cls=data_cls,\n        check_z_flag=params.check_z_flag,\n        max_clk_per_clock_region=max_clk_per_clock_region,\n        max_clk_per_half_column=max_clk_per_half_column,\n    )"
+        },
+        {
+          "first_line": 551,
+          "last_line": 560,
+          "text": "        # legalize LUTs and FFs\n        self.direct_lg_op = (\n            build_direct_lg_op(params, placedb, data_cls)\n            if not params.confine_clock_region_flag\n            else build_clock_region_aware_direct_lg_op(params, placedb, data_cls)\n        )\n        # detailed placement\n        self.ism_dp_op = build_ism_dp_op(params, placedb, data_cls)\n        # legality check\n        self.legality_check_op = build_legality_check_op(params, placedb, data_cls)"
+        }
+      ]
+    },
+    "src/lib/HiFPlacer/deviceInfo/DeviceInfo.cc": {
+      "sha256": "d849230515cc2f23dcb45cc913e67721df40a2999cf3010287be598e764c4c45",
+      "excerpts": [
+        {
+          "first_line": 430,
+          "last_line": 445,
+          "text": "    {\n        for (unsigned int colOffset = 0; colOffset < clockColumns[levelY].size(); colOffset++)\n        {\n            clockColumns[levelY][colOffset] = new ClockColumn();\n        }\n    }\n    int eachLevelY = (topTileIdY - bottomTileIdY + 1) / columnNumY;\n    for (auto curSite : sites)\n    {\n        if (curSite->getName().find(\"SLICE\") != 0)\n        {\n            // currently, BRAM/DSP slices will not lead to clock utilization overflow\n            continue;\n        }\n        int levelY = (curSite->getSiteY() - bottomSiteY) / eachLevelY;\n        int offsetX = curSite->getTile()->getTileIdX() - leftTileIdX;"
+        }
+      ]
+    },
+    "src/lib/HiFPlacer/deviceInfo/DeviceInfo.h": {
+      "sha256": "81e9442a3d884f767038d8cbdad33ec1bda64e0a4658bbd79b0e8693e03066e6",
+      "excerpts": [
+        {
+          "first_line": 797,
+          "last_line": 810,
+          "text": "        inline void addClockAndCell(int clockNetId, int cellId, float x, float y)\n        {\n            float offsetXInRegion = x - leftX;\n            float offsetYInRegion = y - bottomY;\n\n            // this approach is not accurate enought since the slice columns are not evenly\n            // distributed in a clock region. However, it is fast for frequently checking of\n            // clock utilization\n            int colX = offsetXInRegion / colWidth;\n            int colY = offsetYInRegion / colHeight;\n            assert(colX >= -1);\n            assert(colY >= -1);\n            assert(clockColumns.size());\n            assert(colY <= (int)clockColumns.size());"
+        }
+      ]
+    },
+    "src/lib/HiFPlacer/designInfo/DesignInfo.cc": {
+      "sha256": "52ee85ea6d117880ae55d775e0d56ef1c1bba80c5aa63930f148a1efeddc335a",
+      "excerpts": [
+        {
+          "first_line": 375,
+          "last_line": 420,
+          "text": "void DesignInfo::loadClocks(std::string clockFileName)\n{\n    AMF_PROFILE_FUNCTION(\"input_netlist\");\n    std::ifstream clockFile(clockFileName);\n    assert(clockFile.good() && \"The clock file does not exist and please check your path settings\");\n\n    while (clockFile.peek() != EOF)\n    {\n        std::string clockDriverPinName;\n        clockFile >> clockDriverPinName;\n        if (clockDriverPinName == \"\")\n            continue;\n        if (name2Net.find(clockDriverPinName) == name2Net.end())\n        {\n            print_warning(\"global clock: [\" + clockDriverPinName +\n                          \"] is not found in design info. It might not be a problem as long as it is an external pin \"\n                          \"or only connected to one instance.\");\n            continue;\n        }\n        assert(name2Net.find(clockDriverPinName) != name2Net.end());\n        assert(clockSet.find(name2Net[clockDriverPinName]) == clockSet.end());\n        clockSet.insert(name2Net[clockDriverPinName]);\n        clocks.push_back(name2Net[clockDriverPinName]);\n        clock2Cells[name2Net[clockDriverPinName]] = std::set<DesignCell *>();\n        name2Net[clockDriverPinName]->setGlobalClock();\n        // if (name2Net[clockDriverPinName]->getPins().size() < 4000)\n        //     name2Net[clockDriverPinName]->setOverallNetEnhancement(1.1);\n    }\n\n    for (auto tmpCell : cells)\n    {\n        for (auto tmpPin : tmpCell->getPins())\n        {\n            if (!tmpPin->isUnconnected())\n            {\n                if (tmpPin->getNet())\n                {\n                    if (isDesignClock(tmpPin->getNet()))\n                    {\n                        clock2Cells[tmpPin->getNet()].insert(tmpCell);\n                        tmpCell->addClockNet(tmpPin->getNet());\n                    }\n                }\n            }\n        }\n    }"
+        }
+      ]
+    },
+    "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBCluster.cc": {
+      "sha256": "1ca7f26e55375b3e2764d43004812b08df587710b15bfcd8dfc200e8022a2f8b",
+      "excerpts": [
+        {
+          "first_line": 750,
+          "last_line": 765,
+          "text": "            return false;\n        }\n    }\n    PUs.insert(tmpPU);\n    //  assert(checkCellCorrectness(tmpPU, true));\n    hashed = false;\n    if (isMUXMacro)\n    {\n        numMuxes++;\n    }\n\n    if (!parentPackingCLB->getPlacementInfo()->checkClockColumnLegalization(tmpPU, parentPackingCLB->getCLBSite()))\n        return false;\n\n    return true;\n}"
+        }
+      ]
+    },
+    "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc": {
+      "sha256": "80629c42b008614f543d6017194f0841734607fde47acab18fb01e7b616a3e0e",
+      "excerpts": [
+        {
+          "first_line": 223,
+          "last_line": 241,
+          "text": "                delete determinedClusterInSite;\n                // priorityQueue.push_back(determinedClusterInSite);\n            }\n\n            determinedClusterInSite = new PackingCLBCluster(topCluster);\n\n            for (auto countedPair : PU2TopCnt)\n            {\n                if (countedPair.second < unchangedIterationThr ||\n                    !placementInfo->checkClockColumnLegalization(countedPair.first, CLBSite))\n                {\n                    determinedClusterInSite->removePUToConstructDetCluster(countedPair.first);\n                }\n                else\n                {\n                    placementInfo->addPUIntoClockColumn(countedPair.first, CLBSite);\n                }\n            }\n"
+        }
+      ]
+    }
+  }
+}

@@ -29,7 +29,8 @@
         "BUFGCE", "BUFG_GT", "BUFG_GT_SYNC", "BUFGCE_DIV", "BUFGCTRL", "GTHE3_CHANNEL", "GTHE3_COMMON", "IOBUF",       \
         "IBUF", "IBUFDS", "IOBUFDS", "IBUFDS_GTE3", "IBUF_ANALOG", "IOBUFE3", "MMCME3_ADV", "OBUF", "OBUFT",           \
         "PCIE_3_1", "BSCANE2", "SYSMONE1", "RXTX_BITSLICE", "BITSLICE_CONTROL", "TX_BITSLICE_TRI", "OSERDESE3",        \
-        "RIU_OR", "PLLE3_ADV", "HPIO_VREF", "OBUFDS_DUAL_BUF", "URAM288", "URAM288_BASE"
+        "RIU_OR", "PLLE3_ADV", "HPIO_VREF", "OBUFDS_DUAL_BUF", "URAM288", "URAM288_BASE" , \
+        "GTYE4_CHANNEL", "GTYE4_COMMON", "IBUFDS_GTE4", "PCIE40E4", "RAM256X1S"
 
 /**
  * @brief Information related to FPGA designs, including design cells and their interconnections.
@@ -132,7 +133,13 @@ class DesignInfo
         CellType_HPIO_VREF,
         CellType_OBUFDS_DUAL_BUF,
         CellType_URAM288,
-        CellType_URAM288_BASE
+        CellType_URAM288_BASE,
+        // UltraScale+ fixed interface resources; append to preserve old type IDs.
+        CellType_GTYE4_CHANNEL,
+        CellType_GTYE4_COMMON,
+        CellType_IBUFDS_GTE4,
+        CellType_PCIE40E4,
+        CellType_RAM256X1S
     };
 
     inline static bool FFSRCompatible(DesignCellType typeA, DesignCellType typeB)
@@ -930,7 +937,7 @@ class DesignInfo
             return (cellType == CellType_RAM32M16 || cellType == CellType_RAM32X1D || cellType == CellType_RAM64X1S ||
                     cellType == CellType_RAM64M || cellType == CellType_RAM64X1D || cellType == CellType_RAM32M ||
                     cellType == CellType_RAM32X1D || cellType == CellType_RAM32X1S || cellType == CellType_RAM64X1S ||
-                    cellType == CellType_RAM64M8 || cellType == CellType_RAM256X1D);
+                    cellType == CellType_RAM64M8 || cellType == CellType_RAM256X1D || cellType == CellType_RAM256X1S);
         }
         inline bool originallyIsLUTRAM()
         {
@@ -939,7 +946,7 @@ class DesignInfo
                     oriCellType == CellType_RAM64X1D || oriCellType == CellType_RAM32M ||
                     oriCellType == CellType_RAM32X1D || oriCellType == CellType_RAM32X1S ||
                     oriCellType == CellType_RAM64X1S || oriCellType == CellType_RAM64M8 ||
-                    oriCellType == CellType_RAM256X1D);
+                    oriCellType == CellType_RAM256X1D || oriCellType == CellType_RAM256X1S);
         }
         inline bool originallyIsShifter() const
         {
@@ -991,7 +998,9 @@ class DesignInfo
                    cellType == CellType_TX_BITSLICE_TRI || cellType == CellType_OSERDESE3 ||
 
                    cellType == CellType_RIU_OR || cellType == CellType_PLLE3_ADV || cellType == CellType_HPIO_VREF ||
-                   cellType == CellType_OBUFDS_DUAL_BUF;
+                   cellType == CellType_OBUFDS_DUAL_BUF ||
+                   cellType == CellType_GTYE4_CHANNEL || cellType == CellType_GTYE4_COMMON ||
+                   cellType == CellType_IBUFDS_GTE4 || cellType == CellType_PCIE40E4;
         }
 
         inline bool isClockBuffer()
@@ -1358,7 +1367,7 @@ class DesignInfo
         return (cellType == CellType_RAM32M16 || cellType == CellType_RAM32X1D || cellType == CellType_RAM64X1S ||
                 cellType == CellType_RAM64M || cellType == CellType_RAM64X1D || cellType == CellType_RAM32M ||
                 cellType == CellType_RAM32X1D || cellType == CellType_RAM32X1S || cellType == CellType_RAM64X1S ||
-                cellType == CellType_RAM64M8 || cellType == CellType_RAM256X1D);
+                cellType == CellType_RAM64M8 || cellType == CellType_RAM256X1D || cellType == CellType_RAM256X1S);
     }
 
     inline static bool isFF(DesignCellType cellType)
@@ -1382,7 +1391,9 @@ class DesignInfo
                cellType == CellType_OSERDESE3 ||
 
                cellType == CellType_RIU_OR || cellType == CellType_PLLE3_ADV || cellType == CellType_HPIO_VREF ||
-               cellType == CellType_OBUFDS_DUAL_BUF;
+               cellType == CellType_OBUFDS_DUAL_BUF ||
+                   cellType == CellType_GTYE4_CHANNEL || cellType == CellType_GTYE4_COMMON ||
+                   cellType == CellType_IBUFDS_GTE4 || cellType == CellType_PCIE40E4;
     }
 
     inline bool isClockBuffer(DesignCellType cellType)

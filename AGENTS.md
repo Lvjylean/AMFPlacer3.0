@@ -6,6 +6,7 @@
 - 新分支默认使用 `codex/` 前缀。记录当前源码提交、工作区变更、输入哈希、工具版本和构建目录。Git 中不存放 DCP、构建产物、运行日志、许可证或大型运行缓存。
 - 最终 DCP 留在服务器 `experiments/runs/<run-id>/reports/`；本地同步使用 `scripts/sync_reports.py`，仅传输轻量报告与日志。下载 DCP 需要用户明确提出。
 - 所有实验使用唯一 ID，保留 manifest、status、config、日志和报告。运行成功、时序通过、DRC 检查和位置复用率分别记录，不以一个退出码替代全部结论。
+- 2026-09-30 用户明确要求：AMF3 常规 `full-run` 沿用原版允许 Vivado 后端修复的策略，默认 `import_policy=repair`，直接进入修复及布线，不再要求先做严格导入失败轮次。`--strict-import` 和 `--import-only` 保留为可选严格诊断；`--allow-import-repair` 保留兼容。两种模式都记录导入差异、最终位置保留率、完整路由、DRC 与时序，修复结果不改报为严格导入通过。完整导出覆盖和实际约束检查仍保留；历史实验与源码快照不改写。该决定覆盖旧文档中“full-run 默认 strict／repair 仅作诊断”的常规流程约定。
 - 无变化、参数变化、连接变化、增删单元、约束变化和缓存不兼容应分别测试。保持冻结对象和资源占用的一致性；不得将数组编号相同当作跨版本对象匹配。
 - 速度对比须针对同一个 V1 设计与一致工具/参数条件，区分 AMF 阶段加速和端到端加速。
 - 2026-09-28 用户明确要求：AMF 实际布局运行与 Vivado 文件格式适配分别统计，适配时间不计入 placement。DCP→AMF 导出、AMF→Vivado 导出/转换/导入单列；Vivado place_design、route_design、审计/报告/DCP 写出也各自记录。保留 AMF 进程墙钟与端到端总墙钟用于核对，不把进程总时间称为纯算法时间。历史未完整分段的部分标记未单独计时；复用输入缓存说明本轮未执行导出，不伪造首次导出成本。详见 docs/experiment-policy.md。
@@ -28,3 +29,5 @@
 - 2026-09-28 完成 U250/GETRF 的一轮 SA 横纵距离比例数据标定：新配置 `getrf-u250-sa-calibrated.json` 显式使用 `Simulated Annealing y2xRatio=0.71`（有效值，不再乘 0.8），共享 `y2xRatio=0.4`。省略新键时沿用原 SA 计算。正式构建 `build-20260928-002048-349585-d534237b`，报告见 `docs/research/u250-sa-ratio-calibration.md` 和运行 `u250-sa-ratio-calibration-20260928-005532`。1,923 条 routed 连接、保留数据与另一布局验证支持优于旧 0.32 的粗粒度线性代理；不同布局重拟合约 0.55–0.72，不能当作全器件物理常数。本轮未重跑完整 GETRF 布局布线，旧配置仍作对照，不宣称最终 WNS 改善。
 
 - 2026-09-28 随后完成 0.71 的 10 ns 完整实验 `getrf-u250-full-20260928-014049-967020`。与历史严格基线 `getrf-u250-full-20260927-125004-730657`（有效 0.32）相比，总墙钟 147.89→123.88 分钟，AMF 68.57→51.16 分钟，但 WNS +0.111→−0.353 ns、TNS 0→−2.896 ns，26 个 setup 端点违例；hold、全量路由、DRC、级联和 100% 原始 LOC/BEL 保留均通过。最差路径在 SLR 1/2 间跨界五次。0.71 继续作为实验值，不将距离拟合改善表述为端到端 QoR 改善，保留历史 0.32 时序基线。两次构建还存在既有 CLB 打包稳健性差异（本轮未触发列兜底），且服务器负载未严格控制，因此不是纯单变量因果实验。最终 DCP 留在服务器，报告见 `docs/research/u250-sa-ratio-10ns-validation.md`。
+
+- 2026-09-29 用户结束新匹配求解器加速实验，常规使用 `BipartiteMatchingBackend=legacy`；保留 `MacroCandidateSelection=cached_topk` 和只读列表引用优化。五处源码缺省值及常规 GETRF 配置已恢复 legacy。新内核、forward-bias、fast 配置仅供明确选择的历史复现，不自动重新启用。旧内核本身保留原正向 +0.01／反向不抵消；不要再给 legacy 配置新内核的非零 forward-bias。已验证组合及启动命令见 `docs/research/placement-acceleration-inventory.md`，稳定配置为 `configs/experiments/getrf-u250-placement-stable.json`。

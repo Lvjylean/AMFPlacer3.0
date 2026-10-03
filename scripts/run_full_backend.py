@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import zipfile
+from pathlib import Path
 from inspect_amf_inputs import digest
 from srl_cascades import correct_and_validate
 
@@ -22,7 +23,33 @@ def escape_error_payload(match):
     return 'puts $fo "' + ''.join(result) + '"'
 
 
+def canonical_export_names(assignments, cell_types, raw):
+    """Restore only proven literal export names after Tcl list unescaping.
+
+    Vivado resolves the original bare placement names containing doubled
+    backslashes. Our Tcl list reader consumes one escape layer. A restoration
+    must occur verbatim in both the input and export, with the same target.
+    The placement commands themselves are never rewritten.
+    """
+    tokens = raw.split()
+    literal = {name: target for name, target in zip(tokens[::2], tokens[1::2]) if '\\' in name}
+    resolved = dict(assignments)
+    aliases = []
+    for name, target in assignments.items():
+        if name in cell_types or '\\' not in name:
+            continue
+        canonical = name.replace('\\', '\\\\')
+        if canonical not in cell_types or literal.get(canonical) != target:
+            continue
+        if canonical in resolved:
+            raise ValueError('Duplicate canonical AMF cell: ' + canonical)
+        resolved[canonical] = resolved.pop(name)
+        aliases.append(dict(parsed_name=name, input_name=canonical, target=target))
+    return resolved, aliases
+
+
 def prepare(root, source, directory, manifest):
+    upstream = manifest.get('upstream_backend', False)
     source_manifest=directory/'inputs/placement_source_manifest.json'
     shutil.copy2(source/'manifest.json',source_manifest)
     shutil.copy2(source/'config.json',directory/'inputs/placement_source_config.json')
@@ -65,8 +92,34 @@ close $f
     assignments=dict(line.split('\t') for line in (directory/'placement/requested.tsv').read_text().splitlines())
     if not assignments: raise ValueError('No placement assignments found')
     cfg=json.loads((source/'config.json').read_text())
-    counts=collections.Counter(); covered=collections.Counter(); extra=set(assignments)
-    srl_kinds={}; srl_edges=[]
+    fixed_inputs = {}
+    inherited_fixed = {}
+    if cfg.get('fixed units file') and not upstream:
+        fixed_path = Path(cfg['fixed units file'])
+        expected = json.loads((source/'manifest.json').read_text())['inputs']['fixed units file']['sha256']
+        if digest(fixed_path) != expected:
+            raise ValueError('Fixed input assignments changed after AMF execution')
+        for line in fixed_path.read_text().splitlines()[1:]:
+            m = re.fullmatch(r'name=> (\S+) loc=> (\S+) bel=> (\S+)', line)
+            if not m:
+                raise ValueError('Invalid fixed input assignment: ' + line)
+            name, site, bel = m.groups()
+            if name in fixed_inputs:
+                raise ValueError('Duplicate fixed input cell: ' + name)
+            fixed_inputs[name] = dict(site=site, bel=bel)
+            if name in assignments:
+                if assignments[name].split('/')[0] != site:
+                    raise ValueError('AMF moved a fixed input cell: ' + name)
+            else:
+                # The legacy exporter omits locked I/O/clock buffers. They are
+                # inputs to placement, not missing movable-cell decisions.
+                if any(c in name + site for c in '{}\\'):
+                    raise ValueError('Unsupported fixed input Tcl name: ' + name)
+                inherited_fixed[name] = site
+                assignments[name] = site
+        shutil.copy2(fixed_path, directory/'inputs/fixed_units')
+    counts=collections.Counter(); cell_types={}
+    srl_kinds={}; srl_edges=[]; fixed_kinds={}
     with zipfile.ZipFile(cfg['vivado extracted design information file']) as z:
         with z.open(z.namelist()[0]) as f:
             for line in f:
@@ -74,13 +127,34 @@ close $f
                     fields=line.decode().split();name,kind=fields[1],fields[3]
                     if kind.startswith('SRL'):srl_kinds[name]=kind
                     if kind in ('VCC','GND'):continue
+                    cell_types[name]=kind
                     counts[kind]+=1
-                    if name in assignments:covered[kind]+=1;extra.discard(name)
+                    if name in fixed_inputs:fixed_kinds[name]=kind
+                    if name in inherited_fixed and kind not in ('IBUF', 'OBUF', 'BUFGCE'):
+                        if kind not in ('IBUFDS_GTE4', 'GTYE4_CHANNEL', 'GTYE4_COMMON',
+                                        'PCIE40E4', 'BUFG_GT', 'BUFG_GT_SYNC'):
+                            raise ValueError('Unreviewed inherited fixed primitive: ' + kind)
+                        fixed = fixed_inputs[name]
+                        target = fixed['bel']
+                        if not re.fullmatch(re.escape(fixed['site']) + r'/[A-Za-z0-9_]+', target):
+                            raise ValueError('Invalid fixed interface BEL: ' + target)
+                        assignments[name] = inherited_fixed[name] = target
                 elif b'/Q31' in line and b' dir=> IN ' in line and b'drivepin=> ' in line:
                     driver_cell,pin=line.decode().split('drivepin=> ')[1].strip().rsplit('/',1)
                     if pin=='Q31':srl_edges.append((driver_cell,name))
+    commands = ['place_cell [list {' + name + '} {' + target + '}]'
+                for name, target in inherited_fixed.items()]
+    adapted += '\n# Reapply declared fixed input targets after legacy unplacement.\n' + '\n'.join(commands) + '\n'
+    assignments,name_aliases=canonical_export_names(assignments,cell_types,raw.read_text())
+    covered=collections.Counter(cell_types[name] for name in assignments if name in cell_types)
+    extra=set(assignments)-cell_types.keys()
+    (directory/'reports/export_name_aliases.json').write_text(json.dumps(
+        dict(count=len(name_aliases),aliases=name_aliases,placement_commands_changed=False),indent=2)+'\n')
     if extra:raise ValueError('AMF emitted cells absent from input: '+repr(sorted(extra)[:5]))
-    assignments,corrections=correct_and_validate(assignments,srl_kinds,srl_edges)
+    if upstream:
+        corrections = []
+    else:
+        assignments,corrections=correct_and_validate(assignments,srl_kinds,srl_edges)
     for change in corrections:
         # The migration is restricted to a site occupied solely by this SRL.
         # Replace its target in both the placement command and diagnostic dump.
@@ -94,15 +168,29 @@ close $f
         f.write('source\tsink\n')
         for a,b in srl_edges:f.write(a+'\t'+b+'\n')
     (directory/'reports/srl_cascades.json').write_text(json.dumps(
-        dict(checked=len(srl_edges),violations=0,bel_corrections=corrections),indent=2)+'\n')
+        dict(checked=0 if upstream else len(srl_edges),violations=None if upstream else 0,
+             validation_deferred_to_vivado=upstream,bel_corrections=corrections),indent=2)+'\n')
     with (directory/'placement/requested.tsv').open('w') as f:
         for name,target in assignments.items():f.write(name+'\t'+target+'\n')
     metrics=dict(input_cells=sum(counts.values()),assigned_cells=len(assignments),
+                 raw_amf_assigned_cells=len(assignments)-len(inherited_fixed),
+                 inherited_fixed_input_cells=len(inherited_fixed),
                  input_by_type=dict(counts),assigned_by_type=dict(covered),
                  missing_by_type={k:counts[k]-covered[k] for k in counts if counts[k]!=covered[k]})
     (directory/'reports/amf_coverage.json').write_text(json.dumps(metrics,indent=2)+'\n')
-    if metrics['missing_by_type']:
+    if upstream:
+        metrics['omission_policy'] = 'Original exporter hands unexported resources to Vivado; no fixed-cell replay or BEL corrections'
+        (directory/'reports/amf_coverage.json').write_text(json.dumps(metrics,indent=2)+'\n')
+    if metrics['missing_by_type'] and not upstream:
         raise ValueError('Incomplete AMF BEL export: '+repr(metrics['missing_by_type']))
+    if manifest.get('release_fixed_clock_buffers'):
+        clocks = {name: fixed_inputs[name]['site'] for name, kind in fixed_kinds.items() if kind == 'BUFGCE'}
+        if not clocks:
+            raise ValueError('Clock release requires declared fixed BUFGCE input cells')
+        with (directory/'placement/clock_buffer_release.tsv').open('w') as f:
+            f.write('cell\timported_site\n')
+            for name, site in sorted(clocks.items()):f.write(name+'\t'+site+'\n')
+        manifest['released_fixed_clock_buffers'] = clocks
     for name in ('resources.json','resources.tsv','cascades.tsv'):
         if source.resolve()!=directory.resolve() and (source/'placement'/name).exists():
             shutil.copy2(source/'placement'/name,directory/'placement'/name)
@@ -115,6 +203,9 @@ close $f
         original_tcl=str(generated),original_tcl_sha256=digest(generated),import_tcl_sha256=digest(directory/'placement/import_placement.tcl'),
         adapter_diagnostic_lines=n,assignments_changed=bool(corrections),site_assignments_changed=False,
         bel_corrections=corrections)
+    manifest['placement_source']['inherited_fixed_input_assignments'] = inherited_fixed
+    manifest['placement_source']['fixed_input_bels'] = fixed_inputs
+    manifest['placement_source']['audit_name_aliases'] = name_aliases
     manifest['backend_script_sha256']=digest(script)
     diagnostic=root/'scripts/diagnostics/export_boundary_timing_samples.tcl'
     if diagnostic.is_file():

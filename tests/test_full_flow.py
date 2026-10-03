@@ -1,15 +1,46 @@
 import json
+import hashlib
+import io
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
-from run_full_backend import prepare
-from run_full_flow import configure_outputs, completed_amf_placement
+from run_full_backend import prepare, canonical_export_names
+from run_full_flow import configure_outputs, completed_amf_placement, resolve_import_policy
 from run_boundary_comparison import equivalent_configs, assess_qor
 from summarize_full_flow import routing_complete, missing_clock_source_warning, numerical_guard_audit
+
+class FullRunImportPolicy(unittest.TestCase):
+    def command_policy(self, *flags):
+        import amf3
+        captured = []
+        with patch.object(sys, 'argv', ['amf3.py', 'full-run', *flags]), \
+                patch.object(amf3, 'full_run', side_effect=lambda args: captured.append(resolve_import_policy(args))):
+            amf3.main()
+        return captured[0]
+
+    def test_full_run_defaults_to_repair_and_keeps_legacy_flag(self):
+        self.assertEqual(self.command_policy(), 'repair')
+        self.assertEqual(self.command_policy('--allow-import-repair'), 'repair')
+        self.assertEqual(self.command_policy('--upstream-backend'), 'repair')
+        self.assertEqual(self.command_policy('--placement-run', 'experiments/runs/previous'), 'repair')
+
+    def test_strict_acceptance_is_explicit_or_import_only(self):
+        self.assertEqual(self.command_policy('--strict-import'), 'strict')
+        self.assertEqual(self.command_policy('--import-only'), 'strict')
+        self.assertEqual(self.command_policy('--import-only', '--strict-import'), 'strict')
+
+    def test_conflicting_policies_fail_before_any_experiment(self):
+        for flags in (('--strict-import', '--allow-import-repair'),
+                      ('--import-only', '--allow-import-repair')):
+            with self.subTest(flags=flags), patch('sys.stderr', new_callable=io.StringIO):
+                with self.assertRaises(SystemExit) as error:
+                    self.command_policy(*flags)
+                self.assertNotEqual(error.exception.code, 0)
 
 class ComparisonRecommendation(unittest.TestCase):
     def fixture(self,cluster_wns=-.059,cluster_met=False):
@@ -35,6 +66,47 @@ class ComparisonRecommendation(unittest.TestCase):
         self.assertIn('implementation-validation-failed',assess_qor(inputs)['recommendation'])
 
 class FullBackend(unittest.TestCase):
+    def test_fixed_u250_interfaces_preserve_declared_bels_and_complete_coverage(self):
+        with tempfile.TemporaryDirectory() as work:
+            r=Path(work);self.fixture(r,'a[0] SLICE_X0Y0/A6LUT\nb SLICE_X0Y1/H6LUT\n')
+            kinds=['IBUFDS_GTE4','GTYE4_CHANNEL','GTYE4_COMMON','PCIE40E4','BUFG_GT','BUFG_GT_SYNC']
+            fixed=r/'fixed_units'
+            fixed.write_text('# fixed interfaces\n'+''.join(
+                f'name=> interface[{i}] loc=> SITE_X0Y{i} bel=> SITE_X0Y{i}/BEL_{i}\n'
+                for i in range(len(kinds))))
+            config=json.loads((r/'config.json').read_text());config['fixed units file']=str(fixed)
+            (r/'config.json').write_text(json.dumps(config))
+            (r/'manifest.json').write_text(json.dumps({'inputs':{'fixed units file':{'sha256':hashlib.sha256(fixed.read_bytes()).hexdigest()}}}))
+            with zipfile.ZipFile(r/'netlist.zip','w') as z:
+                z.writestr('allCellPinNet','curCell=> a[0] type=> LUT6\ncurCell=> b type=> SRLC32E\n'+''.join(
+                    f'curCell=> interface[{i}] type=> {kind}\n' for i,kind in enumerate(kinds)))
+            manifest={};prepare(r,r,r,manifest)
+            for i in range(len(kinds)):
+                self.assertIn(f'place_cell [list {{interface[{i}]}} {{SITE_X0Y{i}/BEL_{i}}}]',
+                              (r/'placement/import_placement.tcl').read_text())
+                self.assertIn(f'interface[{i}]\tSITE_X0Y{i}/BEL_{i}',(r/'placement/requested.tsv').read_text())
+            self.assertEqual(json.loads((r/'reports/amf_coverage.json').read_text())['missing_by_type'],{})
+
+    def test_vivado_backslash_name_is_restored_only_in_audit(self):
+        with tempfile.TemporaryDirectory() as work:
+            r=Path(work)
+            name=r'axi\\.wen[0]'
+            self.fixture(r,name+' SLICE_X0Y0/A6LUT\nb SLICE_X0Y1/H6LUT\n')
+            with zipfile.ZipFile(r/'netlist.zip','w') as z:
+                z.writestr('allCellPinNet',f'curCell=> {name} type=> LUT6\ncurCell=> b type=> SRLC32E\n')
+            manifest={};prepare(r,r,r,manifest)
+            self.assertIn(name+'\tSLICE_X0Y0/A6LUT',(r/'placement/requested.tsv').read_text())
+            self.assertIn(name+' SLICE_X0Y0/A6LUT',(r/'placement/import_placement.tcl').read_text())
+            self.assertEqual(len(manifest['placement_source']['audit_name_aliases']),1)
+            self.assertFalse(manifest['placement_source']['assignments_changed'])
+
+    def test_name_restoration_requires_literal_export_with_same_target(self):
+        parsed=r'axi\.wen[0]';canonical=r'axi\\.wen[0]'
+        original={parsed:'SLICE_X0Y0/A6LUT'}
+        result,aliases=canonical_export_names(original,{canonical:'LUT6'},canonical+' SLICE_X9Y9/A6LUT')
+        self.assertEqual(result,original)
+        self.assertEqual(aliases,[])
+
     def test_numerical_guard_events_are_not_unique_cell_counts(self):
         log='QP_GUARD axis=X repaired=2 max_diagonal_delta=0.01 iterations=5 relative_error=0.1 converged=0 rollback=1\nQP_GUARD axis=Y repaired=2 max_diagonal_delta=0.02 iterations=4 relative_error=0 converged=1 rollback=0\nTIMING_WEIGHT_GUARD cap=1000 enhanced_edges=20 saturated_edges=3 invalid_edges=0'
         result=numerical_guard_audit(log)
@@ -154,3 +226,16 @@ class FullBackend(unittest.TestCase):
             self.assertTrue(manifest['placement_source']['assignments_changed'])
             self.assertFalse(manifest['placement_source']['site_assignments_changed'])
             self.assertEqual(json.loads((r/'reports/srl_cascades.json').read_text())['checked'],1)
+
+    def test_upstream_backend_keeps_original_bels_and_resource_omissions(self):
+        with tempfile.TemporaryDirectory() as work:
+            r=Path(work);self.fixture(r,'a[0] SLICE_X0Y0/H6LUT\nb SLICE_X1Y0/H6LUT\n')
+            with zipfile.ZipFile(r/'netlist.zip','w') as z:
+                z.writestr('allCellPinNet','curCell=> a[0] type=> SRLC32E\ncurCell=> b type=> SRL16E\n'
+                           'pin=> b/D refpin=> D dir=> IN net=> n drivepin=> a[0]/Q31\n'
+                           'curCell=> io type=> IBUFDS\n')
+            manifest={'upstream_backend':True};prepare(r,r,r,manifest)
+            self.assertIn('a[0]\tSLICE_X0Y0/H6LUT',(r/'placement/requested.tsv').read_text())
+            self.assertFalse(manifest['placement_source']['assignments_changed'])
+            self.assertEqual(json.loads((r/'reports/amf_coverage.json').read_text())['missing_by_type'],{'IBUFDS':1})
+            self.assertIsNone(json.loads((r/'reports/srl_cascades.json').read_text())['violations'])
