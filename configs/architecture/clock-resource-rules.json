@@ -1,0 +1,28 @@
+{
+  "schema": "amf-clock-architecture-rules-v1",
+  "rules_version": "ultrascale-clock-v1",
+  "profiles": [
+    {
+      "id": "u250-ultrascale-plus",
+      "part_pattern": "xcu250-[a-z0-9]+-[0-9][a-z0-9-]*",
+      "architecture": "virtexuplus",
+      "family_values": ["virtexuplus"],
+      "nominal_tracks": {"hroute": 24, "hdistr": 24, "vroute": 24, "vdistr": 24},
+      "half_column_limit": 12,
+      "bbox_clock_limit": 24,
+      "slice_rows_per_clock_region": 60,
+      "sources": {
+        "tracks": "https://docs.amd.com/r/en-US/ug572-ultrascale-clocking/Clock-Structure",
+        "half_column": "https://www.ispd.cc/contests/17/legalization.html",
+        "bbox_model": "https://www.ispd.cc/contests/17/legalization.html"
+      },
+      "notes": [
+        "Track capacities are nominal architecture resources, not available resources after fixed-design reservations.",
+        "Without a device-topology query, half_column_limit=12 preserves the legacy AMF/ISPD placement budget; it is not a measured XCU250 hardware capacity.",
+        "With a complete target-device topology query, the SLICE half-column limit is derived from actual clock-leaf connectivity instead of the legacy 12 budget. Endpoint sampling does not prove general simultaneous clock routability.",
+        "The rectangular clock coverage budget is a placement model; it does not prove detailed clock routability.",
+        "The initial supported die is XCU250. Other parts, including Spartan UltraScale+ with nonuniform vertical tracks, require explicit rules and validation."
+      ]
+    }
+  ]
+}
