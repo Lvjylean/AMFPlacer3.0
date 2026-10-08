@@ -16,17 +16,33 @@ from summarize_full_flow import routing_complete
 
 def constraint_options(args, provenance):
     preserve = bool(args.preserve_input_constraints)
+    override = bool(getattr(args, 'override_core_clock', False))
+    if override and not preserve:
+        raise ValueError('Core clock override requires --preserve-input-constraints')
     if preserve:
         if args.release_io or not args.core_clock or args.clock_period is None:
             raise ValueError('Preserving input constraints requires a core clock/period and forbids releasing I/O')
         if not math.isfinite(args.clock_period) or args.clock_period <= 0:
             raise ValueError('Core period must be positive and finite')
         return dict(preserve_input_constraints=True, core_clock=args.core_clock,
-                    clock_count=0, period_ns=args.clock_period)
+                    clock_count=0, period_ns=args.clock_period, override_core_clock=override)
     if args.core_clock or args.clock_period is not None:
         raise ValueError('Core clock validation requires --preserve-input-constraints')
     return dict(preserve_input_constraints=False, core_clock='',
                 clock_count=provenance['clock_count'], period_ns=provenance['vivado_clock_period_ns'])
+
+
+def probe_vivado(root, executable):
+    path = (Path(root) / executable).resolve()
+    if not path.is_file():
+        raise ValueError('Vivado executable not found: ' + str(path))
+    probe = subprocess.run([str(path), '-version'], capture_output=True, text=True,
+                           check=True, timeout=120)
+    output = probe.stdout + probe.stderr
+    match = re.search(r'\b[Vv]ivado v(\d+\.\d+)\b', output)
+    if not match:
+        raise ValueError('Cannot identify selected Vivado version')
+    return str(path), match.group(1), output
 
 
 def digest(path):
@@ -65,7 +81,7 @@ def collect(directory):
         result['drc'] = drc(reports / 'drc.rpt')
         assert result['drc']['totals'].get('Error', 0) == result['drc_counts']['errors']
         result['routing_drc_verified'] = result['routing_complete'] and result['drc_counts']['errors'] == 0
-    for name in ('release_placement.json', 'tools.json', 'constraint_audit.json'):
+    for name in ('release_placement.json', 'tools.json', 'constraint_audit.json', 'core_clock_override.json'):
         if (reports / name).exists():
             result[name[:-5]] = json.loads((reports / name).read_text())
     checkpoint = reports / 'vivado_routed.dcp'
@@ -77,6 +93,14 @@ def collect(directory):
         audit.get('clock_snapshot_unchanged') and audit.get('io_standards_unchanged') and
         (not manifest['config'].get('preserve_input_constraints') or audit.get('input_fixed_locations_verified')) and
         result.get('final_dcp_sha256'))
+    if manifest['config'].get('override_core_clock'):
+        override = result.get('core_clock_override', {})
+        result['core_clock_override_verified'] = bool(override.get('applied') and
+            override.get('other_clocks_unchanged') and
+            override.get('core_clock') == manifest['config']['core_clock'] and
+            abs(override.get('target_period_ns', -1) - manifest['config']['period_ns']) < 1e-6)
+        result['implementation_verified'] = bool(result['implementation_verified'] and
+            result['core_clock_override_verified'])
     return result
 
 
@@ -92,10 +116,14 @@ def run(root, args):
         raise ValueError('Invalid run prefix')
     provenance = old['input_provenance']
     tools = json.loads((reference / 'reports/tools.json').read_text())
+    vivado, vivado_version, vivado_version_output = probe_vivado(
+        root, getattr(args, 'vivado', None) or machine()['vivado'])
     constraints = constraint_options(args, provenance)
     resume = None
     execution_source = source
     if args.resume_native_run:
+        if constraints.get('override_core_clock'):
+            raise ValueError('Recovery must reuse its already-applied clock target without overriding it again')
         if not constraints['preserve_input_constraints'] or args.opt_design:
             raise ValueError('Native recovery preserves input constraints and cannot add logic optimization')
         resume = root / 'experiments/runs' / validate_run_id(args.resume_native_run)
@@ -115,7 +143,7 @@ def run(root, args):
     for name in ('inputs', 'reports', 'logs', 'work'):
         (directory / name).mkdir(parents=True, exist_ok=False)
     config = dict(case=provenance.get('case', args.run_prefix), part=tools['part'], **constraints,
-                  vivado_version=tools['vivado_version'], vivado_threads=4,
+                  vivado_version=vivado_version, reference_vivado_version=tools['vivado_version'], vivado_threads=4,
                   opt_design=bool(args.opt_design), place_directive='Default', route_directive='Default',
                   io_package_pins='Vivado automatic reassignment' if args.release_io else 'preserved from reference DCP',
                   release_io=bool(args.release_io),
@@ -161,19 +189,22 @@ def run(root, args):
         source_hashes['original_clocks.tsv'] = digest(directory / 'inputs/original_clocks.tsv')
     (directory / 'inputs/working_tree.patch').write_bytes(subprocess.check_output(['git', 'diff', 'HEAD', '--binary'], cwd=root))
     (directory / 'inputs/server_load.txt').write_text(subprocess.check_output(['uptime'], text=True))
-    command = [machine()['vivado'], '-mode', 'batch', '-notrace', '-nojournal',
+    command = [vivado, '-mode', 'batch', '-notrace', '-nojournal',
                '-log', str(directory / 'logs/vivado_internal.log'), '-source',
                str(directory / 'inputs/vivado_baseline.tcl'), '-tclargs', str(execution_source),
                str(directory / 'reports'), config['part'], str(config['clock_count']),
                str(config['period_ns']), str(int(config['opt_design'])), str(int(config['release_io'])),
                str(int(config['preserve_input_constraints'])), config['core_clock'], config['vivado_version'],
-               str(int(config['physical_audit'])), str(int(resume is not None))]
+               str(int(config['physical_audit'])), str(int(resume is not None)),
+               str(int(config.get('override_core_clock', False)))]
     manifest = dict(schema='vivado-native-baseline-v1', case=config['case'], reference_run=str(reference),
                     input_dcp=str(source), input_dcp_sha256=digest(source), source_commit=git('rev-parse', 'HEAD'),
                     git_status=git('status', '--porcelain'), script_hashes=source_hashes,
                     started=dt.datetime.now().astimezone().isoformat(), config=config,
                     build_source='Vivado installed executable; no AMF binary used', command=command,
                     dcp_storage='server-only', stages=[])
+    manifest['vivado_executable'] = vivado
+    manifest['vivado_version_output'] = vivado_version_output
     manifest['reference_manifest_sha256'] = digest(reference / 'manifest.json')
     manifest['reference_input_provenance'] = provenance
     manifest['execution_checkpoint'] = dict(path=str(execution_source), sha256=digest(execution_source))

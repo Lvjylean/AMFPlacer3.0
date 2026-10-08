@@ -1,12 +1,16 @@
 # Export the actual fabric sites of an open checkpoint, without running placement.
 # Usage: ... -tclargs input.dcp out_dir
 #     or ... -tclargs --part xcu250-figd2104-2L-e out_dir
+# Optional: --physical, --clock-resources (independent and combinable).
 set_param general.maxThreads 4
 set physicalIndex [lsearch -exact $argv --physical]
 set exportPhysical [expr {$physicalIndex >= 0}]
 if {$exportPhysical} {set argv [lreplace $argv $physicalIndex $physicalIndex]}
+set clockIndex [lsearch -exact $argv --clock-resources]
+set exportClockResources [expr {$clockIndex >= 0}]
+if {$exportClockResources} {set argv [lreplace $argv $clockIndex $clockIndex]}
 set partMode [expr {[llength $argv] == 3 && [lindex $argv 0] eq "--part"}]
-if {!$partMode && [llength $argv] != 2} {error "Expected input.dcp out_dir, or --part part out_dir"}
+if {!$partMode && [llength $argv] != 2} {error "Expected input.dcp out_dir, or --part part out_dir; optional --physical --clock-resources"}
 set out [file normalize [lindex $argv end]]
 if {[file exists $out]} {error "Refusing to overwrite $out"}
 file mkdir $out
@@ -92,6 +96,10 @@ if {[catch {
         puts $meta "query_gaps\tsites_without_clock_region_are_reported_with_slr_minus_one"
         close $meta
         puts "AMF_PHYSICAL_EXPORT_OK=[llength $allSites],[llength $allTiles]"
+    }
+    if {$exportClockResources} {
+        source [file join [file dirname [info script]] export_clock_resources.tcl]
+        amf_clock_resources::export $out $partMode $crSlr
     }
     close_design
     puts "AMF_DEVICE_EXPORT_OK=$n"

@@ -84,6 +84,14 @@ def build(args):
             record['state'] = 'failed'
             save(root / 'manifest.json', record)
             raise RuntimeError('Build failed; see ' + str(root / (stage + '.log')))
+    # Record capabilities from the actual executable, not from the launcher
+    # version: frozen older binaries silently ignore unfamiliar JSON keys.
+    capability = subprocess.run([str(root / 'build' / 'AMFPlacer'), '--capabilities'],
+                                capture_output=True, text=True, timeout=15)
+    try:
+        record['capabilities'] = json.loads(capability.stdout) if capability.returncode == 0 else {}
+    except json.JSONDecodeError:
+        record['capabilities'] = {}
     record['state'] = 'completed'
     record['binaries'] = {name: hashlib.sha256((root / 'build' / name).read_bytes()).hexdigest()
                           for name in ['AMFPlacer', 'partitionHyperGraph']}
@@ -135,6 +143,12 @@ def inspect_inputs(args):
     require_server()
     from inspect_amf_inputs import inspect
     inspect(ROOT, args)
+
+
+def initialize_placement(args):
+    require_server()
+    from inspect_amf_inputs import inspect
+    inspect(ROOT, args, initial=True)
 
 
 def legalize_resources(args):
@@ -193,17 +207,37 @@ def vivado_run(args):
     run(ROOT, args)
 
 
+def prepare_clock_capacity(args):
+    require_server()
+    from clock_resource_capacity import prepare
+    prepare(ROOT, args)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
+    p = sub.add_parser('prepare-clock-capacity', help='Export nominal target-device clock capacities before placement')
+    p.add_argument('--part', required=True, help='Exact Vivado part, e.g. xcu250-figd2104-2L-e')
+    p.add_argument('--device', required=True, type=Path, help='AMF device archive to bind to the capacity table')
+    p.add_argument('--vivado', type=Path, help='Vivado executable for this capacity query; defaults to machine configuration')
+    p.add_argument('--rules', type=Path, default=Path('configs/architecture/clock-resource-rules.json'))
+    p.add_argument('--raw-dir', type=Path, help='Reuse an audited empty-device clock export; do not rerun Vivado')
+    half_columns = p.add_mutually_exclusive_group()
+    half_columns.add_argument('--query-half-columns', action='store_true',
+                              help='Query target-device SLICE clock-leaf connectivity before placement')
+    half_columns.add_argument('--half-column-topology-dir', type=Path,
+                              help='Reuse a complete audited SLICE clock-leaf topology export')
+    p.set_defaults(action=prepare_clock_capacity)
     p = sub.add_parser('vivado-run', help='Native Vivado placement/routing from a recorded full-run input')
     p.add_argument('--reference-run', required=True)
     p.add_argument('--run-prefix', default='vivado-native')
+    p.add_argument('--vivado', type=Path, help='Override Vivado executable for this native run; keep machine default unchanged')
     p.add_argument('--opt-design', action='store_true', help='Explicitly add logic optimization before placement')
     p.add_argument('--release-io', action='store_true', help='Let Vivado reassign automatic package pins; preserve IOSTANDARD')
     p.add_argument('--preserve-input-constraints', action='store_true', help='Place directly from the input DCP, preserving board/IP locations and mixed clocks')
     p.add_argument('--core-clock', help='Exact core clock name to validate when preserving input constraints')
-    p.add_argument('--clock-period', type=float, help='Expected core period in ns; validate without overriding DCP clocks')
+    p.add_argument('--clock-period', type=float, help='Expected core period in ns; validate by default')
+    p.add_argument('--override-core-clock', action='store_true', help='Explicitly retarget the single primary core clock to --clock-period; preserve other constraints')
     p.add_argument('--physical-audit', action='store_true', help='Export the same 200 critical-path boundary samples as the AMF backend')
     p.add_argument('--resume-native-run', help='Resume routing from a recorded native placed checkpoint; preserve the original input and placement provenance')
     p.set_defaults(action=vivado_run)
@@ -230,6 +264,10 @@ def main():
     p.add_argument('--config', type=Path, required=True)
     p.add_argument('--binary', type=Path, default=Path('builds/current/AMFPlacer'))
     p.set_defaults(action=inspect_inputs)
+    p = sub.add_parser('initialize', help='Initial packing and placement only; no global placement or Vivado')
+    p.add_argument('--config', type=Path, required=True)
+    p.add_argument('--binary', type=Path, default=Path('builds/current/AMFPlacer'))
+    p.set_defaults(action=initialize_placement)
     p = sub.add_parser('legalize-resources', help='Legalize URAM/DSP/BRAM/Carry without full CLB placement')
     p.add_argument('--config', type=Path, required=True)
     p.add_argument('--binary', type=Path, default=Path('builds/current/AMFPlacer'))
@@ -239,6 +277,7 @@ def main():
     p.add_argument('--dcp', default='data/reference/getrf-u250/post_opt.dcp')
     p.set_defaults(action=validate_resources)
     p = sub.add_parser('full-run', help='Recorded AMF full placement and Vivado routing')
+    p.add_argument('--vivado', type=Path, help='Vivado executable for this experiment; defaults to machine configuration')
     p.add_argument('--run-prefix', default='getrf-u250', help='Case label for the unique experiment directory')
     p.add_argument('--input-provenance', type=Path, help='Recorded input adaptation and timing-constraint provenance')
     p.add_argument('--profile', action='store_true', help='Collect runtime scopes from a profiling build')
@@ -247,6 +286,7 @@ def main():
     p.add_argument('--dcp', default='data/reference/getrf-u250/post_opt.dcp')
     p.add_argument('--packing-only', action='store_true')
     p.add_argument('--amf-only', action='store_true')
+    p.add_argument('--global-only', action='store_true', help='Complete normal global placement; stop before final CLB packing and Vivado')
     p.add_argument('--import-only', action='store_true', help='Stop after strict Vivado import acceptance')
     policy = p.add_mutually_exclusive_group()
     policy.add_argument('--allow-import-repair', action='store_true', help='Allow Vivado placement to repair rejected imports (default; retained for existing commands)')

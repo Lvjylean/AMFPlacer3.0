@@ -36,9 +36,17 @@ def resolve_import_policy(args):
     return 'strict' if strict or import_only else 'repair'
 
 
+def global_inspection_requested(args):
+    enabled = bool(getattr(args, 'global_only', False))
+    if enabled and any(getattr(args, k, False) for k in ('amf_only', 'packing_only', 'import_only', 'placement_run')):
+        raise ValueError('--global-only cannot combine with AMF/packing/import-only or placement reuse')
+    return enabled
+
+
 def run(root, args):
     from amf3 import save, stamp, git, machine
     root = Path(root)
+    global_only = global_inspection_requested(args)
     import_only = getattr(args, 'import_only', False)
     profiling = getattr(args, 'profile', False)
     if profiling and args.placement_run:
@@ -49,31 +57,53 @@ def run(root, args):
         raise ValueError('Upstream backend requires original repair policy, without profiling or clock release')
     if import_only and (args.amf_only or args.packing_only or import_policy != 'strict'):
         raise ValueError('--import-only requires strict acceptance and cannot combine with AMF-only modes')
+    vivado = str((root / (getattr(args, 'vivado', None) or machine()['vivado'])).resolve())
+    vivado_version = None
+    if not global_only and not args.amf_only and not args.packing_only:
+        vivado_version = subprocess.check_output([vivado, '-version'], text=True, stderr=subprocess.STDOUT, timeout=60).strip()
     prefix = getattr(args, 'run_prefix', 'getrf-u250')
     if not re.fullmatch(r'[a-z0-9][a-z0-9-]*', prefix):
         raise ValueError('Invalid run prefix')
-    directory = root / 'experiments/runs' / (prefix + '-' + ('packing-' if args.packing_only else 'full-') + stamp())
+    directory = root / 'experiments/runs' / (prefix + '-' + ('global-' if global_only else 'packing-' if args.packing_only else 'full-') + stamp())
     for name in ('inputs', 'reports', 'logs', 'placement', 'work'):
         (directory / name).mkdir(parents=True, exist_ok=False)
     shutil.copy2(Path(__file__), directory / 'inputs/run_full_flow.py')
     binary = (root / args.binary).resolve()
+    if global_only:
+        capabilities = json.loads(subprocess.check_output([str(binary), '--capabilities'], text=True, timeout=15))
+        if capabilities.get('global_placement_inspection_schema') != 1:
+            raise ValueError('Binary lacks global-placement inspection; refusing a full placement fallback')
     config_path = root / args.placement_run / 'config.json' if args.placement_run else root / args.config
     config = json.loads(config_path.read_text())
     inputs = {}
     for key in ('vivado extracted device information file', 'vivado extracted design information file',
                 'physical boundary model file', 'special pin offset info file', 'clock file', 'mergedSharedCellType2sharedCellType',
                 'cellType2fixedAmo file', 'cellType2sharedCellType file', 'sharedCellType2BELtype file',
-                'fixed units file', 'unpredictable macro file', 'designCluster', 'DSP registered outputs file'):
+                'fixed units file', 'unpredictable macro file', 'designCluster', 'DSP registered outputs file',
+                'clock resource capacity file', 'external floorplan membership file',
+                'external floorplan regions file', 'external floorplan manifest file'):
         if config.get(key):
             p = (root / config[key]).resolve()
             inputs[key] = dict(path=str(p), sha256=digest(p))
             config[key] = str(p)
+    from paper_boundary_config import validate_paper_boundary_binary
+    validate_paper_boundary_binary(config, binary)
+    from import_external_floorplan import validate_external_inputs
+    validate_external_inputs(config, binary)
+    if config.get('clock resource capacity file'):
+        from clock_resource_capacity import validate_capacity_inputs, validate_capacity_binary
+        validate_capacity_inputs(config['clock resource capacity file'],
+                                 config['vivado extracted device information file'],
+                                 config.get('clock resource capacity part'))
+        validate_capacity_binary(binary)
     if config.get('PhysicalBoundaryMode') == 'true' or config.get('BoundaryAwareClustering') == 'true':
         if not config.get('physical boundary model file'):
             raise ValueError('Physical mode requires an explicit boundary model')
     if config.get('physical boundary model file'):
         from build_physical_boundaries import validate_model_inputs
         validate_model_inputs(config['physical boundary model file'], config['vivado extracted device information file'])
+    if config.get('external floorplan membership file'):
+        config['external floorplan report file'] = str(directory / 'reports/external_floorplan.json')
     configure_outputs(config, directory)
     if config.get('physical boundary model file'):
         physical = directory/'reports/physical'
@@ -90,11 +120,13 @@ def run(root, args):
                     config_sha256=digest(directory / 'config.json'), dcp_storage='server-only',
                     started=dt.datetime.now().astimezone().isoformat(), stages=[],
                     amf_clock_period_ns=config['ClockPeriod'], amf_clock_source='explicit experiment configuration',
-                    vivado_clock_source='original DCP constraints', placement_run=args.placement_run)
+                    vivado_clock_source='not executed' if global_only else 'original DCP constraints', placement_run=args.placement_run)
+    manifest['vivado_executable'] = vivado
+    manifest['vivado_version_output'] = vivado_version
     manifest['import_policy'] = import_policy
     manifest['upstream_backend'] = upstream_backend
     manifest['runtime_profiling'] = profiling
-    manifest['backend_mode'] = 'import-only' if import_only else 'full'
+    manifest['backend_mode'] = 'global-only' if global_only else 'import-only' if import_only else 'full'
     manifest['release_fixed_clock_buffers'] = bool(getattr(args, 'release_fixed_clock_buffers', False))
     provenance = getattr(args, 'input_provenance', None)
     if provenance:
@@ -142,6 +174,8 @@ def run(root, args):
     try:
         if not args.placement_run:
             command = ['stdbuf','-oL','-eL',binary,directory/'config.json']
+            if global_only:
+                command += ['--inspect-global-placement', directory/'reports/global_placement.json']
             if args.packing_only:
                 command += ['--inspect-packing', directory/'reports/packing.tsv']
             stage('amf', command)
@@ -149,6 +183,17 @@ def run(root, args):
                 metadata = json.loads((directory/'reports/amf_profile.tsv.meta.json').read_text())
                 if not metadata.get('complete'):
                     raise RuntimeError('Runtime profile did not close all scopes')
+        if global_only:
+            report = directory/'reports/global_placement.json'
+            inspected = json.loads(report.read_text())
+            if (inspected.get('schema') != 'amf-global-placement-inspection-v1' or
+                    not inspected.get('global_placement_executed') or inspected.get('final_packing_executed') or
+                    inspected.get('routing_executed') or not Path(str(report)+'.cells.tsv.gz').is_file()):
+                raise ValueError('Incomplete or inconsistent global-placement inspection output')
+            save(directory/'status.json', dict(state='completed', global_placement_executed=True,
+                 full_placement_executed=False, final_packing_executed=False, routing_executed=False,
+                 finished=dt.datetime.now().astimezone().isoformat()))
+            return
         if args.packing_only or args.amf_only:
             save(directory/'status.json',dict(state='completed', packing_only=args.packing_only,
                  full_placement_executed=not args.packing_only, routing_executed=False,
@@ -164,7 +209,7 @@ def run(root, args):
         manifest['stages'].append(dict(name='amf_to_vivado_adapter', function='run_full_backend.prepare',
             elapsed_seconds=time.monotonic()-adapter_begin, exit_code=0))
         save(directory/'manifest.json',manifest)
-        stage('vivado', [machine()['vivado'],'-mode','batch','-notrace','-nojournal','-log',directory/'logs/vivado_internal.log',
+        stage('vivado', [vivado,'-mode','batch','-notrace','-nojournal','-log',directory/'logs/vivado_internal.log',
                         '-source',script,'-tclargs',dcp,directory/'reports',directory/'placement',
                         import_policy, manifest['backend_mode']])
         if import_only:

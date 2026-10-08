@@ -1,6 +1,7 @@
 # Native placement/routing from the same checkpoint as a recorded AMF backend.
-if {$argc != 12} {error "Expected input.dcp reports-directory part clock-count period-ns opt-design release-io preserve-input core-clock vivado-version physical-audit resume"}
-lassign $argv input out expected_part expected_clocks expected_period run_opt release_io preserve_input core_clock expected_version physical_audit resume
+if {$argc ni {12 13}} {error "Expected input.dcp reports-directory part clock-count period-ns opt-design release-io preserve-input core-clock vivado-version physical-audit resume ?override-core-clock?"}
+lassign $argv input out expected_part expected_clocks expected_period run_opt release_io preserve_input core_clock expected_version physical_audit resume override_core_clock
+if {$override_core_clock eq ""} {set override_core_clock 0}
 set inputs [file dirname [info script]]
 set_param general.maxThreads 4
 set timeline [open [file join $out stages.tsv] w]
@@ -30,6 +31,27 @@ proc clocks_snapshot {} {
         lappend rows [list $c [get_property PERIOD $c] [get_property WAVEFORM $c]]
     }
     return [lsort $rows]
+}
+proc retarget_core_clock {name period} {
+    global out
+    set before [clocks_snapshot]
+    set core [get_clocks -quiet $name]
+    set port [get_ports -quiet $name]
+    if {[llength $before] != 1 || [llength $core] != 1 || [llength $port] != 1 || [get_clocks -quiet -of_objects $port] ne $core} {
+        error "Clock override requires one primary clock on a matching top-level port"
+    }
+    set old_period [get_property PERIOD $core]
+    set old_wave [get_property WAVEFORM $core]
+    if {$old_period <= 0 || $period <= 0 || [llength $old_wave] != 2} {error "Invalid primary clock period/waveform"}
+    set wave {}
+    foreach edge $old_wave {lappend wave [expr {$edge*$period/$old_period}]}
+    create_clock -name $name -period $period -waveform $wave $port
+    set after [clocks_snapshot]
+    if {[llength $after] != 1 || abs([get_property PERIOD [get_clocks $name]]-$period)>0.000001} {error "Core clock override failed"}
+    set f [open [file join $out core_clock_override.json] w]
+    puts $f [format {{"applied":true,"core_clock":"%s","source_period_ns":%s,"target_period_ns":%s,"source_waveform":[%s],"target_waveform":[%s],"other_clocks_unchanged":true}} $name $old_period $period [join $old_wave ,] [join $wave ,]]
+    close $f
+    puts "VIVADO_NATIVE_CORE_CLOCK_OVERRIDE name=$name source=$old_period target=$period waveform=$wave"
 }
 proc standards_snapshot {} {
     set rows {}
@@ -127,10 +149,17 @@ proc inventory {stage} {
 }
 if {[catch {
     timed open {open_checkpoint $input}
-    if {[version -short] ne $expected_version} {error "Vivado version differs from reference"}
+    if {[version -short] ne $expected_version} {error "Vivado version differs from selected executable"}
     if {[get_property PART [current_design]] ne $expected_part} {error "Unexpected part"}
     if {$preserve_input} {
         if {$release_io} {error "Cannot release board I/O in preserve-input mode"}
+        if {$override_core_clock} {
+            if {$resume} {error "Cannot override clock during recovery"}
+            timed retarget_clock {
+                report_clocks -file [file join $out source_clocks.rpt]
+                retarget_core_clock $core_clock $expected_period
+            }
+        }
         set core [get_clocks -quiet $core_clock]
         if {[llength $core] != 1 || abs([get_property PERIOD $core]-$expected_period)>0.000001} {
             error "Core clock does not match the requested period"
@@ -180,7 +209,7 @@ if {[catch {
     }
     if {$preserve_input} {
         set f [open [file join $out release_placement.json] w]
-        puts $f [format {{"preserve_input_constraints":true,"released_loc_fixed_cells":0,"released_bel_fixed_cells":0,"input_fixed_cells":%d,"io_package_pins_preserved":true,"io_standards_preserved":true,"clock_constraints_preserved":true,"amf_placement_imported":false}} [llength $original_fixed]];close $f
+        puts $f [format {{"preserve_input_constraints":true,"released_loc_fixed_cells":0,"released_bel_fixed_cells":0,"input_fixed_cells":%d,"io_package_pins_preserved":true,"io_standards_preserved":true,"clock_constraints_preserved":%s,"explicit_core_clock_override":%s,"amf_placement_imported":false}} [llength $original_fixed] [expr {$override_core_clock ? "false" : "true"}] [expr {$override_core_clock ? "true" : "false"}]];close $f
     } else {timed release_placement {
         set fixed [get_cells -hier -quiet -filter {IS_LOC_FIXED}]
         if {[llength $fixed]} {set_property IS_LOC_FIXED false $fixed}
@@ -255,7 +284,7 @@ if {[catch {
             set matched_repairs 0
         }
         set f [open [file join $out constraint_audit.json] w]
-        puts $f [format {{"clock_snapshot_unchanged":true,"io_standards_unchanged":true,"input_fixed_locations_verified":%s,"core_period_ns":%s,"accepted_reference_clock_relocations":%d,"strict_input_fixed_locations":%s}} [expr {$preserve_input ? "true" : "false"}] $expected_period $matched_repairs [expr {$matched_repairs==0 ? "true" : "false"}]];close $f
+        puts $f [format {{"clock_snapshot_unchanged":true,"io_standards_unchanged":true,"input_fixed_locations_verified":%s,"core_period_ns":%s,"accepted_reference_clock_relocations":%d,"strict_input_fixed_locations":%s,"explicit_core_clock_override":%s,"clock_snapshot_reference":"applied_run_constraints"}} [expr {$preserve_input ? "true" : "false"}] $expected_period $matched_repairs [expr {$matched_repairs==0 ? "true" : "false"}] [expr {$override_core_clock ? "true" : "false"}]];close $f
         write_xdc -type timing [file join $out final_timing.xdc]
     }
     if {$physical_audit} {
