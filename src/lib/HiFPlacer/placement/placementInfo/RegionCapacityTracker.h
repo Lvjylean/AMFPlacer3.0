@@ -17,6 +17,7 @@ class RegionCapacityTracker
     bool reserve(int key, const std::vector<Resources> &delta, bool commit, std::string *reason = nullptr);
     void release(int key);
     bool assign(const std::vector<PU *> &units, int targetRegion, bool commit, std::string *reason = nullptr);
+    bool assignTargets(const std::map<PU *, int> &targets, bool commit, std::string *reason = nullptr);
     const std::vector<Resources> &getUsage() const { return used; }
     const std::vector<Resources> &getCapacity() const { return capacity; }
     Resources cellDemand(DesignInfo::DesignCell *cell, bool memoryMacro = false) const;
@@ -29,4 +30,3 @@ class RegionCapacityTracker
     std::map<int, std::vector<Resources>> reservations;
 };
 #endif
-

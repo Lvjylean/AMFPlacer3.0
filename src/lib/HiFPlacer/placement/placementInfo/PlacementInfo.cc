@@ -2159,7 +2159,7 @@ bool PlacementInfo::checkClockUtilization(bool dump)
         for (int j = 0; j < deviceInfo->getClockRegionNumX(); j++)
         {
             std::cout << std::left << std::setw(4) << clockRegionUtilization[i][j];
-            isLegal &= ((clockRegionUtilization[i][j]) <= 24);
+            isLegal &= (clockRegionUtilization[i][j] <= deviceInfo->getClockRegionCapacity(j, i).bboxClockLimit);
         }
         std::cout << "\n";
     }
@@ -2171,7 +2171,7 @@ bool PlacementInfo::checkClockUtilization(bool dump)
         {
             int halfColumnUtil = deviceInfo->getMaxUtilizationOfClockColumns_InClockRegion(j, i);
             std::cout << std::left << std::setw(4) << halfColumnUtil;
-            isLegal &= (halfColumnUtil <= 12);
+            isLegal &= (halfColumnUtil <= deviceInfo->getClockRegionCapacity(j, i).halfColumnLimit);
         }
         std::cout << "\n";
     }
@@ -2190,7 +2190,8 @@ void PlacementInfo::dumpOverflowClockUtilization()
             std::cout << "clock region " << i << "  " << j
                       << " ===================================================================\n";
             auto curClockRegion = deviceInfo->getClockRegions()[i][j];
-            if (curClockRegion->getMaxUtilizationOfClockColumns() > 12)
+            if (curClockRegion->getMaxUtilizationOfClockColumns() >
+                curClockRegion->getClockResourceCapacity().halfColumnLimit)
             {
                 auto curColumn = curClockRegion->getMaxUtilizationClockColumnsPtr();
 
@@ -2242,10 +2243,16 @@ bool PlacementInfo::boundaryClusteringEnabled() const
     auto it=JSONCfg.find("BoundaryAwareClustering");
     return it!=JSONCfg.end() && it->second=="true";
 }
+bool PlacementInfo::paperBoundaryClusteringEnabled() const
+{
+    auto it = JSONCfg.find("BoundaryClusteringStrategy");
+    return boundaryClusteringEnabled() && it != JSONCfg.end() && it->second == "paper-hierarchical";
+}
 void PlacementInfo::clearRegionPreferences()
 {
     AMF_PROFILE_FUNCTION("placement_bookkeeping");
     regionPreferences.clear();
+    paperSLRStageActive = false;
     PU2ClockRegionCenters.clear();
     PU2ClockRegionColumn.clear();
 }
@@ -2273,6 +2280,78 @@ bool PlacementInfo::regionTarget(PlacementUnit *pu,int region,float &x,float &y)
     legalizeXYInArea(pu,x,y);
     return x>=left-1e-4 && x<=right+1e-4 && y>=bottom-1e-4 && y<=top+1e-4;
 }
+bool PlacementInfo::paperRegionBounds(PlacementUnit *pu, const RegionPreference &pref, bool includeSide,
+                                      float &left, float &right, float &bottom, float &top)
+{
+    auto model = deviceInfo->getPhysicalBoundaryModel();
+    if (!model || pref.region < 0 || pref.region >= int(model->getRegions().size())) return false;
+    const auto &r = model->getRegions()[pref.region];
+    float x0 = r.x0, x1 = r.x1;
+    if (!includeSide || !pref.guideX)
+        for (const auto &side : model->getRegions())
+            if (side.slr == r.slr) { x0 = std::min(x0, side.x0); x1 = std::max(x1, side.x1); }
+    float ox0 = 0, ox1 = 0, oy0 = 0, oy1 = 0;
+    if (auto macro = dynamic_cast<PlacementMacro *>(pu))
+        for (int i = 0; i < macro->getNumOfCells(); ++i)
+        {
+            float ox, oy; DesignInfo::DesignCellType type;
+            macro->getVirtualCellInfo(i, ox, oy, type);
+            ox0 = std::min(ox0, ox); ox1 = std::max(ox1, ox);
+            oy0 = std::min(oy0, oy); oy1 = std::max(oy1, oy);
+        }
+    left = x0 - ox0 + 0.25f; right = x1 - ox1 - 0.25f;
+    bottom = r.y0 - oy0 + 0.25f; top = r.y1 - oy1 - 0.25f;
+    // The physical regions include half-row margins at the chip edge. A
+    // projection must also satisfy the existing device-area legality bounds.
+    left = std::max(left, globalMinX + 2 * eps - ox0);
+    right = std::min(right, globalMaxX - 2 * eps - ox1);
+    bottom = std::max(bottom, globalMinY + 2 * eps - oy0);
+    top = std::min(top, globalMaxY - 2 * eps - oy1);
+    return left <= right && bottom <= top;
+}
+bool PlacementInfo::regionAnchor(PlacementUnit *pu, const RegionPreference &pref, float &x, float &y)
+{
+    float left, right, bottom, top;
+    // Validate the final selected side even during the SLR-only phase. A macro
+    // that cannot fit must reject the choice, not be split or squeezed later.
+    if (!paperRegionBounds(pu, pref, true, left, right, bottom, top)) return false;
+    x = pref.guideX ? (left + right) / 2 : pu->X();
+    y = pref.guideY ? (bottom + top) / 2 : pu->Y();
+    return std::isfinite(x) && std::isfinite(y);
+}
+bool PlacementInfo::clipPaperRegionLocation(PlacementUnit *pu)
+{
+    if (!paperBoundaryClusteringEnabled() || pu->isFixed() || pu->isLocked()) return false;
+    // Const lookup: spreading workers only read this map while moving disjoint PUs.
+    const auto &preferences = regionPreferences;
+    auto it = preferences.find(pu);
+    if (it == preferences.end()) return false;
+    float left, right, bottom, top;
+    if (!paperRegionBounds(pu, it->second, !paperSLRStageActive, left, right, bottom, top)) return false;
+    const auto &pref = it->second;
+    float x = pu->X(), y = pu->Y();
+    if (!paperSLRStageActive && pref.guideX) x = std::max(left, std::min(right, x));
+    if (pref.guideY) y = std::max(bottom, std::min(top, y));
+    // Projection to the nearest interior point, never to the target center.
+    if (x == pu->X() && y == pu->Y()) return false;
+    pu->setAnchorLocationAndForgetTheOriginalOne(x, y);
+    return true;
+}
+int PlacementInfo::clipPaperRegionLocations()
+{
+    if (!paperBoundaryClusteringEnabled() || regionPreferences.empty()) return 0;
+    refreshRegionPreferences();
+    int moved = 0;
+    for (auto entry : regionPreferences) moved += clipPaperRegionLocation(entry.first);
+    if (moved) updateElementBinGrid();
+    if (!JSONCfg["BoundaryReportDirectory"].empty())
+    {
+        std::ofstream out(JSONCfg["BoundaryReportDirectory"] + "/paper_region_clips.tsv", std::ios::app);
+        if (out.tellp() == 0) out << "stage\tpreferences\tprojected_pus\n";
+        out << (paperSLRStageActive ? "slr" : "hpio") << '\t' << regionPreferences.size() << '\t' << moved << '\n';
+    }
+    return moved;
+}
 void PlacementInfo::refreshRegionPreferences()
 {
     AMF_PROFILE_FUNCTION("placement_bookkeeping");
@@ -2281,6 +2360,44 @@ void PlacementInfo::refreshRegionPreferences()
     std::unordered_set<PlacementUnit *> live(placementUnits.begin(),placementUnits.end());
     for(auto it=regionPreferences.begin();it!=regionPreferences.end();)
         if(!live.count(it->first))it=regionPreferences.erase(it);else ++it;
+    if (paperBoundaryClusteringEnabled())
+    {
+        RegionCapacityTracker budget(this);
+        std::map<int, std::vector<PlacementUnit *>> groups;
+        for (auto entry : regionPreferences) groups[entry.second.cluster].push_back(entry.first);
+        int removed = 0;
+        for (auto &group : groups)
+        {
+            std::map<PlacementUnit *, int> targets;
+            bool valid = true;
+            for (auto pu : group.second)
+            {
+                // GlobalPlacement_fixedCLB temporarily fixes selected LUT/FFs.
+                // Keep their preferences dormant so they resume after unfixing.
+                if (pu->isFixed() || pu->isLocked()) continue;
+                float x, y;
+                auto &pref = regionPreferences.at(pu);
+                if (!pref.guideX && pref.region >= 0 && pref.region < int(deviceInfo->getPhysicalBoundaryModel()->getRegions().size()))
+                {
+                    const auto &regions = deviceInfo->getPhysicalBoundaryModel()->getRegions();
+                    int slr = regions[pref.region].slr;
+                    // A side tie leaves X free throughout the preference's life,
+                    // not only when it was selected. Follow later X movement for
+                    // capacity accounting without changing the selected SLR.
+                    for (const auto &r : regions)
+                        if (r.slr == slr && pu->X() >= r.x0 && pu->X() <= r.x1)
+                        { pref.region = r.id; break; }
+                }
+                if (!regionAnchor(pu, pref, x, y)) { valid = false; break; }
+                targets[pu] = pref.region;
+            }
+            if (valid && !targets.empty()) valid = budget.assignTargets(targets, true);
+            if (!valid)
+                for (auto pu : group.second) removed += regionPreferences.erase(pu);
+        }
+        if (removed) print_info("Paper boundary preferences released for capacity/geometry: " + std::to_string(removed));
+        return;
+    }
     RegionCapacityTracker budget(this);
     std::vector<PlacementUnit *> ordered;
     for(auto &entry:regionPreferences)ordered.push_back(entry.first);

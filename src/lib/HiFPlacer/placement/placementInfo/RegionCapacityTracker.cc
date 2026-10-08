@@ -149,3 +149,35 @@ bool RegionCapacityTracker::assign(const std::vector<PU *> &units,int target,boo
     return true;
 }
 
+bool RegionCapacityTracker::assignTargets(const std::map<PU *, int> &targets, bool commit, std::string *reason)
+{
+    AMF_PROFILE_FUNCTION("boundary_capacity");
+    if (targets.empty()) return false;
+    std::vector<Resources> delta(used.size());
+    for (auto entry : targets)
+    {
+        auto pu = entry.first; int target = entry.second;
+        if (target < 0 || target >= int(used.size()) || reservations.count(pu->getId()))
+        { if (reason) *reason = "invalid-target-or-unit-already-reserved"; return false; }
+        auto current = currentDemand(pu);
+        for (size_t r = 0; r < used.size(); ++r)
+            for (size_t k = 0; k < M::ResourceCount; ++k)
+            { delta[r][k] -= current[r][k]; delta[target][k] += current[r][k]; }
+    }
+    if (!reserve(-1, delta, false, reason)) return false;
+    if (commit)
+    {
+        for (auto entry : targets)
+        {
+            auto current = currentDemand(entry.first);
+            std::vector<Resources> individual(used.size());
+            for (size_t r = 0; r < used.size(); ++r)
+                for (size_t k = 0; k < M::ResourceCount; ++k)
+                { individual[r][k] -= current[r][k]; individual[entry.second][k] += current[r][k]; }
+            reservations[entry.first->getId()] = individual;
+        }
+        for (size_t r = 0; r < used.size(); ++r)
+            for (size_t k = 0; k < M::ResourceCount; ++k) used[r][k] += delta[r][k];
+    }
+    return true;
+}

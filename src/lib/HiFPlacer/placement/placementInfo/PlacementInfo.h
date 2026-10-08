@@ -4380,12 +4380,23 @@ class PlacementInfo
     {
         int region = -1, cluster = -1;
         float strength = 1.0f;
+        bool guideX = true, guideY = true;
+        // Immutable pull directions for this preference lifetime; 0 means no pull.
+        int pullX = 0, pullY = 0;
     };
     bool boundaryClusteringEnabled() const;
+    bool paperBoundaryClusteringEnabled() const;
+    bool paperSLRStage() const { return paperSLRStageActive; }
+    void setPaperSLRStage(bool active) { paperSLRStageActive = active; }
+    bool paperRegionBounds(PlacementUnit *pu, const RegionPreference &preference, bool includeSide,
+                           float &left, float &right, float &bottom, float &top);
+    bool clipPaperRegionLocation(PlacementUnit *pu);
+    int clipPaperRegionLocations();
     std::map<PlacementUnit *, RegionPreference> &getRegionPreferences() { return regionPreferences; }
     void clearRegionPreferences();
     void refreshRegionPreferences();
     bool regionTarget(PlacementUnit *pu, int region, float &x, float &y);
+    bool regionAnchor(PlacementUnit *pu, const RegionPreference &preference, float &x, float &y);
 
     inline int getLongPathThresholdLevel()
     {
@@ -4559,6 +4570,7 @@ class PlacementInfo
     std::map<PlacementUnit *, std::pair<float, float>> PU2ClockRegionCenters;
     std::map<PlacementUnit *, int> PU2ClockRegionColumn;
     std::map<PlacementUnit *, RegionPreference> regionPreferences;
+    bool paperSLRStageActive = false;
     std::map<DeviceInfo::ClockColumn *, std::set<DesignInfo::DesignNet *>> clockCol2ClockNets;
 
     /**
