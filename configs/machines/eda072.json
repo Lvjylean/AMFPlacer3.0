@@ -1,6 +1,6 @@
 {
   "ssh_alias": "eda072",
-  "project_root": "/Projects/jinyang/workspace/AMFplacer3.0",
+  "project_root": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261007-external-floorplan-copy/repo",
   "vivado": "/Projects/Xilinx/Vivado/2024.2/bin/vivado",
   "build_jobs": 8,
   "amf_jobs": 8,
