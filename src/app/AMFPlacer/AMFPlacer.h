@@ -159,7 +159,9 @@ class AMFPlacer
             firstClock = false;
             out << std::quoted(clock->getName()) << ":" << designInfo->getCellsUnderClock(clock).size();
         }
-        out << "},\n\"slrs\":[";
+        out << "},\n\"clock_resource_capacity\":";
+        deviceinfo->writeClockResourceCapacityJson(out);
+        out << ",\n\"slrs\":[";
         bool first = true;
         for (const auto &slr : siteCounts)
         {
@@ -278,7 +280,8 @@ class AMFPlacer
      * @brief launch the analytical mixed-size FPGA placement procedure
      *
      */
-    void run(const std::string &packingReport = "")
+    void run(const std::string &packingReport = "", const std::string &initialReport = "",
+             const std::string &globalReport = "")
     {
         AMF_PROFILE_FUNCTION("placement_orchestration");
         // Full multi-SLR flow remains an explicit experimental opt-in.
@@ -351,6 +354,21 @@ class AMFPlacer
         // enable the timing optimization, start initial placement and global placement.
 
         globalPlacer->clusterPlacement();
+        if (!initialReport.empty())
+        {
+            std::ofstream report(initialReport);
+            size_t fixed = 0, locked = 0;
+            for (auto pu : placementInfo->getPlacementUnits())
+            { fixed += pu->isFixed(); locked += pu->isLocked(); }
+            report << "{\"schema\":\"amf-initial-placement-v1\",\"placement_units\":"
+                   << placementInfo->getPlacementUnits().size() << ",\"fixed_pus\":" << fixed
+                   << ",\"locked_pus\":" << locked << ",\"legacy_cluster_count\":" << placementInfo->getClusterNum()
+                   << ",\"region_preferences\":" << placementInfo->getRegionPreferences().size()
+                   << ",\"full_placement_executed\":false,\"routing_executed\":false}\n";
+            if (!report) throw std::runtime_error("Cannot write initial placement report");
+            print_status("Initial placement inspection done; no global placement or routing");
+            return;
+        }
         if(placementInfo->boundaryClusteringEnabled()) timingOptimizer->clusterCriticalPathsByPhysicalRegion();
         else timingOptimizer->clusterLongPathInOneClockRegion(longPathThr, 0.5);
         globalPlacer->GlobalPlacement_fixedCLB(1, 0.0002);
@@ -419,6 +437,41 @@ class AMFPlacer
 
         timingOptimizer->conductStaticTimingAnalysis();
         timingOptimizer->auditPhysicalBoundaries("amf-before-pack");
+        if (!globalReport.empty())
+        {
+            // Diagnostic exit only: execute the identical placement prefix,
+            // then stop before final CLB packing and all Vivado operations.
+            std::stringstream coordinates;
+            coordinates << "cell\tprimitive\tpu\tx\ty\n" << std::setprecision(9);
+            size_t realCells = 0;
+            for (auto cell : designInfo->getCells())
+            {
+                if (cell->isVirtualCell()) continue;
+                auto pu = placementInfo->getPlacementUnitByCellId(cell->getCellId());
+                float x = pu->X(), y = pu->Y();
+                if (auto macro = dynamic_cast<PlacementInfo::PlacementMacro *>(pu))
+                {
+                    x += macro->getCellOffsetXInMacro(cell);
+                    y += macro->getCellOffsetYInMacro(cell);
+                }
+                if (!std::isfinite(x) || !std::isfinite(y))
+                    throw std::runtime_error("Non-finite global placement coordinate: " + cell->getName());
+                coordinates << cell->getName() << '\t' << cell->getOriCellType() << '\t'
+                            << pu->getId() << '\t' << x << '\t' << y << '\n';
+                ++realCells;
+            }
+            writeStrToGZip(globalReport + ".cells.tsv.gz", coordinates);
+            std::ofstream report(globalReport);
+            report << std::setprecision(12)
+                   << "{\"schema\":\"amf-global-placement-inspection-v1\",\"real_cells\":" << realCells
+                   << ",\"placement_units\":" << placementInfo->getPlacementUnits().size()
+                   << ",\"hpwl\":" << placementInfo->updateB2BAndGetTotalHPWL()
+                   << ",\"global_placement_executed\":true,\"full_placement_executed\":false,"
+                      "\"final_packing_executed\":false,\"routing_executed\":false}\n";
+            if (!report) throw std::runtime_error("Cannot write global placement report");
+            print_status("Global placement inspection done; final packing and routing skipped");
+            return;
+        }
         // Final packing replaces PUs: retire all transient region preferences.
         if(placementInfo->boundaryClusteringEnabled()) placementInfo->clearRegionPreferences();
         // finally pack the elements into sites on the FPGA device
