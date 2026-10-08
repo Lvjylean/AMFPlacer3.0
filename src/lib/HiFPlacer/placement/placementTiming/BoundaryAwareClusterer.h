@@ -14,7 +14,10 @@ class BoundaryAwareClusterer
     void run();
     void refresh();
     void audit(const std::string &stage);
+    void advancePaperStage();
   private:
+    void runPaper();
+    void spreadPaper(bool slrStage);
     struct Score { double weighted=0, worst=0, displacement=0; };
     std::vector<Edge *> affectedEdges(const std::vector<PU *> &units) const;
     bool targets(const std::vector<PU *> &units,int region,std::map<PU *,std::pair<float,float>> &positions) const;
@@ -28,4 +31,3 @@ class BoundaryAwareClusterer
     float nearCriticalFraction=0.15f,maxDisplacement=280.0f,minGain=0.05f,displacementCost=0.0001f;
 };
 #endif
-

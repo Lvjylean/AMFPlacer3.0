@@ -31,6 +31,11 @@ BoundaryAwareClusterer::BoundaryAwareClusterer(PlacementInfo *p,PlacementTimingO
 {
     AMF_PROFILE_FUNCTION("boundary_clustering");
     if(!model)throw std::runtime_error("Boundary clustering requires a physical model");
+    auto strategy = cfg.find("BoundaryClusteringStrategy");
+    if (strategy != cfg.end() && strategy->second != "region-gain" && strategy->second != "paper-hierarchical")
+        throw std::runtime_error("Unknown BoundaryClusteringStrategy: " + strategy->second);
+    if (strategy != cfg.end() && strategy->second == "paper-hierarchical" && !p->boundaryClusteringEnabled())
+        throw std::runtime_error("Paper boundary anchors require BoundaryAwareClustering=true");
     y2xRatio=number(cfg,"y2xRatio",0.4f);
     maxClusters=int(number(cfg,"BoundaryMaxClusters",512));
     maxPathCells=int(number(cfg,"BoundaryMaxPathCells",128));
@@ -106,6 +111,7 @@ BoundaryAwareClusterer::Score BoundaryAwareClusterer::score(const std::vector<Ed
 void BoundaryAwareClusterer::run()
 {
     AMF_PROFILE_FUNCTION("boundary_clustering");
+    if (placement->paperBoundaryClusteringEnabled()) { runPaper(); return; }
     placement->clearRegionPreferences();
     RegionCapacityTracker budget(placement);
     auto graph=placement->getTimingInfo()->getSimplePlacementTimingGraph();
@@ -207,6 +213,9 @@ void BoundaryAwareClusterer::refresh()
 {
     AMF_PROFILE_FUNCTION("boundary_clustering");
     placement->refreshRegionPreferences();
+    // Paper anchors express a coarse region preference. A local edge-delay
+    // trial must not retire them as soon as cells reach the selected region.
+    if (placement->paperBoundaryClusteringEnabled()) return;
     std::map<int,std::vector<PU *>> groups;
     for(auto entry:placement->getRegionPreferences())groups[entry.second.cluster].push_back(entry.first);
     int released=0;
@@ -281,4 +290,3 @@ void BoundaryAwareClusterer::audit(const std::string &stage)
              <<n<<'\t'<<s<<'\t'<<i<<'\t'<<std::max(0,s-direct)/2<<'\n';
     }
 }
-

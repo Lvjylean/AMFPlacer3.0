@@ -1037,6 +1037,12 @@ void PlacementTimingOptimizer::clusterCriticalPathsByPhysicalRegion()
     physical.audit("cluster-selected");
 }
 
+void PlacementTimingOptimizer::advancePaperBoundaryStage()
+{
+    if (placementInfo->paperBoundaryClusteringEnabled() && placementInfo->paperSLRStage())
+        BoundaryAwareClusterer(placementInfo, this, JSONCfg).advancePaperStage();
+}
+
 void PlacementTimingOptimizer::auditPhysicalBoundaries(const std::string &stage)
 {
     AMF_PROFILE_FUNCTION("diagnostic_output");
