@@ -215,3 +215,18 @@ add_executable(checkSpreadDisplacement EXCLUDE_FROM_ALL tests/check_spread_displ
 
 add_executable(checkEmptyLegalization EXCLUDE_FROM_ALL tests/check_empty_legalization.cc)
 target_link_libraries(checkEmptyLegalization Packing GlobalPlacer Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+# Clock capacity schema and production device wiring regressions.
+add_executable(checkClockResourceCapacity EXCLUDE_FROM_ALL tests/check_clock_resource_capacity.cc
+               lib/HiFPlacer/deviceInfo/ClockResourceCapacity.cc)
+add_executable(checkClockCapacityDevice EXCLUDE_FROM_ALL tests/check_clock_capacity_device.cc)
+target_link_libraries(checkClockCapacityDevice DeviceInfo Utils pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+# One-shot external floorplan and legacy dispatch regression.
+add_executable(checkExternalFloorplan EXCLUDE_FROM_ALL tests/check_external_floorplan.cc)
+target_link_libraries(checkExternalFloorplan GlobalPlacer Packing Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkHierarchicalBoundaryPolicy EXCLUDE_FROM_ALL tests/check_hierarchical_boundary_policy.cc)
+
+add_executable(checkPaperBoundaryClustering EXCLUDE_FROM_ALL tests/check_paper_boundary_clustering.cc)
+target_link_libraries(checkPaperBoundaryClustering GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
