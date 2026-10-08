@@ -4,6 +4,10 @@
 
 正式工作区位于 eda072：`/Projects/jinyang/workspace/AMFplacer3.0`。源码、构建、大型输入及最终 DCP 保存在服务器；本地保留轻量管理镜像、报告与日志。
 
+## 2026-10-08 功能分支
+
+本分支包含外部 floorplan 初始化接入、单向分阶段的 SLR/HPIO 二维聚拢修复，以及表驱动时钟容量检查。外部 floorplan 只负责初始化；尚未加入 SLL 容量优化或完整时钟布线分配。继承 1003 的 U250 坐标、延迟系数和接口修复，详见 [1008 功能核对与验证范围](docs/research/version-diff-20261008.md)。
+
 ## 目录
 
 ```text
@@ -56,7 +60,7 @@ U250 GETRF 完整流程使用 `python3 scripts/amf3.py full-run`，后端重试�
 
 ## 已验证基线
 
-U250 已开放输入检查和独立硬资源分配/合法化，覆盖 URAM 与 Carry/DSP 专用级联 SLR 检查。`amf3.py legalize-resources` 执行本阶段，`amf3.py validate-resources` 用 Vivado 回读部分位置。已新增实验性 `amf3.py full-run` 入口并修复 GETRF 的 SRL/MUX 初始打包与最终 CLB 映射问题，修复版 AMF 全部 856,998 个单元导出及 Vivado 全量实现已通过：928,432 条可布线网络全部完成，DRC 错误/严重警告为 0，99.7855% 原始 LOC/BEL 保留。本次 10 ns 下 WNS −2.886 ns，setup 时序仍未收敛。固定基线见 `experiments/baselines/getrf-u250-full-20260926.json`；验证二进制为 `builds/validated-getrf-u250-full/AMFPlacer`。外部 floorplan 接入和 AMF SLL 代价留待后续。输入层记录见 [U250 输入适配](docs/research/u250-input-adaptation.md)，本阶段验证、命令和限制见 [U250 资源合法化](docs/research/u250-resource-legalization.md)。
+U250 已开放输入检查和独立硬资源分配/合法化，覆盖 URAM 与 Carry/DSP 专用级联 SLR 检查。`amf3.py legalize-resources` 执行本阶段，`amf3.py validate-resources` 用 Vivado 回读部分位置。已新增实验性 `amf3.py full-run` 入口并修复 GETRF 的 SRL/MUX 初始打包与最终 CLB 映射问题，修复版 AMF 全部 856,998 个单元导出及 Vivado 全量实现已通过：928,432 条可布线网络全部完成，DRC 错误/严重警告为 0，99.7855% 原始 LOC/BEL 保留。本次 10 ns 下 WNS −2.886 ns，setup 时序仍未收敛。固定基线见 `experiments/baselines/getrf-u250-full-20260926.json`；验证二进制为 `builds/validated-getrf-u250-full/AMFPlacer`。该历史基线尚未接入外部 floorplan；本分支已新增初始化接入，AMF SLL 容量优化仍待后续。输入层记录见 [U250 输入适配](docs/research/u250-input-adaptation.md)，本阶段验证、命令和限制见 [U250 资源合法化](docs/research/u250-resource-legalization.md)。
 
 2026-09-25 的成功轮次为 `faceDetect-benchmark-20260925-144131`：AMF 98.676 秒，Vivado 后端 564.033 秒，113,125 条可布线网络全部完成，路由错误 0；WNS 0.300 ns、TNS 0，hold 违例 0，总线偏斜 8 项通过。约 99.22% 的 AMF 请求位置在最终 DCP 中保留。
 

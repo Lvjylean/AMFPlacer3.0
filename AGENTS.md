@@ -31,3 +31,5 @@
 - 2026-09-28 随后完成 0.71 的 10 ns 完整实验 `getrf-u250-full-20260928-014049-967020`。与历史严格基线 `getrf-u250-full-20260927-125004-730657`（有效 0.32）相比，总墙钟 147.89→123.88 分钟，AMF 68.57→51.16 分钟，但 WNS +0.111→−0.353 ns、TNS 0→−2.896 ns，26 个 setup 端点违例；hold、全量路由、DRC、级联和 100% 原始 LOC/BEL 保留均通过。最差路径在 SLR 1/2 间跨界五次。0.71 继续作为实验值，不将距离拟合改善表述为端到端 QoR 改善，保留历史 0.32 时序基线。两次构建还存在既有 CLB 打包稳健性差异（本轮未触发列兜底），且服务器负载未严格控制，因此不是纯单变量因果实验。最终 DCP 留在服务器，报告见 `docs/research/u250-sa-ratio-10ns-validation.md`。
 
 - 2026-09-29 用户结束新匹配求解器加速实验，常规使用 `BipartiteMatchingBackend=legacy`；保留 `MacroCandidateSelection=cached_topk` 和只读列表引用优化。五处源码缺省值及常规 GETRF 配置已恢复 legacy。新内核、forward-bias、fast 配置仅供明确选择的历史复现，不自动重新启用。旧内核本身保留原正向 +0.01／反向不抵消；不要再给 legacy 配置新内核的非零 forward-bias。已验证组合及启动命令见 `docs/research/placement-acceleration-inventory.md`，稳定配置为 `configs/experiments/getrf-u250-placement-stable.json`。
+
+- 2026-10-08 发布范围更新：本分支已接入 initialization-only 外部 floorplan，并包含单向分阶段 SLR/HPIO 聚拢与时钟容量表修复；覆盖前文历史阶段的“暂不接入 floorplan”限制。外部区域不永久锁定，未实现 SLL 容量优化和完整时钟布线分配。详见 docs/research/version-diff-20261008.md。历史报告按原日期理解，不改写历史结果。
