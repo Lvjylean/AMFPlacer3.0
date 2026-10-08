@@ -207,6 +207,12 @@ void GlobalPlacer::GlobalPlacement_CLBElements(int iterNum, bool continuePreviou
 
         spreading(i, spreadRegionBinNumLimit, displacementLimit);
 
+        // Complete SLR guidance and density spreading before preparing HPIO
+        // guidance for the next existing iteration. Do not add QP iterations.
+        // Also cover preferred PUs not selected by an overflow-bin spreader.
+        placementInfo->clipPaperRegionLocations();
+        if (timingOptimizer) timingOptimizer->advancePaperBoundaryStage();
+
         upperBoundHPWL = placementInfo->updateB2BAndGetTotalHPWL();
         print_status("Spreader Iteration#" + to_string_align3(i) + " Done HPWL=" + std::to_string(upperBoundHPWL));
 

@@ -13,6 +13,7 @@
  */
 
 #include "ClusterPlacer.h"
+#include "ExternalFloorplan.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -52,7 +53,11 @@ void ClusterPlacer::ClusterPlacement()
     AMF_PROFILE_FUNCTION("clustering");
     print_status("Cluster Placement Start.");
 
-    if (!randomInitialPlacement)
+    if (ExternalFloorplan::enabled(JSONCfg))
+    {
+        ExternalFloorplan::initialize(placementInfo, JSONCfg);
+    }
+    else if (!randomInitialPlacement)
     {
         clusterPlacementUnits();
         placeClusters();

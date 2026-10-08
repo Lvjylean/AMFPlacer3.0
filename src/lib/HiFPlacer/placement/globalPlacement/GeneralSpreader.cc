@@ -328,6 +328,9 @@ void GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocationsWorker(
                 else
                     curPU->setSpreadLocation(cellLoc[curCell->getCellId()].X, cellLoc[curCell->getCellId()].Y,
                                              forgetRatio);
+                // Clip after blending/displacement limiting: blending itself
+                // can otherwise move a PU back across the selected boundary.
+                placementInfo->clipPaperRegionLocation(curPU);
                 placementInfo->transferCellBinInfo(curCell->getCellId(), curPU->X(), curPU->Y());
                 cellLoc[curCell->getCellId()].X = curPU->X();
                 cellLoc[curCell->getCellId()].Y = curPU->Y();
@@ -385,6 +388,7 @@ void GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocationsWorker(
                 else
                     curPU->setSpreadLocation(curNewPUX, curNewPUY, forgetRatio);
                 placementInfo->enforceLegalizeXYInArea(curPU);
+                placementInfo->clipPaperRegionLocation(curPU);
                 for (int vId = 0; vId < curMacro->getNumOfCells(); vId++)
                 {
                     float offsetX_InMacro, offsetY_InMacro;
@@ -432,7 +436,8 @@ void GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocations(
     //     }
     // }
 
-    // Physical region targets remain soft: density spreading may leave them.
+    // Region-gain targets remain soft. The paper strategy clips complete PUs
+    // in the worker after blending, within its transient selected region.
     // The next QP/STA refresh rechecks capacity and benefit.
     // VCU108 Optimization is retained only by the legacy clustering mode.
     if (enableClockRegionAware && !placementInfo->boundaryClusteringEnabled())

@@ -1,3 +1,4 @@
+#include "../placementTiming/HierarchicalBoundaryPolicy.h"
 #include "../../../utils/RuntimeProfiler.h"
 /**
  * @file WirelengthOptimizer.cc
@@ -1101,6 +1102,35 @@ void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
         for(auto entry:placementInfo->getRegionPreferences())
         {
             auto pu=entry.first;
+            if (placementInfo->paperBoundaryClusteringEnabled())
+            {
+                if (pu->isFixed() || pu->isLocked()) continue;
+                float x, y;
+                if (!placementInfo->regionAnchor(pu, entry.second, x, y)) continue;
+                const auto &pref = entry.second;
+                const size_t nets = pu->getNetsSetPtr()->size();
+                const float beta = pesudoNetWeight * pref.strength;
+                const bool slrStage = placementInfo->paperSLRStage();
+                const float wx = !slrStage && pref.guideX ? hierarchical_boundary::anchorWeight(
+                    beta, pref.pullX * (x - pu->X()), nets, DSPCritical) : 0;
+                const float wy = slrStage && pref.guideY ? hierarchical_boundary::anchorWeight(
+                    beta, pref.pullY * (y - pu->Y()), nets, DSPCritical) : 0;
+                if (wx > 0)
+                {
+                    ++xTargets;
+                    placementInfo->addPseudoNetsInPlacementInfo(
+                        xSolver->solverData.objectiveMatrixTripletList, xSolver->solverData.objectiveMatrixDiag,
+                        xSolver->solverData.objectiveVector, pu, x, wx, 1.0f, true, false);
+                }
+                if (wy > 0)
+                {
+                    ++yTargets;
+                    placementInfo->addPseudoNetsInPlacementInfo(
+                        ySolver->solverData.objectiveMatrixTripletList, ySolver->solverData.objectiveMatrixDiag,
+                        ySolver->solverData.objectiveVector, pu, y, wy, 1.0f, false, true);
+                }
+                continue;
+            }
             float x,y;
             if(!placementInfo->regionTarget(pu,entry.second.region,x,y))continue;
             float weight=pesudoNetWeight*entry.second.strength*std::max(size_t(1),pu->getNetsSetPtr()->size());
@@ -1122,8 +1152,9 @@ void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
         if(!JSONCfg["BoundaryReportDirectory"].empty())
         {
             std::ofstream f(JSONCfg["BoundaryReportDirectory"]+"/qp_region_targets.tsv",std::ios::app);
-            if(f.tellp()==0)f<<"preferences\tx_attractions\ty_attractions\tweight\n";
-            f<<placementInfo->getRegionPreferences().size()<<'\t'<<xTargets<<'\t'<<yTargets<<'\t'<<pesudoNetWeight<<'\n';
+            if(f.tellp()==0)f<<"preferences\tx_attractions\ty_attractions\tweight\tstage\n";
+            f<<placementInfo->getRegionPreferences().size()<<'\t'<<xTargets<<'\t'<<yTargets<<'\t'<<pesudoNetWeight<<'\t'
+             <<(placementInfo->paperBoundaryClusteringEnabled() ? (placementInfo->paperSLRStage() ? "slr" : "hpio") : "region-gain")<<'\n';
         }
         return;
     }
