@@ -10,7 +10,7 @@ from unittest.mock import patch
 import zipfile
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 from run_full_backend import prepare, canonical_export_names
-from run_full_flow import configure_outputs, completed_amf_placement, resolve_import_policy
+from run_full_flow import configure_outputs, completed_amf_placement, resolve_import_policy, global_inspection_requested
 from run_boundary_comparison import equivalent_configs, assess_qor
 from summarize_full_flow import routing_complete, missing_clock_source_warning, numerical_guard_audit
 
@@ -239,3 +239,16 @@ class FullBackend(unittest.TestCase):
             self.assertFalse(manifest['placement_source']['assignments_changed'])
             self.assertEqual(json.loads((r/'reports/amf_coverage.json').read_text())['missing_by_type'],{'IBUFDS':1})
             self.assertIsNone(json.loads((r/'reports/srl_cascades.json').read_text())['violations'])
+
+class GlobalInspectionModeTest(unittest.TestCase):
+    def test_default_keeps_existing_flow(self):
+        from types import SimpleNamespace
+        self.assertFalse(global_inspection_requested(SimpleNamespace()))
+    def test_explicit_global_only(self):
+        from types import SimpleNamespace
+        self.assertTrue(global_inspection_requested(SimpleNamespace(global_only=True)))
+    def test_reject_ambiguous_or_reused_flow(self):
+        from types import SimpleNamespace
+        for key in ('amf_only','packing_only','import_only','placement_run'):
+            with self.assertRaises(ValueError):
+                global_inspection_requested(SimpleNamespace(global_only=True,**{key:True}))

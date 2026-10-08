@@ -1,0 +1,165 @@
+// Exercise the unmodified production shortest-path method body with small,
+// deterministic collaborators. This is an ownership/decision regression;
+// device legality and end-to-end behavior remain covered by the native build/run.
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <fstream>
+#include <iostream>
+#include <map>
+#include <memory>
+#include <set>
+#include <sstream>
+#include <string>
+#include <vector>
+#define AMF_PROFILE_FUNCTION(x)
+void print_status(const std::string &) {}
+struct DeviceInfo {
+    struct DeviceSite {
+        int id; float x, y;
+        float X() const { return x; }
+        float Y() const { return y; }
+        std::string getName() const { return "site" + std::to_string(id); }
+    };
+};
+struct DesignInfo {
+    enum { CellType_LUT4 };
+    struct Cell { int id; int getCellId() const { return id; } };
+    std::vector<Cell *> cells;
+    auto &getCells() { return cells; }
+};
+struct PlacementInfo {
+    struct PlacementUnit {
+        int id;
+        int getId() const { return id; }
+        bool isLocked() const { return false; }
+        bool checkHasCARRY() const { return false; }
+        bool checkHasLUTRAM() const { return false; }
+        bool checkHasBRAM() const { return false; }
+        bool checkHasDSP() const { return false; }
+        bool checkHasURAM() const { return false; }
+    };
+    DesignInfo *design;
+    std::vector<PlacementUnit *> units;
+    int clockUpdates = 0;
+    PlacementUnit *getPlacementUnitByCellId(int id) { return units.at(id); }
+    void addPUIntoClockColumn(PlacementUnit *, DeviceInfo::DeviceSite *) { ++clockUpdates; }
+};
+struct Timing {
+    std::vector<std::vector<int>> paths;
+    auto findCriticalPaths(float) { return paths; }
+    float getDelayByModel(float x1, float y1, float x2, float y2) {
+        return .1f + .05f * (std::fabs(x1-x2) + std::fabs(y1-y2));
+    }
+};
+struct ParallelCLBPacker {
+    struct PackingCLBSite {
+        struct PackingCLBCluster {
+            static int alive, checks;
+            PackingCLBSite *parent;
+            std::set<PlacementInfo::PlacementUnit *> members;
+            explicit PackingCLBCluster(PackingCLBSite *s): parent(s) { ++alive; }
+            explicit PackingCLBCluster(PackingCLBCluster *s): parent(s->parent), members(s->members) { ++alive; }
+            ~PackingCLBCluster() { --alive; }
+            bool checkAddPU(PlacementInfo::PlacementUnit *) { ++checks; return parent->accept; }
+            bool addPU(PlacementInfo::PlacementUnit *p) {
+                if (!parent->accept) return false;
+                members.insert(p); return true;
+            }
+            bool contains(PlacementInfo::PlacementUnit *p) { return members.count(p); }
+            void removePUToConstructDetCluster(PlacementInfo::PlacementUnit *p) { members.erase(p); }
+            std::vector<DesignInfo::Cell *> getCellSet() {
+                std::vector<DesignInfo::Cell *> v;
+                for (auto p: members) v.push_back(parent->info->design->cells.at(p->id));
+                return v;
+            }
+        };
+        DeviceInfo::DeviceSite site;
+        PlacementInfo *info;
+        bool accept = true;
+        PackingCLBCluster *cluster = nullptr;
+        PackingCLBSite(int id, float x, float y, PlacementInfo *p): site{id,x,y}, info(p) {}
+        ~PackingCLBSite() { delete cluster; }
+        bool checkIsNonCLBSite() const { return false; }
+        DeviceInfo::DeviceSite *getCLBSite() { return &site; }
+        PackingCLBCluster *getDeterminedClusterInSite() { return cluster; }
+        void setDeterminedClusterInSite(PackingCLBCluster *p) { assert(!cluster); cluster=p; }
+    };
+    DesignInfo *designInfo;
+    PlacementInfo *placementInfo;
+    Timing *timingOptimizer;
+    float y2xRatio = .71f;
+    int queries = 0;
+    std::vector<PackingCLBSite *> cellId2PackingSite, PUId2PackingCLBSite;
+    std::map<DeviceInfo::DeviceSite *, PackingCLBSite *> deviceSite2PackingSite;
+    std::vector<DeviceInfo::DeviceSite *> neighbors;
+    template<class... Args>
+    std::vector<DeviceInfo::DeviceSite *> *findNeiborSitesFromBinGrid(Args...) {
+        ++queries;
+        return new std::vector<DeviceInfo::DeviceSite *>(neighbors);
+    }
+    int timingDrivenDetailedPlacement_shortestPath(int iterId, float displacementRatio);
+};
+int ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::alive = 0;
+int ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::checks = 0;
+
+// PRODUCTION_BODY
+
+int main() {
+    using Site = ParallelCLBPacker::PackingCLBSite;
+    using Cluster = Site::PackingCLBCluster;
+    for (const std::string scenario: {"duplicate-origin", "unmapped-path", "rejected-candidate", "early-break"}) {
+        for (int repeat=0; repeat<20; ++repeat) {
+            int before = Cluster::alive;
+            std::string outcome;
+            {
+                DesignInfo design;
+                PlacementInfo info; info.design = &design;
+                DesignInfo::Cell cells[]={{0},{1},{2}};
+                PlacementInfo::PlacementUnit units[]={{0},{1},{2}};
+                for (int i=0;i<3;++i) { design.cells.push_back(&cells[i]);info.units.push_back(&units[i]); }
+                Timing timing; timing.paths={{0,1,2}};
+                ParallelCLBPacker packer;
+                packer.designInfo=&design;packer.placementInfo=&info;packer.timingOptimizer=&timing;
+                std::vector<std::unique_ptr<Site>> sites;
+                for (int i=0;i<5;++i) {
+                    float xs[]={0,1,2,.5f,1.5f}, ys[]={0,1,0,0,0};
+                    sites.emplace_back(new Site(i,xs[i],ys[i],&info));
+                    sites.back()->cluster=new Cluster(sites.back().get());
+                    packer.deviceSite2PackingSite[&sites.back()->site]=sites.back().get();
+                }
+                for (int i=0;i<3;++i) {
+                    auto site=sites[scenario=="duplicate-origin"?0:i].get();
+                    site->cluster->members.insert(&units[i]);
+                    packer.cellId2PackingSite.push_back(site);packer.PUId2PackingCLBSite.push_back(site);
+                }
+                if (scenario=="unmapped-path") packer.cellId2PackingSite[1]=nullptr;
+                if (scenario=="rejected-candidate" || scenario=="early-break") {
+                    packer.neighbors={&sites[3]->site,&sites[4]->site};
+                    if (scenario=="rejected-candidate") sites[3]->accept=sites[4]->accept=false;
+                }
+                Cluster::checks=0;
+                int moved=packer.timingDrivenDetailedPlacement_shortestPath(repeat<10?1:101,repeat<10?.8f:.05f);
+                std::ostringstream result;
+                result<<scenario<<" "<<repeat<<" moved="<<moved<<" checks="<<Cluster::checks
+                      <<" queries="<<packer.queries<<" clocks="<<info.clockUpdates<<" sites=";
+                for(auto s:packer.PUId2PackingCLBSite) result<<s->site.id<<",";
+                // Sort by stable PU id, not allocation address.
+                result<<" members=";
+                for(auto &s:sites) {
+                    std::vector<int> ids;
+                    for(auto p:s->cluster->members) ids.push_back(p->id);
+                    std::sort(ids.begin(),ids.end());
+                    result<<s->site.id<<":";
+                    for(int id:ids) result<<id<<",";
+                    result<<";";
+                }
+                outcome=result.str();
+            }
+            std::cout<<"RESULT "<<outcome<<"\n";
+            std::cout<<"LEAK "<<scenario<<" "<<repeat<<" "<<Cluster::alive-before<<"\n";
+        }
+    }
+    std::cout.flush();
+}
+
