@@ -24,6 +24,7 @@
 #include <vector>
 #include <memory>
 #include "PhysicalBoundaryModel.h"
+#include "ClockResourceCapacity.h"
 
 /**
  * @brief Information class related to FPGA device, including the details of BEL/Site/Tile/ClockRegion.
@@ -468,7 +469,7 @@ class DeviceInfo
     class ClockColumn
     {
       public:
-        ClockColumn()
+        explicit ClockColumn(unsigned int nominalClockLimit = 12) : clockLimit(nominalClockLimit)
         {
             sites.clear();
             clockNetId2Cnt.clear();
@@ -874,7 +875,11 @@ class DeviceInfo
             return clockColumns;
         }
 
+        const ClockRegionCapacity &getClockResourceCapacity() const { return clockResourceCapacity; }
+        void setClockResourceCapacity(const ClockRegionCapacity &capacity) { clockResourceCapacity = capacity; }
+
       private:
+        ClockRegionCapacity clockResourceCapacity;
         std::vector<DeviceSite *> sites;
         std::set<DeviceTile *> tiles;
         std::vector<std::vector<ClockColumn *>> clockColumns;
@@ -909,6 +914,13 @@ class DeviceInfo
     DeviceInfo(std::map<std::string, std::string> &JSONCfg, std::string _deviceName);
     bool isPhysicalBoundaryTimingEnabled() const { return physicalBoundaryTiming; }
     PhysicalBoundaryModel *getPhysicalBoundaryModel() const { return physicalBoundaryModel.get(); }
+    bool hasClockResourceCapacityTable() const { return static_cast<bool>(clockResourceCapacityTable); }
+    const ClockResourceCapacityTable *getClockResourceCapacityTable() const { return clockResourceCapacityTable.get(); }
+    const ClockRegionCapacity &getClockRegionCapacity(int x, int y) const
+    {
+        return clockRegions.at(y).at(x)->getClockResourceCapacity();
+    }
+    void writeClockResourceCapacityJson(std::ostream &out) const;
     ~DeviceInfo()
     {
         for (auto bel : BELs)
@@ -1294,6 +1306,8 @@ class DeviceInfo
     std::vector<float> clockRegionYBounds;
     std::vector<int> clockRegionYSLRBoundaryCounts;
     std::unique_ptr<PhysicalBoundaryModel> physicalBoundaryModel;
+    std::unique_ptr<ClockResourceCapacityTable> clockResourceCapacityTable;
+    void loadClockResourceCapacities();
     bool physicalBoundaryTiming = false;
 
     std::map<std::string, std::string> &JSONCfg;

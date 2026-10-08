@@ -18,6 +18,7 @@
 #include "stringCheck.h"
 #include <algorithm>
 #include <assert.h>
+#include <iomanip>
 
 namespace
 {
@@ -207,6 +208,7 @@ DeviceInfo::DeviceInfo(std::map<std::string, std::string> &JSONCfg, std::string 
     print_info("There are " + std::to_string(clockRegionNumY) + "x" + std::to_string(clockRegionNumX) +
                "(YxX) clock regions on the device");
 
+    loadClockResourceCapacities();
     mapClockRegionToArray();
     for (const auto &key : {"PhysicalBoundaryMode", "PhysicalBoundaryAudit", "BoundaryAwareClustering"})
         if (JSONCfg.count(key) && JSONCfg[key] != "true" && JSONCfg[key] != "false")
@@ -226,6 +228,95 @@ DeviceInfo::DeviceInfo(std::map<std::string, std::string> &JSONCfg, std::string 
                    " regions, " + std::to_string(physicalBoundaryModel->getBoundaries().size()) + " boundaries");
     }
     print_status("New Device Info Created.");
+}
+
+void DeviceInfo::loadClockResourceCapacities()
+{
+    std::map<std::string, int> regionSLRs;
+    for (auto site : sites)
+    {
+        const auto name = "X" + std::to_string(site->getClockRegionX()) + "Y" +
+                          std::to_string(site->getClockRegionY());
+        auto inserted = regionSLRs.emplace(name, site->getSLRId());
+        if (!inserted.second && inserted.first->second != site->getSLRId())
+            throw std::runtime_error("Clock region has inconsistent SLR metadata: " + name);
+    }
+    auto file = JSONCfg.find("clock resource capacity file");
+    if (file != JSONCfg.end())
+    {
+        if (file->second.empty()) throw std::runtime_error("clock resource capacity file must not be empty");
+        auto part = JSONCfg.find("clock resource capacity part");
+        if (part == JSONCfg.end() || part->second.empty())
+            throw std::runtime_error("clock resource capacity part is required with a capacity file");
+        clockResourceCapacityTable.reset(new ClockResourceCapacityTable(file->second, part->second, regionSLRs));
+        print_info("Clock capacity mode: device_table; nominal capacities for " + part->second +
+                   "; archive SHA256 is checked by the Python entry point, geometry/SLR checked here.");
+    }
+    else
+    {
+        if (JSONCfg.count("clock resource capacity part"))
+            throw std::runtime_error("clock resource capacity part requires a capacity file");
+        print_warning("Clock capacity mode: legacy_24_12; BBox region limit=24, half-column limit=12; "
+                      "device track capacities are unknown. Supply a device capacity table for validation.");
+    }
+    for (const auto &entry : coord2ClockRegion)
+    {
+        const auto name = "X" + std::to_string(entry.first.first) + "Y" + std::to_string(entry.first.second);
+        ClockRegionCapacity capacity;
+        capacity.slr = regionSLRs.at(name);
+        if (clockResourceCapacityTable) capacity = clockResourceCapacityTable->getRegions().at(name);
+        entry.second->setClockResourceCapacity(capacity);
+    }
+}
+
+void DeviceInfo::writeClockResourceCapacityJson(std::ostream &out) const
+{
+    // Metadata excludes control characters, but file names can contain them.
+    auto quoted = [&out](const std::string &value) {
+        const char hex[] = "0123456789abcdef";
+        out << '"';
+        for (unsigned char c : value)
+        {
+            if (c == '"' || c == '\\') out << '\\' << c;
+            else if (c < 32) out << "\\u00" << hex[c >> 4] << hex[c & 15];
+            else out << c;
+        }
+        out << '"';
+    };
+    out << "{\"mode\":\"" << (clockResourceCapacityTable ? "device_table" : "legacy_24_12")
+        << "\",\"resource_state\":\"nominal\",\"archive_hash_validation_in_cpp\":false"
+        << ",\"geometry_validation\":" << (clockResourceCapacityTable ? "true" : "false")
+        << ",\"source_file\":";
+    if (clockResourceCapacityTable) quoted(clockResourceCapacityTable->getPath());
+    else out << "null";
+    out << ",\"metadata\":{";
+    bool first = true;
+    if (clockResourceCapacityTable)
+        for (const auto &entry : clockResourceCapacityTable->getMetadata())
+        {
+            if (!first) out << ',';
+            first = false;
+            quoted(entry.first); out << ':'; quoted(entry.second);
+        }
+    out << "},\"clock_regions\":[";
+    first = true;
+    for (const auto &entry : coord2ClockRegion)
+    {
+        if (!first) out << ',';
+        first = false;
+        const auto &capacity = entry.second->getClockResourceCapacity();
+        out << "{\"name\":\"X" << entry.first.first << 'Y' << entry.first.second << "\",\"slr\":" << capacity.slr;
+        auto nominalTrack = [&out](const char *name, int value) {
+            out << ",\"" << name << "\":";
+            if (value < 0) out << "null";
+            else out << value;
+        };
+        nominalTrack("hroute", capacity.hroute); nominalTrack("hdistr", capacity.hdistr);
+        nominalTrack("vroute", capacity.vroute); nominalTrack("vdistr", capacity.vdistr);
+        out << ",\"half_column_limit\":" << capacity.halfColumnLimit
+            << ",\"bbox_clock_limit\":" << capacity.bboxClockLimit << '}';
+    }
+    out << "]}";
 }
 
 void DeviceInfo::mapClockRegionToArray()
@@ -430,7 +521,7 @@ void DeviceInfo::ClockRegion::mapSiteToClockColumns(bool fabricOnlyGeometry)
     {
         for (unsigned int colOffset = 0; colOffset < clockColumns[levelY].size(); colOffset++)
         {
-            clockColumns[levelY][colOffset] = new ClockColumn();
+            clockColumns[levelY][colOffset] = new ClockColumn(clockResourceCapacity.halfColumnLimit);
         }
     }
     int eachLevelY = (topTileIdY - bottomTileIdY + 1) / columnNumY;
