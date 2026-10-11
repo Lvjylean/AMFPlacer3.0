@@ -108,10 +108,10 @@ BoundaryAwareClusterer::Score BoundaryAwareClusterer::score(const std::vector<Ed
         s.displacement+=std::fabs(entry.first->X()-entry.second.first)+y2xRatio*std::fabs(entry.first->Y()-entry.second.second);
     return s;
 }
-void BoundaryAwareClusterer::run()
+void BoundaryAwareClusterer::run(bool deferSLRSpreading)
 {
     AMF_PROFILE_FUNCTION("boundary_clustering");
-    if (placement->paperBoundaryClusteringEnabled()) { runPaper(); return; }
+    if (placement->paperBoundaryClusteringEnabled()) { runPaper(deferSLRSpreading); return; }
     placement->clearRegionPreferences();
     RegionCapacityTracker budget(placement);
     auto graph=placement->getTimingInfo()->getSimplePlacementTimingGraph();

@@ -64,11 +64,34 @@ void MinCostBipartiteMatcher::solve()
         return;
     }
     if (numExpectedMatches == 0) return;
+    if(numLeftNodes>=10000) {
+        std::vector<int> parent(numLeftNodes+numRightNodes),ls(parent.size(),0),rs(parent.size(),0);
+        for(size_t k=0;k<parent.size();++k)parent[k]=k;
+        auto root=[&](int x){while(parent[x]!=x){parent[x]=parent[parent[x]];x=parent[x];}return x;};
+        size_t edges=0;
+        for(int u=0;u<numLeftNodes;++u)for(const auto &e:adjList[u]) {
+            ++edges;int a=root(u),b=root(numLeftNodes+e.first);if(a!=b)parent[b]=a;
+        }
+        for(int u=0;u<numLeftNodes;++u)++ls[root(u)];
+        for(int v=0;v<numRightNodes;++v)++rs[root(numLeftNodes+v)];
+        int components=0,largestL=0,largestR=0,deficit=0;
+        for(size_t k=0;k<parent.size();++k)if(ls[k]) {
+          ++components;if(ls[k]>largestL){largestL=ls[k];largestR=rs[k];}
+          deficit+=std::max(0,ls[k]-rs[k]);
+        }
+        print_info("AMF_DIAG_GRAPH left="+std::to_string(numLeftNodes)+" right="+std::to_string(numRightNodes)+
+          " edges="+std::to_string(edges)+" components="+std::to_string(components)+
+          " largest_left="+std::to_string(largestL)+" largest_right="+std::to_string(largestR)+
+          " component_deficit="+std::to_string(deficit));
+    }
     int numSolvers = minCostFlowSolvers.size();
+    std::vector<double> workerSeconds(numSolvers);
 #pragma omp parallel for schedule(dynamic)
     for (int solverId = 0; solverId < numSolvers; solverId++)
     {
+        const auto workerStart=amf_matching::Clock::now();
         minCostFlowSolvers[solverId]->calcMinCostFlow(srcNode, sinkNode, numExpectedMatches);
+        workerSeconds[solverId]=amf_matching::seconds(workerStart);
         for (int i = 0; i < numLeftNodes; i++)
         {
             for (unsigned int j = 0; j < minCostFlowSolvers[solverId]->resGraph.adj[i].size(); j++)
@@ -86,6 +109,22 @@ void MinCostBipartiteMatcher::solve()
                 }
             }
         }
+    }
+    if(std::getenv("AMF_MATCHER_WORKER_TRACE")) for(int i=0;i<numSolvers;++i) {
+        const auto *solver=minCostFlowSolvers[i];
+        std::ostringstream line;
+        line<<std::setprecision(12)<<"AMF_MATCHER_WORKER left="<<numLeftNodes<<" right="<<numRightNodes
+            <<" worker="<<i<<" seconds="<<workerSeconds[i]<<" visits="<<solver->diagVisits
+            <<" relax="<<solver->diagRelax<<" spfa="<<solver->diagSPFA<<" augment="<<solver->diagAugment;
+        print_info(line.str());
+    }
+    if(numLeftNodes>=10000) {
+        unsigned long long visits=0,relax=0,spfa=0,augment=0,maxVisits=0;
+        for(auto solver:minCostFlowSolvers){visits+=solver->diagVisits;relax+=solver->diagRelax;
+          spfa+=solver->diagSPFA;augment+=solver->diagAugment;maxVisits=std::max(maxVisits,solver->diagVisits);}
+        print_info("AMF_DIAG_SEARCH left="+std::to_string(numLeftNodes)+" visits="+std::to_string(visits)+
+          " relax="+std::to_string(relax)+" spfa="+std::to_string(spfa)+" augment="+std::to_string(augment)+
+          " max_solver_visits="+std::to_string(maxVisits));
     }
     print_info("AMF_MATCHER backend=legacy left=" + std::to_string(numLeftNodes) +
                " right=" + std::to_string(numRightNodes) + " solve_s=" + std::to_string(amf_matching::seconds(started)));

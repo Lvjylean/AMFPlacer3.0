@@ -28,6 +28,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <limits>
 
 /**
  * @brief PlacementTimingInfo is the container which record the timing information related to placement.
@@ -260,6 +261,16 @@ class PlacementTimingInfo
                 return latestInputArrival;
             }
 
+            inline float getLatestInputArrival_inv()
+            {
+                return latestInputArrival_inv;
+            }
+
+            inline float getLatestInputArrival_inLastIteration()
+            {
+                return latestInputArrival_inLastIteration;
+            }
+
             /**
              * @brief Set the latest arrival time to the output of this timing node
              *
@@ -270,14 +281,39 @@ class PlacementTimingInfo
                 latestInputArrival = _latestInputArrival;
             }
 
+            /**
+             * @brief Set the latest arrival time to the output of this timing node
+             *
+             * @param _latestInputArrival
+             */
+            inline void setLatestInputArrival_inv(float _latestInputArrival_inv)
+            {
+                latestInputArrival_inv = _latestInputArrival_inv;
+            }
+
+            inline void setLatestInputArrival_inLastIteration(float _latestInputArrival_inLastIteration)
+            {
+                latestInputArrival_inLastIteration = _latestInputArrival_inLastIteration;
+            }
+
             inline void setLatestOutputArrival(float _latestOutputArrival)
             {
                 latestOutputArrival = _latestOutputArrival;
             }
 
+            inline void setLatestOutputArrival_inv(float _latestOutputArrival_inv)
+            {
+                latestOutputArrival_inv = _latestOutputArrival_inv;
+            }
+
             inline float getLatestOutputArrival()
             {
                 return latestOutputArrival;
+            }
+
+            inline float getLatestOutputArrival_inv()
+            {
+                return latestOutputArrival_inv;
             }
 
             /**
@@ -291,6 +327,16 @@ class PlacementTimingInfo
             }
 
             /**
+             * @brief Get the slowest predecessor node Id
+             *
+             * @return int
+             */
+            inline int getSlowestPredecessorId_inv()
+            {
+                return slowestPredecessorId_inv;
+            }
+
+            /**
              * @brief Set the slowest predecessor node Id
              *
              * @param _slowestPredecessorId
@@ -298,6 +344,16 @@ class PlacementTimingInfo
             inline void setSlowestPredecessorId(int _slowestPredecessorId)
             {
                 slowestPredecessorId = _slowestPredecessorId;
+            }
+
+            /**
+             * @brief Set the slowest predecessor node Id
+             *
+             * @param _slowestPredecessorId
+             */
+            inline void setSlowestPredecessorId_inv(int _slowestPredecessorId_inv)
+            {
+                slowestPredecessorId_inv = _slowestPredecessorId_inv;
             }
 
             /**
@@ -331,6 +387,27 @@ class PlacementTimingInfo
             }
 
             /**
+             * @brief Get the criticality of a endpoint for its successor paths
+             *
+             * @return float
+             */
+            inline float getEndpointCriticality()
+            {
+                assert(forwardLevel == 0 && backwardLevel == 0);
+                return endpointCriticality;
+            }
+
+            /**
+             * @brief Set the Endpoint Criticality of a endpoint for its successor paths
+             *
+             * @param _endpointCriticality
+             */
+            inline void setEndpointCriticality(float _endpointCriticality)
+            {
+                endpointCriticality = _endpointCriticality;
+            }
+
+            /**
              * @brief Set the required arrival time
              *
              * @param _requiredArrival
@@ -360,7 +437,7 @@ class PlacementTimingInfo
              */
             inline int getEarlestSuccessorId()
             {
-                return slowestPredecessorId;
+                return earliestSuccessorId;
             }
 
             /**
@@ -393,6 +470,18 @@ class PlacementTimingInfo
                 return clusterId;
             }
 
+            inline void addTotalFanout(int _totalFanout)
+            {
+                // Reconvergent fanout counts paths and may exceed int on large designs.
+                const int room = std::numeric_limits<int>::max() - totalFanout;
+                totalFanout += std::min(room, std::max(0, _totalFanout));
+            }
+
+            inline int getTotalFanout()
+            {
+                return totalFanout;
+            }
+
           private:
             /**
              * @brief the pointer linked to the design element (pin or cell)
@@ -401,12 +490,20 @@ class PlacementTimingInfo
             nodeType *designNode = nullptr;
             int id;
             float latestInputArrival = 0.0; // ns
+            float latestInputArrival_inLastIteration = 0.0;
             float latestOutputArrival = 0.0;
+            float latestInputArrival_inv = 0.0; // ns
+            float latestInputArrival_inLastIteration_inv = 0.0;
+            float latestOutputArrival_inv = 0.0;
+
             float requiredArrival = 10.0; // ns
+            float endpointCriticality = 1000.0;
             float clockPeriod = -10;
             int slowestPredecessorId = -1;
+            int slowestPredecessorId_inv = -1;
             int earliestSuccessorId = -1;
             int clusterId = -1;
+            int totalFanout = 1;
 
             /**
              * @brief the node can have internal delay (e.g., cell delay)
@@ -522,6 +619,8 @@ class PlacementTimingInfo
             nodes.push_back(timingNode);
         }
 
+        void invalidateReverseArrival() { invArrivalNotUpdated = true; }
+
         inline std::vector<TimingNode *> &getNodes()
         {
             return nodes;
@@ -622,8 +721,19 @@ class PlacementTimingInfo
         std::vector<int> backTraceDelayLongestPathFromNode(int curNodeId);
 
         bool backTraceDelayLongestPathFromNode(int curNodeId, std::vector<int> &isCovered, std::vector<int> &resPath,
-                                               int converThr = 30);
+                                               int converThr = 30, int backTraceCheckFanoutLevel = 5);
 
+        bool backTraceDelayLongestPathFromNode_inv(int curNodeId, std::vector<int> &isCovered,
+                                                   std::vector<int> &resPath, int converThr = 30,
+                                                   int backTraceCheckFanoutLevel = 5);
+
+        std::vector<std::vector<int>> backTraceDelayLongestPathsFromNodeWithTolerance(int startNodeId, float tolerance,
+                                                                                      int pathNumThr = 1000,
+                                                                                      int sizeThr = 1000);
+
+        std::vector<int> forwardTraceDelayLongestPathFromNode(int curNodeId);
+        bool forwardTraceDelayLongestPathFromNode(int curNodeId, std::vector<int> &isCovered, std::vector<int> &resPath,
+                                                  int converThr = 30);
         /**
          * @brief Set the Longest Path Length for each TimingNode in the TimingGraph and get a sorted vector of
          * TimingNodes
@@ -635,6 +745,7 @@ class PlacementTimingInfo
             {
                 tmpNode->calcLongestPath();
                 tmpNode->getDesignNode()->setTimingLength(tmpNode->getLongestPathLength());
+                tmpNode->getDesignNode()->setTimingForwardLevel(tmpNode->getForwardLevel());
             }
 
             pathLenSortedNodes = nodes;
@@ -660,11 +771,42 @@ class PlacementTimingInfo
                       });
         }
 
-        inline std::vector<TimingNode *> &getSortedTimingEndpoints()
+        void sortedEndpointByDelay_inv();
+
+        void sortedEndpointByRequiredDelay()
+        {
+            requiredDelaySortedTimingEndpointNodes.clear();
+            for (auto id : backwardlevel2NodeIds[0])
+            {
+                if (nodes[id]->getInEdges().size() == 0)
+                    continue;
+                requiredDelaySortedTimingEndpointNodes.push_back(nodes[id]);
+            }
+            std::sort(requiredDelaySortedTimingEndpointNodes.begin(), requiredDelaySortedTimingEndpointNodes.end(),
+                      [](TimingNode *a, TimingNode *b) -> bool {
+                          return (a->getEndpointCriticality() == b->getEndpointCriticality()
+                                      ? a->getId() > b->getId()
+                                      : a->getEndpointCriticality() < b->getEndpointCriticality());
+                      });
+        }
+
+        // Compatibility entry point used by AMF3 physical-boundary clustering.
+        inline std::vector<TimingNode *> &getSortedTimingEndpoints() { return delaySortedTimingEndpointNodes; }
+
+        inline std::vector<TimingNode *> &getSortedTimingEndpoints_ByArrival()
         {
             return delaySortedTimingEndpointNodes;
         }
 
+        inline std::vector<TimingNode *> &getSortedTimingEndpoints_ByArrival_inv()
+        {
+            return delaySortedTimingEndpointNodes_inv;
+        }
+
+        inline std::vector<TimingNode *> &getSortedTimingEndpoints_ByRequiredArrival()
+        {
+            return requiredDelaySortedTimingEndpointNodes;
+        }
         /**
          * @brief find the longest path from a register to the target node (id)
          *
@@ -740,7 +882,12 @@ class PlacementTimingInfo
          */
         inline float getClockPeriod()
         {
-            return clockPeriod;
+            return clockPeriod - clockSkew;
+        }
+
+        inline void setClockSkew(float _clockSkew)
+        {
+            clockSkew = _clockSkew;
         }
 
         /**
@@ -755,11 +902,23 @@ class PlacementTimingInfo
             clockPeriod = _clockPeriod;
         }
 
+        inline std::vector<std::vector<int>> &getForwardlevel2NodeIds()
+        {
+            return forwardlevel2NodeIds;
+        }
+
+        inline std::vector<std::vector<int>> &getBackwardlevel2NodeIds()
+        {
+            return backwardlevel2NodeIds;
+        }
+
       private:
         PlacementTimingInfo *timingInfo = nullptr;
         std::vector<TimingNode *> nodes;
         std::vector<TimingNode *> pathLenSortedNodes;
         std::vector<TimingNode *> delaySortedTimingEndpointNodes;
+        std::vector<TimingNode *> delaySortedTimingEndpointNodes_inv;
+        std::vector<TimingNode *> requiredDelaySortedTimingEndpointNodes;
         std::vector<TimingEdge *> edges;
 
         /**
@@ -780,6 +939,9 @@ class PlacementTimingInfo
         int mediumPathThresholdLevel = 1;
 
         float clockPeriod = 10.0; // ns
+        float clockSkew = 0;
+
+        bool invArrivalNotUpdated = false;
     };
 
     /**
@@ -787,6 +949,8 @@ class PlacementTimingInfo
      *
      */
     void buildSimpleTimingGraph();
+
+    void reduceClockPeriodToRatio(float ratio);
 
     /**
      * @brief Get the Simple Timing Info object which regard design cells as timing nodes

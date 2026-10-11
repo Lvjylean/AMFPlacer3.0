@@ -1,6 +1,7 @@
 #include "BoundaryAwareClusterer.h"
 #include "WirelengthOptimizer.h"
 #include "GeneralSpreader.h"
+#include "GlobalPlacer.h"
 #include "RegionCapacityTracker.h"
 #include "simpleJSON.h"
 #include <fstream>
@@ -64,7 +65,7 @@ int main(int argc, char **argv)
         DeviceInfo device(cfg,cfg["device"]);DesignInfo design(cfg,&device);PlacementInfo p(&design,&device,cfg);
         PlacementInfo::PlacementMacro *macro=nullptr;
         bool oversized=scenario=="oversized";
-        const int targetSLR=scenario.find("bottom")==0?0:(scenario.find("top")==0?3:1);
+        const int targetSLR=scenario.find("bottom")==0?0:(scenario.find("top")==0?3:(scenario=="middle-upper"?2:1));
         const float offset=scenario=="negative-offset" || scenario=="bottom-macro" ? -8 : (oversized?400:8);
         if(scenario=="macro" || scenario=="negative-offset" || scenario=="bottom-macro" || scenario=="top-macro" || oversized) {
             std::string a="v0",b="v1";
@@ -83,11 +84,12 @@ int main(int argc, char **argv)
             float x=110+index%5,y=150+index%7;
             if(scenario=="slr-tie")y=endpoint?620:(index<32?150:320)+index%7;
             else if(scenario=="inside") {x=20+index%5;y=320+index%7;}
+            else if(scenario=="inside-above") {x=20+index%5;y=410+index%7;}
             else if(index<40) {
                 int leftCount=scenario=="side-tie"?20:30;
                 x=(index<leftCount?20:110)+index%5;y=320+index%7;
             } else if(scenario=="upper" || (scenario=="both-seams" && index>=52))y=620+index%7;
-            if(targetSLR!=1)y=index<40?targetSLR*240+80+index%7:(targetSLR==0?320:620)+index%7;
+            if(targetSLR!=1)y=index<40?targetSLR*240+80+index%7:(targetSLR==0?320:(targetSLR==2?320:620))+index%7;
             if(scenario=="right")x=150-x;
             pu->setAnchorLocationAndForgetTheOriginalOne(x,y);if(endpoint)pu->setFixed();
             p.getPlacementUnits().push_back(pu);p.getPlacementUnpackedCells().push_back(pu);
@@ -98,7 +100,9 @@ int main(int argc, char **argv)
         auto model=device.getPhysicalBoundaryModel();
         std::map<PlacementInfo::PlacementUnit *,std::pair<float,float>> before;
         for(auto pu:p.getPlacementUnits())before[pu]={pu->X(),pu->Y()};
-        PlacementTimingOptimizer timing(&p,cfg);timing.clusterCriticalPathsByPhysicalRegion();
+        const bool deferInitialSLRSpreading = scenario.find("budget") == 0;
+        PlacementTimingOptimizer timing(&p,cfg);
+        timing.clusterCriticalPathsByPhysicalRegion(deferInitialSLRSpreading);
         auto &prefs=p.getRegionPreferences();size_t moved=0;
         for(auto entry:before) {
             auto pu=entry.first;
@@ -106,23 +110,80 @@ int main(int argc, char **argv)
             require(model->getRegions()[model->regionAt(pu->X(),pu->Y())].slr==
                     model->getRegions()[model->regionAt(entry.second.first,entry.second.second)].slr,"SLR spreading crossed die");
             if(pu->isFixed())require(pu->X()==entry.second.first,"Fixed endpoint moved");
+            if(deferInitialSLRSpreading)
+                require(pu->X()==entry.second.first,"Deferred clustering changed X before initialization");
             moved+=pu->X()!=entry.second.first;
         }
         if(scenario=="slr-tie" || oversized)require(prefs.empty(),"Invalid majority/macro geometry accepted");
         else {
             require(prefs.size()==size_t(macro?63:64),"Long-path group lost movable units");
             require(p.paperSLRStage(),"Initial phase is not SLR");
-            int up=0,down=0;
             for(auto entry:prefs) {
-                auto pref=entry.second;auto pu=entry.first;
+                auto pref=entry.second;
                 require(model->getRegions().at(pref.region).slr==targetSLR && pref.guideY,"SLR-first vote failed");
                 require(pref.guideX==(scenario!="side-tie"),"Wrong HPIO tie handling");
                 require(pref.pullX==(scenario=="side-tie"?0:(scenario=="right"?1:-1)),"Wrong fixed HPIO pull direction");
-                up+=pref.pullY>0;down+=pref.pullY<0;
-                if(model->getRegions().at(model->regionAt(before.at(pu).first,before.at(pu).second)).slr==targetSLR)require(pref.pullY==0,"SLR residents acquired center attraction");
+                require(pref.pullY==(targetSLR==0?-1:(targetSLR==3?1:0)),
+                        "SLR rule depends on initial PU location rather than target geometry");
             }
-            if(scenario=="both-seams")require(up>0 && down>0,"Middle die cannot receive from both seams");
-            if(scenario=="upper")require(down>0 && up==0,"Upper-die pull direction reversed");
+            if(scenario.find("budget")==0) {
+                // Exercise the real GP driver and solver, not a simulated
+                // counter: every cluster generation must get two budgets.
+                for(auto entry:before)if(entry.first->isFixed())entry.first->setLocked();
+                GlobalPlacer placer(&p,cfg);
+                const bool early=scenario!="budget";
+                if(early)placer.setMacroLegalizationFixed();
+                const int budget=early?5:2;
+                for(int generation=0;generation<3;++generation) {
+                    if(generation) {
+                        for(auto entry:before)if(!entry.first->isLocked())
+                            entry.first->setAnchorLocationAndForgetTheOriginalOne(entry.second.first,entry.second.second);
+                        p.updateElementBinGrid();
+                        timing.clusterCriticalPathsByPhysicalRegion();
+                        size_t movedResidents=0;
+                        for(auto entry:before)movedResidents+=entry.first->X()!=entry.second.first;
+                        require(movedResidents>0,"Later generation lost immediate X room-making");
+                    }
+                    require(p.paperSLRStage() && !prefs.empty(),"Rebuild did not restart SLR");
+                    std::cout<<"BUDGET_GENERATION "<<generation<<"\n";
+                    placer.GlobalPlacement_CLBElements(0,true,2,false,true,200,&timing);
+                    require(p.paperSLRStage(),"Zero-iteration call consumed SLR budget");
+                    if(generation==0) {
+                        placer.GlobalPlacement_fixedCLB(1,.0002f);
+                        std::cout<<"INITIAL_FIXED_CLB_COMPLETED\n";
+                        require(p.paperSLRStage(),"Fixed CLB pass consumed SLR budget");
+                        // This fixture consists of LUT/FF PUs: all six real
+                        // initialization QPs must retain the unspread positions.
+                        for(auto entry:before)
+                            require(entry.first->X()==entry.second.first && entry.first->Y()==entry.second.second,
+                                    "X room-making occurred before initialization completed");
+                        timing.spreadPaperBoundarySLR();
+                        size_t movedResidents=0;
+                        for(auto entry:before) {
+                            require(entry.first->Y()==entry.second.second,"SLR X room-making changed Y");
+                            if(entry.first->isLocked())require(entry.first->X()==entry.second.first,"Locked endpoint moved");
+                            movedResidents+=entry.first->X()!=entry.second.first;
+                        }
+                        require(movedResidents>0,"Deferred X room-making did not execute at SLR entry");
+                        std::cout<<"INITIAL_SLR_SPREAD_AFTER_FIXED_CLB moved="<<movedResidents<<"\n";
+                    }
+                    placer.GlobalPlacement_CLBElements(budget,generation!=0,2,false,
+                                                       scenario!="budget-nonstrict",200,&timing);
+                    require(!p.paperSLRStage(),"Normal GP did not finish the SLR budget");
+                    require(!prefs.empty(),"GP erased valid preferences");
+                    for(auto entry:prefs)checkFence(p,entry.first);
+                    // With no rebuild, another GP call must remain HPIO-only.
+                    placer.GlobalPlacement_CLBElements(1,true,2,false,true,200,&timing);
+                    require(!p.paperSLRStage(),"Ordinary continuation restarted SLR");
+                }
+                p.clearRegionPreferences();cfg["BoundaryAwareClustering"]="false";
+                cfg.erase("BoundaryClusteringStrategy");
+                placer.GlobalPlacement_CLBElements(2,true,2,false,true,200,&timing);
+                for(auto entry:before)if(entry.first->isFixed())
+                    require(entry.first->X()==entry.second.first && entry.first->Y()==entry.second.second,"Fixed endpoint moved");
+                std::ofstream out(argv[3]);out<<"scenario\tpassed\n"<<scenario<<"\t1\n";
+                std::cout<<"PASS "<<scenario<<'\n';return 0;
+            }
             WirelengthOptimizer optimizer(&p,cfg,false);
             optimizer.updateB2BNetWeight(.005f);
             const size_t originalSize=prefs.size();
@@ -140,6 +201,21 @@ int main(int argc, char **argv)
             float freeX=first->X();p.clipPaperRegionLocation(first);
             require(first->X()==freeX,"SLR phase prematurely imposed an HPIO fence");
             p.updateElementBinGrid();
+            optimizer.updateB2BNetWeight(.005f); // Clipped at die edge: Y anchors must remain active.
+            // Verify the original distance/DSPCritical gates while SLR anchors
+            // are active, then restore locations before HPIO room-making.
+            std::map<PlacementInfo::PlacementUnit *,std::pair<float,float>> beforeThresholdProbe;
+            for(auto entry:prefs)beforeThresholdProbe[entry.first]={entry.first->X(),entry.first->Y()};
+            for(float offset : {-10.f,-6.f,-3.f,0.f,3.f,6.f,10.f}) {
+                for(auto &entry:prefs) {
+                    float x,y;require(p.regionAnchor(entry.first,entry.second,x,y),"Missing SLR probe anchor");
+                    entry.first->setAnchorLocationAndForgetTheOriginalOne(entry.first->X(),y+offset);
+                }
+                p.updateElementBinGrid();p.refreshRegionPreferences();optimizer.updateB2BNetWeight(.005f);
+            }
+            for(auto entry:beforeThresholdProbe)
+                entry.first->setAnchorLocationAndForgetTheOriginalOne(entry.second.first,entry.second.second);
+            p.updateElementBinGrid();
             timing.advancePaperBoundaryStage();require(!p.paperSLRStage(),"No HPIO phase transition");
             require(prefs.size()==originalSize,"Phase transition erased valid preferences");
             std::map<PlacementInfo::PlacementUnit *,std::pair<float,float>> afterTransition;
@@ -153,13 +229,39 @@ int main(int argc, char **argv)
                 first->setAnchorLocationAndForgetTheOriginalOne(110,first->Y());p.updateElementBinGrid();p.refreshRegionPreferences();p.clipPaperRegionLocation(first);
                 require(prefs.size()==originalSize && first->X()==110,"Side tie acquired X restriction after phase transition");
             }
-            // Move beyond every target center in its original pull direction.
-            // A QP refresh must not reverse that direction and pull it back.
+            // Move beyond each HPIO center in its original X direction.
+            // X must not reverse; Y is exactly at its anchor for this check.
             for(auto &entry:prefs) {
                 auto pu=entry.first;float x,y;require(p.regionAnchor(pu,entry.second,x,y),"Missing anchor");
                 pu->setAnchorLocationAndForgetTheOriginalOne(entry.second.guideX?x+entry.second.pullX*2:pu->X(),y);
             }
             p.updateElementBinGrid();p.refreshRegionPreferences();optimizer.updateB2BNetWeight(.005f);
+            // No Y anchor may reappear after the HPIO transition, even when
+            // moving beyond the old distance thresholds. X must not reverse.
+            for(float offset : {-10.f,-6.f,-3.f,0.f,3.f,6.f,10.f}) {
+                for(auto &entry:prefs) {
+                    float x,y;require(p.regionAnchor(entry.first,entry.second,x,y),"Missing Y probe anchor");
+                    entry.first->setAnchorLocationAndForgetTheOriginalOne(
+                        entry.second.guideX?x+entry.second.pullX*2:entry.first->X(),y+offset);
+                }
+                p.updateElementBinGrid();p.refreshRegionPreferences();optimizer.updateB2BNetWeight(.005f);
+            }
+            // Probe arrival and later re-entry at the macro-aware phase edge.
+            // The outer die edge is avoided: use the edge toward another SLR.
+            for (bool slrProbe : {true, false}) {
+                p.setPaperSLRStage(slrProbe);
+                for (float delta : {1.f, 0.f, -1.f, 1.f}) {
+                    for (auto entry : prefs) {
+                        float l,r,b,t;
+                        require(p.paperRegionBounds(entry.first,entry.second,!slrProbe,l,r,b,t),"Missing entry bounds");
+                        float x=(l+r)*.5f,y=(b+t)*.5f;
+                        if (slrProbe) y=targetSLR==3 ? b-delta : t+delta;
+                        else if (entry.second.guideX) x=entry.second.pullX<0 ? r+delta : l-delta;
+                        entry.first->setAnchorLocationAndForgetTheOriginalOne(x,y);
+                    }
+                    p.updateElementBinGrid();p.refreshRegionPreferences();optimizer.updateB2BNetWeight(.005f);
+                }
+            }
             RegionCapacityTracker capacity(&p);std::map<PlacementInfo::PlacementUnit *,int> targets;
             for(auto entry:prefs)targets[entry.first]=entry.second.region;
             require(capacity.assignTargets(targets,true),"Capacity reservation failed");auto usage=capacity.getUsage();

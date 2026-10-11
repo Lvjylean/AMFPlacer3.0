@@ -17,7 +17,7 @@ int main(int argc, const char **argv)
 {
     if (argc == 2 && std::string(argv[1]) == "--capabilities")
     {
-        std::cout << "{\"schema\":\"amf-capabilities-v1\",\"clock_resource_capacity_schema\":1,\"external_floorplan_initialization_schema\":1,\"paper_hierarchical_boundaries_schema\":2,\"global_placement_inspection_schema\":1}\n";
+        std::cout << "{\"schema\":\"amf-capabilities-v1\",\"clock_resource_capacity_schema\":1,\"external_floorplan_initialization_schema\":1,\"paper_hierarchical_boundaries_schema\":2,\"global_placement_inspection_schema\":1,\"amf2pro_integration_schema\":1}\n";
         return 0;
     }
     amf_profile::Session profileSession;

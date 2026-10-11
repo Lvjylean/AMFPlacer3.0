@@ -9,6 +9,18 @@
  * @copyright Copyright (c) 2021 Reconfiguration Computing Systems Lab, The Hong Kong University of Science and
  * Technology. All rights reserved.
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
  */
 
 #ifndef _PlacementINFO
@@ -1037,18 +1049,21 @@ class PlacementInfo
          * @param x
          * @param y
          */
-        inline void setAnchorLocation(float x, float y)
+        inline void setAnchorLocation(float x, float y, bool rememberLastAnchor = true)
         {
             assert(!locked);
-            if (anchorX < -100 && anchorY < -100)
+            if (rememberLastAnchor)
             {
-                lastAnchorX = x;
-                lastAnchorY = y;
-            }
-            else
-            {
-                lastAnchorX = anchorX;
-                lastAnchorY = anchorY;
+                if (anchorX < -100 && anchorY < -100)
+                {
+                    lastAnchorX = x;
+                    lastAnchorY = y;
+                }
+                else
+                {
+                    lastAnchorX = anchorX;
+                    lastAnchorY = anchorY;
+                }
             }
             anchorX = x;
             anchorY = y;
@@ -1209,6 +1224,17 @@ class PlacementInfo
         inline void setNetsSetPtr(std::vector<PlacementNet *> *_nets)
         {
             nets = _nets;
+            netsBeDriven.clear();
+            for (auto tmpNet : *nets)
+            {
+                if (tmpNet->getDriverUnits().size() == 1)
+                {
+                    if (tmpNet->getDriverUnits()[0] == this)
+                    {
+                        netsBeDriven.push_back(tmpNet);
+                    }
+                }
+            }
         }
 
         /**
@@ -1237,6 +1263,11 @@ class PlacementInfo
                 }
             }
             return numUnitsBeDrivenByThisPU;
+        }
+
+        inline std::vector<PlacementNet *> &getNetsBeDrivenByThisPU()
+        {
+            return netsBeDriven;
         }
 
         inline int getUnitsDriveThisPU()
@@ -1396,6 +1427,8 @@ class PlacementInfo
          */
         std::vector<PlacementNet *> *nets;
 
+        std::vector<PlacementNet *> netsBeDriven;
+
         /**
          * @brief fixed simply means the PlacementUnit cannot be moved.
          *
@@ -1508,6 +1541,7 @@ class PlacementInfo
         // DesignInfo::DesignCellType virtualCellType;
         std::string siteName;
         std::string BELName;
+
         DeviceInfo::DeviceSite *lockedSite = nullptr;
     };
 
@@ -3022,10 +3056,10 @@ class PlacementInfo
         getGridXY(targetX, targetY, binIdX, binIdY);
 
         assert(binIdY >= 0);
-        assert((unsigned int)binIdY < LUTFFBinGrid.size());
+        assert((unsigned int)binIdY < CLBBinGrid.size());
         assert(binIdX >= 0);
-        assert((unsigned int)binIdX < LUTFFBinGrid[binIdY].size());
-        assert(LUTFFBinGrid[binIdY][binIdX]->inRange(targetX, targetY));
+        assert((unsigned int)binIdX < CLBBinGrid[binIdY].size());
+        assert(CLBBinGrid[binIdY][binIdX]->inRange(targetX, targetY));
 
         std::queue<std::pair<int, int>> binXYqueue;
         std::set<std::pair<int, int>> reachedBinXYs;
@@ -3040,7 +3074,7 @@ class PlacementInfo
             binXYqueue.pop();
             int curbinIdX = curXY.first, curbinIdY = curXY.second;
 
-            PlacementInfo::PlacementBinInfo *curBin = LUTFFBinGrid[curbinIdY][curbinIdX];
+            PlacementInfo::PlacementBinInfo *curBin = CLBBinGrid[curbinIdY][curbinIdX];
             float bin2TargetXYDistance = curBin->getManhattanDistanceTo(targetX, targetY);
             if (bin2TargetXYDistance > displacementUpperbound)
                 continue;
@@ -3068,13 +3102,101 @@ class PlacementInfo
                 {
                     if (!(nextY >= 0))
                         continue;
-                    if (!((unsigned int)nextY < LUTFFBinGrid.size()))
+                    if (!((unsigned int)nextY < CLBBinGrid.size()))
                         continue;
                     if (!(nextX >= 0))
                         continue;
-                    if (!((unsigned int)nextX < LUTFFBinGrid[binIdY].size()))
+                    if (!((unsigned int)nextX < CLBBinGrid[binIdY].size()))
                         continue;
-                    PlacementInfo::PlacementBinInfo *nextBin = LUTFFBinGrid[nextY][nextX];
+                    PlacementInfo::PlacementBinInfo *nextBin = CLBBinGrid[nextY][nextX];
+                    float nextBin2TargetXYDistance = nextBin->getManhattanDistanceTo(targetX, targetY);
+                    if (nextBin2TargetXYDistance > displacementUpperbound)
+                        continue;
+                    std::pair<int, int> nextXY(nextX, nextY);
+                    if (reachedBinXYs.find(nextXY) == reachedBinXYs.end())
+                    {
+                        reachedBinXYs.insert(nextXY);
+                        binXYqueue.push(nextXY);
+                    }
+                }
+            }
+        }
+
+        assert(findItself);
+        return res;
+    }
+
+    inline std::vector<DesignInfo::DesignCell *> *findNeiborsFromBinGridBasedOnHash(DesignInfo::DesignCell *curCell,
+                                                                                    float displacementUpperbound)
+    {
+        // please note that the input DesignCell is only used to find the corresponding binGrid for site search.
+        bool findLUT = curCell->isLUT();
+        float targetX = cellId2location[curCell->getCellId()].X;
+        float targetY = cellId2location[curCell->getCellId()].Y;
+        std::vector<DesignInfo::DesignCell *> *res = new std::vector<DesignInfo::DesignCell *>();
+        res->clear();
+
+        int binIdX, binIdY;
+        getGridXY(targetX, targetY, binIdX, binIdY);
+
+        assert(binIdY >= 0);
+        assert((unsigned int)binIdY < CLBBinGrid.size());
+        assert(binIdX >= 0);
+        assert((unsigned int)binIdX < CLBBinGrid[binIdY].size());
+        assert(CLBBinGrid[binIdY][binIdX]->inRange(targetX, targetY));
+
+        std::queue<std::pair<int, int>> binXYqueue;
+        std::set<std::pair<int, int>> reachedBinXYs;
+        binXYqueue.emplace(binIdX, binIdY);
+        reachedBinXYs.emplace(binIdX, binIdY);
+
+        int hashCode = designNodeHash[curCell->getCellId()];
+        assert(hashCode != -1 && "The target design cell should have a hash code");
+
+        bool findItself = false;
+
+        while (binXYqueue.size() > 0)
+        {
+            std::pair<int, int> curXY = binXYqueue.front();
+            binXYqueue.pop();
+            int curbinIdX = curXY.first, curbinIdY = curXY.second;
+
+            PlacementInfo::PlacementBinInfo *curBin = CLBBinGrid[curbinIdY][curbinIdX];
+            float bin2TargetXYDistance = curBin->getManhattanDistanceTo(targetX, targetY);
+            if (bin2TargetXYDistance > displacementUpperbound)
+                continue;
+            for (auto tmpCell : curBin->getCells())
+            {
+                if (tmpCell->getCellType() == curCell->getCellType() &&
+                    hashCode == designNodeHash[tmpCell->getCellId()])
+                {
+                    float tmpX = cellId2location[tmpCell->getCellId()].X;
+                    float tmpY = cellId2location[tmpCell->getCellId()].Y;
+                    float tmpPUDis = std::max(fabs(targetX - tmpX), y2xRatio * fabs(targetY - tmpY));
+                    if (tmpPUDis <= displacementUpperbound)
+                    {
+                        if (tmpCell == curCell)
+                        {
+                            findItself = true;
+                        }
+                        res->push_back(tmpCell);
+                    }
+                }
+            }
+            assert(findItself);
+            for (int nextY = curbinIdY - 1; nextY <= curbinIdY + 1; nextY++)
+            {
+                for (int nextX = curbinIdX - 1; nextX <= curbinIdX + 1; nextX++)
+                {
+                    if (!(nextY >= 0))
+                        continue;
+                    if (!((unsigned int)nextY < CLBBinGrid.size()))
+                        continue;
+                    if (!(nextX >= 0))
+                        continue;
+                    if (!((unsigned int)nextX < CLBBinGrid[binIdY].size()))
+                        continue;
+                    PlacementInfo::PlacementBinInfo *nextBin = CLBBinGrid[nextY][nextX];
                     float nextBin2TargetXYDistance = nextBin->getManhattanDistanceTo(targetX, targetY);
                     if (nextBin2TargetXYDistance > displacementUpperbound)
                         continue;
@@ -3256,7 +3378,7 @@ class PlacementInfo
      * @brief map design cells to the bins in the bin grid.
      *
      */
-    void updateElementBinGrid();
+    void updateElementBinGrid(bool checkGridForPackingRouting = true, bool bypassBRAMDSP = false);
 
     /**
      * @brief adjust the resource demand of LUTs/FFs according to routing congestion
@@ -3402,7 +3524,7 @@ class PlacementInfo
      *
      * @param curPU target PlacementUnit
      */
-    inline void enforceLegalizeXYInArea(PlacementUnit *curPU)
+    inline void enforceLegalizeXYInArea(PlacementUnit *curPU, bool forget = true)
     {
         float fX = curPU->X();
         float fY = curPU->Y();
@@ -3437,7 +3559,10 @@ class PlacementInfo
         }
         if (fX != curPU->X() || fY != curPU->Y())
         {
-            curPU->setAnchorLocationAndForgetTheOriginalOne(fX, fY);
+            if (forget)
+                curPU->setAnchorLocationAndForgetTheOriginalOne(fX, fY);
+            else
+                curPU->setAnchorLocation(fX, fY, false);
         }
     }
 
@@ -3936,7 +4061,7 @@ class PlacementInfo
         double totalHPWL = 0.0;
         int numNet = placementNets.size();
 
-#pragma omp parallel for
+#pragma omp parallel for schedule(dynamic)
         for (int netId = 0; netId < numNet; netId++)
         {
             auto net = placementNets[netId];
@@ -4381,7 +4506,8 @@ class PlacementInfo
         int region = -1, cluster = -1;
         float strength = 1.0f;
         bool guideX = true, guideY = true;
-        // Immutable pull directions for this preference lifetime; 0 means no pull.
+        // X: fixed HPIO-side direction. Y: -1 bottom SLR, +1 top SLR,
+        // 0 middle SLR (two-sided attraction); guideX/guideY enable each axis.
         int pullX = 0, pullY = 0;
     };
     bool boundaryClusteringEnabled() const;
@@ -4461,6 +4587,35 @@ class PlacementInfo
     inline float getMacroRatio()
     {
         return macroRatio;
+    }
+
+    inline std::vector<int> &getDesignNodeHash()
+    {
+        return designNodeHash;
+    }
+
+    inline std::vector<std::vector<DesignInfo::DesignCell *>> &getDatapathClusters()
+    {
+        return datapathClusters;
+    }
+
+    inline std::set<int> &getPUsSkewRisky()
+    {
+        return PUsSkewRisky;
+    }
+
+    inline bool checkSLICEMBug()
+    {
+        return SLICEMBug;
+    }
+
+    void FFPartitioning();
+
+    bool hasTimingEndpoint(DesignInfo::DesignCell *cell);
+
+    inline std::vector<std::vector<DesignInfo::DesignCell *>> &getFFBasedClusters()
+    {
+        return FFBased_Clusters;
     }
 
   private:
@@ -4545,7 +4700,7 @@ class PlacementInfo
      * @brief Bin Grid for LUTs and FFs, mainly for searching neighbor elements during packing
      *
      */
-    std::vector<std::vector<PlacementBinInfo *>> LUTFFBinGrid;
+    std::vector<std::vector<PlacementBinInfo *>> CLBBinGrid;
 
     /**
      * @brief Bin Grid includes all types of sites, mainly for congestion evalution
@@ -4572,6 +4727,11 @@ class PlacementInfo
     std::map<PlacementUnit *, RegionPreference> regionPreferences;
     bool paperSLRStageActive = false;
     std::map<DeviceInfo::ClockColumn *, std::set<DesignInfo::DesignNet *>> clockCol2ClockNets;
+
+    std::vector<std::vector<DesignInfo::DesignCell *>> FFBased_Clusters;
+    std::vector<int> designNodeHash;
+    std::vector<std::vector<DesignInfo::DesignCell *>> datapathClusters;
+    std::set<int> PUsSkewRisky;
 
     /**
      * @brief the retangular clock region coverage of a clock net
@@ -4656,6 +4816,30 @@ class PlacementInfo
     int highFanOutThr = 10000000;
 
     float macroRatio = 0.0;
+    bool SLICEMBug = false;
+};
+
+/**
+ * @brief a utility struct for the comparison between PlacementInfo::PlacementUnit according to PU ID
+ *
+ * The default STL set for PlacementUnit pointers will lead to random iteration order of the PlacementUnits in a set and
+ * lead to slight variation in the final packing result.
+ *
+ */
+struct Packing_PUcompare
+{
+    inline bool operator()(PlacementInfo::PlacementUnit *lhs, PlacementInfo::PlacementUnit *rhs) const
+    {
+        return lhs->getId() < rhs->getId();
+    }
+};
+
+struct Packing_Netcompare
+{
+    inline bool operator()(PlacementInfo::PlacementNet *lhs, PlacementInfo::PlacementNet *rhs) const
+    {
+        return lhs->getId() < rhs->getId();
+    }
 };
 
 std::ostream &operator<<(std::ostream &os, PlacementInfo::PlacementMacro *curMacro);

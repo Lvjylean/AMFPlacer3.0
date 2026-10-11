@@ -27,15 +27,19 @@
 #include "readZip.h"
 #include "strPrint.h"
 #include "stringCheck.h"
+#include <algorithm>
 #include <assert.h>
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <limits.h>
 #include <map>
 #include <omp.h>
 #include <queue>
+#include <random>
 #include <set>
 #include <sstream>
+#include <stdlib.h>
 #include <string>
 #include <vector>
 
@@ -43,29 +47,6 @@
 // W. Li and D. Z. Pan, "A New Paradigm for FPGA Placement Without Explicit Packing,"
 // in IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems, vol. 38, no. 11, pp. 2113-2126,
 // Nov. 2019, doi: 10.1109/TCAD.2018.2877017.
-
-/**
- * @brief a utility struct for the comparison between PlacementInfo::PlacementUnit according to PU ID
- *
- * The default STL set for PlacementUnit pointers will lead to random iteration order of the PlacementUnits in a set and
- * lead to slight variation in the final packing result.
- *
- */
-struct Packing_PUcompare
-{
-    inline bool operator()(PlacementInfo::PlacementUnit *lhs, PlacementInfo::PlacementUnit *rhs) const
-    {
-        return lhs->getId() < rhs->getId();
-    }
-};
-
-struct Packing_Netcompare
-{
-    inline bool operator()(PlacementInfo::PlacementNet *lhs, PlacementInfo::PlacementNet *rhs) const
-    {
-        return lhs->getId() < rhs->getId();
-    }
-};
 
 /**
  * @brief ParallelCLBPacker will finally pack LUT/FF/MUX/CARRY elements into legal CLB sites in a parallel approach.
@@ -149,6 +130,7 @@ class ParallelCLBPacker
                 CLK = nullptr;
                 SR = nullptr;
                 CE = nullptr;
+                FFType = static_cast<DesignInfo::DesignCellType>(-1);
             }
         };
 
@@ -177,6 +159,7 @@ class ParallelCLBPacker
                 CLK = nullptr;
                 SR = nullptr;
                 CE = nullptr;
+                FFType = static_cast<DesignInfo::DesignCellType>(-1);
             }
             return *this;
         };
@@ -203,6 +186,12 @@ class ParallelCLBPacker
             return FFs;
         }
 
+        inline void clear()
+        {
+            FFs.clear();
+            reset();
+        }
+
         /**
          * @brief clear the control set information in this PackedControlSet (only when there is no FF in this set)
          *
@@ -214,6 +203,7 @@ class ParallelCLBPacker
             CLK = nullptr;
             SR = nullptr;
             CE = nullptr;
+            FFType = static_cast<DesignInfo::DesignCellType>(-1);
         }
 
         /**
@@ -259,6 +249,8 @@ class ParallelCLBPacker
             assert(i >= 0);
             FFs.erase(FFs.begin() + i);
             updateCSID();
+            if (FFs.size() == 0)
+                reset();
         }
 
         inline void updateCSID()
@@ -375,7 +367,7 @@ class ParallelCLBPacker
         DesignInfo::DesignNet *CLK = nullptr;
         DesignInfo::DesignNet *SR = nullptr;
         DesignInfo::DesignNet *CE = nullptr;
-        DesignInfo::DesignCellType FFType;
+        DesignInfo::DesignCellType FFType = static_cast<DesignInfo::DesignCellType>(-1);
         std::vector<DesignInfo::DesignCell *> FFs;
         bool mustMainSlots = false;
     };
@@ -423,6 +415,7 @@ class ParallelCLBPacker
 
         ~PackingCLBSite()
         {
+            delete bestDeterminedClusterInSite;
             if (determinedClusterInSite)
             {
                 delete determinedClusterInSite;
@@ -432,6 +425,142 @@ class ParallelCLBPacker
                 delete tmpCluster;
             }
         }
+
+        /**
+         * @brief SiteBELMapping is a contain recording the mapping between cells and BELs.
+         *
+         * We hold the cell information in arrays of slots.
+         *
+         */
+        class SiteBELMapping
+        {
+          public:
+            SiteBELMapping()
+            {
+                Carry = nullptr;
+                for (int i = 0; i < 2; i++)
+                {
+                    MuxF8[i] = nullptr;
+                    for (int j = 0; j < 2; j++)
+                    {
+                        MuxF7[i][j] = nullptr;
+                        for (int k = 0; k < 4; k++)
+                        {
+                            LUTs[i][j][k] = nullptr;
+                            FFs[i][j][k] = nullptr;
+                        }
+                    }
+                }
+            }
+            SiteBELMapping &operator=(const SiteBELMapping &anotherMapping)
+            {
+                Carry = anotherMapping.Carry;
+                for (int i = 0; i < 2; i++)
+                {
+                    MuxF8[i] = anotherMapping.MuxF8[i];
+                    for (int j = 0; j < 2; j++)
+                    {
+                        MuxF7[i][j] = anotherMapping.MuxF7[i][j];
+                        for (int k = 0; k < 4; k++)
+                        {
+                            LUTs[i][j][k] = anotherMapping.LUTs[i][j][k];
+                            FFs[i][j][k] = anotherMapping.FFs[i][j][k];
+                        }
+                    }
+                }
+                return (*this);
+            }
+
+            inline void print() const
+            {
+                for (int i = 0; i < 2; i++)
+                {
+                    for (int j = 0; j < 2; j++)
+                    {
+                        for (int k = 0; k < 4; k++)
+                        {
+                            if (LUTs[i][j][k])
+                            {
+                                std::cout << "i,j,k:" << i << "," << j << "," << k << "   " << LUTs[i][j][k] << "\n";
+                            }
+                            if (FFs[i][j][k])
+                            {
+                                std::cout << "i,j,k:" << i << "," << j << "," << k << "   " << FFs[i][j][k] << "\n";
+                            }
+                        }
+                    }
+                }
+            }
+
+            inline bool canDirectConnectInSlot(DesignInfo::DesignCell *targetLUT,
+                                               DesignInfo::DesignCell *targetFF) const
+            {
+                int i, j, k;
+                return findDirectConnectSlot(targetLUT, targetFF, i, j, k);
+            }
+
+            inline bool findDirectConnectSlot(DesignInfo::DesignCell *lut, DesignInfo::DesignCell *ff,
+                                              int &half, int &lane, int &row) const
+            {
+                for (int i = 0; i < 2; ++i)
+                    for (int j = 0; j < 2; ++j)
+                    {
+                        if ((lut->isLUT6() && j == 1) || !CLBSiteLegality::canPlaceFF(*this, ff, i, j)) continue;
+                        for (int k = 0; k < 4; ++k)
+                            if (!LUTs[i][j][k] && !FFs[i][j][k] &&
+                                CLBSiteLegality::lutPairCompatible(lut, LUTs[i][1-j][k]))
+                            {
+                                half=i; lane=j; row=k;
+                                return true;
+                            }
+                    }
+                return false;
+            }
+
+            inline void addLUTFFPair(DesignInfo::DesignCell *lut, DesignInfo::DesignCell *ff)
+            {
+                int i, j, k;
+                if (!findDirectConnectSlot(lut, ff, i, j, k))
+                    throw std::runtime_error("No legal LUT/FF slot at detailed-placement commit");
+                LUTs[i][j][k]=lut;
+                FFs[i][j][k]=ff;
+            }
+
+            inline void removeLUTFFPair(DesignInfo::DesignCell *targetLUT, DesignInfo::DesignCell *targetFF)
+            {
+                for (int i = 0; i < 2; i++)
+                {
+                    for (int j = 0; j < 2; j++)
+                    {
+                        for (int k = 0; k < 4; k++)
+                        {
+                            if (LUTs[i][j][k] == targetLUT)
+                            {
+                                LUTs[i][j][k] = nullptr;
+                            }
+                            if (FFs[i][j][k] == targetFF)
+                            {
+                                FFs[i][j][k] = nullptr;
+                            }
+                        }
+                    }
+                }
+                return;
+            }
+
+            ~SiteBELMapping()
+            {
+            }
+
+            DesignInfo::DesignCell *LUTs[2][2][4]; // [bottom_Or_Top][6 or 5][which Slot]
+            DesignInfo::DesignCell *FFs[2][2][4];  // [bottom_Or_Top][FF or FF2][which Slot]
+            DesignInfo::DesignCell *MuxF7[2][2];   // [bottom_Or_Top][which Slot]
+            DesignInfo::DesignCell *MuxF8[2];
+            DesignInfo::DesignCell *Carry;
+
+            const std::string MuxF8SlotNames[2] = {"F8MUX_BOT", "F8MUX_TOP"};
+            const std::string MuxF7SlotNames[2][2] = {{"F7MUX_AB", "F7MUX_CD"}, {"F7MUX_EF", "F7MUX_GH"}};
+        };
 
         /**
          * @brief PackingCLBCluster is a container of cells/PlacementUnits which can be packed in the corresponding CLB
@@ -873,6 +1002,21 @@ class ParallelCLBPacker
                 assert(false && "should not reach here");
             }
 
+            void setControlSet(SiteBELMapping &slopMapping)
+            {
+                for (int i = 0; i < FFControlSets.size(); i++)
+                {
+                    FFControlSets[i].clear();
+                    for (int k = 0; k < 4; k++)
+                    {
+                        if (slopMapping.FFs[i / 2][i % 2][k])
+                        {
+                            FFControlSets[i].addFF(slopMapping.FFs[i / 2][i % 2][k]);
+                        }
+                    }
+                }
+            }
+
             /**
              * @brief remove some PlacementInfo::PlacementUnit from the cluster for later determined cluster
              * construction of this site
@@ -881,6 +1025,11 @@ class ParallelCLBPacker
              */
             void removePUToConstructDetCluster(PlacementInfo::PlacementUnit *tmpPU)
             {
+                if (PUs.find(tmpPU) == PUs.end())
+                {
+                    printMyself();
+                    std::cout << "removing PU: " << tmpPU << "\n";
+                }
                 assert(PUs.find(tmpPU) != PUs.end());
                 std::vector<DesignInfo::DesignCell *> cellsToRemove(0);
                 if (auto unpackCell = dynamic_cast<PlacementInfo::PlacementUnpackedCell *>(tmpPU))
@@ -1101,7 +1250,8 @@ class ParallelCLBPacker
 
                 if (parentPackingCLB->getLUTRAMMacro())
                 {
-                    for (auto cell : parentPackingCLB->getLUTRAMMacro()->getCells())
+                    for (auto macro : parentPackingCLB->getLUTRAMMacros())
+                    for (auto cell : macro->getCells())
                     {
                         res.insert(cell);
                     }
@@ -1353,10 +1503,9 @@ class ParallelCLBPacker
                         HiFPlacer_hashprimes[(unsigned char)(~(parentPackingCLB->getCarryMacro()->getId()) & 0xff)];
                     hashId %= 10001777;
                 }
-                if (parentPackingCLB->getLUTRAMMacro())
+                for (auto macro:parentPackingCLB->getLUTRAMMacros())
                 {
-                    hashId +=
-                        HiFPlacer_hashprimes[(unsigned char)(~(parentPackingCLB->getLUTRAMMacro()->getId()) & 0xff)];
+                    hashId += HiFPlacer_hashprimes[(unsigned char)(~(macro->getId()) & 0xff)];
                     hashId %= 10001777;
                 }
                 for (auto tmpPU : PUs)
@@ -1904,6 +2053,29 @@ class ParallelCLBPacker
             return priorityQueue.size();
         }
 
+        inline bool isDirectConnectLUTFF(DesignInfo::DesignCell *tgtLUT, DesignInfo::DesignCell *tgtFF)
+        {
+            if (!tgtFF)
+                return false;
+            for (auto FFPin : tgtFF->getPins())
+            {
+                if (FFPin->getPinType() == DesignInfo::PinType_D)
+                {
+                    if (FFPin->getNet())
+                    {
+                        if (FFPin->getNet()->getDriverPins().size() == 1)
+                        {
+                            if (FFPin->getNet()->getDriverPins()[0]->getCell() == tgtLUT)
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
         const PackingCLBCluster *getPriorityQueueTop()
         {
             assert(priorityQueue.size());
@@ -2046,9 +2218,8 @@ class ParallelCLBPacker
          */
         inline void addLUTRAMMacro()
         {
-            assert(determinedClusterInSite == nullptr);
             assert(LUTRAMMacro);
-            determinedClusterInSite = new PackingCLBCluster(this);
+            if(!determinedClusterInSite) determinedClusterInSite = new PackingCLBCluster(this);
             determinedClusterInSite->clusterHash();
             determinedClusterInSite->updateScoreInSite();
         }
@@ -2059,6 +2230,13 @@ class ParallelCLBPacker
             assert(_NonCLBCell);
             isNonCLBSite = true;
             nonCLBCell = _NonCLBCell;
+        }
+
+        inline void clearNonCLBCell()
+        {
+            assert(determinedClusterInSite == nullptr);
+            nonCLBCell = nullptr;
+            isNonCLBSite = true;
         }
 
         inline bool checkIsPrePackedSite()
@@ -2100,6 +2278,7 @@ class ParallelCLBPacker
             return carryCell;
         }
 
+        const std::vector<PlacementInfo::PlacementMacro*> &getLUTRAMMacros() const { return LUTRAMMacros; }
         inline PlacementInfo::PlacementMacro *getLUTRAMMacro()
         {
             return LUTRAMMacro;
@@ -2168,121 +2347,6 @@ class ParallelCLBPacker
 
             return totalPin;
         }
-
-        /**
-         * @brief SiteBELMapping is a contain recording the mapping between cells and BELs.
-         *
-         * We hold the cell information in arrays of slots.
-         *
-         */
-        class SiteBELMapping
-        {
-          public:
-            SiteBELMapping()
-            {
-                Carry = nullptr;
-                for (int i = 0; i < 2; i++)
-                {
-                    MuxF8[i] = nullptr;
-                    for (int j = 0; j < 2; j++)
-                    {
-                        MuxF7[i][j] = nullptr;
-                        for (int k = 0; k < 4; k++)
-                        {
-                            LUTs[i][j][k] = nullptr;
-                            FFs[i][j][k] = nullptr;
-                        }
-                    }
-                }
-            }
-            SiteBELMapping &operator=(const SiteBELMapping &anotherMapping)
-            {
-                Carry = anotherMapping.Carry;
-                for (int i = 0; i < 2; i++)
-                {
-                    MuxF8[i] = anotherMapping.MuxF8[i];
-                    for (int j = 0; j < 2; j++)
-                    {
-                        MuxF7[i][j] = anotherMapping.MuxF7[i][j];
-                        for (int k = 0; k < 4; k++)
-                        {
-                            LUTs[i][j][k] = anotherMapping.LUTs[i][j][k];
-                            FFs[i][j][k] = anotherMapping.FFs[i][j][k];
-                        }
-                    }
-                }
-                return (*this);
-            }
-
-            inline bool canDirectConnectInSlot(DesignInfo::DesignCell *targetLUT,
-                                               DesignInfo::DesignCell *targetFF) const
-            {
-                int i, j, k;
-                return findDirectConnectSlot(targetLUT, targetFF, i, j, k);
-            }
-
-            inline bool findDirectConnectSlot(DesignInfo::DesignCell *lut, DesignInfo::DesignCell *ff,
-                                              int &half, int &lane, int &row) const
-            {
-                for (int i = 0; i < 2; ++i)
-                    for (int j = 0; j < 2; ++j)
-                    {
-                        if ((lut->isLUT6() && j == 1) || !CLBSiteLegality::canPlaceFF(*this, ff, i, j)) continue;
-                        for (int k = 0; k < 4; ++k)
-                            if (!LUTs[i][j][k] && !FFs[i][j][k] &&
-                                CLBSiteLegality::lutPairCompatible(lut, LUTs[i][1-j][k]))
-                            {
-                                half=i; lane=j; row=k;
-                                return true;
-                            }
-                    }
-                return false;
-            }
-
-            inline void addLUTFFPair(DesignInfo::DesignCell *lut, DesignInfo::DesignCell *ff)
-            {
-                int i, j, k;
-                if (!findDirectConnectSlot(lut, ff, i, j, k))
-                    throw std::runtime_error("No legal LUT/FF slot at detailed-placement commit");
-                LUTs[i][j][k]=lut;
-                FFs[i][j][k]=ff;
-            }
-
-            inline void removeLUTFFPair(DesignInfo::DesignCell *targetLUT, DesignInfo::DesignCell *targetFF)
-            {
-                for (int i = 0; i < 2; i++)
-                {
-                    for (int j = 0; j < 2; j++)
-                    {
-                        for (int k = 0; k < 4; k++)
-                        {
-                            if (LUTs[i][j][k] == targetLUT)
-                            {
-                                LUTs[i][j][k] = nullptr;
-                            }
-                            if (FFs[i][j][k] == targetFF)
-                            {
-                                FFs[i][j][k] = nullptr;
-                            }
-                        }
-                    }
-                }
-                return;
-            }
-
-            ~SiteBELMapping()
-            {
-            }
-
-            DesignInfo::DesignCell *LUTs[2][2][4]; // [bottom_Or_Top][6 or 5][which Slot]
-            DesignInfo::DesignCell *FFs[2][2][4];  // [bottom_Or_Top][FF or FF2][which Slot]
-            DesignInfo::DesignCell *MuxF7[2][2];   // [bottom_Or_Top][which Slot]
-            DesignInfo::DesignCell *MuxF8[2];
-            DesignInfo::DesignCell *Carry;
-
-            const std::string MuxF8SlotNames[2] = {"F8MUX_BOT", "F8MUX_TOP"};
-            const std::string MuxF7SlotNames[2][2] = {{"F7MUX_AB", "F7MUX_CD"}, {"F7MUX_EF", "F7MUX_GH"}};
-        };
 
         void mapCarryRelatedCellsToSlots(PlacementInfo::PlacementMacro *_CARRYChain, float siteOffset);
         void mapLUTRAMRelatedCellsToSlots(PlacementInfo::PlacementMacro *_LUTRAMMacro);
@@ -2413,9 +2477,18 @@ class ParallelCLBPacker
          */
         void finalMapToSlots()
         {
-            if (determinedClusterInSite)
+            if (determinedClusterInSite && !isNonCLBSite)
             {
                 best_DirectConnect = -100000000;
+
+                slotMapping = SiteBELMapping();
+                mappedCells.clear();
+                mappedLUTs.clear();
+                mappedFFs.clear();
+                best_SlotMapping = SiteBELMapping();
+                best_mappedCells.clear();
+                best_mappedLUTs.clear();
+                best_mappedFFs.clear();
                 if (checkIsCarrySite())
                 {
                     finalMapToSlotsForCarrySite();
@@ -2435,6 +2508,35 @@ class ParallelCLBPacker
                 else
                 {
                     // assert(false && "undefined packing situation");
+                }
+
+                if (determinedClusterInSite)
+                {
+                    unsigned int FFCnt = 0;
+                    for (auto &CSFF : determinedClusterInSite->getFFControlSets())
+                        FFCnt += CSFF.getFFs().size();
+
+                    if (FFCnt != mappedFFs.size())
+                    {
+                        std::cout << "FFCnt: " << FFCnt << " mappedFFs.size():" << mappedFFs.size() << "\n";
+                        determinedClusterInSite->printMyself();
+                        for (int i = 0; i < 2; i++)
+                        {
+                            for (int k = 0; k < 4; k++)
+                            {
+                                for (int j = 0; j < 2; j++)
+                                {
+                                    std::cout << "i,k,j:" << i << "," << k << "," << j << ":\n";
+                                    if (slotMapping.LUTs[i][j][k])
+                                        std::cout << slotMapping.LUTs[i][j][k] << "\n";
+                                    if (slotMapping.FFs[i][j][k])
+                                        std::cout << slotMapping.FFs[i][j][k] << "\n";
+                                }
+                            }
+                        }
+                        assert(FFCnt == mappedFFs.size());
+                    }
+                    determinedClusterInSite->setControlSet(slotMapping);
                 }
             }
         }
@@ -2561,6 +2663,9 @@ class ParallelCLBPacker
                     }
                 }
             }
+            std::cout << "cell:" << targetCell << "\n";
+            std::cout << "macro:" << placementInfo->getPlacementUnitByCell(targetCell) << "\n";
+            std::cout << "target:" << CLBSite->getName() << "\n";
             assert(false && "the LUT should be found in slots.");
             return std::array<int, 3>{-1, -1, -1};
         }
@@ -2582,6 +2687,40 @@ class ParallelCLBPacker
             }
             assert(false && "the FF should be found in slots.");
             return std::array<int, 3>{-1, -1, -1};
+        }
+
+        inline void recordBestPacking()
+        {
+            if (bestDeterminedClusterInSite)
+            {
+                delete bestDeterminedClusterInSite;
+                bestDeterminedClusterInSite = nullptr;
+            }
+            if (determinedClusterInSite)
+                bestDeterminedClusterInSite = new PackingCLBCluster(determinedClusterInSite);
+            bestNonCLBCell = nonCLBCell;
+        }
+
+        inline void recoverToBestPacking()
+        {
+            if (determinedClusterInSite)
+            {
+                delete determinedClusterInSite;
+                determinedClusterInSite = nullptr;
+            }
+            if (bestDeterminedClusterInSite)
+                determinedClusterInSite = new PackingCLBCluster(bestDeterminedClusterInSite);
+            nonCLBCell = bestNonCLBCell;
+        }
+
+        inline bool isTimingPathLenFactorDisabled()
+        {
+            return noTimingPathLenFactor;
+        }
+
+        inline void setTimingPathLenFactorTo(bool enable)
+        {
+            noTimingPathLenFactor = !enable;
         }
 
       private:
@@ -2652,6 +2791,8 @@ class ParallelCLBPacker
         std::map<PlacementInfo::PlacementUnit *, int, Packing_PUcompare> PU2TopCnt;
         const std::vector<PackingCLBSite *> &PUId2PackingCLBSite;
         PackingCLBCluster *determinedClusterInSite = nullptr;
+        PackingCLBCluster *bestDeterminedClusterInSite = nullptr;
+
         float detScore = 0;
 
         bool isCarrySite = false;
@@ -2659,11 +2800,14 @@ class ParallelCLBPacker
         bool isNonCLBSite = false;
         PlacementInfo::PlacementMacro *CARRYChain = nullptr;
         PlacementInfo::PlacementMacro *LUTRAMMacro = nullptr;
+        std::vector<PlacementInfo::PlacementMacro*> LUTRAMMacros;
         DesignInfo::DesignCell *carryCell = nullptr;
         DesignInfo::DesignCell *nonCLBCell = nullptr;
+        DesignInfo::DesignCell *bestNonCLBCell = nullptr;
         int CARRYChainSiteOffset = -1;
 
         bool debug = false;
+        bool noTimingPathLenFactor = false;
 
         std::set<DesignInfo::DesignCell *> mappedCells;
         std::set<DesignInfo::DesignCell *> mappedLUTs;
@@ -2693,6 +2837,20 @@ class ParallelCLBPacker
         {
         }
     } siteWithScore;
+
+    /**
+     * @brief helper struct for candidate site sorting
+     *
+     */
+    typedef struct _deviceSiteWithScore
+    {
+        DeviceInfo::DeviceSite *site;
+        float score;
+
+        _deviceSiteWithScore(DeviceInfo::DeviceSite *site, float score) : site(site), score(score)
+        {
+        }
+    } DeviceSiteWithScore;
 
     /**
      * @brief helper struct for candidate site sorting
@@ -2770,11 +2928,23 @@ class ParallelCLBPacker
      */
     void packCLBs(int packIterNum, bool doExceptionHandling, bool debug = false);
 
+    void updatePUCell2PackingSite();
+
+    void recordBestPacking();
+    void recoverToBestPacking();
+    void partiallyRecoverToBestPacking(std::set<PackingCLBSite *> &selectedPackingSites);
+    void partiallyRecordBestPacking(std::set<PackingCLBSite *> &selectedPackingSites);
+
     void addNonCLBPackingSites();
 
+    bool tryAcceptLocalTimingDetailedPlacement(std::set<PlacementInfo::PlacementUnit *, Packing_PUcompare> &movedPUs,
+                                               std::set<ParallelCLBPacker::PackingCLBSite *> &changedPackingSites);
     int timingDrivenDetailedPlacement_shortestPath_intermediate();
-    int timingDrivenDetailedPlacement_shortestPath(int iterId, float displacementRatio);
-    int timingDrivenDetailedPlacement_swap(int iterId);
+    int timingDrivenDetailedPlacement_shortestPath(int iterId, float displacementRatio, float pathCriticalRatio = 0.9);
+    int timingDrivenDetailedPlacement_shortestPath(int iterId, float displacementRatio, float pathCriticalRatio,
+                                                   int lowIndex, int highIndex);
+    int timingDrivenDetailedPlacement_swap(float disOffset, int iterId, bool preserverCriticalPath = false,
+                                           float pathCriticalRatio = 0.9);
     int timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSlotMapping();
     /**
      * @brief handle the PlacementUnits that cannot be packed during the parallel procedure
@@ -2806,7 +2976,8 @@ class ParallelCLBPacker
     std::vector<DeviceInfo::DeviceSite *> *
     findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCellType, float targetX, float targetY,
                                float displacementLowerbound, float displacementUpperbound, float y2xRatio,
-                               bool clockRegionAware, float v1x, float v1y, float v2x, float v2y, int numLimit);
+                               bool clockRegionAware, float v1x, float v1y, float v2x, float v2y, int numLimit,
+                               bool sortCandidate = false);
 
     /**
      * @brief try to find a legal location for the given PlacementUnit when most of PlacementUnits are packed into CLB
@@ -2945,12 +3116,21 @@ class ParallelCLBPacker
     std::vector<PackingCLBSite *> cellId2PackingSite;
 
     float y2xRatio = 1.0;
+    bool noSectorGuided = false;
+    bool useBigWindow = false;
+    float criticalPathThr = 0.9;
+
+    bool useLocalFineTune = false;
+    bool noTimingPathLenFactor = false;
 
     /**
      * @brief whether make clock region become constraints
      *
      */
     bool clockRegionAware = true;
+    int lowIndex = -1000;
+    int highIndex = 1000;
+    int fineTuneCandidateNum = -10;
 };
 std::ostream &operator<<(std::ostream &os, const ParallelCLBPacker::PackingCLBSite::PackingCLBCluster *tmpCluster);
 // inline bool operator<(const ParallelCLBPacker::PackingCLBSite::PackingCLBCluster &A,

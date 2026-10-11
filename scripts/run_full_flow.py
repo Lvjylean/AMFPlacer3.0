@@ -81,7 +81,8 @@ def run(root, args):
                 'cellType2fixedAmo file', 'cellType2sharedCellType file', 'sharedCellType2BELtype file',
                 'fixed units file', 'unpredictable macro file', 'designCluster', 'DSP registered outputs file',
                 'clock resource capacity file', 'external floorplan membership file',
-                'external floorplan regions file', 'external floorplan manifest file'):
+                'external floorplan regions file', 'external floorplan manifest file',
+                'SRL control metadata file'):
         if config.get(key):
             p = (root / config[key]).resolve()
             inputs[key] = dict(path=str(p), sha256=digest(p))

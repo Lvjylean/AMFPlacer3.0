@@ -103,6 +103,10 @@ static void benchmark(Adjacency &adj, int rights, int target, const std::string 
         ++count;
     }
     require(count <= target, "exceeded requested matching count");
+    if(const char *path=std::getenv("AMF_MATCHER_ASSIGNMENT_FILE")) {
+        std::ofstream out(path); require(bool(out),"cannot write assignment");
+        for(int left=0;left<(int)adj.size();++left)out<<left<<'\t'<<matcher.getMatchedRightNode(left)<<'\n';
+    }
     std::cout << std::setprecision(15) << "{\"backend\":\"" << backend << "\",\"left\":" << adj.size()
               << ",\"right\":" << rights << ",\"threads\":" << threads << ",\"matched\":" << count
               << ",\"forward_bias\":" << forwardBias << ",\"cost\":" << cost << ",\"build_seconds\":" << buildSeconds

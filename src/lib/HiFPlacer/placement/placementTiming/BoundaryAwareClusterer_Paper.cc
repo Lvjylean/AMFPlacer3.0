@@ -52,7 +52,7 @@ int integer(std::map<std::string, std::string> &config, const char *key, int fal
 }
 }
 
-void BoundaryAwareClusterer::runPaper()
+void BoundaryAwareClusterer::runPaper(bool deferSLRSpreading)
 {
     AMF_PROFILE_FUNCTION("boundary_clustering");
     placement->clearRegionPreferences();
@@ -152,12 +152,10 @@ void BoundaryAwareClusterer::runPaper()
                 float slrLeft = selected.x0, slrRight = selected.x1;
                 for (const auto &side : regions) if (side.slr == selected.slr)
                 { slrLeft = std::min(slrLeft, side.x0); slrRight = std::max(slrRight, side.x1); }
-                // Keep the direction even after crossing the center; never
-                // recalculate it from a later QP/spreading position.
+                // HPIO keeps the existing outer-region, one-sided rule. SLRs
+                // use the upstream outer/middle cases rotated from X to Y.
                 if (guideX) pref.pullX = (selected.x0 + selected.x1 < slrLeft + slrRight) ? -1 : 1;
-                float lx, hx, ly, hy; offsets(pu, lx, hx, ly, hy);
-                if (guideY) pref.pullY = pu->Y() + ly < selected.y0 ? 1 :
-                                        (pu->Y() + hy > selected.y1 ? -1 : 0);
+                if (guideY) pref.pullY = hierarchical_boundary::slrPullDirection(regions, target);
                 preferences[pu] = pref;
                 targets[pu] = target;
             }
@@ -180,22 +178,34 @@ void BoundaryAwareClusterer::runPaper()
                    << preferences.size() << '\t' << choice.slr << '\t' << choice.slrVotes << '\t'
                    << choice.region << '\t' << choice.sideVotes << '\t' << guideX << '\t' << guideY << '\t' << reason << '\n';
     }
-    spreadPaper(placement->paperSLRStage());
+    // The first generation keeps its original cluster selection, but must
+    // not alter X coordinates before fixedCLB initialization completes.
+    if (deferSLRSpreading && placement->paperSLRStage())
+        print_info("Paper boundary SLR X spreading deferred until after fixedCLB initialization");
+    else
+        spreadPaper(placement->paperSLRStage());
     print_info("Paper boundary clustering accepted " + std::to_string(accepted) + " clusters / " +
                std::to_string(selectedPUs) + " PUs; path threshold=" + std::to_string(threshold) +
                " cell limit=" + std::to_string(maxCells));
 }
 
+void BoundaryAwareClusterer::spreadPaperSLR()
+{
+    if (!placement->paperBoundaryClusteringEnabled() || !placement->paperSLRStage()) return;
+    print_info("Paper boundary SLR X spreading at first phase entry");
+    spreadPaper(true);
+}
+
 void BoundaryAwareClusterer::advancePaperStage()
 {
     if (!placement->paperBoundaryClusteringEnabled() || !placement->paperSLRStage()) return;
-    // Called only after the first normal GP spreading pass, never by the
-    // temporary fixedCLB QP pass. Both phases use the existing iteration budget.
+    // Called after the independently budgeted SLR GP phase ends (budget or
+    // normal convergence), never after an individual spread or fixedCLB QP.
     placement->clipPaperRegionLocations();
     placement->setPaperSLRStage(false);
     placement->refreshRegionPreferences();
     spreadPaper(false);
-    print_info("Paper boundary phase: SLR guidance complete; HPIO guidance prepared (SLR fence retained)");
+    print_info("Paper boundary phase: HPIO guidance prepared (SLR anchors disabled; SLR fence retained)");
 }
 
 void BoundaryAwareClusterer::spreadPaper(bool slrStage)
@@ -203,6 +213,21 @@ void BoundaryAwareClusterer::spreadPaper(bool slrStage)
     AMF_PROFILE_FUNCTION("boundary_spreading");
     const auto &regions = model->getRegions();
     const auto &preferences = placement->getRegionPreferences();
+
+    // BEGIN SLR_ROOM_MOVEMENT_AUDIT: observation only, before room-making.
+    struct SLRRoomBefore { PU *pu; float x, y; int slr; };
+    std::vector<SLRRoomBefore> slrRoomBefore;
+    static unsigned long long slrRoomCallCounter = 0;
+    unsigned long long slrRoomCall = 0;
+    if (slrStage)
+    {
+        slrRoomCall = ++slrRoomCallCounter;
+        slrRoomBefore.reserve(placement->getPlacementUnits().size());
+        for (auto pu : placement->getPlacementUnits())
+            slrRoomBefore.push_back({pu, pu->X(), pu->Y(),
+                regions.at(model->regionAt(pu->X(), pu->Y())).slr});
+    }
+    // END SLR_ROOM_MOVEMENT_AUDIT
     // SLR phase: whole-die X expansion, with no HPIO-side attraction/fence yet.
     // HPIO phase: selected-side Y expansion, bounded by that die's Y limits.
     std::map<int, PhysicalBoundaryModel::Region> boxes;
@@ -289,5 +314,58 @@ void BoundaryAwareClusterer::spreadPaper(bool slrStage)
                            << incoming[key] << '\t' << inside << '\t' << low << '\t' << high << '\t'
                            << range.first << '\t' << range.second << '\t' << moved << '\n';
     }
+
+    // BEGIN SLR_ROOM_MOVEMENT_AUDIT: measure actual locations AFTER internal clipping.
+    if (slrStage)
+    {
+        struct Movement
+        {
+            size_t movedPUs = 0, movedInstances = 0;
+            double absDx = 0, absDy = 0, maxDx = 0, maxDy = 0;
+        };
+        std::map<int, Movement> movement;
+        for (const auto &before : slrRoomBefore)
+        {
+            const double dx = std::fabs(double(before.pu->X()) - before.x);
+            const double dy = std::fabs(double(before.pu->Y()) - before.y);
+            if (dx + dy <= 1e-5) continue;
+            auto &m = movement[before.slr];
+            ++m.movedPUs;
+            m.movedInstances += instanceCount(before.pu);
+            m.absDx += dx; m.absDy += dy;
+            m.maxDx = std::max(m.maxDx, dx); m.maxDy = std::max(m.maxDy, dy);
+        }
+        std::ofstream movementReport;
+        if (!config["BoundaryReportDirectory"].empty())
+        {
+            movementReport.open(config["BoundaryReportDirectory"] +
+                                "/slr_x_room_movement.tsv", std::ios::app);
+            if (movementReport.tellp() == 0)
+                movementReport << "call\tslr\tincoming_instances\tmoved_pus\tmoved_real_instances"
+                               << "\tsum_abs_dx\tmean_abs_dx_moved_pu\tmax_abs_dx"
+                               << "\tsum_abs_dy\tmax_abs_dy\tstatus\n";
+            movementReport.precision(10);
+        }
+        for (const auto &group : boxes)
+        {
+            const int slr = group.first;
+            const auto &m = movement[slr];
+            const char *status = incoming[slr] <= 0 ? "no_incoming" :
+                                 (m.movedPUs ? "moved" : "no_actual_movement");
+            if (movementReport)
+                movementReport << slrRoomCall << '\t' << slr << '\t' << incoming[slr] << '\t'
+                               << m.movedPUs << '\t' << m.movedInstances << '\t'
+                               << m.absDx << '\t' << (m.movedPUs ? m.absDx / m.movedPUs : 0) << '\t'
+                               << m.maxDx << '\t' << m.absDy << '\t' << m.maxDy << '\t' << status << '\n';
+            print_info("SLR_X_ROOM_MOVEMENT call=" + std::to_string(slrRoomCall) +
+                       " slr=" + std::to_string(slr) + " incoming=" + std::to_string(incoming[slr]) +
+                       " moved_pus=" + std::to_string(m.movedPUs) +
+                       " moved_real_instances=" + std::to_string(m.movedInstances) +
+                       " sum_abs_dx=" + std::to_string(m.absDx) +
+                       " max_abs_dx=" + std::to_string(m.maxDx) +
+                       " sum_abs_dy=" + std::to_string(m.absDy) + " status=" + status);
+        }
+    }
+    // END SLR_ROOM_MOVEMENT_AUDIT
     placement->updateElementBinGrid();
 }

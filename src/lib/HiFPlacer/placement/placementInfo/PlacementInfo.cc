@@ -38,6 +38,11 @@ PlacementInfo::PlacementInfo(DesignInfo *designInfo, DeviceInfo *deviceInfo,
         y2xRatio = std::stof(JSONCfg["y2xRatio"]);
     }
 
+    if (JSONCfg.find("checkSLICEMBug") != JSONCfg.end())
+    {
+        SLICEMBug = JSONCfg["checkSLICEMBug"] == "true";
+    }
+
     print_status("Loading compatiblePlacementTable");
     compatiblePlacementTable = loadCompatiblePlacementTable(cellType2fixedAmoFileName, cellType2sharedCellTypeFileName,
                                                             sharedCellType2BELtypeFileName);
@@ -69,6 +74,7 @@ PlacementInfo::PlacementInfo(DesignInfo *designInfo, DeviceInfo *deviceInfo,
     }
 
     simplePlacementTimingInfo = new PlacementTimingInfo(designInfo, deviceInfo, JSONCfg);
+    PUsSkewRisky.clear();
 
     print_status("New Placement Info Created.");
 }
@@ -335,9 +341,9 @@ void PlacementInfo::createGridBins(float _binWidth, float _binHeight)
                 }
         }
     }
-    if (LUTFFBinGrid.size())
+    if (CLBBinGrid.size())
     {
-        for (auto &tmpRow : LUTFFBinGrid)
+        for (auto &tmpRow : CLBBinGrid)
             for (auto &curBin : tmpRow)
             {
                 delete curBin;
@@ -378,7 +384,7 @@ void PlacementInfo::createGridBins(float _binWidth, float _binHeight)
 
     // extra binGrid for LUTFF utilization adjustment and a global bin grid for all types of elememnts to evelaute
     // routability
-    LUTFFBinGrid.clear();
+    CLBBinGrid.clear();
     for (curBottomY = startY, i = 0; curBottomY < endY - eps; curBottomY += binHeight, i++)
     {
         std::vector<PlacementBinInfo *> tmpBELGridRow;
@@ -396,7 +402,7 @@ void PlacementInfo::createGridBins(float _binWidth, float _binHeight)
             tmpBELGridRow.push_back(newBin);
             tmpGlobalBELGridRow.push_back(globalNewBin);
         }
-        LUTFFBinGrid.push_back(tmpBELGridRow);
+        CLBBinGrid.push_back(tmpBELGridRow);
         globalBinGrid.push_back(tmpGlobalBELGridRow);
     }
     // a set for grid check
@@ -901,14 +907,23 @@ void PlacementInfo::resetElementBinGrid()
                 curBin->reset();
 }
 
-void PlacementInfo::updateElementBinGrid()
+void PlacementInfo::updateElementBinGrid(bool checkGridForPackingRouting, bool bypassBRAMDSP)
 {
     AMF_PROFILE_FUNCTION("placement_bookkeeping");
     resetElementBinGrid();
     cellId2location.resize(designInfo->getNumCells());
-
+    // for (auto curPU : placementUnits)
+    // {
+    //     if (!curPU->isLocked() && !curPU->isFixed())
+    //         enforceLegalizeXYInArea(curPU);
+    // }
     for (auto curPU : placementUnits)
     {
+        if (bypassBRAMDSP)
+        {
+            if (curPU->checkHasBRAM() || curPU->checkHasDSP() || curPU->checkHasURAM())
+                continue;
+        }
         if (auto curUnpackedCell = dynamic_cast<PlacementUnpackedCell *>(curPU))
         {
             int binIdX, binIdY;
@@ -1015,57 +1030,123 @@ void PlacementInfo::updateElementBinGrid()
         }
     }
 
-    for (auto &tmpRow : globalBinGrid)
+    if (checkGridForPackingRouting)
     {
-        for (auto &curBin : tmpRow)
+        for (auto &tmpRow : globalBinGrid)
         {
-            assert(curBin);
-            curBin->reset();
-        }
-    }
-
-    for (auto curPU : placementUnits)
-    {
-        if (auto curUnpackedCell = dynamic_cast<PlacementUnpackedCell *>(curPU))
-        {
-            int binIdX, binIdY;
-            float cellX = curUnpackedCell->X();
-            float cellY = curUnpackedCell->Y();
-            DesignInfo::DesignCell *curCell = curUnpackedCell->getCell();
-
-            if (curCell->isLUT() || curCell->isFF()) // currently we only resize LUT/FF
+            for (auto &curBin : tmpRow)
             {
-                getGridXY(cellX, cellY, binIdX, binIdY);
-                assert(globalBinGrid[binIdY][binIdX]->inRange(cellX, cellY));
-                assert(binIdY >= 0);
-                assert(binIdX >= 0);
-                assert((unsigned int)binIdY < globalBinGrid.size());
-                assert((unsigned int)binIdX < globalBinGrid[binIdY].size());
-                globalBinGrid[binIdY][binIdX]->addCell(curCell, 0);
+                assert(curBin);
+                curBin->reset();
             }
         }
-        else if (auto curMacro = dynamic_cast<PlacementMacro *>(curPU))
+
+        for (auto curPU : placementUnits)
         {
-            for (int vId = 0; vId < curMacro->getNumOfCells(); vId++)
+            if (curPU->checkHasBRAM() || curPU->checkHasDSP() || curPU->checkHasURAM())
+                continue;
+
+            if (auto curUnpackedCell = dynamic_cast<PlacementUnpackedCell *>(curPU))
             {
-                float offsetX_InMacro, offsetY_InMacro;
-                DesignInfo::DesignCellType cellType;
-                curMacro->getVirtualCellInfo(vId, offsetX_InMacro, offsetY_InMacro, cellType);
-                DesignInfo::DesignCell *curCell = curMacro->getCell(vId);
+                int binIdX, binIdY;
+                float cellX = curUnpackedCell->X();
+                float cellY = curUnpackedCell->Y();
+                DesignInfo::DesignCell *curCell = curUnpackedCell->getCell();
+
                 if (curCell->isLUT() || curCell->isFF()) // currently we only resize LUT/FF
                 {
-                    int binIdX, binIdY;
-                    float cellX = curMacro->X() + offsetX_InMacro;
-                    float cellY = curMacro->Y() + offsetY_InMacro;
-
                     getGridXY(cellX, cellY, binIdX, binIdY);
                     assert(globalBinGrid[binIdY][binIdX]->inRange(cellX, cellY));
-
                     assert(binIdY >= 0);
                     assert(binIdX >= 0);
                     assert((unsigned int)binIdY < globalBinGrid.size());
                     assert((unsigned int)binIdX < globalBinGrid[binIdY].size());
                     globalBinGrid[binIdY][binIdX]->addCell(curCell, 0);
+                }
+            }
+            else if (auto curMacro = dynamic_cast<PlacementMacro *>(curPU))
+            {
+                for (int vId = 0; vId < curMacro->getNumOfCells(); vId++)
+                {
+                    float offsetX_InMacro, offsetY_InMacro;
+                    DesignInfo::DesignCellType cellType;
+                    curMacro->getVirtualCellInfo(vId, offsetX_InMacro, offsetY_InMacro, cellType);
+                    DesignInfo::DesignCell *curCell = curMacro->getCell(vId);
+                    if (curCell->isLUT() || curCell->isFF()) // currently we only resize LUT/FF
+                    {
+                        int binIdX, binIdY;
+                        float cellX = curMacro->X() + offsetX_InMacro;
+                        float cellY = curMacro->Y() + offsetY_InMacro;
+
+                        getGridXY(cellX, cellY, binIdX, binIdY);
+                        assert(globalBinGrid[binIdY][binIdX]->inRange(cellX, cellY));
+
+                        assert(binIdY >= 0);
+                        assert(binIdX >= 0);
+                        assert((unsigned int)binIdY < globalBinGrid.size());
+                        assert((unsigned int)binIdX < globalBinGrid[binIdY].size());
+                        globalBinGrid[binIdY][binIdX]->addCell(curCell, 0);
+                    }
+                }
+            }
+        }
+
+        for (auto &curRow : CLBBinGrid)
+            for (auto curBin : curRow)
+                curBin->reset();
+        // assign LUT/FF to bin grid to find their neighbors easily
+        for (auto curPU : placementUnits)
+        {
+            if (curPU->checkHasBRAM() || curPU->checkHasDSP() || curPU->checkHasURAM())
+                continue;
+
+            if (auto curUnpackedCell = dynamic_cast<PlacementUnpackedCell *>(curPU))
+            {
+                int binIdX, binIdY;
+                float cellX = curUnpackedCell->X();
+                float cellY = curUnpackedCell->Y();
+                DesignInfo::DesignCell *curCell = curUnpackedCell->getCell();
+
+                if (curCell->isLUT() || curCell->isFF() || curCell->isCarry() || curCell->isMux())
+                {
+                    getGridXY(cellX, cellY, binIdX, binIdY);
+                    assert(CLBBinGrid[binIdY][binIdX]->inRange(cellX, cellY));
+                    assert(binIdY >= 0);
+                    assert(binIdX >= 0);
+                    assert((unsigned int)binIdY < CLBBinGrid.size());
+                    assert((unsigned int)binIdX < CLBBinGrid[binIdY].size());
+                    CLBBinGrid[binIdY][binIdX]->addCell(curCell,
+                                                        0); // we just use the bininfo to record LUTFF location
+                    cellId2location[curCell->getCellId()].X = cellX;
+                    cellId2location[curCell->getCellId()].Y = cellY;
+                }
+            }
+            else if (auto curMacro = dynamic_cast<PlacementMacro *>(curPU))
+            {
+                for (int vId = 0; vId < curMacro->getNumOfCells(); vId++)
+                {
+                    float offsetX_InMacro, offsetY_InMacro;
+                    DesignInfo::DesignCellType cellType;
+                    curMacro->getVirtualCellInfo(vId, offsetX_InMacro, offsetY_InMacro, cellType);
+                    DesignInfo::DesignCell *curCell = curMacro->getCell(vId);
+                    if (curCell->isLUT() || curCell->isFF() || curCell->isCarry() || curCell->isMux())
+                    {
+                        int binIdX, binIdY;
+                        float cellX = curMacro->X() + offsetX_InMacro;
+                        float cellY = curMacro->Y() + offsetY_InMacro;
+
+                        getGridXY(cellX, cellY, binIdX, binIdY);
+                        assert(CLBBinGrid[binIdY][binIdX]->inRange(cellX, cellY));
+
+                        assert(binIdY >= 0);
+                        assert(binIdX >= 0);
+                        assert((unsigned int)binIdY < CLBBinGrid.size());
+                        assert((unsigned int)binIdX < CLBBinGrid[binIdY].size());
+                        CLBBinGrid[binIdY][binIdX]->addCell(curCell,
+                                                            0); // we just use the bininfo to record LUTFF location
+                        cellId2location[curCell->getCellId()].X = cellX;
+                        cellId2location[curCell->getCellId()].Y = cellY;
+                    }
                 }
             }
         }
@@ -1092,62 +1173,6 @@ void PlacementInfo::adjustLUTFFUtilization_Packablity(float neighborDisplacement
     lastProgressWhenLUTFFUtilAdjust = getProgress();
 
     print_status("PlacementInfo: adjusting LUT/FF utilization based on Packablity");
-    for (auto &curRow : LUTFFBinGrid)
-        for (auto curBin : curRow)
-            curBin->reset();
-    // assign LUT/FF to bin grid to find their neighbors easily
-    for (auto curPU : placementUnits)
-    {
-        if (auto curUnpackedCell = dynamic_cast<PlacementUnpackedCell *>(curPU))
-        {
-            int binIdX, binIdY;
-            float cellX = curUnpackedCell->X();
-            float cellY = curUnpackedCell->Y();
-            DesignInfo::DesignCell *curCell = curUnpackedCell->getCell();
-
-            if (curCell->isLUT() || curCell->isFF())
-            {
-                getGridXY(cellX, cellY, binIdX, binIdY);
-                assert(LUTFFBinGrid[binIdY][binIdX]->inRange(cellX, cellY));
-                assert(binIdY >= 0);
-                assert(binIdX >= 0);
-                assert((unsigned int)binIdY < LUTFFBinGrid.size());
-                assert((unsigned int)binIdX < LUTFFBinGrid[binIdY].size());
-                LUTFFBinGrid[binIdY][binIdX]->addCell(curCell,
-                                                      0); // we just use the bininfo to record LUTFF location
-                cellId2location[curCell->getCellId()].X = cellX;
-                cellId2location[curCell->getCellId()].Y = cellY;
-            }
-        }
-        else if (auto curMacro = dynamic_cast<PlacementMacro *>(curPU))
-        {
-            for (int vId = 0; vId < curMacro->getNumOfCells(); vId++)
-            {
-                float offsetX_InMacro, offsetY_InMacro;
-                DesignInfo::DesignCellType cellType;
-                curMacro->getVirtualCellInfo(vId, offsetX_InMacro, offsetY_InMacro, cellType);
-                DesignInfo::DesignCell *curCell = curMacro->getCell(vId);
-                if (curCell->isLUT() || curCell->isFF())
-                {
-                    int binIdX, binIdY;
-                    float cellX = curMacro->X() + offsetX_InMacro;
-                    float cellY = curMacro->Y() + offsetY_InMacro;
-
-                    getGridXY(cellX, cellY, binIdX, binIdY);
-                    assert(LUTFFBinGrid[binIdY][binIdX]->inRange(cellX, cellY));
-
-                    assert(binIdY >= 0);
-                    assert(binIdX >= 0);
-                    assert((unsigned int)binIdY < LUTFFBinGrid.size());
-                    assert((unsigned int)binIdX < LUTFFBinGrid[binIdY].size());
-                    LUTFFBinGrid[binIdY][binIdX]->addCell(curCell,
-                                                          0); // we just use the bininfo to record LUTFF location
-                    cellId2location[curCell->getCellId()].X = cellX;
-                    cellId2location[curCell->getCellId()].Y = cellY;
-                }
-            }
-        }
-    }
 
     unsigned int cellNum = getCells().size();
     std::vector<float> &compatiblePlacementTable_cellId2Occupation = compatiblePlacementTable->getcellId2Occupation();
@@ -1293,6 +1318,10 @@ void PlacementInfo::adjustLUTFFUtilization_Routability(bool enfore)
         assert((unsigned int)leftBinX < globalBinGrid[bottomBinY].size());
         assert(topBinY >= 0);
         assert(rightBinX >= 0);
+        if (topBinY >= globalBinGrid.size())
+        {
+            topBinY = globalBinGrid.size() - 1;
+        }
         assert((unsigned int)topBinY < globalBinGrid.size());
         assert((unsigned int)rightBinX < globalBinGrid[topBinY].size());
 
@@ -2100,6 +2129,26 @@ void PlacementInfo::enhanceDDRNet()
             }
         }
     }
+    // for (auto curPNet : placementNets)
+    // {
+    //     if (auto curNet = curPNet->getDesignNet())
+    //     {
+    //         if (curNet->getName().find("CLKOUT") != std::string::npos)
+    //         {
+    //             curNet->setOverallTimingNetEnhancement(2);
+    //         }
+    //     }
+    // }
+    // for (auto curPNet : placementNets)
+    // {
+    //     if (auto curNet = curPNet->getDesignNet())
+    //     {
+    //         if (curNet->getName().find("BUFGT") != std::string::npos)
+    //         {
+    //             curNet->setOverallTimingNetEnhancement(50);
+    //         }
+    //     }
+    // }
 }
 
 bool PlacementInfo::checkClockUtilization(bool dump)
@@ -2411,4 +2460,103 @@ void PlacementInfo::refreshRegionPreferences()
         {regionPreferences.erase(pu);++removed;}
     }
     if(removed)print_info("Physical region preferences released for capacity/lifecycle: "+std::to_string(removed));
+}
+
+bool PlacementInfo::hasTimingEndpoint(DesignInfo::DesignCell *cell)
+{
+    auto &timingNodes = getTimingInfo()->getSimplePlacementTimingInfo();
+    return timingNodes[cell->getCellId()]->checkIsRegister();
+}
+
+void PlacementInfo::FFPartitioning()
+{
+    std::set<DesignInfo::DesignCell *> coloredCells;
+    FFBased_Clusters.clear();
+    for (auto tmpCell : getCells())
+    {
+        if (!hasTimingEndpoint(tmpCell) && coloredCells.find(tmpCell) == coloredCells.end())
+        {
+            std::vector<DesignInfo::DesignCell *> curCluster;
+            std::queue<DesignInfo::DesignCell *> nodeQ;
+            curCluster.clear();
+            curCluster.push_back(tmpCell);
+            coloredCells.insert(tmpCell);
+            nodeQ.push(tmpCell);
+
+            while (nodeQ.size())
+            {
+                auto curCell = nodeQ.front();
+                nodeQ.pop();
+
+                for (auto curNet : (curCell->getInputNets()))
+                {
+                    if (curNet->checkIsGlobalClock() || curNet->checkIsPowerNet())
+                        continue;
+                    for (auto driverPin : curNet->getDriverPins())
+                    {
+                        if (driverPin)
+                        {
+                            if (auto nextCell = driverPin->getCell())
+                            {
+                                if (coloredCells.find(nextCell) == coloredCells.end() && !hasTimingEndpoint(nextCell))
+                                {
+                                    curCluster.push_back(nextCell);
+                                    coloredCells.insert(nextCell);
+                                    nodeQ.push(nextCell);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                for (auto curNet : curCell->getOutputNets())
+                {
+                    if (curNet->checkIsGlobalClock() || curNet->checkIsPowerNet())
+                        continue;
+                    for (auto pinBeDriven : curNet->getPinsBeDriven())
+                    {
+                        if (pinBeDriven)
+                        {
+                            if (auto nextCell = pinBeDriven->getCell())
+                            {
+                                if (coloredCells.find(nextCell) == coloredCells.end())
+                                {
+                                    curCluster.push_back(nextCell);
+                                    coloredCells.insert(nextCell);
+                                    if (!hasTimingEndpoint(nextCell))
+                                        nodeQ.push(nextCell);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (curCluster.size() > 1000)
+                FFBased_Clusters.push_back(curCluster);
+        }
+    }
+
+    print_info("#Cells=" + std::to_string(getCells().size()) + " #coloredCells=" + std::to_string(coloredCells.size()));
+    for (auto &tmpCluster : FFBased_Clusters)
+    {
+        std::cout << tmpCluster.size() << "\n";
+    }
+
+    if (!JSONCfg.count("BoundaryReportDirectory")) return;
+    std::string dumpClustersFile = JSONCfg.at("BoundaryReportDirectory") + "/ff_clusters";
+    print_status("dumping cluster information to " + dumpClustersFile);
+    std::ofstream outfile0((dumpClustersFile + ".tcl").c_str());
+    assert(outfile0.is_open() && outfile0.good() &&
+           "The path for cluster result dumping does not exist and please check your path settings");
+    for (unsigned int cluster_id = 0; cluster_id < FFBased_Clusters.size(); cluster_id++)
+    {
+        outfile0 << "highlight -color_index " << (cluster_id) % 20 + 1 << "  [get_cells {";
+        for (auto tmpCell : FFBased_Clusters[cluster_id])
+        {
+            outfile0 << tmpCell->getName() << " ";
+        }
+        outfile0 << "}]\n";
+    }
+    outfile0.close();
 }

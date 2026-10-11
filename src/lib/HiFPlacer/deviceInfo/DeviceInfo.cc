@@ -111,6 +111,9 @@ DeviceInfo::DeviceInfo(std::map<std::string, std::string> &JSONCfg, std::string 
         fill5, fill6, fill7;
     float centerX, centerY;
 
+    int sliceMaxX = 0;
+    int sliceMaxY = 0;
+
     while (std::getline(infile, line))
     {
         std::istringstream iss(line);
@@ -189,12 +192,33 @@ DeviceInfo::DeviceInfo(std::map<std::string, std::string> &JSONCfg, std::string 
                 strSplit(BELname, splitedName, "/");
                 addBEL(BELname, splitedName[1], curSite);
             }
+            if (curSite->getSiteType().find("SLICE") == 0)
+            {
+                if (curSite->getSiteX() > sliceMaxX)
+                    sliceMaxX = curSite->getSiteX();
+                if (curSite->getSiteY() > sliceMaxY)
+                    sliceMaxY = curSite->getSiteY();
+            }
         }
         else
             assert(false && "Parser Error");
     }
 
     std::sort(sites.begin(), sites.end(), siteSortCmp);
+
+    sliceMaxY++;
+    sliceMaxX++;
+    sliceArray = std::vector<std::vector<DeviceSite *>>(sliceMaxY, std::vector<DeviceSite *>(sliceMaxX, nullptr));
+    for (auto curSite : sites)
+    {
+        if (curSite->getSiteType().find("SLICE") == 0)
+        {
+            assert(curSite->getSiteY() < sliceArray.size());
+            assert(curSite->getSiteX() < sliceArray[curSite->getSiteY()].size());
+            assert(!sliceArray[curSite->getSiteY()][curSite->getSiteX()]);
+            sliceArray[curSite->getSiteY()][curSite->getSiteX()] = curSite;
+        }
+    }
 
     std::map<std::string, std::vector<DeviceSite *>>::iterator tmpIt;
     for (tmpIt = siteType2Sites.begin(); tmpIt != siteType2Sites.end(); tmpIt++)

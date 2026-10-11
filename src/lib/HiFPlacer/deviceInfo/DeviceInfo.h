@@ -1279,6 +1279,11 @@ class DeviceInfo
         return clockColumns;
     }
 
+    inline std::vector<std::vector<DeviceSite *>> &getCLBSliceArray()
+    {
+        return sliceArray;
+    }
+
   private:
     std::string deviceName;
     std::set<std::string> BELTypes;
@@ -1288,6 +1293,7 @@ class DeviceInfo
     std::set<std::string> siteTypes;
     std::map<std::string, std::vector<DeviceSite *>> siteType2Sites;
     std::vector<DeviceSite *> sites;
+    std::vector<std::vector<DeviceSite *>> sliceArray;
 
     std::set<std::string> tileTypes;
     std::map<std::string, std::vector<DeviceTile *>> tileType2Tiles;

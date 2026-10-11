@@ -757,6 +757,16 @@ class DesignInfo
             containFixedPins = true;
         }
 
+        inline void setControlSetSignal()
+        {
+            isControlSetSignal = true;
+        }
+
+        inline bool checkIsControlSetSignal()
+        {
+            return isControlSetSignal;
+        }
+
       private:
         std::vector<std::string> pinNames;
         std::vector<DesignPin *> pinPtrs;
@@ -769,6 +779,7 @@ class DesignInfo
         bool virtualNet;
         bool isGlobalClock = false;
         bool isPowerNet = false;
+        bool isControlSetSignal = false;
     };
 
     /**
@@ -1134,6 +1145,16 @@ class DesignInfo
             return timingLength;
         }
 
+        inline void setTimingForwardLevel(int _timingForwardLevel)
+        {
+            timingForwardLevel = _timingForwardLevel;
+        }
+
+        inline int getTimingForwardLevel()
+        {
+            return timingForwardLevel;
+        }
+
       private:
         std::vector<DesignPin *> pinPtrs;
         std::vector<DesignPin *> inputPinPtrs;
@@ -1150,6 +1171,7 @@ class DesignInfo
         bool hasDSPReg = false;
         ControlSetInfo *controlSetInfo = nullptr;
         int timingLength = 0;
+        int timingForwardLevel = 0;
     };
 
     /**

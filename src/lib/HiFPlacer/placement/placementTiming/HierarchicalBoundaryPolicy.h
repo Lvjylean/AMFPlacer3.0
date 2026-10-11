@@ -47,13 +47,34 @@ inline std::pair<float, float> expandedRange(float low, float high, float lower,
     float start = std::max(lower, std::min(float((low + high - width) * 0.5), float(upper - width)));
     return {start, float(start + width)};
 }
-// direction is chosen once, not recomputed after a PU passes the anchor.
-// This is the upstream one-sided blockage rule (including its DSPCritical gate).
-inline float anchorWeight(float beta, float directedDistance, size_t nets, bool dspCritical = false)
+// Rotate the upstream outer/middle blockage cases to Y. Use physical geometry,
+// not SLR IDs or the PU's initial side of the target die. Zero denotes the
+// middle-region, two-sided rule; guideY separately controls whether it is active.
+template <typename Regions>
+int slrPullDirection(const Regions &regions, int targetRegion)
+{
+    const auto &target = regions.at(targetRegion);
+    bool below = false, above = false;
+    for (const auto &r : regions) if (r.slr != target.slr)
+    {
+        below = below || r.y1 <= target.y0;
+        above = above || r.y0 >= target.y1;
+    }
+    return below == above ? 0 : (below ? 1 : -1);
+}
+
+inline float anchorDistance(float coordinate, float anchor, int direction)
+{
+    return direction == 0 ? std::fabs(coordinate - anchor) : direction * (anchor - coordinate);
+}
+
+// Preserve the original weight thresholds and DSPCritical gate. The caller
+// supplies absolute distance for a middle region, directed distance outside it.
+inline float anchorWeight(float beta, float directedDistance, size_t nets, bool weakAttraction = true)
 {
     if (directedDistance <= 0 || beta <= 0 || nets == 0) return 0;
     if (directedDistance > 6) return beta * std::pow(nets, 1.1);
-    if (dspCritical) return 0;
+    if (!weakAttraction) return 0;
     if (directedDistance > 3) return beta * nets;
     return (directedDistance / 3) * beta * nets;
 }

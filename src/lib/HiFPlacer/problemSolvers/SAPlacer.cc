@@ -53,6 +53,8 @@ double SAPlacer::evaluateClusterPlacement(const std::vector<std::vector<std::vec
         }
     }
 
+    int minGridX = 10000, maxGridX = -10000;
+
     for (int gridY = 0; gridY < gridH; gridY++)
         for (int gridX = 0; gridX < gridW; gridX++)
         {
@@ -71,7 +73,36 @@ double SAPlacer::evaluateClusterPlacement(const std::vector<std::vector<std::vec
                             (regionW + y2xRatio * regionH);
                     }
             }
+            if (grid2clusters[gridY][gridX].size() > 1)
+            {
+                minGridX = std::min(minGridX, gridX);
+                maxGridX = std::max(maxGridX, gridX);
+            }
         }
+
+    if (clusterAdjMat.size() <= 8 && maxGridX - minGridX >= 1)
+    {
+        resWL += 500;
+    }
+
+    // for (auto enhancedCluster : enhancedClusterCluster)
+    // {
+    //     int left = 1000, right = -1000, top = -1000, bottom = 1000;
+    //     int cnt = 0;
+    //     for (auto clusterId : enhancedCluster)
+    //     {
+    //         cnt++;
+    //         if (cluster2XY[clusterId].first > right)
+    //             right = cluster2XY[clusterId].first;
+    //         if (cluster2XY[clusterId].first < left)
+    //             left = cluster2XY[clusterId].first;
+    //         if (cluster2XY[clusterId].second > top)
+    //             top = cluster2XY[clusterId].second;
+    //         if (cluster2XY[clusterId].second < bottom)
+    //             bottom = cluster2XY[clusterId].second;
+    //     }
+    //     resWL += cnt * 5 * (fabs(right - left) * regionW + y2xRatio * fabs(top - bottom) * regionH);
+    // }
 
     return resWL;
 }
@@ -142,6 +173,28 @@ double SAPlacer::incrementalEvaluateClusterPlacement(const std::vector<std::vect
                     }
             }
         }
+
+    // for (auto enhancedCluster : enhancedClusterCluster)
+    // {
+    //     int left = 1000, right = -1000, top = -1000, bottom = 1000;
+    //     int cnt = 0;
+    //     for (auto clusterId : enhancedCluster)
+    //     {
+    //         if (placed[clusterId])
+    //         {
+    //             cnt++;
+    //             if (cluster2XY[clusterId].first > right)
+    //                 right = cluster2XY[clusterId].first;
+    //             if (cluster2XY[clusterId].first < left)
+    //                 left = cluster2XY[clusterId].first;
+    //             if (cluster2XY[clusterId].second > top)
+    //                 top = cluster2XY[clusterId].second;
+    //             if (cluster2XY[clusterId].second < bottom)
+    //                 bottom = cluster2XY[clusterId].second;
+    //         }
+    //     }
+    //     resWL += cnt * 5 * (fabs(right - left) * regionW + y2xRatio * fabs(top - bottom) * regionH);
+    // }
 
     return resWL;
 }
@@ -717,6 +770,8 @@ void SAPlacer::solve()
     seedAndE.clear();
 
     int initOffset = 0;
+    if (nJobs > 8)
+        nJobs = 8;
     for (int restartI = restartNum; restartI > 0; restartI -= nJobs)
     {
 

@@ -1,0 +1,245 @@
+cmake_minimum_required(VERSION 3.10)
+
+project(AMFPlacer)
+
+option(AMF_ENABLE_RUNTIME_PROFILING "Record nested wall/CPU times at functional boundaries" OFF)
+if(AMF_ENABLE_RUNTIME_PROFILING)
+  add_definitions(-DAMF_ENABLE_RUNTIME_PROFILING)
+endif()
+
+set(CMAKE_CXX_STANDARD 17)
+find_package(OpenMP)
+add_compile_options ( -std=c++17 -O3  -fopenmp -Wall )
+if(OPENMP_FOUND)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 ${OpenMP_CXX_FLAGS}")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 ${OpenMP_C_FLAGS}")
+else(OPENMP_FOUND)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 ")
+  message (STATUS "OpenMP not found")
+endif()
+
+
+set(CMAKE_INSTALL_PREFIX ${PROJECT_SOURCE_DIR})
+
+
+# find required packages
+include(FetchContent)
+
+
+
+# Boost
+# set(BOOST_ROOT "")
+
+set(Boost_USE_STATIC_LIBS OFF)
+set(BOOST_VER 1.65.1)
+set(Boost_NO_BOOST_CMAKE ON)
+set(BOOST_COMPONENTS filesystem program_options system log thread)
+ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
+
+# Workaround function to allow cmake call `find_package` twice. Avoide side effects from local variables, which are produced be `find_package`
+function(findBoost Required)
+    find_package(Boost ${BOOST_VER} ${Required} 
+        COMPONENTS ${BOOST_COMPONENTS}
+        OPTIONAL_COMPONENTS unit_test_framework
+    )
+    set(Boost_FOUND ${Boost_FOUND} PARENT_SCOPE)
+    set(Boost_LIBRARIES ${Boost_LIBRARIES} PARENT_SCOPE)
+    set(Boost_INCLUDE_DIRS ${Boost_INCLUDE_DIRS} PARENT_SCOPE)
+endfunction()
+
+findBoost("")
+
+if(NOT Boost_FOUND)
+  string(REPLACE "." "_" BOOST_VER_ ${BOOST_VER}) 
+  set(BOOST_URL "https://boostorg.jfrog.io/artifactory/main/release/${BOOST_VER}/source/boost_${BOOST_VER_}.tar.bz2" CACHE STRING "Boost download URL")
+  set(BOOST_URL_SHA256 "9807a5d16566c57fd74fb522764e0b134a8bbe6b6e8967b83afefd30dcd3be81" CACHE STRING "Boost download URL SHA256 checksum")
+  option(BOOST_DISABLE_TESTS "Do not build test targets" OFF)
+  include(FetchContent)
+  set(FETCHCONTENT_QUIET OFF)
+  FetchContent_Declare(
+    Boost
+    URL ${BOOST_URL}
+    URL_HASH SHA256=${BOOST_URL_SHA256}
+  )
+  FetchContent_GetProperties(Boost)
+  set(FETCHCONTENT_QUIET OFF)
+  if(NOT Boost_POPULATED)
+    message(STATUS "Fetching Boost")
+    FetchContent_Populate(Boost)
+    message(STATUS "Fetching Boost - done")
+    message(STATUS " boost source dir is ${boost_SOURCE_DIR} ")
+    message(STATUS " boost binary dir is ${boost_BINARY_DIR} ")
+    string(JOIN "," BOOST_WITH_LIBRARIES ${BOOST_COMPONENTS}) 
+    execute_process(
+      COMMAND ./bootstrap.sh --prefix=${boost_BINARY_DIR} --with-libraries=${BOOST_WITH_LIBRARIES}
+      WORKING_DIRECTORY ${boost_SOURCE_DIR}
+      RESULT_VARIABLE result
+    )
+    if(NOT result EQUAL "0")
+      message( FATAL_ERROR "Bad exit status of bootstrap")
+    endif()
+    execute_process(
+      COMMAND ./b2 install -j8
+      WORKING_DIRECTORY ${boost_SOURCE_DIR}
+      RESULT_VARIABLE result
+    )
+    if(NOT result EQUAL "0")
+      message( FATAL_ERROR "Bad exit status of b2")
+    endif()
+    set(BOOST_ROOT ${boost_BINARY_DIR} CACHE PATH "Root folder to find boost" FORCE)
+    set(Boost_DIR ${boost_BINARY_DIR} CACHE PATH "Root folder to find boost" FORCE)
+  endif()
+  findBoost(REQUIRED)
+endif()
+
+message(STATUS " boost libs ${Boost_LIBRARIES}")
+message(STATUS " boost includes ${Boost_INCLUDE_DIRS}")
+include_directories(${Boost_INCLUDE_DIRS})
+
+# ABSL
+if (NOT TARGET absl::strings OR NOT TARGET absl::status OR NOT TARGET absl::span)
+  message(STATUS "AMFPlacer fetching packages: `absl` targets not found. Attempting to fetch contents...")
+  FetchContent_Declare(
+    abseil-cpp 
+    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/3rdParty/abseil-cpp-src
+    # GIT_REPOSITORY https://github.com/abseil/abseil-cpp.git
+    # GIT_TAG        origin/master
+  )
+  FetchContent_MakeAvailable(abseil-cpp)
+else()
+  message(STATUS "AMFPlacer fetching packages: `absl` targets found.")
+endif()
+
+# EIGEN
+# Eigen is usually available as a system package, so we use find_package.
+if (NOT TARGET Eigen3::Eigen)
+  message(STATUS "AMFPlacer fetching packages: `Eigen3` targets not found. Attempting to find package...")
+  FetchContent_Declare(
+    eigen
+    # GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+    # GIT_TAG        origin/master
+    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/3rdParty/eigen3-src
+  )
+  FetchContent_MakeAvailable(eigen)
+  set(EIGEN3_INCLUDE_DIR ${eigen_SOURCE_DIR})
+  # find_package(Eigen3 3.3.7 REQUIRED NO_MODULE)
+else()
+  message(STATUS "AMFPlacer fetching packages: `Eigen3` targets found.")
+endif()
+
+# OSQP
+if (NOT TARGET osqpstatic)
+  message(STATUS "AMFPlacer fetching packages: `osqp` targets not found. Attempting to find contents...")
+  FetchContent_Declare(
+    osqp
+    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/3rdParty/osqp-src
+    # GIT_REPOSITORY https://github.com/oxfordcontrol/osqp.git
+    # GIT_TAG        origin/master
+  )
+  FetchContent_MakeAvailable(osqp)
+else()
+  message(STATUS "AMFPlacer fetching packages: `osqp` targets found.")
+endif()
+
+find_package(ZLIB)
+
+include_directories(
+  ${Boost_INCLUDE_DIR}
+  ${EIGEN3_INCLUDE_DIR}
+  ${ZLIB_INCLUDE_DIRS}
+)
+
+add_subdirectory(lib)
+
+set(SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/app/AMFPlacer/main.cc)
+add_executable(AMFPlacer ${SOURCE_FILES})
+add_executable(partitionHyperGraph lib/3rdParty/partitionHyperGraph.cc)
+
+include_directories(./lib/
+./lib/HiFPlacer/designInfo/ 
+./lib/HiFPlacer/deviceInfo/ 
+./lib/utils/
+./lib/HiFPlacer/placement/placementInfo/
+./lib/HiFPlacer/placement/globalPlacement/
+./lib/HiFPlacer/placement/legalization/
+./lib/HiFPlacer/placement/packing/
+./lib/HiFPlacer/placement/placementTiming/
+./lib/3rdParty
+./lib/HiFPlacer/problemSolvers
+${abseil-cpp_SOURCE_DIR} 
+)
+
+link_directories(${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/)
+
+target_link_libraries(AMFPlacer GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils
+                        ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a 
+                        pthread 
+                        ${ZLIB_LIBRARIES}  ${Boost_LIBRARIES} ) #GL GLU glut GLEW
+target_link_libraries(partitionHyperGraph  ${Boost_LIBRARIES}  m ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a )
+if(AMF_ENABLE_RUNTIME_PROFILING)
+  target_link_libraries(partitionHyperGraph Utils pthread)
+endif()
+
+
+# Opt-in native model regression, built from the same isolated source snapshot.
+add_executable(checkSLRTiming EXCLUDE_FROM_ALL tests/check_slr_timing.cc)
+target_link_libraries(checkSLRTiming DesignInfo DeviceInfo PlacementInfo PlacementTiming Utils
+                      pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkPhysicalBoundaries EXCLUDE_FROM_ALL tests/check_physical_boundaries.cc)
+target_link_libraries(checkPhysicalBoundaries DeviceInfo PlacementInfo PlacementTiming DesignInfo Utils pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+add_executable(checkBoundaryClustering EXCLUDE_FROM_ALL tests/check_boundary_clustering.cc)
+target_link_libraries(checkBoundaryClustering DesignInfo DeviceInfo PlacementInfo PlacementTiming Utils pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+add_executable(checkQPStability EXCLUDE_FROM_ALL tests/check_qp_stability.cc)
+target_link_libraries(checkQPStability ProblemSolvers Utils pthread ${Boost_LIBRARIES})
+add_executable(checkBoundaryPacking EXCLUDE_FROM_ALL tests/check_boundary_packing.cc)
+target_link_libraries(checkBoundaryPacking Packing GlobalPlacer Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+add_executable(checkCLBSiteLegality EXCLUDE_FROM_ALL tests/check_clb_site_legality.cc)
+target_link_libraries(checkCLBSiteLegality DesignInfo DeviceInfo Utils pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+add_executable(checkInitialCLBLegality EXCLUDE_FROM_ALL tests/check_initial_clb_legality.cc)
+target_link_libraries(checkInitialCLBLegality Packing GlobalPlacer Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkSAY2XRatio EXCLUDE_FROM_ALL tests/check_sa_y2x_ratio.cc)
+target_link_libraries(checkSAY2XRatio ProblemSolvers Utils pthread ${Boost_LIBRARIES})
+
+add_executable(checkBipartiteMatching EXCLUDE_FROM_ALL tests/check_bipartite_matching.cc)
+target_link_libraries(checkBipartiteMatching ProblemSolvers Utils pthread ${Boost_LIBRARIES})
+
+# Device-specific coefficient regression; no placement or routing.
+add_executable(checkDelayCoefficients EXCLUDE_FROM_ALL tests/check_delay_coefficients.cc)
+target_link_libraries(checkDelayCoefficients DesignInfo DeviceInfo PlacementInfo PlacementTiming Utils
+                      pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+# Verify the production spreading displacement limiter without a device/netlist.
+add_executable(checkSpreadDisplacement EXCLUDE_FROM_ALL tests/check_spread_displacement.cc)
+
+add_executable(checkEmptyLegalization EXCLUDE_FROM_ALL tests/check_empty_legalization.cc)
+target_link_libraries(checkEmptyLegalization Packing GlobalPlacer Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+# Clock capacity schema and production device wiring regressions.
+add_executable(checkClockResourceCapacity EXCLUDE_FROM_ALL tests/check_clock_resource_capacity.cc
+               lib/HiFPlacer/deviceInfo/ClockResourceCapacity.cc)
+add_executable(checkClockCapacityDevice EXCLUDE_FROM_ALL tests/check_clock_capacity_device.cc)
+target_link_libraries(checkClockCapacityDevice DeviceInfo Utils pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+# One-shot external floorplan and legacy dispatch regression.
+add_executable(checkExternalFloorplan EXCLUDE_FROM_ALL tests/check_external_floorplan.cc)
+target_link_libraries(checkExternalFloorplan GlobalPlacer Packing Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkHierarchicalBoundaryPolicy EXCLUDE_FROM_ALL tests/check_hierarchical_boundary_policy.cc)
+
+add_executable(checkPaperBoundaryClustering EXCLUDE_FROM_ALL tests/check_paper_boundary_clustering.cc)
+target_link_libraries(checkPaperBoundaryClustering GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+# Explicit opt-in primitive timing and production stage-gate regression.
+add_executable(checkProPrimitiveTiming EXCLUDE_FROM_ALL tests/check_pro_primitive_timing.cc)
+target_link_libraries(checkProPrimitiveTiming DesignInfo DeviceInfo PlacementInfo PlacementTiming Utils pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkStageExperiment EXCLUDE_FROM_ALL tests/check_stage_experiment.cc)
+target_link_libraries(checkStageExperiment GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkBoundaryDSPIndependence EXCLUDE_FROM_ALL tests/check_boundary_dsp_independence.cc)
+target_link_libraries(checkBoundaryDSPIndependence DesignInfo DeviceInfo PlacementInfo PlacementTiming Utils pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkSRLSharingInput EXCLUDE_FROM_ALL tests/check_srl_sharing_input.cc)
+target_link_libraries(checkSRLSharingInput Packing GlobalPlacer Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})

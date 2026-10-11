@@ -1,3 +1,13 @@
+# 2026-10-12 AMF3Pro SRL compatibility branch
+
+- Publish frozen independent max-two-round SLR implementation as primary code.
+- Preserve the exact merged-stage implementation as a source overlay and configuration variant.
+- Permit compatible independent SRL PUs to share SLICEM sites, up to four SRL primitives.
+- Restore coupled MCLB/CARRY legalization; default weak attraction on and primitive timing exceptions off.
+- Include Pro changes, fine-grained timing, input/source provenance and completed four-arm experiment summaries.
+- Resolve/hash SRL control metadata in full-run and provide portable host/input configuration.
+- No new placement algorithm changes or multicore optimization in this publication.
+
 # Changelog
 
 ## 3.0.0-dev — 2026-09-25

@@ -46,6 +46,10 @@ ClusterPlacer::ClusterPlacer(PlacementInfo *placementInfo, std::map<std::string,
     {
         randomInitialPlacement = JSONCfg["RandomInitialPlacement"] == "true";
     }
+    if (JSONCfg.find("noPathLenCluster") != JSONCfg.end())
+    {
+        noPathLenCluster = JSONCfg["noPathLenCluster"] == "true";
+    }
 }
 
 void ClusterPlacer::ClusterPlacement()
@@ -130,6 +134,8 @@ void ClusterPlacer::hypergraphPartitioning()
         eachClusterBRAMNum = std::stoi(JSONCfg["clockRegionBRAMNum"]);
     }
 
+    // FFPartitioning();
+
     clockBasedPartitioning(minClusterCellNum, eachClusterDSPNum, eachClusterBRAMNum);
     if (isClustersToLarges() && clusters.size() < 0.6 * gridW * gridH)
     {
@@ -139,9 +145,110 @@ void ClusterPlacer::hypergraphPartitioning()
     }
 }
 
+bool ClusterPlacer::hasTimingEndpoint(DesignInfo::DesignCell *cell)
+{
+    auto &timingNodes = placementInfo->getTimingInfo()->getSimplePlacementTimingInfo();
+    return timingNodes[cell->getCellId()]->checkIsRegister();
+}
+
+void ClusterPlacer::FFPartitioning()
+{
+    std::set<DesignInfo::DesignCell *> coloredCells;
+    std::vector<std::vector<DesignInfo::DesignCell *>> FFBased_Clusters;
+    for (auto tmpCell : placementInfo->getCells())
+    {
+        if (!hasTimingEndpoint(tmpCell) && coloredCells.find(tmpCell) == coloredCells.end())
+        {
+            std::vector<DesignInfo::DesignCell *> curCluster;
+            std::queue<DesignInfo::DesignCell *> nodeQ;
+            curCluster.clear();
+            curCluster.push_back(tmpCell);
+            coloredCells.insert(tmpCell);
+            nodeQ.push(tmpCell);
+
+            while (nodeQ.size())
+            {
+                auto curCell = nodeQ.front();
+                nodeQ.pop();
+
+                for (auto curNet : (curCell->getInputNets()))
+                {
+                    if (curNet->checkIsGlobalClock() || curNet->checkIsPowerNet())
+                        continue;
+                    for (auto driverPin : curNet->getDriverPins())
+                    {
+                        if (driverPin)
+                        {
+                            if (auto nextCell = driverPin->getCell())
+                            {
+                                if (coloredCells.find(nextCell) == coloredCells.end() && !hasTimingEndpoint(nextCell))
+                                {
+                                    curCluster.push_back(nextCell);
+                                    coloredCells.insert(nextCell);
+                                    nodeQ.push(nextCell);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                for (auto curNet : curCell->getOutputNets())
+                {
+                    if (curNet->checkIsGlobalClock() || curNet->checkIsPowerNet())
+                        continue;
+                    for (auto pinBeDriven : curNet->getPinsBeDriven())
+                    {
+                        if (pinBeDriven)
+                        {
+                            if (auto nextCell = pinBeDriven->getCell())
+                            {
+                                if (coloredCells.find(nextCell) == coloredCells.end())
+                                {
+                                    curCluster.push_back(nextCell);
+                                    coloredCells.insert(nextCell);
+                                    if (!hasTimingEndpoint(nextCell))
+                                        nodeQ.push(nextCell);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (curCluster.size() > 1000)
+                FFBased_Clusters.push_back(curCluster);
+        }
+    }
+
+    print_info("#PU=" + std::to_string(placementInfo->getPlacementUnits().size()) +
+               " #coloredPU=" + std::to_string(coloredCells.size()));
+    for (auto &tmpCluster : FFBased_Clusters)
+    {
+        std::cout << tmpCluster.size() << "\n";
+    }
+
+    std::string dumpClustersFile = "testCluster";
+    print_status("dumping cluster information to " + dumpClustersFile);
+    std::ofstream outfile0((dumpClustersFile + ".tcl").c_str());
+    assert(outfile0.is_open() && outfile0.good() &&
+           "The path for cluster result dumping does not exist and please check your path settings");
+    for (unsigned int cluster_id = 0; cluster_id < FFBased_Clusters.size(); cluster_id++)
+    {
+        outfile0 << "highlight -color_index " << (cluster_id) % 20 + 1 << "  [get_cells {";
+        for (auto tmpCell : FFBased_Clusters[cluster_id])
+        {
+            outfile0 << tmpCell->getName() << " ";
+        }
+        outfile0 << "}]\n";
+    }
+    outfile0.close();
+}
+
 void ClusterPlacer::createLongPathClusterUnits()
 {
     AMF_PROFILE_FUNCTION("clustering");
+    if (noPathLenCluster)
+        return;
     // handle the long paths
     auto &timingNodes = placementInfo->getTimingInfo()->getSimplePlacementTimingInfo_PathLenSorted();
     // auto simpleTimingGraph = placementInfo->getTimingInfo()->getSimplePlacementTimingGraph();
@@ -457,6 +564,117 @@ void ClusterPlacer::clockBasedPartitioning(int minClusterCellNum, int eachCluste
     }
     assert(PUCnt == placementUnit2ClusterId.size());
     clusters = newClusters;
+
+    auto &timingNodes = placementInfo->getTimingInfo()->getSimplePlacementTimingInfo_PathLenSorted();
+    int pathLenThr = placementInfo->getLongPathThresholdLevel();
+    std::set<DesignInfo::DesignCell *> highFanoutRegs;
+    enhancedClusterCluster.clear();
+    int enhancedCnt = 0;
+    if (false) // if (clusters.size() < 20)
+    {
+        std::set<int> extractedCellIds;
+        std::set<PlacementInfo::PlacementUnit *> extractedPUs;
+        extractedCellIds.clear();
+        extractedPUs.clear();
+
+        for (unsigned int nodeId = 0; nodeId < timingNodes.size(); nodeId++)
+        {
+            auto timingNode = timingNodes[nodeId];
+            if (timingNode->getForwardLevel() == 1 && timingNode->getLongestPathLength() > pathLenThr * 0.9)
+            {
+                for (auto inEdge : timingNode->getInEdges())
+                {
+                    auto driverNode = inEdge->getSource();
+                    if (auto driverCell = driverNode->getDesignNode())
+                    {
+                        if (driverNode->getForwardLevel() == 0)
+                        {
+                            if (driverNode->getOutEdges().size() >= 64)
+                            {
+                                if (highFanoutRegs.find(driverCell) == highFanoutRegs.end())
+                                {
+                                    highFanoutRegs.insert(driverCell);
+                                    std::vector<int> clustersBeDrivenCnt(clusters.size(), 0);
+                                    for (auto outEdge : driverNode->getOutEdges())
+                                    {
+                                        auto fanoutNode = outEdge->getSink();
+                                        if (fanoutNode->getLongestPathLength() > pathLenThr * 0.9)
+                                        {
+                                            auto curPU = placementInfo->getPlacementUnitByCellId(fanoutNode->getId());
+                                            int tmpClusterId = placementUnit2ClusterId[curPU->getId()];
+
+                                            clustersBeDrivenCnt[tmpClusterId]++;
+                                        }
+                                    }
+
+                                    int nonZeroCnt = 0;
+                                    for (auto cnt : clustersBeDrivenCnt)
+                                    {
+                                        nonZeroCnt += (cnt > 0);
+                                    }
+
+                                    if (nonZeroCnt >= 3)
+                                    {
+                                        std::cout << driverCell << " level=" << timingNode->getLongestPathLength()
+                                                  << " fanout=" << driverNode->getOutEdges().size()
+                                                  << " #cluster=" << nonZeroCnt << "\n";
+
+                                        auto candidateCellIds =
+                                            placementInfo->getTimingInfo()
+                                                ->getSimplePlacementTimingGraph()
+                                                ->BFSFromNode(driverNode->getId(), pathLenThr * 0.666, 20000,
+                                                              extractedCellIds);
+                                        std::set<PlacementInfo::PlacementUnit *> PUsInLongPaths;
+                                        PUsInLongPaths.clear();
+
+                                        float totalWeight = 0;
+                                        std::set<int> tmpNewCluster;
+                                        tmpNewCluster.clear();
+
+                                        for (auto candidateCellId : candidateCellIds)
+                                        {
+                                            auto PUInPath = placementInfo->getPlacementUnitByCellId(candidateCellId);
+                                            if (extractedPUs.find(PUInPath) == extractedPUs.end() &&
+                                                PUsInLongPaths.find(PUInPath) == PUsInLongPaths.end())
+                                            {
+                                                PUsInLongPaths.insert(PUInPath);
+                                                tmpNewCluster.insert(PUInPath->getId());
+                                                totalWeight += PUInPath->getWeight();
+                                            }
+                                        }
+                                        print_warning("trying to enhance new cluster generated from " +
+                                                      driverCell->getName() + " with " +
+                                                      std::to_string(tmpNewCluster.size()) + " PUs and " +
+                                                      std::to_string(candidateCellIds.size()) + " cells");
+                                        if (tmpNewCluster.size() > 4000)
+                                        {
+                                            print_warning("enhanced new cluster generated from " +
+                                                          driverCell->getName() + " with " +
+                                                          std::to_string(tmpNewCluster.size()) + " PUs");
+                                            for (auto candidateCellId : candidateCellIds)
+                                            {
+                                                auto PUInPath =
+                                                    placementInfo->getPlacementUnitByCellId(candidateCellId);
+                                                if (PUsInLongPaths.find(PUInPath) != PUsInLongPaths.end())
+                                                {
+                                                    extractedPUs.insert(PUInPath);
+                                                    extractedCellIds.insert(candidateCellId);
+                                                }
+                                            }
+                                            inEdge->getSourcePin()->getNet()->setOverallTimingNetEnhancement(2);
+                                            enhancedCnt++;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (enhancedCnt > 3)
+                break;
+        }
+    }
 }
 
 void ClusterPlacer::refineClustersWithPredefinedClusters()
@@ -737,7 +955,7 @@ void ClusterPlacer::placeClusters()
     const float saY2xRatio = SAPlacer::configuredY2XRatio(JSONCfg, y2xRatio);
     print_status("SA effective y2xRatio = " + std::to_string(saY2xRatio) +
                  (JSONCfg.count("Simulated Annealing y2xRatio") ? " (explicit)" : " (legacy y2xRatio * 0.8)"));
-    saPlacer = new SAPlacer("ClusterSA", clusterAdjMat, clusterCLBCellWeights, cluster2FixedUnitMat, fixedX, fixedY,
+    saPlacer = new SAPlacer("ClusterSA", clusterAdjMat, enhancedClusterCluster, clusterCLBCellWeights, cluster2FixedUnitMat, fixedX, fixedY,
                             gridH, gridW, deviceH, deviceW, connectionToFixedFactor, saY2xRatio, SAIterNum, jobs,
                             restartNum, verbose);
     saPlacer->solve();

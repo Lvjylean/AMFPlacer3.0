@@ -1753,3 +1753,271 @@ void MacroLegalizer::verifyAvailableCapacity()
     verify(BRAMPUs, BRAMColumn2Sites);
     verify(CARRYPUs, CARRYColumn2Sites);
 }
+
+void MacroLegalizer::moveAMacroFromAToB(PlacementInfo::PlacementMacro *curMacro, int X1, int Y1, int X2, int Y2,
+                                        std::vector<std::vector<CLBMacroLegalizattionInfo>> &CLBArray)
+{
+
+    int offset = 0;
+
+    for (auto curSite : PU2LegalSites[curMacro])
+    {
+        assert(curSite->isMapped());
+        CLBArray[curSite->getSiteY()][curSite->getSiteX()].macro = curMacro;
+        CLBArray[curSite->getSiteY()][curSite->getSiteX()].offsetInMacro = offset;
+        offset++;
+    }
+}
+
+void MacroLegalizer::macroDetailedPlacement(PlacementTimingOptimizer *timingOptimizer)
+{
+    placementInfo->updateElementBinGrid();
+    timingOptimizer->conductStaticTimingAnalysis();
+
+    auto &deviceCLBArray = deviceInfo->getCLBSliceArray();
+    if (deviceCLBArray.empty()) return;
+    int colNum = deviceCLBArray[0].size();
+    int rowNum = deviceCLBArray.size();
+
+    std::vector<std::vector<CLBMacroLegalizattionInfo>> CLBArray(rowNum,
+                                                                 std::vector<CLBMacroLegalizattionInfo>(colNum));
+
+    for (auto matchedPair : PULevelMatching)
+    {
+        auto targetPU = matchedPair.first;
+        int offset = 0;
+        for (auto curSite : PU2LegalSites[targetPU])
+        {
+            assert(curSite->isMapped());
+            auto curMacro = dynamic_cast<PlacementInfo::PlacementMacro *>(targetPU);
+            CLBArray[curSite->getSiteY()][curSite->getSiteX()].macro = curMacro;
+            CLBArray[curSite->getSiteY()][curSite->getSiteX()].offsetInMacro = offset;
+            offset++;
+        }
+    }
+
+    auto oriCellIdsInCriticalPaths = timingOptimizer->findCriticalPaths(0.9, true, 1000);
+    std::set<PlacementInfo::PlacementMacro *> macrosTouched;
+
+    int fineTunedCnt = 0;
+
+    for (auto oriCellIdsInCriticalPath : oriCellIdsInCriticalPaths)
+    {
+        PlacementInfo::PlacementUnit *lastPU = nullptr;
+        std::set<PlacementInfo::PlacementUnit *> PUsInCriticalPathSet;
+        std::set<PlacementInfo::PlacementMacro *> carrayMacros;
+
+        for (auto cellId : oriCellIdsInCriticalPath)
+        {
+            auto curPU = placementInfo->getPlacementUnitByCellId(cellId);
+            if (PUsInCriticalPathSet.find(curPU) == PUsInCriticalPathSet.end())
+            {
+                PUsInCriticalPathSet.insert(curPU);
+                if (auto curMacro = dynamic_cast<PlacementInfo::PlacementMacro *>(curPU))
+                {
+                    if (curMacro->checkHasCARRY())
+                    {
+                        carrayMacros.insert(curMacro);
+                    }
+                }
+            }
+        }
+
+        if (!carrayMacros.size())
+            continue;
+
+        for (auto curMacro : carrayMacros)
+        {
+            if (curMacro->isFixed() || curMacro->isLocked() || !PU2LegalSites.count(curMacro) ||
+                PU2LegalSites.at(curMacro).empty() || macrosTouched.find(curMacro) != macrosTouched.end())
+                continue;
+            macrosTouched.insert(curMacro);
+            // if (curMacro->hasRegister())
+            //     continue;
+
+            // std::cout << " processing " << curMacro << "\n";
+
+            float oriPUX = curMacro->X();
+            float oriPUY = curMacro->Y();
+
+            curMacro->setAnchorLocationAndForgetTheOriginalOne(PU2LegalSites[curMacro][0]->X(),
+                                                               PU2LegalSites[curMacro][0]->Y());
+            for (int vId = 0; vId < curMacro->getNumOfCells(); vId++)
+            {
+                float offsetX_InMacro, offsetY_InMacro;
+                DesignInfo::DesignCellType cellType;
+                curMacro->getVirtualCellInfo(vId, offsetX_InMacro, offsetY_InMacro, cellType);
+
+                float cellX = curMacro->X() + offsetX_InMacro;
+                float cellY = curMacro->Y() + offsetY_InMacro;
+
+                DesignInfo::DesignCell *curCell = curMacro->getCell(vId);
+                cellLoc[curCell->getCellId()].X = cellX;
+                cellLoc[curCell->getCellId()].Y = cellY;
+            }
+
+            std::set<PlacementInfo::PlacementUnit *, Packing_PUcompare> changedPUs;
+            changedPUs.insert(curMacro);
+            timingOptimizer->incrementalStaticTimingAnalysis(changedPUs, true);
+            float oriMaxFanoutDelay = timingOptimizer->getMaxIncrementalDelay();
+            timingOptimizer->recoverArrivalDelayFromLastIncrementalSTA();
+            changedPUs.clear();
+
+            int curSiteX = PU2LegalSites[curMacro][0]->getSiteX();
+            int curSiteY = PU2LegalSites[curMacro][0]->getSiteY();
+            int siteNum = PU2LegalSites[curMacro].size();
+            // std::cout << " curSiteX " << curSiteX << " curSiteY " << curSiteY << " siteNum " << siteNum
+            //           << " oriMaxFanoutDelay " << oriMaxFanoutDelay << "\n";
+
+            int bestOffsetSiteX = -100, bestOffsetSiteY = -100;
+            float bestDelay = oriMaxFanoutDelay - 0.01;
+
+            for (int offsetSiteX = -1; offsetSiteX <= 1; offsetSiteX++)
+            {
+                for (int offsetSiteY = -1; offsetSiteY <= 1; offsetSiteY++)
+                {
+                    if (offsetSiteX == 0 && offsetSiteY == 0)
+                        continue;
+                    if (curSiteY + offsetSiteY < 0 || curSiteY + offsetSiteY + siteNum > int(CLBArray.size()))
+                        continue;
+                    if (curSiteX + offsetSiteX < 0 || curSiteX + offsetSiteX >= CLBArray[0].size())
+                        continue;
+
+                    std::vector<DeviceInfo::DeviceSite *> targetSites;
+                    for (int i = 0; i < siteNum; ++i)
+                        targetSites.push_back(deviceCLBArray[curSiteY + offsetSiteY + i][curSiteX + offsetSiteX]);
+                    if (std::any_of(targetSites.begin(), targetSites.end(), [](DeviceInfo::DeviceSite *site) {
+                            return site == nullptr;
+                        }) || !legalSiteRange(curMacro, targetSites, 0, siteNum)) continue;
+                    bool ok = true;
+                    for (int i = 0; i < siteNum; i++)
+                    {
+                        if (CLBArray[curSiteY + offsetSiteY + i][curSiteX + offsetSiteX].macro)
+                        {
+                            if (CLBArray[curSiteY + offsetSiteY + i][curSiteX + offsetSiteX].macro != curMacro)
+                            {
+                                ok = false;
+                                break;
+                            }
+                        }
+                        else if (deviceCLBArray[curSiteY + offsetSiteY + i][curSiteX + offsetSiteX]->isMapped())
+                        {
+                            ok = false;
+                            break;
+                        }
+                    }
+
+                    if (ok)
+                    {
+                        int newY = curSiteY + offsetSiteY;
+                        int newX = curSiteX + offsetSiteX;
+
+                        curMacro->setAnchorLocationAndForgetTheOriginalOne(deviceCLBArray[newY][newX]->X(),
+                                                                           deviceCLBArray[newY][newX]->Y());
+
+                        assert(curMacro->getCARRYNum() + curMacro->getDSPNum() + curMacro->getBRAMNum() > 0);
+
+                        for (int vId = 0; vId < curMacro->getNumOfCells(); vId++)
+                        {
+                            float offsetX_InMacro, offsetY_InMacro;
+                            DesignInfo::DesignCellType cellType;
+                            curMacro->getVirtualCellInfo(vId, offsetX_InMacro, offsetY_InMacro, cellType);
+
+                            float cellX = curMacro->X() + offsetX_InMacro;
+                            float cellY = curMacro->Y() + offsetY_InMacro;
+
+                            DesignInfo::DesignCell *curCell = curMacro->getCell(vId);
+                            cellLoc[curCell->getCellId()].X = cellX;
+                            cellLoc[curCell->getCellId()].Y = cellY;
+                        }
+
+                        changedPUs.insert(curMacro);
+                        timingOptimizer->incrementalStaticTimingAnalysis(changedPUs, true);
+                        float newFanoutDelay = timingOptimizer->getMaxIncrementalDelay();
+                        // std::cout << " newX " << newX << " newY " << newY << " newFanoutDelay " << newFanoutDelay
+                        //           << "\n";
+                        timingOptimizer->recoverArrivalDelayFromLastIncrementalSTA();
+                        changedPUs.clear();
+
+                        if (bestDelay > newFanoutDelay)
+                        {
+                            bestDelay = newFanoutDelay;
+                            bestOffsetSiteX = offsetSiteX;
+                            bestOffsetSiteY = offsetSiteY;
+                        }
+                    }
+                }
+            }
+
+            curMacro->setAnchorLocationAndForgetTheOriginalOne(oriPUX, oriPUY);
+            for (int vId = 0; vId < curMacro->getNumOfCells(); vId++)
+            {
+                float offsetX_InMacro, offsetY_InMacro;
+                DesignInfo::DesignCellType cellType;
+                curMacro->getVirtualCellInfo(vId, offsetX_InMacro, offsetY_InMacro, cellType);
+
+                float cellX = curMacro->X() + offsetX_InMacro;
+                float cellY = curMacro->Y() + offsetY_InMacro;
+
+                DesignInfo::DesignCell *curCell = curMacro->getCell(vId);
+                cellLoc[curCell->getCellId()].X = cellX;
+                cellLoc[curCell->getCellId()].Y = cellY;
+            }
+            changedPUs.insert(curMacro);
+            timingOptimizer->incrementalStaticTimingAnalysis(changedPUs, true);
+
+            if (bestOffsetSiteX > -10)
+            {
+                int newY = curSiteY + bestOffsetSiteY;
+                int newX = curSiteX + bestOffsetSiteX;
+
+                for (auto curSite : PU2LegalSites[curMacro])
+                {
+                    curSite->resetMapped();
+                    CLBArray[curSite->getSiteY()][curSite->getSiteX()].macro = nullptr;
+                    CLBArray[curSite->getSiteY()][curSite->getSiteX()].offsetInMacro = 0;
+                }
+
+                PU2LegalSites[curMacro].clear();
+                for (int i = 0; i < siteNum; i++)
+                {
+                    assert(!CLBArray[newY + i][newX].macro);
+                    deviceCLBArray[newY + i][newX]->setMapped();
+                    assert(
+                        CLBArray[deviceCLBArray[newY + i][newX]->getSiteY()][deviceCLBArray[newY + i][newX]->getSiteX()]
+                            .macro == nullptr);
+                    CLBArray[deviceCLBArray[newY + i][newX]->getSiteY()][deviceCLBArray[newY + i][newX]->getSiteX()]
+                        .macro = curMacro;
+                    CLBArray[deviceCLBArray[newY + i][newX]->getSiteY()][deviceCLBArray[newY + i][newX]->getSiteX()]
+                        .offsetInMacro = i;
+                    PU2LegalSites[curMacro].push_back(deviceCLBArray[newY + i][newX]);
+                }
+
+                PU2X[curMacro] = PU2LegalSites[curMacro][0]->X();
+                PU2Y[curMacro] = PU2LegalSites[curMacro][0]->Y();
+                fineTunedCnt++;
+            }
+        }
+    }
+
+    for (int i = 0; i < PULevelMatching.size(); i++)
+    {
+        auto targetPU = PULevelMatching[i].first;
+        assert(PU2LegalSites[targetPU].size());
+        PULevelMatching[i].second = PU2LegalSites[targetPU][0];
+    }
+
+    for (auto matchedPair : PULevelMatching)
+    {
+        auto targetPU = matchedPair.first;
+        for (auto curSite : PU2LegalSites[targetPU])
+        {
+            assert(curSite->isMapped());
+        }
+    }
+
+    placementInfo->setPULegalSite(PU2LegalSites);
+    placementInfo->setPULegalXY(PU2X, PU2Y);
+
+    print_info("MacroLegalizer: fine tune locations of " + std::to_string(fineTunedCnt) + " macros");
+}

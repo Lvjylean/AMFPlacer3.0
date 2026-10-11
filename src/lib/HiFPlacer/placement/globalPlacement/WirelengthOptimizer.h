@@ -74,12 +74,14 @@ class WirelengthOptimizer
      * @param enableMacroPseudoNet2Site enable the legalization pseudo net to force macros move to the legal site
      * @param considerNetNum whether add the interconnection-density-aware factor to pseudo net weights
      * @param enableUserDefinedClusterOpt whether check user-defined cluster information to add pseudo nets
+     * @param enableFFClusterOpt whether the current placement phase permits internal FF cluster pseudo nets
      * @param timingOpt whether turn on the timing-oriented optimizations
      */
     void GlobalPlacementQPSolve(float pesudoNetWeight, bool firstIteration = true,
                                 bool forwardSolutionToNextIteration = false, bool enableMacroPseudoNet2Site = false,
                                 bool considerNetNum = true, bool enableUserDefinedClusterOpt = false,
-                                float displacementLimit = -10, PlacementTimingOptimizer *timingOptimizer = nullptr);
+                                float displacementLimit = -10, PlacementTimingOptimizer *timingOptimizer = nullptr,
+                               bool enableFFClusterOpt = false);
 
     /**
      * @brief update the net weights in the quadratic model according to B2B net HPWL model.
@@ -93,11 +95,13 @@ class WirelengthOptimizer
      * @param enableMacroPseudoNet2Site enable the legalization pseudo net to force macros move to the legal site
      * @param considerNetNum whether add the interconnection-density-aware factor to pseudo net weights
      * @param enableUserDefinedClusterOpt whether check user-defined cluster information to add pseudo nets
+     * @param enableFFClusterOpt whether the current placement phase permits internal FF cluster pseudo nets
      * @param timingOpt whether turn on the timing-oriented optimizations
      */
     void updateB2BNetWeight(float pesudoNetWeight, bool enableMacroPseudoNet2Site = false, bool considerNetNum = true,
                             bool enableUserDefinedClusterOpt = false,
-                            PlacementTimingOptimizer *timingOptimizer = nullptr);
+                            PlacementTimingOptimizer *timingOptimizer = nullptr,
+                            bool enableFFClusterOpt = false);
 
     /**
      * @brief a worker funtion for multi-threading net weight updating
@@ -235,7 +239,24 @@ class WirelengthOptimizer
      *
      * @param pesudoNetWeight the common weight factor for pseudo nets
      */
-    void updatePseudoNetForUserDefinedClusters(float pesudoNetWeight);
+    // Counts are per QP model update, not cumulative across rebuilt models. Each
+    // movable PU/cluster anchor contributes one X term and one Y term. Shared
+    // PUs in distinct clusters count once per anchor; uniquePUs is deduplicated.
+    struct ClusterPseudoNetStats
+    {
+        size_t inputClusters = 0;
+        size_t insertedClusters = 0;
+        size_t xTerms = 0;
+        size_t yTerms = 0;
+        size_t uniquePUs = 0;
+    };
+
+    ClusterPseudoNetStats updatePseudoNetForUserDefinedClusters(float pesudoNetWeight);
+    ClusterPseudoNetStats updatePseudoNetForFFClusters(float pesudoNetWeight);
+    void updatePseudoNetsForClusters(float pesudoNetWeight, bool enableUserDefinedClusterOpt,
+                                    bool enableFFClusterOpt);
+
+    void updatePseudoNetForDataPathClusters(float pesudoNetWeight);
 
     typedef struct _slackEnhanceTuple
     {
@@ -363,9 +384,11 @@ class WirelengthOptimizer
      */
     bool directMacroLegalize = false;
 
-    bool DSPCritical = false;
+    bool boundaryWeakAttraction = true;
 
     float pin2pinEnhance = 5.0;
+
+    bool noWNSGPOpt = false;
 
     /**
      * @brief the fade-out factor for the user-defined clusters
@@ -375,6 +398,9 @@ class WirelengthOptimizer
      *
      */
     float userDefinedClusterFadeOutFactor = 1.0;
+    // Internal FF groups have their own lifetime, independent of external data.
+    float ffClusterFadeOutFactor = 1.0;
+    unsigned long long clusterPseudoNetUpdateCount = 0;
 
     /**
      * @brief the net weight for macro legalization
@@ -393,8 +419,10 @@ class WirelengthOptimizer
     float slackThr = 0;
 
     // For debug usage
-    std::string targetCellName = "design_1_i/DigitRec_0/inst/ap_phi_reg_pp2_iter31_knn_set_392_1_reg_27413_reg[20]";
+    std::string targetCellName = "";
     int targetCellId = -1;
+    std::vector<float> PUsTimingCriticality;
+    std::vector<int> PUsTimingCritical_TargetPUId;
 };
 
 #endif

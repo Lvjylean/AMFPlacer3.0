@@ -42,20 +42,64 @@ class PlacementTimingOptimizer
     void propogateArrivalTime();
     std::vector<int> findCriticalPath();
     std::vector<std::vector<int>> findCriticalPaths(float criticalRatio, bool checkOverlap = true,
-                                                    int pathNumThr = 1000, int converThr = 30);
+                                                    int pathNumThr = 1000, int converThr = 30,
+                                                    bool backwardSearch = true);
+
+    std::vector<std::vector<int>> findCriticalPaths_tolerate(float criticalRatio, bool checkOverlap = true,
+                                                             int pathNumThr = 1000, int converThr = 30,
+                                                             bool backwardSearch = true);
+
+    std::vector<std::vector<int>> findCriticalPaths_inv(float criticalRatio, bool checkOverlap = true,
+                                                        int pathNumThr = 1000, int converThr = 30);
+
+    void encodeNodesInCriticalPaths(float criticalRatio, bool checkOverlap = true, int pathNumThr = 1000,
+                                    int converThr = 30);
     std::vector<std::vector<int>> findCriticalPaths(float criticalRatio,
                                                     std::vector<bool> &FFDirectlyDrivenButNotInOneSlot);
     float getWorstSlackOfCell(DesignInfo::DesignCell *srcCell);
     float conductStaticTimingAnalysis(bool enforeOptimisticTiming = false);
-    void incrementalStaticTimingAnalysis_forPUWithLocation(PlacementInfo::PlacementUnit *curPU, float targetX,
-                                                           float targetY);
+    void incrementalStaticTimingAnalysis(std::set<PlacementInfo::PlacementUnit *, Packing_PUcompare> movedPUs,
+                                         bool noBackPropogation = false);
     void setPinsLocation();
     void clusterLongPathInOneClockRegion(int pathLenThr, float clusterThrRatio);
-    void clusterCriticalPathsByPhysicalRegion();
+    void clusterCriticalPathsByPhysicalRegion(bool deferSLRSpreading = false);
+    void spreadPaperBoundarySLR();
     void advancePaperBoundaryStage();
     void auditPhysicalBoundaries(const std::string &stage);
     void dumpClockRegionClusters();
     void stretchClockRegionColumns();
+
+    inline void updateDelayRelatedToCell(DesignInfo::DesignCell *curCell)
+    {
+        auto &pinLoc = placementInfo->getPinId2location();
+        auto &timingNodes = timingInfo->getSimplePlacementTimingInfo();
+        for (auto edge : timingNodes[curCell->getCellId()]->getInEdges())
+        {
+            auto &pin1Loc = pinLoc[edge->getSourcePin()->getElementIdInType()];
+            auto &pin2Loc = pinLoc[edge->getSinkPin()->getElementIdInType()];
+            if (pin1Loc.X < -5 && pin1Loc.Y < -5)
+                continue;
+            if (pin2Loc.X < -5 && pin2Loc.Y < -5)
+                continue;
+
+            edge->setDelay(
+                getDelayByModel(edge->getSink(), edge->getSource(), pin1Loc.X, pin1Loc.Y, pin2Loc.X, pin2Loc.Y));
+        }
+        for (auto edge : timingNodes[curCell->getCellId()]->getOutEdges())
+        {
+            auto &pin1Loc = pinLoc[edge->getSourcePin()->getElementIdInType()];
+            auto &pin2Loc = pinLoc[edge->getSinkPin()->getElementIdInType()];
+            if (pin1Loc.X < -5 && pin1Loc.Y < -5)
+                continue;
+            if (pin2Loc.X < -5 && pin2Loc.Y < -5)
+                continue;
+
+            edge->setDelay(
+                getDelayByModel(edge->getSink(), edge->getSource(), pin1Loc.X, pin1Loc.Y, pin2Loc.X, pin2Loc.Y));
+        }
+    }
+
+    void checkCrossRegionDegree();
 
     void initPois()
     {
@@ -97,15 +141,69 @@ class PlacementTimingOptimizer
                                  float Y1, float X2, float Y2)
     {
         float delay = getDelayByModel_conservative(X1, Y1, X2, Y2);
-        // if (node1->getClusterId() >= 0 && node2->getClusterId() >= 0 &&
-        //     node1->getClusterId() != node2->getClusterId() && delay > 0.05)
-        //     delay -= 0.05;
+        if (proPrimitiveTiming && !DSPCritical && isPackingTiming)
+        {
+            if (node1->getDesignNode()->isDSP() && node1->getForwardLevel() == 0)
+                delay += 0.5;
+            else if (node2->getDesignNode()->isDSP() && node2->getForwardLevel() == 0)
+                delay += 0.5;
+        }
+        if (proPrimitiveTiming && chainTimingEnabled && node1->getDesignNode()->isCarry() && node2->getDesignNode()->isCarry())
+        {
+            delay -= 0.15;
+            if (delay < 0.027)
+                delay = 0.027;
+        }
         return delay;
     }
 
     inline float getDelayByModel(float X1, float Y1, float X2, float Y2)
     {
         return getDelayByModel_conservative(X1, Y1, X2, Y2);
+    }
+
+    float IOX6[6] = {7.5, 15.5, 33.5, 51.5, 69.5, 76.5};
+    float IOX4[4] = {7.5, 33.5, 51.5, 76.5};
+
+    inline bool crossIOBank(float X1, float X2)
+    {
+        float minX = std::min(X1, X2);
+        float maxX = std::max(X1, X2);
+        if (fineTuneTiming)
+        {
+            for (int i = 0; i < 6; i++)
+                if (minX < IOX6[i] && maxX > IOX6[i])
+                    return true;
+        }
+        else
+        {
+            for (int i = 0; i < 4; i++)
+                if (minX < IOX4[i] && maxX > IOX4[i])
+                    return true;
+        }
+
+        return false;
+    }
+
+    inline int countCrossIOBank(float X1, float X2)
+    {
+        float minX = std::min(X1, X2);
+        float maxX = std::max(X1, X2);
+        int res = 0;
+        if (fineTuneTiming)
+        {
+            for (int i = 0; i < 6; i++)
+                if (minX < IOX6[i] && maxX > IOX6[i])
+                    res++;
+        }
+        else
+        {
+            for (int i = 0; i < 4; i++)
+                if (minX < IOX4[i] && maxX > IOX4[i])
+                    res++;
+        }
+
+        return res;
     }
 
     const float timingC0[10] = {95.05263521, -26.50563359, 77.42394117, 106.29195883, -14.975527};
@@ -126,13 +224,16 @@ class PlacementTimingOptimizer
         const float slrDelay = physical ? physical->penalty(X1, Y1, X2, Y2, slrBoundaryDelayNs) :
             slrBoundaryDelayNs * deviceInfo->getSLRBoundaryCount(clockRegionY0, clockRegionY1);
 
+        const bool ioCrossing = proLegacyIOBoundary && isPackingTiming && crossIOBank(X1, X2);
+
         if (X * X + Y * Y < 9)
         {
             X *= 2;
             float delay = (timingC0[0] + std::pow(X, 0.3) * timingC0[1] + std::pow(Y, 0.3) * timingC0[2] +
                            std::pow(X, 0.5) * timingC0[3] + std::pow(Y, 0.5) * timingC0[4]) /
                           1000.0;
-            if (!physical && (std::abs(clockRegionX1 - clockRegionX0) > 1 || clockRegionX1 == 2 || clockRegionX0 == 2))
+            if (ioCrossing) delay += 0.4f;
+            else if (!physical && (std::abs(clockRegionX1 - clockRegionX0) > 1 || clockRegionX1 == 2 || clockRegionX0 == 2))
                 delay += std::abs(clockRegionX1 - clockRegionX0) * 0.5;
 
             if (delay < 0.05)
@@ -145,7 +246,8 @@ class PlacementTimingOptimizer
             float delay = (timingC1[0] + std::pow(X, 0.3) * timingC1[1] + std::pow(Y, 0.3) * timingC1[2] +
                            std::pow(X, 0.5) * timingC1[3] + std::pow(Y, 0.5) * timingC1[4]) /
                           1000.0;
-            if (!physical && (std::abs(clockRegionX1 - clockRegionX0) > 1 || clockRegionX1 == 2 || clockRegionX0 == 2))
+            if (ioCrossing) delay += 0.4f;
+            else if (!physical && (std::abs(clockRegionX1 - clockRegionX0) > 1 || clockRegionX1 == 2 || clockRegionX0 == 2))
                 delay += std::abs(clockRegionX1 - clockRegionX0) * 0.5;
 
             if (delay < 0.05)
@@ -158,7 +260,8 @@ class PlacementTimingOptimizer
             float delay = (timingC2[0] + std::pow(X, 0.3) * timingC2[1] + std::pow(Y, 0.3) * timingC2[2] +
                            std::pow(X, 0.5) * timingC2[3] + std::pow(Y, 0.5) * timingC2[4]) /
                           1000.0;
-            if (!physical && (std::abs(clockRegionX1 - clockRegionX0) > 1 || clockRegionX1 == 2 || clockRegionX0 == 2))
+            if (ioCrossing) delay += 0.4f;
+            else if (!physical && (std::abs(clockRegionX1 - clockRegionX0) > 1 || clockRegionX1 == 2 || clockRegionX0 == 2))
                 delay += std::abs(clockRegionX1 - clockRegionX0) * 0.5;
 
             if (delay < 0.05)
@@ -170,6 +273,11 @@ class PlacementTimingOptimizer
     inline void pauseCounter()
     {
         enableCounter = false;
+    }
+
+    inline void startCounter()
+    {
+        enableCounter = true;
     }
 
     float getSlackThr();
@@ -185,7 +293,56 @@ class PlacementTimingOptimizer
         assert(timingInfo);
         auto timingGraph = timingInfo->getSimplePlacementTimingGraph();
         timingGraph->sortedEndpointByDelay();
-        return timingGraph->getSortedTimingEndpoints();
+        return timingGraph->getSortedTimingEndpoints_ByArrival();
+    }
+
+    inline float getMaxDelay()
+    {
+        return maxDelay;
+    }
+
+    inline float getMaxIncrementalDelay()
+    {
+        return incr_maxDelay;
+    }
+
+    inline float getOriginalMaxIncrementalDelay()
+    {
+        return oriMaxIncrDelay;
+    }
+
+    // Restores the previous timing transaction. The caller owns the PU/packing
+    // rollback; pin locations and edge/node timing caches are restored here.
+    void recoverArrivalDelayFromLastIncrementalSTA();
+
+    inline void enablePackingTiming()
+    {
+        isPackingTiming = true;
+    }
+
+    inline float getIncrementalTotalTimingBenefit()
+    {
+        return incr_totalTimingBenefit;
+    }
+
+    void enhanceFFControlSetNets();
+
+    void forwardBFSToFindNodesToBeUpdated(std::vector<int> &initialNodeIds);
+    void backwardBFSToFindNodesToBeUpdated();
+    void incremental_propogateArrivalTime();
+
+    void incremental_backPropogateRequiredArrivalTime();
+
+    void clusterCriticalDataPath();
+
+    void enableFineTuneTiming()
+    {
+        fineTuneTiming = true;
+    }
+
+    void setClockEnhanced()
+    {
+        clockEnhanced = true;
     }
 
   private:
@@ -202,6 +359,14 @@ class PlacementTimingOptimizer
     bool DSPCritical = false;
     // Heuristic ns per physical SLR seam; 0 reproduces the pre-SLR model.
     float slrBoundaryDelayNs = 1.5f;
+    using TimingNode = PlacementTimingInfo::TimingGraph<DesignInfo::DesignCell>::TimingNode;
+    using TimingEdge = PlacementTimingInfo::TimingGraph<DesignInfo::DesignCell>::TimingEdge;
+    std::map<int, TimingNode> incrementalNodeSnapshot;
+    std::map<TimingEdge *, float> incrementalEdgeSnapshot;
+    std::map<int, PlacementInfo::Location> incrementalPinSnapshot;
+    bool noBlockAware = false;
+    bool proPrimitiveTiming = false;
+    bool proLegacyIOBoundary = false;
 
     inline float getDis(float x1, float y1, float x2, float y2)
     {
@@ -210,6 +375,7 @@ class PlacementTimingOptimizer
 
     float xDelayUnit = 0.13; // ns/unit
     float yDelayUnit = 0.10; // ns/unit
+    float maxDelay = 0;
 
     int poisN = 1000;
     float lambdaPois = 100;
@@ -222,6 +388,25 @@ class PlacementTimingOptimizer
     std::vector<float> PUId2Slack;
     bool increaseLowDelayVal = false;
     bool enableCounter = true;
+    bool isPackingTiming = false;
+    float incr_maxDelay = 0;
+    float oriMaxIncrDelay = 0;
+    float incr_totalTimingBenefit = 0;
+
+    std::vector<std::vector<int>> incremental_forwardLevel2NodeIds;
+    std::vector<std::vector<int>> incremental_backwardLevel2NodeIds;
+    std::vector<int> incrementalUpdatedNodes;
+    std::vector<int> cellInputCodes;
+
+    std::vector<std::vector<int>> dataPathsToBeClustered;
+
+    bool chainTimingEnabled = false;
+
+    bool fineTuneTiming = false;
+
+    bool initialClustering = true;
+
+    bool clockEnhanced = false;
 };
 
 #endif

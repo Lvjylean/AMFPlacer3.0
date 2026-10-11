@@ -11,12 +11,13 @@ class BoundaryAwareClusterer
     using Edge = PlacementTimingInfo::TimingGraph<DesignInfo::DesignCell>::TimingEdge;
     BoundaryAwareClusterer(PlacementInfo *placement, PlacementTimingOptimizer *timing,
                            std::map<std::string,std::string> &config);
-    void run();
+    void run(bool deferSLRSpreading = false);
     void refresh();
     void audit(const std::string &stage);
     void advancePaperStage();
+    void spreadPaperSLR();
   private:
-    void runPaper();
+    void runPaper(bool deferSLRSpreading);
     void spreadPaper(bool slrStage);
     struct Score { double weighted=0, worst=0, displacement=0; };
     std::vector<Edge *> affectedEdges(const std::vector<PU *> &units) const;

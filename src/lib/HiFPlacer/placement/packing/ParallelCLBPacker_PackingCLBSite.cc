@@ -669,6 +669,43 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCarrySite(int FFContro
         }
     }
 
+    for (auto &FFSet : determinedClusterInSite->getFFControlSets())
+    {
+        for (auto curFF : FFSet.getFFs())
+        {
+            if (FF2LUT.find(curFF) == FF2LUT.end())
+            {
+                for (auto pair : pairedLUTs)
+                {
+                    if (isDirectConnectLUTFF(pair.first, curFF))
+                    {
+                        FF2LUT[curFF] = pair.first;
+                        LUT2FF[pair.first] = curFF;
+                        break;
+                    }
+                    if (isDirectConnectLUTFF(pair.second, curFF))
+                    {
+                        FF2LUT[curFF] = pair.second;
+                        LUT2FF[pair.second] = curFF;
+                        break;
+                    }
+                }
+                if (FF2LUT.find(curFF) == FF2LUT.end())
+                {
+                    for (auto curLUT : singleLUTs)
+                    {
+                        if (isDirectConnectLUTFF(curLUT, curFF))
+                        {
+                            FF2LUT[curFF] = curLUT;
+                            LUT2FF[curLUT] = curFF;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     assert(fixedPairedLUTs.size() + determinedClusterInSite->getSingleLUTs().size() +
                determinedClusterInSite->getPairedLUTs().size() <=
            8);
@@ -987,6 +1024,30 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCarrySite(int FFContro
                         if (CSFF0.compatibleWith(CSFF1.getCSId()) &&
                             CLBSiteLegality::canPlaceFF(slotMapping, targetFF, i0, j0))
                         {
+                            bool compatible = true;
+                            for (int kk = 0; kk < 4; kk++)
+                            {
+                                if (slotMapping.FFs[i0][1 - j0][kk])
+                                {
+                                    if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo())
+                                    {
+                                        if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getCLK() !=
+                                                targetFF->getControlSetInfo()->getCLK() ||
+                                            slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getSR() !=
+                                                targetFF->getControlSetInfo()->getSR() ||
+                                            !DesignInfo::FFSRCompatible(
+                                                slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getFFType(),
+                                                targetFF->getControlSetInfo()->getFFType()))
+                                        {
+                                            compatible = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            if (!compatible)
+                                continue;
+
                             if (FFSwapOption[FFControlSetOrderId][halfCLBId1] !=
                                 FFSwapOption[FFControlSetOrderId][halfCLBId0])
                                 determinedClusterInSite->moveFFFromCS1ToCS0(
@@ -1056,7 +1117,10 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCarrySite(int FFContro
                                             if (slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo()->getCLK() !=
                                                     targetFF->getControlSetInfo()->getCLK() ||
                                                 slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo()->getSR() !=
-                                                    targetFF->getControlSetInfo()->getSR())
+                                                    targetFF->getControlSetInfo()->getSR() ||
+                                                !DesignInfo::FFSRCompatible(
+                                                    slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo()->getFFType(),
+                                                    targetFF->getControlSetInfo()->getFFType()))
                                             {
                                                 compatible = false;
                                             }
@@ -1182,6 +1246,9 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int 
             if (!compatibleInOneHalfCLB(FFSwapOption[FFControlSetOrderId][halfCLBId],
                                         FFSwapOption[FFControlSetOrderId][anotherHalfCLBId]))
             {
+                mappedCells.clear();
+                mappedLUTs.clear();
+                mappedFFs.clear();
                 return;
             }
             if (halfCLBId != FFSwapOption[FFControlSetOrderId][halfCLBId])
@@ -1190,6 +1257,9 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int 
                 {
                     if (placementInfo->getPlacementUnitByCell(FF)->checkHasMUX())
                     {
+                        mappedCells.clear();
+                        mappedLUTs.clear();
+                        mappedFFs.clear();
                         return;
                     }
                 }
@@ -1200,6 +1270,9 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int 
                 {
                     if (placementInfo->getPlacementUnitByCell(FF)->checkHasMUX())
                     {
+                        mappedCells.clear();
+                        mappedLUTs.clear();
+                        mappedFFs.clear();
                         return;
                     }
                 }
@@ -1251,6 +1324,43 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int 
                     assert(pairMacro->getCells()[1]->isFF());
                     FF2LUT[pairMacro->getCells()[1]] = pairMacro->getCells()[0];
                     LUT2FF[pairMacro->getCells()[0]] = pairMacro->getCells()[1];
+                }
+            }
+        }
+    }
+
+    for (auto &FFSet : determinedClusterInSite->getFFControlSets())
+    {
+        for (auto curFF : FFSet.getFFs())
+        {
+            if (FF2LUT.find(curFF) == FF2LUT.end())
+            {
+                for (auto pair : pairedLUTs)
+                {
+                    if (isDirectConnectLUTFF(pair.first, curFF))
+                    {
+                        FF2LUT[curFF] = pair.first;
+                        LUT2FF[pair.first] = curFF;
+                        break;
+                    }
+                    if (isDirectConnectLUTFF(pair.second, curFF))
+                    {
+                        FF2LUT[curFF] = pair.second;
+                        LUT2FF[pair.second] = curFF;
+                        break;
+                    }
+                }
+                if (FF2LUT.find(curFF) == FF2LUT.end())
+                {
+                    for (auto curLUT : singleLUTs)
+                    {
+                        if (isDirectConnectLUTFF(curLUT, curFF))
+                        {
+                            FF2LUT[curFF] = curLUT;
+                            LUT2FF[curLUT] = curFF;
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -1590,6 +1700,30 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int 
                         if (CSFF0.compatibleWith(CSFF1.getCSId()) &&
                             CLBSiteLegality::canPlaceFF(slotMapping, targetFF, i0, j0))
                         {
+                            bool compatible = true;
+                            for (int kk = 0; kk < 4; kk++)
+                            {
+                                if (slotMapping.FFs[i0][1 - j0][kk])
+                                {
+                                    if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo())
+                                    {
+                                        if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getCLK() !=
+                                                targetFF->getControlSetInfo()->getCLK() ||
+                                            slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getSR() !=
+                                                targetFF->getControlSetInfo()->getSR() ||
+                                            !DesignInfo::FFSRCompatible(
+                                                slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getFFType(),
+                                                targetFF->getControlSetInfo()->getFFType()))
+                                        {
+                                            compatible = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            if (!compatible)
+                                continue;
+
                             if (FFSwapOption[FFControlSetOrderId][halfCLBId1] !=
                                 FFSwapOption[FFControlSetOrderId][halfCLBId0])
                                 determinedClusterInSite->moveFFFromCS1ToCS0(
@@ -1659,7 +1793,10 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int 
                                             if (slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo()->getCLK() !=
                                                     targetFF->getControlSetInfo()->getCLK() ||
                                                 slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo()->getSR() !=
-                                                    targetFF->getControlSetInfo()->getSR())
+                                                    targetFF->getControlSetInfo()->getSR() ||
+                                                !DesignInfo::FFSRCompatible(
+                                                    slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo()->getFFType(),
+                                                    targetFF->getControlSetInfo()->getFFType()))
                                             {
                                                 compatible = false;
                                             }
@@ -1722,6 +1859,180 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int 
         }
     }
 
+    // swap LUTs between LUT slots
+    for (auto pair : LUT2FF)
+    {
+        auto targetLUT = pair.first;
+        auto targetFF = pair.second;
+        int luti = cell2slot[targetLUT].at(0);
+        int lutj = cell2slot[targetLUT].at(1);
+        int lutk = cell2slot[targetLUT].at(2);
+        int ffi = cell2slot[targetFF].at(0);
+        int ffj = cell2slot[targetFF].at(1);
+        int ffk = cell2slot[targetFF].at(2);
+        int halfCLBId_Ori = ffi * 2 + ffj;
+
+        if (slotMapping.LUTs[luti][1 - lutj][lutk])
+            continue;
+
+        bool optimized = false;
+        if (!(luti == ffi && lutj == ffj && lutk == ffk))
+        {
+            for (int i0 = 0; i0 < 2 && !optimized; i0++)
+            {
+                for (int k0 = 0; k0 < 4 && !optimized; k0++)
+                {
+                    if (isMuxMacro(slotMapping.LUTs[i0][0][k0]) || isMuxMacro(slotMapping.FFs[i0][0][k0]) ||
+                        isMuxMacro(slotMapping.LUTs[i0][1][k0]) || isMuxMacro(slotMapping.FFs[i0][1][k0]))
+                        continue;
+
+                    if (!(slotMapping.FFs[i0][0][k0] || slotMapping.FFs[i0][1][k0]))
+                    {
+                        for (int j0 = 0; j0 < 2 && !optimized; j0++)
+                        {
+                            if (targetLUT->isLUT6() && j0 == 1)
+                                continue;
+
+                            bool compatible = true;
+
+                            int halfCLBId_target = i0 * 2 + j0;
+                            for (int kk = 0; kk < 4; kk++)
+                            {
+                                if (slotMapping.FFs[i0][j0][kk])
+                                {
+                                    if (slotMapping.FFs[i0][j0][kk]->getControlSetInfo())
+                                    {
+                                        if (slotMapping.FFs[i0][j0][kk]->getControlSetInfo()->getId() !=
+                                            targetFF->getControlSetInfo()->getId())
+                                        {
+                                            compatible = false;
+                                        }
+                                    }
+                                }
+                            }
+                            for (int kk = 0; kk < 4; kk++)
+                            {
+                                if (slotMapping.FFs[i0][1 - j0][kk])
+                                {
+                                    if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo())
+                                    {
+                                        if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getCLK() !=
+                                                targetFF->getControlSetInfo()->getCLK() ||
+                                            slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getSR() !=
+                                                targetFF->getControlSetInfo()->getSR() ||
+                                            !DesignInfo::FFSRCompatible(
+                                                slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getFFType(),
+                                                targetFF->getControlSetInfo()->getFFType()))
+                                        {
+                                            compatible = false;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (compatible)
+                            {
+
+                                auto LUT0 = slotMapping.LUTs[i0][0][k0];
+                                auto LUT1 = slotMapping.LUTs[i0][1][k0];
+
+                                slotMapping.LUTs[i0][0][k0] = nullptr;
+                                slotMapping.LUTs[i0][1][k0] = nullptr;
+
+                                slotMapping.LUTs[luti][lutj][lutk] = nullptr;
+                                slotMapping.FFs[ffi][ffj][ffk] = nullptr;
+
+                                slotMapping.LUTs[i0][j0][k0] = targetLUT;
+                                slotMapping.FFs[i0][j0][k0] = targetFF;
+
+                                if (FFSwapOption[FFControlSetOrderId][halfCLBId_Ori] !=
+                                    FFSwapOption[FFControlSetOrderId][halfCLBId_target])
+                                    determinedClusterInSite->moveFFFromCS1ToCS0(
+                                        targetFF, FFSwapOption[FFControlSetOrderId][halfCLBId_Ori],
+                                        FFSwapOption[FFControlSetOrderId][halfCLBId_target]);
+                                cell2slot[targetFF] = std::array<int, 3>({i0, j0, k0});
+                                cell2slot[targetLUT] = std::array<int, 3>({i0, j0, k0});
+
+                                slotMapping.LUTs[luti][0][lutk] = LUT0;
+                                slotMapping.LUTs[luti][1][lutk] = LUT1;
+
+                                if (LUT0)
+                                    cell2slot[LUT0] = std::array<int, 3>({luti, 0, lutk});
+                                if (LUT1)
+                                    cell2slot[LUT1] = std::array<int, 3>({luti, 1, lutk});
+
+                                optimized = true;
+
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // // Move FF to empty slot if possible to increase direct connect
+    // for (int i0 = 0; i0 < 2; i0++)
+    // {
+    //     for (int j0 = 0; j0 < 2; j0++)
+    //     {
+    //         for (int k0 = 0; k0 < 4; k0++)
+    //         {
+    //             if (!slotMapping.LUTs[i0][j0][k0])
+    //                 continue;
+    //             if (LUT2FF.find(slotMapping.LUTs[i0][j0][k0]) != LUT2FF.end())
+    //             {
+    //                 auto targetFF = LUT2FF[slotMapping.LUTs[i0][j0][k0]];
+    //                 if (slotMapping.FFs[i0][j0][k0] == nullptr)
+    //                 {
+    //                     int halfCLBId0 = i0 * 2 + j0;
+    //                     auto &CSFF0 =
+    //                         determinedClusterInSite->getFFControlSets()[FFSwapOption[FFControlSetOrderId][halfCLBId0]];
+    //                     int i1 = cell2slot[targetFF].at(0);
+    //                     int j1 = cell2slot[targetFF].at(1);
+    //                     int k1 = cell2slot[targetFF].at(2);
+    //                     int halfCLBId1 = i1 * 2 + j1;
+    //                     auto &CSFF1 =
+    //                         determinedClusterInSite->getFFControlSets()[FFSwapOption[FFControlSetOrderId][halfCLBId1]];
+    //                     if (CSFF0.compatibleWith(CSFF1.getCSId()))
+    //                     {
+    //                         bool compatible = true;
+    //                         for (int kk = 0; kk < 4; kk++)
+    //                         {
+    //                             if (slotMapping.FFs[i0][1 - j0][kk])
+    //                             {
+    //                                 if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo())
+    //                                 {
+    //                                     if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getCLK() !=
+    //                                             targetFF->getControlSetInfo()->getCLK() ||
+    //                                         slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getSR() !=
+    //                                             targetFF->getControlSetInfo()->getSR())
+    //                                     {
+    //                                         compatible = false;
+    //                                         break;
+    //                                     }
+    //                                 }
+    //                             }
+    //                         }
+    //                         if (!compatible)
+    //                             continue;
+
+    //                         if (FFSwapOption[FFControlSetOrderId][halfCLBId1] !=
+    //                             FFSwapOption[FFControlSetOrderId][halfCLBId0])
+    //                             determinedClusterInSite->moveFFFromCS1ToCS0(
+    //                                 targetFF, FFSwapOption[FFControlSetOrderId][halfCLBId1],
+    //                                 FFSwapOption[FFControlSetOrderId][halfCLBId0]);
+    //                         slotMapping.FFs[i0][j0][k0] = targetFF;
+    //                         slotMapping.FFs[i1][j1][k1] = nullptr;
+    //                         cell2slot[targetFF] = std::array<int, 3>({i0, j0, k0});
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+
     for (int i0 = 0; i0 < 2; i0++)
     {
         for (int k0 = 0; k0 < 4; k0++)
@@ -1761,6 +2072,8 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int 
                         continue;
                     float slack =
                         (srcNode->getLatestInputArrival() - srcNode->getRequiredArrivalTime()) / clockPeriod + 20;
+                    if (j == 0)
+                        slack += 0.025;
                     directConnectCnt += slack;
                 }
             }
@@ -2153,6 +2466,43 @@ void ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite(int FFC
                     assert(pairMacro->getCells()[1]->isFF());
                     FF2LUT[pairMacro->getCells()[1]] = pairMacro->getCells()[0];
                     LUT2FF[pairMacro->getCells()[0]] = pairMacro->getCells()[1];
+                }
+            }
+        }
+    }
+
+    for (auto &FFSet : determinedClusterInSite->getFFControlSets())
+    {
+        for (auto curFF : FFSet.getFFs())
+        {
+            if (FF2LUT.find(curFF) == FF2LUT.end())
+            {
+                for (auto pair : pairedLUTs)
+                {
+                    if (isDirectConnectLUTFF(pair.first, curFF))
+                    {
+                        FF2LUT[curFF] = pair.first;
+                        LUT2FF[pair.first] = curFF;
+                        break;
+                    }
+                    if (isDirectConnectLUTFF(pair.second, curFF))
+                    {
+                        FF2LUT[curFF] = pair.second;
+                        LUT2FF[pair.second] = curFF;
+                        break;
+                    }
+                }
+                if (FF2LUT.find(curFF) == FF2LUT.end())
+                {
+                    for (auto curLUT : singleLUTs)
+                    {
+                        if (isDirectConnectLUTFF(curLUT, curFF))
+                        {
+                            FF2LUT[curFF] = curLUT;
+                            LUT2FF[curLUT] = curFF;
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -2560,6 +2910,30 @@ void ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite(int FFC
                         if (CSFF0.compatibleWith(CSFF1.getCSId()) &&
                             CLBSiteLegality::canPlaceFF(slotMapping, targetFF, i0, j0))
                         {
+                            bool compatible = true;
+                            for (int kk = 0; kk < 4; kk++)
+                            {
+                                if (slotMapping.FFs[i0][1 - j0][kk])
+                                {
+                                    if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo())
+                                    {
+                                        if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getCLK() !=
+                                                targetFF->getControlSetInfo()->getCLK() ||
+                                            slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getSR() !=
+                                                targetFF->getControlSetInfo()->getSR() ||
+                                            !DesignInfo::FFSRCompatible(
+                                                slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getFFType(),
+                                                targetFF->getControlSetInfo()->getFFType()))
+                                        {
+                                            compatible = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            if (!compatible)
+                                continue;
+
                             if (FFSwapOption[FFControlSetOrderId][halfCLBId1] !=
                                 FFSwapOption[FFControlSetOrderId][halfCLBId0])
                                 determinedClusterInSite->moveFFFromCS1ToCS0(
@@ -2629,7 +3003,10 @@ void ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite(int FFC
                                             if (slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo()->getCLK() !=
                                                     targetFF->getControlSetInfo()->getCLK() ||
                                                 slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo()->getSR() !=
-                                                    targetFF->getControlSetInfo()->getSR())
+                                                    targetFF->getControlSetInfo()->getSR() ||
+                                                !DesignInfo::FFSRCompatible(
+                                                    slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo()->getFFType(),
+                                                    targetFF->getControlSetInfo()->getFFType()))
                                             {
                                                 compatible = false;
                                             }
@@ -2692,6 +3069,119 @@ void ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite(int FFC
         }
     }
 
+    // swap LUTs between LUT slots
+    for (auto pair : LUT2FF)
+    {
+        auto targetLUT = pair.first;
+        auto targetFF = pair.second;
+        int luti = cell2slot[targetLUT].at(0);
+        int lutj = cell2slot[targetLUT].at(1);
+        int lutk = cell2slot[targetLUT].at(2);
+        int ffi = cell2slot[targetFF].at(0);
+        int ffj = cell2slot[targetFF].at(1);
+        int ffk = cell2slot[targetFF].at(2);
+        int halfCLBId_Ori = ffi * 2 + ffj;
+
+        if (slotMapping.LUTs[luti][1 - lutj][lutk])
+            continue;
+
+        bool optimized = false;
+        if (!(luti == ffi && lutj == ffj && lutk == ffk))
+        {
+            for (int i0 = 0; i0 < 2 && !optimized; i0++)
+            {
+                for (int k0 = 0; k0 < 4 && !optimized; k0++)
+                {
+                    if (isMuxMacro(slotMapping.LUTs[i0][0][k0]) || isMuxMacro(slotMapping.FFs[i0][0][k0]) ||
+                        isMuxMacro(slotMapping.LUTs[i0][1][k0]) || isMuxMacro(slotMapping.FFs[i0][1][k0]))
+                        continue;
+
+                    if (!(slotMapping.FFs[i0][0][k0] || slotMapping.FFs[i0][1][k0]))
+                    {
+                        for (int j0 = 0; j0 < 2 && !optimized; j0++)
+                        {
+                            if (targetLUT->isLUT6() && j0 == 1)
+                                continue;
+
+                            bool compatible = true;
+
+                            int halfCLBId_target = i0 * 2 + j0;
+                            for (int kk = 0; kk < 4; kk++)
+                            {
+                                if (slotMapping.FFs[i0][j0][kk])
+                                {
+                                    if (slotMapping.FFs[i0][j0][kk]->getControlSetInfo())
+                                    {
+                                        if (slotMapping.FFs[i0][j0][kk]->getControlSetInfo()->getId() !=
+                                            targetFF->getControlSetInfo()->getId())
+                                        {
+                                            compatible = false;
+                                        }
+                                    }
+                                }
+                            }
+                            for (int kk = 0; kk < 4; kk++)
+                            {
+                                if (slotMapping.FFs[i0][1 - j0][kk])
+                                {
+                                    if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo())
+                                    {
+                                        if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getCLK() !=
+                                                targetFF->getControlSetInfo()->getCLK() ||
+                                            slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getSR() !=
+                                                targetFF->getControlSetInfo()->getSR() ||
+                                            !DesignInfo::FFSRCompatible(
+                                                slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getFFType(),
+                                                targetFF->getControlSetInfo()->getFFType()))
+                                        {
+                                            compatible = false;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (compatible)
+                            {
+
+                                auto LUT0 = slotMapping.LUTs[i0][0][k0];
+                                auto LUT1 = slotMapping.LUTs[i0][1][k0];
+
+                                slotMapping.LUTs[i0][0][k0] = nullptr;
+                                slotMapping.LUTs[i0][1][k0] = nullptr;
+
+                                slotMapping.LUTs[luti][lutj][lutk] = nullptr;
+                                slotMapping.FFs[ffi][ffj][ffk] = nullptr;
+
+                                slotMapping.LUTs[i0][j0][k0] = targetLUT;
+                                slotMapping.FFs[i0][j0][k0] = targetFF;
+
+                                if (FFSwapOption[FFControlSetOrderId][halfCLBId_Ori] !=
+                                    FFSwapOption[FFControlSetOrderId][halfCLBId_target])
+                                    determinedClusterInSite->moveFFFromCS1ToCS0(
+                                        targetFF, FFSwapOption[FFControlSetOrderId][halfCLBId_Ori],
+                                        FFSwapOption[FFControlSetOrderId][halfCLBId_target]);
+                                cell2slot[targetFF] = std::array<int, 3>({i0, j0, k0});
+                                cell2slot[targetLUT] = std::array<int, 3>({i0, j0, k0});
+
+                                slotMapping.LUTs[luti][0][lutk] = LUT0;
+                                slotMapping.LUTs[luti][1][lutk] = LUT1;
+
+                                if (LUT0)
+                                    cell2slot[LUT0] = std::array<int, 3>({luti, 0, lutk});
+                                if (LUT1)
+                                    cell2slot[LUT1] = std::array<int, 3>({luti, 1, lutk});
+
+                                optimized = true;
+
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     auto &timingNodes = placementInfo->getTimingInfo()->getSimplePlacementTimingInfo();
     float clockPeriod = placementInfo->getTimingInfo()->getSimplePlacementTimingGraph()->getClockPeriod();
     float directConnectCnt = 0;
@@ -2711,6 +3201,8 @@ void ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite(int FFC
                         continue;
                     float slack =
                         (srcNode->getLatestInputArrival() - srcNode->getRequiredArrivalTime()) / clockPeriod + 20;
+                    if (j == 0)
+                        slack += 0.025;
                     directConnectCnt += slack;
                 }
             }
@@ -2758,6 +3250,8 @@ void ParallelCLBPacker::PackingCLBSite::moveLUTToLUT6Slot()
                 if (determinedClusterInSite->getSingleLUTs().find(slotMapping.LUTs[i][1][k]) !=
                     determinedClusterInSite->getSingleLUTs().end())
                 {
+                    if (isDirectConnectLUTFF(slotMapping.LUTs[i][1][k], slotMapping.FFs[i][1][k]))
+                        continue;
                     slotMapping.LUTs[i][0][k] = slotMapping.LUTs[i][1][k];
                     slotMapping.LUTs[i][1][k] = nullptr;
                 }
@@ -2769,7 +3263,27 @@ void ParallelCLBPacker::PackingCLBSite::moveLUTToLUT6Slot()
 void ParallelCLBPacker::PackingCLBSite::mapLUTRAMRelatedCellsToSlots(PlacementInfo::PlacementMacro *_LUTRAMMacro)
 {
     AMF_PROFILE_FUNCTION("final_packing");
-    LUTRAMMacro = _LUTRAMMacro;
+    if(std::find(LUTRAMMacros.begin(),LUTRAMMacros.end(),_LUTRAMMacro)!=LUTRAMMacros.end())
+        throw std::runtime_error("Duplicate prepacked MCLB owner");
+    if(!LUTRAMMacros.empty()) {
+        std::set<std::string> bels;
+        unsigned srlCount=0;
+        auto owners=LUTRAMMacros;owners.push_back(_LUTRAMMacro);
+        for(auto macro:owners) {
+            if(macro->getFixedCellInfoVec().size()!=macro->getCells().size())
+                throw std::runtime_error("Shared SRL site lacks complete BEL assignment");
+            for(auto cell:macro->getCells()) {
+                if(cell->originallyIsShifter()) ++srlCount;
+                else if(cell->getOriCellType()!=DesignInfo::CellType_MUXF7)
+                    throw std::runtime_error("Non-SRL macro admitted to shared SRL site");
+            }
+            for(const auto &fixed:macro->getFixedCellInfoVec())
+                if(!bels.insert(fixed.BELName).second) throw std::runtime_error("Shared SRL BEL collision");
+        }
+        if(srlCount>4) throw std::runtime_error("Shared SLICEM exceeds four SRLs");
+    }
+    if(!LUTRAMMacro) LUTRAMMacro=_LUTRAMMacro;
+    LUTRAMMacros.push_back(_LUTRAMMacro);
     isLUTRAMSite = true;
 }
 

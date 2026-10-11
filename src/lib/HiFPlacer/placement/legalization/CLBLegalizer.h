@@ -1,3 +1,7 @@
+#include "LegalizationTrace.h"
+#include "SRLSiteSharing.h"
+#include <algorithm>
+#include <limits>
 /**
  * @file CLBLegalizer.h
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -86,6 +90,7 @@ class CLBLegalizer
             return 0.0f;
         if (finalAverageDisplacement > 1000)
             return finalAverageDisplacement;
+        if (!sharedSRLGroups.empty()) return sharingAverageDisplacement();
         float tmpAverageDisplacement = 0.0;
         for (auto PUSitePair : PULevelMatching)
         {
@@ -143,6 +148,17 @@ class CLBLegalizer
     }
 
   private:
+    friend class SRLSharingProbe;
+    void buildSRLSharingGroups();
+    void expandSharedSRLTargets();
+    PlacementInfo::Location sharingCenter(PlacementInfo::PlacementUnit *pu) const;
+    bool sharingLocationLegal(PlacementInfo::PlacementUnit *pu, float x, float y) const;
+    float sharingHPWLChange(PlacementInfo::PlacementUnit *pu, float x, float y);
+    float sharingAverageDisplacement() const;
+    std::map<PlacementInfo::PlacementUnit*,std::vector<PlacementInfo::PlacementUnit*>> sharedSRLGroups;
+    std::map<PlacementInfo::PlacementMacro*,std::vector<PlacementInfo::PlacementMacro::fixedPlacementInfo_inMacro>> originalSRLFixed;
+    std::map<std::string,std::vector<std::string>> srlControlMetadata;
+    bool srlControlsLoaded=false;
     std::string legalizerName;
     PlacementInfo *placementInfo;
     DeviceInfo *deviceInfo;
@@ -615,8 +631,11 @@ class CLBLegalizer
                 curCell = curMacro->getCells()[0];
             }
             assert(curCell);
+            auto center=sharingCenter(curPU);
+            const bool shared=sharedSRLGroups.count(curPU);
             PU2SitesInDisplacementThreshold[curPU] = placementInfo->findNeiborSiteFromBinGrid(
-                curCell, cellLoc[curCell->getCellId()].X, cellLoc[curCell->getCellId()].Y, displacementThreshold,
+                curCell, shared?center.X:cellLoc[curCell->getCellId()].X,
+                shared?center.Y:cellLoc[curCell->getCellId()].Y, displacementThreshold,
                 candidateFactor * maxNumCandidate);
         }
     }
@@ -661,7 +680,8 @@ class CLBLegalizer
 
     inline float getDisplacement(PlacementInfo::PlacementUnit *curPU, DeviceInfo::DeviceSite *curSite)
     {
-        return std::fabs(curPU->X() - curSite->X()) + y2xRatio * std::fabs(curPU->Y() - curSite->Y());
+        auto center=sharingCenter(curPU);
+        return std::fabs(center.X-curSite->X())+y2xRatio*std::fabs(center.Y-curSite->Y());
     }
 
     /**
@@ -677,6 +697,12 @@ class CLBLegalizer
         if (PU2Site2HPWLIncrease[curPU].find(curSite) != PU2Site2HPWLIncrease[curPU].end())
         {
             return PU2Site2HPWLIncrease[curPU][curSite];
+        }
+        legalization_trace::CostScope traceCost;
+        if(sharedSRLGroups.count(curPU)) {
+            float cost=sharingHPWLChange(curPU,curSite->X(),curSite->Y());
+            PU2Site2HPWLIncrease[curPU][curSite]=cost;
+            return cost;
         }
         float oriHPWL = 0.0;
         float newHPWL = 0.0;
@@ -706,6 +732,7 @@ class CLBLegalizer
      */
     inline float getHPWLChange(PlacementInfo::PlacementUnit *tmpPU, float PUX, float PUY)
     {
+        if(sharedSRLGroups.count(tmpPU)) return sharingHPWLChange(tmpPU,PUX,PUY);
 
         float oriHPWL = 0.0;
         float newHPWL = 0.0;

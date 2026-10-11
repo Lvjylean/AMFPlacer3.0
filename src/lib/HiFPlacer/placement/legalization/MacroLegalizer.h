@@ -18,6 +18,7 @@
 #include "DeviceInfo.h"
 #include "MinCostBipartiteMatcher.h"
 #include "PlacementInfo.h"
+#include "PlacementTimingOptimizer.h"
 #include "dumpZip.h"
 #include "sysInfo.h"
 #include <assert.h>
@@ -80,6 +81,10 @@ class MacroLegalizer
      *
      * @return float
      */
+    // Diagnostic read-only access; assignment and convergence gates are unchanged.
+    const std::vector<std::pair<PlacementInfo::PlacementUnit *, DeviceInfo::DeviceSite *>> &
+    diagnosticMatching() const { return PULevelMatching; }
+
     inline float getAverageDisplacementOfExactLegalization()
     {
         if (noTarget)
@@ -152,6 +157,32 @@ class MacroLegalizer
     {
         return noTarget;
     }
+
+    /**
+     * @brief helper struct for candidate site sorting
+     *
+     */
+    typedef struct _CLBMacroLegalizattionInfo
+    {
+        PlacementInfo::PlacementMacro *macro = nullptr;
+        int offsetInMacro = -1;
+
+        _CLBMacroLegalizattionInfo(PlacementInfo::PlacementMacro *macro, int offsetInMacro)
+            : macro(macro), offsetInMacro(offsetInMacro)
+        {
+        }
+
+        _CLBMacroLegalizattionInfo()
+        {
+            macro = nullptr;
+            offsetInMacro = -1;
+        }
+    } CLBMacroLegalizattionInfo;
+
+    void macroDetailedPlacement(PlacementTimingOptimizer *timingOptimizer);
+
+    void moveAMacroFromAToB(PlacementInfo::PlacementMacro *curMacro, int X1, int Y1, int X2, int Y2,
+                            std::vector<std::vector<CLBMacroLegalizattionInfo>> &CLBArray);
 
   private:
     std::string legalizerName;

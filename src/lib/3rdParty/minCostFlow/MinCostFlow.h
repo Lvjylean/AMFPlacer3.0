@@ -96,6 +96,7 @@ class MinCostFlow
             stepProgress = 1;
         while (SPFA(resGraph, s, t, parent, parentEdge))
         {
+            ++diagAugment;
             int path_flow = MAX_VAL;
             for (v = t; v != s; v = parent[v])
             {
@@ -138,6 +139,7 @@ class MinCostFlow
         }
     }
 
+    unsigned long long diagSPFA=0,diagVisits=0,diagRelax=0,diagAugment=0;
     Graph resGraph;
 
   private:
@@ -171,6 +173,7 @@ class MinCostFlow
     bool SPFA(Graph resGraph, int source, int sink, int parentVertex[], Edge *parentEdge[])
     {
         // Initialize variables that will be needed
+        ++diagSPFA;
         int numVertices = resGraph.numVertices;
         std::vector<Edge *> *adj = resGraph.adj;
         float distance[numVertices];
@@ -199,6 +202,7 @@ class MinCostFlow
             int u = nodeQ.front();
             nodeQ.pop();
             int numEdge = adj[u].size();
+            diagVisits += numEdge;
             //#pragma omp parallel for
             for (int e = 0; e < numEdge; e++)
             {
@@ -208,6 +212,7 @@ class MinCostFlow
                     float w = adj[u][e]->cost;
                     if (distance[v] > distance[u] + w + eps)
                     {
+                        ++diagRelax;
                         distance[v] = distance[u] + w;
                         parentVertex[v] = u;
                         parentEdge[v] = adj[u][e];

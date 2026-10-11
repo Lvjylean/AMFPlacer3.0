@@ -28,7 +28,10 @@ def git(*args):
 
 
 def machine():
-    return json.loads((ROOT / 'configs/machines/eda072.json').read_text())
+    path = ROOT / os.environ.get('AMF_MACHINE_CONFIG', 'configs/machines/eda072.json')
+    settings = json.loads(path.read_text())
+    settings['project_root'] = str((ROOT / settings['project_root']).resolve())
+    return settings
 
 
 def require_server():
@@ -73,6 +76,8 @@ def build(args):
     save(root / 'manifest.json', record)
     commands = [('configure', ['cmake', '-S', str(root / 'src'), '-B', str(root / 'build'), '-G', 'Ninja', '-DCMAKE_CXX_FLAGS=-g']),
                 ('compile', ['cmake', '--build', str(root / 'build'), '--parallel', str(record['jobs']), '--target', 'AMFPlacer', 'partitionHyperGraph'])]
+    if os.environ.get('AMF_STUDY_BOOST_LIBRARYDIR'):
+        commands[0][1].extend(['-DBOOST_LIBRARYDIR='+os.environ['AMF_STUDY_BOOST_LIBRARYDIR'], '-DBoost_NO_SYSTEM_PATHS=OFF'])
     if args.profile:
         commands[0][1].append('-DAMF_ENABLE_RUNTIME_PROFILING=ON')
     for stage, command in commands:
@@ -281,7 +286,7 @@ def main():
     p.add_argument('--run-prefix', default='getrf-u250', help='Case label for the unique experiment directory')
     p.add_argument('--input-provenance', type=Path, help='Recorded input adaptation and timing-constraint provenance')
     p.add_argument('--profile', action='store_true', help='Collect runtime scopes from a profiling build')
-    p.add_argument('--config', default='configs/experiments/getrf-u250-full.json')
+    p.add_argument('--config', default='configs/experiments/getrf-amf3pro-srl-share4-10ns.json')
     p.add_argument('--binary', default='builds/current/AMFPlacer')
     p.add_argument('--dcp', default='data/reference/getrf-u250/post_opt.dcp')
     p.add_argument('--packing-only', action='store_true')

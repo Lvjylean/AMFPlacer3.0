@@ -4,6 +4,21 @@
 
 正式工作区位于 eda072：`/Projects/jinyang/workspace/AMFplacer3.0`。源码、构建、大型输入及最终 DCP 保存在服务器；本地保留轻量管理镜像、报告与日志。
 
+## 当前分支：AMF3Pro / SRL 兼容共享 site
+
+本分支的根目录主源码采用 **独立 SLR 阶段，每次 cluster 最多两轮**。
+默认 GETRF 配置开启 BoundaryWeakAttraction，每个 SLICEM 最多容纳 4 个兼容 SRL，保留独立 PU，关闭 Pro 器件延迟特例。
+
+- 主配置：[getrf-amf3pro-srl-share4-10ns.json](configs/experiments/getrf-amf3pro-srl-share4-10ns.json)
+- 合并版源码覆盖文件及独立配置：[variants/merged/](variants/merged/)
+- [版本范围、两种实现、输入准备和运行方式](docs/research/amf3pro-srl-compatible-20261012.md)
+- [四组完整实验结果与 DCP 地址](docs/research/getrf-srl-share4-final-results-20261012.md)
+- [主配置 AMF 各阶段耗时](docs/research/getrf-srl-share4-max2-weak-on-amf-timing-20261012.md)
+
+full-run 默认选择上述主配置；历史 run 仍为 faceDetect。
+主算法实现与两轮实验冻结快照逐文件相同；另同步了一处旧测试的开关参数修正。合并覆盖文件可精确重建合并实验源码。
+此次仅整理发布入口和来源，尚未加入多核并行优化。以下旧版本说明保留为历史。
+
 ## 2026-10-08 功能分支
 
 本分支包含外部 floorplan 初始化接入、单向分阶段的 SLR/HPIO 二维聚拢修复，以及表驱动时钟容量检查。外部 floorplan 只负责初始化；尚未加入 SLL 容量优化或完整时钟布线分配。继承 1003 的 U250 坐标、延迟系数和接口修复，详见 [1008 功能核对与验证范围](docs/research/version-diff-20261008.md)。

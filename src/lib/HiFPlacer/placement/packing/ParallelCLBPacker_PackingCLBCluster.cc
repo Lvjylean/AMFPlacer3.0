@@ -103,6 +103,13 @@ bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::addLUT(DesignInfo::De
 
     assert(singleLUTs.find(curLUT) == singleLUTs.end());
 
+    bool SLICEMBug = false;
+    if (parentPackingCLB->getPlacementInfo()->checkSLICEMBug() &&
+        parentPackingCLB->getCLBSite()->getSiteType() == "SLICEM")
+    {
+        SLICEMBug = true;
+    }
+
     if (singleLUTs.size() + 1 + pairedLUTs.size() + parentPackingCLB->getFixedPairedLUTs().size() <= MaxNum_LUTSite)
     {
         singleLUTs.insert(curLUT);
@@ -131,7 +138,7 @@ bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::addLUT(DesignInfo::De
                 }
             }
         }
-        if (LUTToPair)
+        if (LUTToPair && !SLICEMBug)
         {
             singleLUTs.erase(LUTToPair);
             if (LUTToPair->getCellId() < curLUT->getCellId())
@@ -153,7 +160,8 @@ bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::addLUT(DesignInfo::De
         return true;
     }
 
-    maxCardinalityMatching();
+    if (!SLICEMBug)
+        maxCardinalityMatching();
 
     return singleLUTs.size() + pairedLUTs.size() + parentPackingCLB->getFixedPairedLUTs().size() <= MaxNum_LUTSite;
 }
@@ -526,9 +534,8 @@ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::updateScoreInSite()
             }
         }
         totalNetNum += tmpPU->getNetsSetPtr()->size() * 0.5; //(tmpPU->getWeight() > 1 ? (tmpPU->getWeight() / 2) : 1);
-        totalLen += getPlacementUnitMaxPathLen(tmpPU);
-        // Timing-aware packing: accumulate negative slack for critical path prioritization
-        // 时序感知打包: 累积负 slack 用于关键路径优先
+        if (!parentPackingCLB->isTimingPathLenFactorDisabled())
+            totalLen += getPlacementUnitMaxPathLen(tmpPU);
         totalNegSlack += getPlacementUnitMaxPathNegativeSlack(tmpPU);
         if (tmpPU->getType() == PlacementInfo::PlacementUnitType_Macro)
             totalCellNum += tmpPU->getWeight();
@@ -585,7 +592,8 @@ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::incrementalUpdateScor
             }
         }
         totalNetNum += tmpPU->getNetsSetPtr()->size() * 0.5; //(tmpPU->getWeight() > 1 ? (tmpPU->getWeight() / 2) : 1);
-        totalLen += getPlacementUnitMaxPathLen(tmpPU);
+        if (!parentPackingCLB->isTimingPathLenFactorDisabled())
+            totalLen += getPlacementUnitMaxPathLen(tmpPU);
         totalNegSlack += getPlacementUnitMaxPathNegativeSlack(tmpPU);
         if (tmpPU->getType() == PlacementInfo::PlacementUnitType_Macro)
             totalCellNum += tmpPU->getWeight();
@@ -653,6 +661,8 @@ bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::addPU(PlacementInfo::
         }
         else if (tmpMacro->getMacroType() == PlacementInfo::PlacementMacro::PlacementMacroType_LUTFFPair)
         {
+            // if (parentPackingCLB->getCLBSite()->getSiteType() == "SLICEM" && placementInfo->checkSLICEMBug())
+            //     return false;
             if (tmpMacro->getCells()[0]->isLUT6())
             {
                 if (tmpMacro->getCells()[0]->getTimingLength() > 10)
@@ -981,6 +991,7 @@ std::ostream &operator<<(std::ostream &os, const ParallelCLBPacker::PackingCLBSi
     for (auto &FG : tmpCluster->getFFControlSets())
     {
         os << "FG#" << cnt << "\n";
+        cnt++;
         if (FG.getFFs().size() == 0)
             continue;
         if (FG.getFFs().size() == 0)
@@ -1002,7 +1013,6 @@ std::ostream &operator<<(std::ostream &os, const ParallelCLBPacker::PackingCLBSi
             os << " CE: virtual.\n";
         }
 
-        cnt++;
         for (auto curFF : FG.getFFs())
         {
             os << "  FF:  " << curFF << "\n";
@@ -1076,10 +1086,12 @@ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::printMyself()
     for (auto &FG : getFFControlSets())
     {
         std::cout << "FG#" << cnt << "\n";
+        cnt++;
         if (FG.getFFs().size() == 0)
             continue;
         if (FG.getCSId() >= 0)
         {
+            std::cout << " CSID:" << FG.getCSId() << "\n";
             if (FG.getCLK())
                 std::cout << " CLK:" << FG.getCLK()->getName() << "\n";
             if (FG.getSR())
@@ -1088,13 +1100,11 @@ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::printMyself()
                 std::cout << " CE:" << FG.getCE()->getName() << "\n";
         }
         else
-
         {
             std::cout << " CLK: virtual.\n";
             std::cout << " SR: virtual.\n";
             std::cout << " CE: virtual.\n";
         }
-        cnt++;
         for (auto curFF : FG.getFFs())
         {
             std::cout << "  FF:  " << curFF << "\n";

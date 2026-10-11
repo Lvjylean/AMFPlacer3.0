@@ -14,6 +14,7 @@
  */
 
 #include "GeneralSpreader.h"
+#include "MacroStudyControl.h"
 
 #include <cmath>
 #include <omp.h>
@@ -381,14 +382,20 @@ void GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocationsWorker(
 
                 float curNewPUX = tmpTotalX;
                 float curNewPUY = tmpTotalY;
+                const float studyX0=curPU->X(),studyY0=curPU->Y();
                 placementInfo->legalizeXYInArea(curPU, curNewPUX, curNewPUY);
                 if (displacementLimitEnable)
                     curPU->setSpreadLocation_WithLimitDisplacement(curNewPUX, curNewPUY, forgetRatio,
                                                                    displacementLimit);
                 else
                     curPU->setSpreadLocation(curNewPUX, curNewPUY, forgetRatio);
+                if(macro_study::active("carry-spread-y-half") && curPU->checkHasCARRY() && macro_study::carryEligible.count(curPU->getId()))
+                    curPU->setAnchorLocationAndForgetTheOriginalOne(curPU->X(),studyY0+0.5f*(curPU->Y()-studyY0));
+                const float studyXB=curPU->X(),studyYB=curPU->Y();
                 placementInfo->enforceLegalizeXYInArea(curPU);
+                const float studyXE=curPU->X(),studyYE=curPU->Y();
                 placementInfo->clipPaperRegionLocation(curPU);
+                macro_study::workerStep(placementInfo,curPU,studyX0,studyY0,studyXB,studyYB,studyXE,studyYE,curPU->X(),curPU->Y());
                 for (int vId = 0; vId < curMacro->getNumOfCells(); vId++)
                 {
                     float offsetX_InMacro, offsetY_InMacro;
@@ -444,32 +451,83 @@ void GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocations(
     {
         auto &PU2ClockRegionColumn = placementInfo->getPU2ClockRegionColumn();
         auto &clockRegions = placementInfo->getDeviceInfo()->getClockRegions();
+        std::set<PlacementInfo::PlacementUnit *> touchedPUs;
+        touchedPUs.clear();
         for (auto curCell : involvedCells)
         {
             auto PU = placementInfo->getPlacementUnitByCellId(curCell->getCellId());
             if (PU2ClockRegionColumn.find(PU) != PU2ClockRegionColumn.end())
             {
                 int clockRegionX = PU2ClockRegionColumn[PU];
+                bool constrained = false;
                 if (clockRegionX == 2)
                 {
                     float rLeft = clockRegions[0][clockRegionX]->getLeft();
                     float rRight = clockRegions[0][clockRegionX]->getRight();
                     if (cellLoc[curCell->getCellId()].X < rLeft)
+                    {
                         cellLoc[curCell->getCellId()].X = rLeft + 0.1;
+                        constrained = true;
+                    }
                     if (cellLoc[curCell->getCellId()].X > rRight)
+                    {
                         cellLoc[curCell->getCellId()].X = rRight - 0.1;
+                        constrained = true;
+                    }
                 }
                 else if (clockRegionX < 2)
                 {
                     float rRight = clockRegions[0][1]->getRight();
                     if (cellLoc[curCell->getCellId()].X > rRight)
+                    {
                         cellLoc[curCell->getCellId()].X = rRight - 0.1;
+                        constrained = true;
+                    }
                 }
                 else if (clockRegionX > 2)
                 {
                     float rLeft = clockRegions[0][3]->getLeft();
                     if (cellLoc[curCell->getCellId()].X < rLeft)
+                    {
                         cellLoc[curCell->getCellId()].X = rLeft + 0.1;
+                        constrained = true;
+                    }
+                }
+
+                if (constrained && touchedPUs.find(PU) == touchedPUs.end() && (placementInfo->getClusterNum() <= 8))
+                {
+                    touchedPUs.insert(PU);
+                    if (auto curUnpackedCell = dynamic_cast<PlacementInfo::PlacementUnpackedCell *>(PU))
+                    {
+                        float XDiff = std::min(std::fabs(PU->X() - cellLoc[curCell->getCellId()].X), (float)5.0);
+
+                        if (XDiff > 2)
+                        {
+                            float YDiff =
+                                std::max(std::min(cellLoc[curCell->getCellId()].Y - PU->Y(), (float)5.0), (float)-5.0);
+                            if (YDiff > 0)
+                                cellLoc[curCell->getCellId()].Y += 2;
+                            else
+                                cellLoc[curCell->getCellId()].Y -= 2;
+                        }
+                    }
+                    else if (auto curMacro = dynamic_cast<PlacementInfo::PlacementMacro *>(PU))
+                    {
+                        float oriX = curMacro->X() + curMacro->getCellOffsetXInMacro(curCell);
+                        float oriY = curMacro->Y() + curMacro->getCellOffsetYInMacro(curCell);
+
+                        float XDiff = std::min(std::fabs(oriX - cellLoc[curCell->getCellId()].X), (float)5.0);
+
+                        if (XDiff > 2)
+                        {
+                            float YDiff =
+                                std::max(std::min(cellLoc[curCell->getCellId()].Y - oriY, (float)5.0), (float)-5.0);
+                            if (YDiff > 0)
+                                cellLoc[curCell->getCellId()].Y += 2;
+                            else
+                                cellLoc[curCell->getCellId()].Y -= 2;
+                        }
+                    }
                 }
             }
         }
@@ -582,6 +640,7 @@ void GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocations(
                     tmpTotalY /= (double)numCellsInvolvedInSpreading;
                     float curNewPUX = tmpTotalX;
                     float curNewPUY = tmpTotalY;
+                    const float studyX0=curPU->X(),studyY0=curPU->Y();
                     placementInfo->legalizeXYInArea(curPU, curNewPUX, curNewPUY);
 
                     if (displacementLimitEnable)
@@ -590,7 +649,11 @@ void GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocations(
                     else
                         curPU->setSpreadLocation(curNewPUX, curNewPUY, forgetRatio);
 
+                    if(macro_study::active("carry-spread-y-half") && curPU->checkHasCARRY() && macro_study::carryEligible.count(curPU->getId()))
+                        curPU->setAnchorLocationAndForgetTheOriginalOne(curPU->X(),studyY0+0.5f*(curPU->Y()-studyY0));
+                    const float studyXB=curPU->X(),studyYB=curPU->Y();
                     placementInfo->enforceLegalizeXYInArea(curPU);
+                    macro_study::workerStep(placementInfo,curPU,studyX0,studyY0,studyXB,studyYB,curPU->X(),curPU->Y(),curPU->X(),curPU->Y());
                     for (int vId = 0; vId < curMacro->getNumOfCells(); vId++)
                     {
                         float offsetX_InMacro, offsetY_InMacro;
@@ -890,9 +953,9 @@ void GeneralSpreader::SpreadRegion::SubBox::spreadCellsH(SubBox **boxA, SubBox *
                 float newHiX = binGrid[bottomBinY][binX]->right() - placementInfo->getBinGridW() / (num + 1.0);
                 float rangeold = oldHiX - oldLoX;
                 float rangenew = newHiX - newLoX;
-                assert(rangeold > -1e-5);
-                assert(rangenew > -1e-5);
-                if (fabs(rangeold) < 1e-5)
+                assert(rangeold > -1e-4);
+                assert(rangenew > -1e-4);
+                if (fabs(rangeold) < 1e-5 || rangeold < 0)
                 {
                     float newLoc = (newLoX + newHiX) / 2;
                     for (int ci = cellInBinHead; ci <= cellInBinTail; ++ci)
@@ -957,9 +1020,9 @@ void GeneralSpreader::SpreadRegion::SubBox::spreadCellsH(SubBox **boxA, SubBox *
                 float newHiX = binGrid[bottomBinY][binX]->right() - placementInfo->getBinGridW() / (num + 1.0);
                 float rangeold = oldHiX - oldLoX;
                 float rangenew = newHiX - newLoX;
-                assert(rangeold > -1e-5);
-                assert(rangenew > -1e-5);
-                if (fabs(rangeold) < 1e-5)
+                assert(rangeold > -1e-4);
+                assert(rangenew > -1e-4);
+                if (fabs(rangeold) < 1e-5 || rangeold < 0)
                 {
                     float newLoc = (newLoX + newHiX) / 2;
                     for (int ci = cellInBinHead; ci <= cellInBinTail; ++ci)
@@ -1150,9 +1213,9 @@ void GeneralSpreader::SpreadRegion::SubBox::spreadCellsV(SubBox **boxA, SubBox *
                 assert(newTopY >= newBottomY);
                 float rangeold = oriTopY - oriBottomY;
                 float rangenew = newTopY - newBottomY;
-                assert(rangeold > -1e-5);
-                assert(rangenew > -1e-5);
-                if (fabs(rangeold) < 1e-5)
+                assert(rangeold > -1e-4);
+                assert(rangenew > -1e-4);
+                if (fabs(rangeold) < 1e-5 || rangeold < 0)
                 {
                     float newBottomc = (newBottomY + newTopY) / 2;
                     for (int ci = cellInBinHead; ci <= cellInBinTail; ++ci)
@@ -1215,9 +1278,9 @@ void GeneralSpreader::SpreadRegion::SubBox::spreadCellsV(SubBox **boxA, SubBox *
                 float newTopY = binGrid[binY][leftBinX]->top() - placementInfo->getBinGridH() / (num + 1.0);
                 float rangeold = oriTopY - oriBottomY;
                 float rangenew = newTopY - newBottomY;
-                assert(rangeold > -1e-5);
-                assert(rangenew > -1e-5);
-                if (fabs(rangeold) < 1e-5)
+                assert(rangeold > -1e-4);
+                assert(rangenew > -1e-4);
+                if (fabs(rangeold) < 1e-5 || rangeold < 0)
                 {
                     float newBottomc = (newBottomY + newTopY) / 2;
                     for (int ci = cellInBinHead; ci <= cellInBinTail; ++ci)

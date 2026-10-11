@@ -59,10 +59,21 @@ ParallelCLBPacker::ParallelCLBPacker(DesignInfo *designInfo, DeviceInfo *deviceI
       placementMacros(placementInfo->getPlacementMacros()), cellInMacros(placementInfo->getCellInMacros()),
       cellId2PlacementUnit(placementInfo->getCellId2PlacementUnit())
 {
-    AMF_PROFILE_FUNCTION("final_packing");
     if (JSONCfg.find("y2xRatio") != JSONCfg.end())
     {
         y2xRatio = std::stof(JSONCfg["y2xRatio"]);
+    }
+    if (JSONCfg.find("noSectorGuided") != JSONCfg.end())
+    {
+        noSectorGuided = (JSONCfg["noSectorGuided"] == "true");
+    }
+    if (JSONCfg.find("useBigWindow") != JSONCfg.end())
+    {
+        useBigWindow = (JSONCfg["useBigWindow"] == "true");
+    }
+    if (JSONCfg.find("noTimingPathLenFactor") != JSONCfg.end())
+    {
+        noTimingPathLenFactor = (JSONCfg["noTimingPathLenFactor"] == "true");
     }
     // PlacementInfo *placementInfo, DeviceInfo::DeviceSite *CLBSite, int unchangedIterationThr,
     //                        int numNeighbor, float deltaD, float curD, float maxD, int PQSize, float y2xRatio,
@@ -112,6 +123,14 @@ ParallelCLBPacker::ParallelCLBPacker(DesignInfo *designInfo, DeviceInfo *deviceI
         if (tmpPackingSite->getDeterminedClusterInSite())
         {
             assert(tmpPackingSite->checkIsPrePackedSite());
+        }
+    }
+
+    if (noTimingPathLenFactor)
+    {
+        for (int i = 0; i < numPackingSites; i++)
+        {
+            packingSites[i]->setTimingPathLenFactorTo(false);
         }
     }
     print_status("ParallelCLBPacker: initialized.");
@@ -277,16 +296,349 @@ void ParallelCLBPacker::packCLBsIteration(bool initial, bool debug)
     }
 }
 
+void ParallelCLBPacker::updatePUCell2PackingSite()
+{
+    // print_status("ParallelCLBPacker: updatig PUCell2PackingSite");
+    cellId2PackingSite = std::vector<PackingCLBSite *>(placementInfo->getCells().size(), nullptr);
+    PUId2PackingCLBSite.clear();
+    PUId2PackingCLBSite.resize(placementInfo->getPlacementUnits().size(), nullptr);
+    int packNum = packingSites.size();
+
+#pragma omp parallel for schedule(dynamic)
+    for (int i = 0; i < packNum; i++)
+    {
+        auto packingSite = packingSites[i];
+        if (packingSite)
+        {
+            if (packingSite->getDeterminedClusterInSite())
+            {
+                auto cellSet = packingSite->getDeterminedClusterInSite()->getCellSet();
+                for (auto cell : cellSet)
+                {
+                    auto curPU = placementInfo->getPlacementUnitByCellId(cell->getCellId());
+                    if (cellId2PackingSite[cell->getCellId()])
+                    {
+                        std::cout << cellId2PackingSite[cell->getCellId()] << "\n";
+                        std::cout << "problem PU: " << curPU << "\n";
+                        std::cout << "problem cell: " << cell << "\n";
+                        assert(false && "each cell should be only mapped once!");
+                    }
+                    cellId2PackingSite[cell->getCellId()] = packingSite;
+                    if (auto curMacro = dynamic_cast<PlacementInfo::PlacementMacro *>(curPU))
+                    {
+                        if (curMacro->getCells()[0] == cell)
+                        {
+                            PUId2PackingCLBSite[curPU->getId()] = packingSite;
+                        }
+                    }
+                    else
+                    {
+                        PUId2PackingCLBSite[curPU->getId()] = packingSite;
+                    }
+                }
+            }
+            else if (packingSite->checkIsNonCLBSite())
+            {
+                if (packingSite->getNonCLBCell())
+                {
+                    cellId2PackingSite[packingSite->getNonCLBCell()->getCellId()] = packingSite;
+                    auto curPU = placementInfo->getPlacementUnitByCellId(packingSite->getNonCLBCell()->getCellId());
+                    if (auto curMacro = dynamic_cast<PlacementInfo::PlacementMacro *>(curPU))
+                    {
+                        if (curMacro->getCells()[0] == packingSite->getNonCLBCell())
+                            PUId2PackingCLBSite[curPU->getId()] = packingSite;
+                    }
+                    else
+                        PUId2PackingCLBSite[curPU->getId()] = packingSite;
+                    if (curPU->getDSPNum() == 1)
+                    {
+                        placementInfo->getPULegalSite()[curPU] =
+                            std::vector<DeviceInfo::DeviceSite *>(1, packingSite->getCLBSite());
+                    }
+                }
+            }
+        }
+    }
+    // print_status("ParallelCLBPacker: updated PUCell2PackingSite");
+}
+
+void ParallelCLBPacker::partiallyRecoverToBestPacking(std::set<PackingCLBSite *> &selectedPackingSites)
+{
+    // print_status("ParallelCLBPacker: recovering selected PUCell2PackingSite");
+
+    for (auto packingSite : selectedPackingSites)
+    {
+        if (packingSite)
+        {
+            packingSite->recoverToBestPacking();
+        }
+    }
+
+    for (auto packingSite : selectedPackingSites)
+    {
+        if (packingSite)
+        {
+            if (packingSite->getDeterminedClusterInSite())
+            {
+                auto cellSet = packingSite->getDeterminedClusterInSite()->getCellSet();
+                for (auto cell : cellSet)
+                {
+                    auto curPU = placementInfo->getPlacementUnitByCellId(cell->getCellId());
+                    cellId2PackingSite[cell->getCellId()] = packingSite;
+                    PUId2PackingCLBSite[curPU->getId()] = packingSite;
+                }
+            }
+            else if (packingSite->checkIsNonCLBSite())
+            {
+                if (packingSite->getNonCLBCell())
+                {
+                    cellId2PackingSite[packingSite->getNonCLBCell()->getCellId()] = packingSite;
+                    auto curPU = placementInfo->getPlacementUnitByCellId(packingSite->getNonCLBCell()->getCellId());
+                    PUId2PackingCLBSite[curPU->getId()] = packingSite;
+                    if (curPU->getDSPNum() == 1)
+                    {
+                        placementInfo->getPULegalSite()[curPU] =
+                            std::vector<DeviceInfo::DeviceSite *>(1, packingSite->getCLBSite());
+                    }
+                }
+            }
+        }
+    }
+
+    std::vector<PlacementInfo::Location> &cellLoc = placementInfo->getCellId2location();
+    for (auto packingSite : selectedPackingSites)
+    {
+        if (packingSite)
+        {
+            if (packingSite->getDeterminedClusterInSite())
+            {
+                if (packingSite->getDeterminedClusterInSite()->getPUs().size())
+                {
+                    for (auto tmpPU : packingSite->getDeterminedClusterInSite()->getPUs())
+                    {
+                        tmpPU->setAnchorLocationAndForgetTheOriginalOne(packingSite->getCLBSite()->X(),
+                                                                        packingSite->getCLBSite()->Y());
+                        tmpPU->setFixed();
+                    }
+                }
+                for (auto tmpPU : packingSite->getDeterminedClusterInSite()->getPUs())
+                {
+                    if (auto unpackCell = dynamic_cast<PlacementInfo::PlacementUnpackedCell *>(tmpPU))
+                    {
+                        cellLoc[unpackCell->getCell()->getCellId()].X = tmpPU->X();
+                        cellLoc[unpackCell->getCell()->getCellId()].Y = tmpPU->Y();
+                    }
+                    else if (auto curMacro = dynamic_cast<PlacementInfo::PlacementMacro *>(tmpPU))
+                    {
+                        assert(curMacro->getCARRYNum() + curMacro->getDSPNum() + curMacro->getBRAMNum() <= 1);
+                        assert(!curMacro->isPacked());
+                        int cellIdInMacro = 0;
+                        for (auto tmpCell : curMacro->getCells())
+                        {
+                            cellLoc[tmpCell->getCellId()].X = tmpPU->X();
+                            cellLoc[tmpCell->getCellId()].Y = tmpPU->Y();
+                            cellIdInMacro++;
+                        }
+                    }
+                }
+            }
+            else if (packingSite->checkIsNonCLBSite())
+            {
+                if (packingSite->getNonCLBCell())
+                {
+                    auto curPU = placementInfo->getPlacementUnitByCellId(packingSite->getNonCLBCell()->getCellId());
+                    if (curPU->isLocked())
+                    {
+                        continue;
+                    }
+                    assert(curPU->getDSPNum() == 1); // currently we can only handle this kind of macro
+                    curPU->setAnchorLocationAndForgetTheOriginalOne(packingSite->getCLBSite()->X(),
+                                                                    packingSite->getCLBSite()->Y());
+                    curPU->setFixed();
+
+                    if (auto tmpMacro = dynamic_cast<PlacementInfo::PlacementMacro *>(curPU))
+                    {
+                        if (tmpMacro->getMacroType() == PlacementInfo::PlacementMacro::PlacementMacroType_DSP)
+                        {
+                            auto curCell = tmpMacro->getCells()[0];
+                            auto targetSite = packingSite->getCLBSite();
+
+                            cellLoc[curCell->getCellId()].X = targetSite->X();
+                            cellLoc[curCell->getCellId()].Y = targetSite->Y();
+                        }
+                        else
+                        {
+                            assert(false && "undefined situtation");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // print_status("ParallelCLBPacker: recovered selected PUCell2PackingSite");
+}
+
+void ParallelCLBPacker::partiallyRecordBestPacking(std::set<PackingCLBSite *> &selectedPackingSites)
+{
+    // print_status("ParallelCLBPacker: updatig selected PUCell2PackingSite");
+
+    for (auto packingSite : selectedPackingSites)
+    {
+        if (packingSite)
+        {
+            packingSite->recordBestPacking();
+        }
+    }
+
+    for (auto packingSite : selectedPackingSites)
+    {
+        if (packingSite)
+        {
+            if (packingSite->getDeterminedClusterInSite())
+            {
+                auto cellSet = packingSite->getDeterminedClusterInSite()->getCellSet();
+                for (auto cell : cellSet)
+                {
+                    auto curPU = placementInfo->getPlacementUnitByCellId(cell->getCellId());
+                    if (cellId2PackingSite[cell->getCellId()] != packingSite)
+                    {
+                        std::cout << cellId2PackingSite[cell->getCellId()]->getDeterminedClusterInSite() << "\n";
+                        std::cout << packingSite->getDeterminedClusterInSite() << "\n";
+                        std::cout << "problem PU: " << curPU << "\n";
+                        std::cout << "problem cell: " << cell << "\n";
+                        assert(false && "each cell should be only mapped once!");
+                    }
+                    cellId2PackingSite[cell->getCellId()] = packingSite;
+                    PUId2PackingCLBSite[curPU->getId()] = packingSite;
+                }
+            }
+            else if (packingSite->checkIsNonCLBSite())
+            {
+                if (packingSite->getNonCLBCell())
+                {
+                    cellId2PackingSite[packingSite->getNonCLBCell()->getCellId()] = packingSite;
+                    auto curPU = placementInfo->getPlacementUnitByCellId(packingSite->getNonCLBCell()->getCellId());
+                    PUId2PackingCLBSite[curPU->getId()] = packingSite;
+                    if (curPU->getDSPNum() == 1)
+                    {
+                        placementInfo->getPULegalSite()[curPU] =
+                            std::vector<DeviceInfo::DeviceSite *>(1, packingSite->getCLBSite());
+                    }
+                }
+            }
+        }
+    }
+
+    std::vector<PlacementInfo::Location> &cellLoc = placementInfo->getCellId2location();
+    for (auto packingSite : selectedPackingSites)
+    {
+        if (packingSite)
+        {
+            if (packingSite->getDeterminedClusterInSite())
+            {
+                if (packingSite->getDeterminedClusterInSite()->getPUs().size())
+                {
+                    for (auto tmpPU : packingSite->getDeterminedClusterInSite()->getPUs())
+                    {
+                        tmpPU->setAnchorLocationAndForgetTheOriginalOne(packingSite->getCLBSite()->X(),
+                                                                        packingSite->getCLBSite()->Y());
+                        tmpPU->setFixed();
+                    }
+                }
+                for (auto tmpPU : packingSite->getDeterminedClusterInSite()->getPUs())
+                {
+                    if (auto unpackCell = dynamic_cast<PlacementInfo::PlacementUnpackedCell *>(tmpPU))
+                    {
+                        cellLoc[unpackCell->getCell()->getCellId()].X = tmpPU->X();
+                        cellLoc[unpackCell->getCell()->getCellId()].Y = tmpPU->Y();
+                    }
+                    else if (auto curMacro = dynamic_cast<PlacementInfo::PlacementMacro *>(tmpPU))
+                    {
+                        assert(curMacro->getCARRYNum() + curMacro->getDSPNum() + curMacro->getBRAMNum() <= 1);
+                        assert(!curMacro->isPacked());
+                        int cellIdInMacro = 0;
+                        for (auto tmpCell : curMacro->getCells())
+                        {
+                            cellLoc[tmpCell->getCellId()].X = tmpPU->X();
+                            cellLoc[tmpCell->getCellId()].Y = tmpPU->Y();
+                            cellIdInMacro++;
+                        }
+                    }
+                }
+            }
+            else if (packingSite->checkIsNonCLBSite())
+            {
+                if (packingSite->getNonCLBCell())
+                {
+                    auto curPU = placementInfo->getPlacementUnitByCellId(packingSite->getNonCLBCell()->getCellId());
+                    if (curPU->isLocked())
+                    {
+                        continue;
+                    }
+                    assert(curPU->getDSPNum() == 1); // currently we can only handle this kind of macro
+                    curPU->setAnchorLocationAndForgetTheOriginalOne(packingSite->getCLBSite()->X(),
+                                                                    packingSite->getCLBSite()->Y());
+                    curPU->setFixed();
+
+                    if (auto tmpMacro = dynamic_cast<PlacementInfo::PlacementMacro *>(curPU))
+                    {
+                        if (tmpMacro->getMacroType() == PlacementInfo::PlacementMacro::PlacementMacroType_DSP)
+                        {
+                            auto curCell = tmpMacro->getCells()[0];
+                            auto targetSite = packingSite->getCLBSite();
+
+                            cellLoc[curCell->getCellId()].X = targetSite->X();
+                            cellLoc[curCell->getCellId()].Y = targetSite->Y();
+                        }
+                        else
+                        {
+                            assert(false && "undefined situtation");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // print_status("ParallelCLBPacker: updated selected PUCell2PackingSite");
+}
+
+void ParallelCLBPacker::recordBestPacking()
+{
+    for (auto packingSite : packingSites)
+    {
+        if (packingSite)
+        {
+            packingSite->recordBestPacking();
+        }
+    }
+    updatePUCell2PackingSite();
+    setPULocationToPackedSite();
+}
+
+void ParallelCLBPacker::recoverToBestPacking()
+{
+    for (auto packingSite : packingSites)
+    {
+        if (packingSite)
+        {
+            packingSite->recoverToBestPacking();
+        }
+    }
+    updatePUCell2PackingSite();
+    setPULocationToPackedSite();
+}
+
 void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool debug)
 {
     AMF_PROFILE_FUNCTION("final_packing");
     placementInfo->updateB2BAndGetTotalHPWL();
-    placementInfo->updateElementBinGrid(); // we don't need utilization information here, we can update LUT/FF
-                                           // utilization when needed.
+    placementInfo->updateElementBinGrid(false); // we don't need utilization information here, we can update LUT/FF
+                                                // utilization when needed.
+
+    timingOptimizer->enablePackingTiming();
     int iterCnt = 0;
-    std::ofstream debugFile;
-    debugFile.open("OpenPitonSLICE_SLICE_X38Y213");
-    debugFile.close();
 
     packCLBsIteration(true, debug);
     print_status("ParallelCLBPacker: initial packCLBsIteration done.");
@@ -362,9 +714,9 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
                 numFixed++;
 
         float fixedRatio = (float)numFixed / (float)placementInfo->getPlacementUnits().size();
-        if (fixedRatio > 0.25 && WLOptimizer && iterCnt < 32)
+        if (fixedRatio > 0.25 && WLOptimizer && iterCnt < 16)
         {
-            placementInfo->updateElementBinGrid();
+            placementInfo->updateElementBinGrid(false);
             timingOptimizer->pauseCounter();
             timingOptimizer->conductStaticTimingAnalysis();
             placementInfo->getPU2ClockRegionCenters().clear();
@@ -404,6 +756,7 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
                 {
                     assert(packingSite->getDeterminedClusterInSite()->areAllPUsValidForThisSite(PUId2PackingCLBSite,
                                                                                                 packingSite));
+                    assert(packingSite->getDeterminedClusterInSite()->checkCellCorrectness(nullptr, true));
                 }
             }
         }
@@ -413,91 +766,331 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
     if (doExceptionHandling)
     {
         // assert(!incrementalPacking && "for incremental packing, it is not worthy to do exception handling");
-        placementInfo->updateElementBinGrid();
+        placementInfo->updateElementBinGrid(false);
         timingOptimizer->conductStaticTimingAnalysis();
         exceptionHandling(true);
-        placementInfo->updateElementBinGrid();
+        placementInfo->updateElementBinGrid(false);
         timingOptimizer->conductStaticTimingAnalysis();
-        int packNum = packingSites.size();
+
+        float minCP = timingOptimizer->getMaxDelay();
         addNonCLBPackingSites();
-        int replaceCnt = 1000;
+        recordBestPacking();
+
+        int packNum = packingSites.size();
 
 #ifdef TIMINGDP
-        for (int i = 0; (i < 120 || replaceCnt > 60) && i < 150; i++)
+        int replaceCnt = 1000;
+        int DPCnt = 0;
+        int lastRecoverDPCnt = 0;
+        int succCnt = 0;
+        float clockPeriod = placementInfo->getTimingInfo()->getSimplePlacementTimingGraph()->getClockPeriod();
+        float newCP = 10000;
+        bool bestPackingUpdated = false;
+        float pathCriticalRatio = 0.875;
+        int failPathOpt = 0;
+        int pathBasedReplaceCnt = 0;
+        for (int i = 0; i < 120 && DPCnt < 80; i++, succCnt++)
         {
-            cellId2PackingSite = std::vector<PackingCLBSite *>(placementInfo->getCells().size(), nullptr);
-            PUId2PackingCLBSite.clear();
-            PUId2PackingCLBSite.resize(placementInfo->getPlacementUnits().size(), nullptr);
-            for (auto packingSite : packingSites)
+            updatePUCell2PackingSite();
+            i++;
+
+            if (DPCnt == 20 || DPCnt == 40 || DPCnt == 60)
             {
-                if (packingSite)
+                packNum = packingSites.size();
+                recoverToBestPacking();
+                timingOptimizer->conductStaticTimingAnalysis();
+#pragma omp parallel for schedule(dynamic)
+                for (int i = 0; i < packNum; i++)
+                    packingSites[i]->finalMapToSlots();
+                timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSlotMapping();
+                recordBestPacking();
+                bestPackingUpdated = true;
+            }
+            else
+            {
+                if (i < 4)
+                    replaceCnt = timingDrivenDetailedPlacement_shortestPath(100, 0.5, pathCriticalRatio);
+                else if (i >= 100)
+                    replaceCnt =
+                        timingDrivenDetailedPlacement_shortestPath(succCnt, 1.0 - 100.0 / 105.0, pathCriticalRatio);
+                else
+                    replaceCnt =
+                        timingDrivenDetailedPlacement_shortestPath(succCnt * 2, 1.0 - i / 105.0, pathCriticalRatio);
+                if (replaceCnt == 0)
+                    pathCriticalRatio = 0.8;
+                packNum = packingSites.size();
+            }
+            setPULocationToPackedSite();
+            if (replaceCnt)
+                timingOptimizer->conductStaticTimingAnalysis();
+            newCP = timingOptimizer->getMaxDelay();
+            print_info("ParallelCLBPacker: SP algorithm get newCP=" + std::to_string(newCP));
+            print_info("ParallelCLBPacker: critical path delay=" + std::to_string(newCP) +
+                       " clock period=" + std::to_string(clockPeriod));
+            if (DPCnt < 5 && newCP < minCP + 0.015)
+            {
+                if (i > 4)
+                    i -= 4;
+                recordBestPacking();
+                bestPackingUpdated = true;
+            }
+            else if (DPCnt > 15 && newCP < minCP + 0.015)
+            {
+
+                recordBestPacking();
+                updatePUCell2PackingSite();
+                if (i > 60)
                 {
-                    if (packingSite->getDeterminedClusterInSite())
-                    {
-                        auto cellSet = packingSite->getDeterminedClusterInSite()->getCellSet();
-                        for (auto cell : cellSet)
-                        {
-                            cellId2PackingSite[cell->getCellId()] = packingSite;
-                            auto curPU = placementInfo->getPlacementUnitByCellId(cell->getCellId());
-                            PUId2PackingCLBSite[curPU->getId()] = packingSite;
-                        }
-                    }
-                    else if (packingSite->checkIsNonCLBSite())
-                    {
-                        cellId2PackingSite[packingSite->getNonCLBCell()->getCellId()] = packingSite;
-                        auto curPU = placementInfo->getPlacementUnitByCellId(packingSite->getNonCLBCell()->getCellId());
-                        PUId2PackingCLBSite[curPU->getId()] = packingSite;
-                    }
+                    pathBasedReplaceCnt = timingDrivenDetailedPlacement_swap(0.5, 80, true);
+                    failPathOpt += (pathBasedReplaceCnt == 0);
+                }
+                recordBestPacking();
+                updatePUCell2PackingSite();
+                setPULocationToPackedSite();
+                timingOptimizer->conductStaticTimingAnalysis();
+                newCP = timingOptimizer->getMaxDelay();
+                minCP = newCP;
+                bestPackingUpdated = true;
+            }
+            if (i > 50 && newCP > minCP * 1.05)
+            {
+                if (newCP > minCP * 1.1 && DPCnt > 50 && lastRecoverDPCnt < DPCnt)
+                {
+                    recoverToBestPacking();
+                    timingOptimizer->conductStaticTimingAnalysis();
+                    lastRecoverDPCnt = DPCnt + 5;
+                    succCnt = 0;
+                    i -= 10;
+                }
+                else
+                {
+                    if (succCnt >= 10)
+                        succCnt -= 5;
+                    i -= 4;
+                    lastRecoverDPCnt = DPCnt;
                 }
             }
-            i++;
-            if (i >= 100)
-                replaceCnt = timingDrivenDetailedPlacement_shortestPath(i, 1.0 - 100.0 / 105.0);
-            else
-                replaceCnt = timingDrivenDetailedPlacement_shortestPath(i, 1.0 - i / 105.0);
+            else if (i > 10 && newCP > minCP * 1.1 && succCnt >= 5)
+                succCnt -= 5;
+            DPCnt++;
 
-            setPULocationToPackedSite();
-            timingOptimizer->conductStaticTimingAnalysis();
+            print_status("ParallelCLBPacker: i=" + std::to_string(i) + " DPCnt=" + std::to_string(DPCnt));
         }
+
+        if (bestPackingUpdated)
+            recoverToBestPacking();
+        timingOptimizer->conductStaticTimingAnalysis();
 
         replaceCnt = 1000;
-        for (int i = 0; i < 40 && replaceCnt > 5; i++)
+        int failOptCnt = 0;
+        succCnt = 0;
+        float disOffset = 0;
+        newCP = 10000;
+        for (int i = 0; i < 2; i++)
         {
-            cellId2PackingSite = std::vector<PackingCLBSite *>(placementInfo->getCells().size(), nullptr);
-            PUId2PackingCLBSite.clear();
-            PUId2PackingCLBSite.resize(placementInfo->getPlacementUnits().size(), nullptr);
-            for (auto packingSite : packingSites)
-            {
-                if (packingSite)
-                {
-                    if (packingSite->getDeterminedClusterInSite())
-                    {
-                        auto cellSet = packingSite->getDeterminedClusterInSite()->getCellSet();
-                        for (auto cell : cellSet)
-                        {
-                            cellId2PackingSite[cell->getCellId()] = packingSite;
-                            auto curPU = placementInfo->getPlacementUnitByCellId(cell->getCellId());
-                            PUId2PackingCLBSite[curPU->getId()] = packingSite;
-                        }
-                    }
-                    else if (packingSite->checkIsNonCLBSite())
-                    {
-                        cellId2PackingSite[packingSite->getNonCLBCell()->getCellId()] = packingSite;
-                        auto curPU = placementInfo->getPlacementUnitByCellId(packingSite->getNonCLBCell()->getCellId());
-                        PUId2PackingCLBSite[curPU->getId()] = packingSite;
-                    }
-                }
-            }
-            replaceCnt = timingDrivenDetailedPlacement_swap(i);
+            recordBestPacking();
+            updatePUCell2PackingSite();
+            replaceCnt = timingDrivenDetailedPlacement_swap(0.5, 50, true, pathCriticalRatio);
             setPULocationToPackedSite();
             timingOptimizer->conductStaticTimingAnalysis();
+
+            newCP = timingOptimizer->getMaxDelay();
+            if (newCP < minCP + 0.015)
+            {
+                minCP = newCP;
+                recordBestPacking();
+                bestPackingUpdated = true;
+            }
+            print_info("ParallelCLBPacker: critical path delay=" + std::to_string(newCP) +
+                       " clock period=" + std::to_string(clockPeriod));
         }
+
+        int resetCnt = 0;
+        for (int i = 0; i < 40 && newCP > clockPeriod * 0.9 && resetCnt < 2; i++)
+        {
+            updatePUCell2PackingSite();
+            replaceCnt = timingDrivenDetailedPlacement_swap(disOffset, succCnt, false, pathCriticalRatio);
+            if (replaceCnt == 0)
+                pathCriticalRatio = 0.8;
+            setPULocationToPackedSite();
+            if (replaceCnt)
+                timingOptimizer->conductStaticTimingAnalysis();
+            else
+            {
+                disOffset += 0.25;
+            }
+            newCP = timingOptimizer->getMaxDelay();
+            print_info("ParallelCLBPacker: critical path delay=" + std::to_string(newCP) +
+                       " clock period=" + std::to_string(clockPeriod));
+            if (newCP < minCP + 0.015 && newCP > minCP - 0.001)
+            {
+                disOffset += 0.5;
+            }
+
+            if (i > 5 && newCP < minCP + 0.015)
+            {
+                minCP = newCP;
+                recordBestPacking();
+                bestPackingUpdated = true;
+            }
+            if (i > 10 && newCP > minCP * 1.1)
+            {
+                failOptCnt++;
+                if (failOptCnt > 3)
+                {
+                    resetCnt++;
+                    recoverToBestPacking();
+                    timingOptimizer->conductStaticTimingAnalysis();
+                    failOptCnt = 0;
+                    succCnt = 0;
+                }
+            }
+            succCnt++;
+        }
+
+        succCnt = 0;
+        resetCnt = 0;
+        if (bestPackingUpdated)
+            recoverToBestPacking();
+        timingOptimizer->conductStaticTimingAnalysis();
+
+        print_info("ParallelCLBPacker: failPathOpt=" + std::to_string(failPathOpt));
+        succCnt = 0;
+        resetCnt = 0;
+        for (int i = 0; i < 4 && newCP > clockPeriod * 0.9 && resetCnt < 3; i++)
+        {
+            recordBestPacking();
+            updatePUCell2PackingSite();
+            replaceCnt = timingDrivenDetailedPlacement_swap(disOffset + 0.01 * (random() % 100),
+                                                            2 * succCnt + (random() % 5), true);
+            setPULocationToPackedSite();
+            if (replaceCnt)
+                timingOptimizer->conductStaticTimingAnalysis();
+            else
+            {
+                disOffset += 0.5;
+            }
+            newCP = timingOptimizer->getMaxDelay();
+            print_info("ParallelCLBPacker: critical path delay=" + std::to_string(newCP) +
+                       " clock period=" + std::to_string(clockPeriod));
+            if (newCP < minCP + 0.015)
+            {
+                disOffset += 0.33;
+            }
+
+            if (i > 5 && newCP < minCP + 0.015)
+            {
+                minCP = newCP;
+                recordBestPacking();
+                bestPackingUpdated = true;
+            }
+            else
+            {
+                recoverToBestPacking();
+                timingOptimizer->conductStaticTimingAnalysis();
+                bestPackingUpdated = true;
+            }
+
+            succCnt++;
+        }
+
+        if (bestPackingUpdated)
+            recoverToBestPacking();
+        timingOptimizer->conductStaticTimingAnalysis();
+
+        for (int i = 0; i < 5; i++)
+        {
+            recordBestPacking();
+            updatePUCell2PackingSite();
+            replaceCnt = timingDrivenDetailedPlacement_swap(0.5, 100, true, pathCriticalRatio);
+            if (replaceCnt == 0)
+                pathCriticalRatio = 0.8;
+            setPULocationToPackedSite();
+            timingOptimizer->conductStaticTimingAnalysis();
+
+            newCP = timingOptimizer->getMaxDelay();
+            if (newCP < minCP + 0.015)
+            {
+                minCP = newCP;
+                recordBestPacking();
+                bestPackingUpdated = true;
+            }
+            print_info("ParallelCLBPacker: critical path delay=" + std::to_string(newCP) +
+                       " clock period=" + std::to_string(clockPeriod));
+        }
+
+        if (!replaceCnt)
+        {
+            if (bestPackingUpdated)
+                recoverToBestPacking();
+            timingOptimizer->conductStaticTimingAnalysis();
+            useLocalFineTune = true;
+            for (int i = 0; i < 5; i++)
+            {
+                recordBestPacking();
+                updatePUCell2PackingSite();
+                replaceCnt = timingDrivenDetailedPlacement_swap(0.5, 100, true, pathCriticalRatio);
+                if (replaceCnt == 0)
+                    pathCriticalRatio = 0.8;
+                setPULocationToPackedSite();
+                timingOptimizer->conductStaticTimingAnalysis();
+
+                newCP = timingOptimizer->getMaxDelay();
+                if (newCP < minCP + 0.015)
+                {
+                    minCP = newCP;
+                    recordBestPacking();
+                    bestPackingUpdated = true;
+                }
+                print_info("ParallelCLBPacker: critical path delay=" + std::to_string(newCP) +
+                           " clock period=" + std::to_string(clockPeriod));
+            }
+            useLocalFineTune = false;
+        }
+        // if (fineTuneCandidateNum < 100)
+        // {
+        //     if (bestPackingUpdated)
+        //         recoverToBestPacking();
+        //     timingOptimizer->conductStaticTimingAnalysis();
+        //     useLocalFineTune = true;
+        //     for (int i = 0; i < fineTuneCandidateNum / 2; i++)
+        //     {
+        //         recordBestPacking();
+        //         updatePUCell2PackingSite();
+        //         replaceCnt = timingDrivenDetailedPlacement_swap(0.5, 100, true, pathCriticalRatio);
+        //         if (replaceCnt == 0)
+        //             pathCriticalRatio = 0.8;
+        //         setPULocationToPackedSite();
+        //         timingOptimizer->conductStaticTimingAnalysis();
+
+        //         newCP = timingOptimizer->getMaxDelay();
+        //         if (newCP < minCP + 0.015)
+        //         {
+        //             minCP = newCP;
+        //             recordBestPacking();
+        //             bestPackingUpdated = true;
+        //         }
+        //         print_info("ParallelCLBPacker: critical path delay=" + std::to_string(newCP) +
+        //                    " clock period=" + std::to_string(clockPeriod));
+        //     }
+        //     useLocalFineTune = false;
+        // }
+
+        recoverToBestPacking();
+        updatePUCell2PackingSite();
+        setPULocationToPackedSite();
+        timingOptimizer->conductStaticTimingAnalysis();
+
 #endif
 #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < packNum; i++)
             packingSites[i]->finalMapToSlots();
 #ifdef TIMINGDP
+        timingOptimizer->conductStaticTimingAnalysis();
         timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSlotMapping();
+#pragma omp parallel for schedule(dynamic)
+        for (int i = 0; i < packNum; i++)
+            packingSites[i]->finalMapToSlots();
 #endif
     }
 
@@ -512,6 +1105,10 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
             }
         }
     }
+
+    updatePUCell2PackingSite();
+    setPULocationToPackedSite();
+    placementInfo->updateElementBinGrid();
     dumpFinalPacking();
 }
 
@@ -529,21 +1126,29 @@ inline float getAngle(float v1x, float v1y, float v2x, float v2y)
     return angle;
 }
 
-int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, float displacementRatio)
+int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, float displacementRatio,
+                                                                  float pathCriticalRatio)
 {
     AMF_PROFILE_FUNCTION("detailed_placement");
+    std::vector<std::unique_ptr<std::vector<DeviceInfo::DeviceSite *>>> neighborOwners;
+    auto ownNeighbors = [&](std::vector<DeviceInfo::DeviceSite *> *p) {
+        neighborOwners.emplace_back(p); return p;
+    };
     print_status("ParallelCLBPacker: conducting timing-driven detailed placement based on shortest path.");
-    auto oriCellIdsInCriticalPaths = timingOptimizer->findCriticalPaths(0.9);
+    auto oriCellIdsInCriticalPaths = timingOptimizer->findCriticalPaths(pathCriticalRatio, true, 1 + iterId * 20);
     std::set<PlacementInfo::PlacementUnit *> PUsTouched;
     PUsTouched.clear();
     std::ofstream outfileTcl("./DetailedPlacementRecord");
     int replaceCnt = 0;
     for (auto oriCellIdsInCriticalPath : oriCellIdsInCriticalPaths)
     {
+        neighborOwners.clear();
+        // std::set<PackingCLBSite *> changedPackingSites;
+        // std::set<PlacementInfo::PlacementUnit *, Packing_PUcompare> movedPUs;
+        // movedPUs.clear();
+        // changedPackingSites.clear();
         std::map<int, std::vector<PackingCLBSite *>> cellId2CandidateSites;
         std::set<PackingCLBSite *> sitesCandidates;
-        // A rejected candidate may be retried and replace the same site's scratch
-        // cluster. Own every scratch object, including on an unmapped-path exit.
         std::map<PackingCLBSite *, std::unique_ptr<PackingCLBSite::PackingCLBCluster>> site2TrialCluster;
         cellId2CandidateSites.clear();
 
@@ -578,18 +1183,271 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
             cellId2CandidateSites[cellId] = std::vector<PackingCLBSite *>(1, curPackingSite);
             sitesCandidates.insert(curPackingSite);
             if (!curPackingSite->checkIsNonCLBSite())
-                site2TrialCluster[curPackingSite].reset(
-                    new PackingCLBSite::PackingCLBCluster(curPackingSite->getDeterminedClusterInSite()));
+                site2TrialCluster[curPackingSite].reset(new PackingCLBSite::PackingCLBCluster(curPackingSite->getDeterminedClusterInSite()));
         }
         if (CellUnmapped)
+        {
             continue;
+        }
         // find candidate sites for each possible PU
 
-        for (int siteCandidateLimit = 1; siteCandidateLimit <= 10; siteCandidateLimit++)
+        std::map<PlacementInfo::PlacementUnit *, std::pair<std::vector<DeviceInfo::DeviceSite *> *, int>>
+            PU2SiteConeOffsetPairs;
+        std::map<PlacementInfo::PlacementUnit *, std::pair<std::vector<DeviceInfo::DeviceSite *> *, int>>
+            PU2SiteNeighborOffsetPairs;
+
+        float displacementThr = 5.0 * displacementRatio;
+        if (displacementThr < 1)
+            displacementThr = 1;
+
+        int numCellInPath = cellIdsInCriticalPath.size();
+
+        for (int orderI = 0; orderI < numCellInPath; orderI++)
         {
-            float displacementThr = 5.0 * displacementRatio;
-            if (displacementThr < 1)
-                displacementThr = 1;
+            auto cellId = cellIdsInCriticalPath[orderI];
+            auto curPU = placementInfo->getPlacementUnitByCellId(cellId);
+            if (PUsTouched.find(curPU) == PUsTouched.end())
+            {
+                PU2SiteConeOffsetPairs[curPU] = std::pair<std::vector<DeviceInfo::DeviceSite *> *, int>(nullptr, 0);
+                PU2SiteNeighborOffsetPairs[curPU] = std::pair<std::vector<DeviceInfo::DeviceSite *> *, int>(nullptr, 0);
+            }
+        }
+
+        //#pragma omp parallel for
+        if (!noSectorGuided)
+        {
+            for (int orderI = 0; orderI < numCellInPath; orderI++)
+            {
+                auto cellId = cellIdsInCriticalPath[orderI];
+                auto curPU = placementInfo->getPlacementUnitByCellId(cellId);
+                if (PUsTouched.find(curPU) == PUsTouched.end())
+                {
+                    auto curCell = designInfo->getCells()[cellId];
+                    // std::cout << curCell << " has following candidates: \n";
+                    if (!curPU->isLocked() && !curPU->checkHasCARRY() && !curPU->checkHasLUTRAM() &&
+                        !curPU->checkHasBRAM() && !(curPU->checkHasDSP() || curPU->checkHasURAM()))
+                    {
+                        float v1x = 0, v1y = 0, v2x = 0, v2y = 0;
+                        PackingCLBSite *succSite = nullptr, *predSite = nullptr;
+                        if (orderI > 0 && orderI < cellIdsInCriticalPath.size() - 1)
+                        {
+                            predSite = cellId2PackingSite[cellIdsInCriticalPath[orderI - 1]];
+                            int predSiteOrderId = orderI - 1;
+                            auto curSite = cellId2PackingSite[cellId];
+                            succSite = cellId2PackingSite[cellIdsInCriticalPath[orderI + 1]];
+                            int succSiteOrderId = orderI + 1;
+                            assert(predSite && curSite && succSite);
+                            // while (curSite == predSite && predSiteOrderId - 1 >= 0)
+                            // {
+                            //     predSiteOrderId--;
+                            //     predSite = cellId2PackingSite[cellIdsInCriticalPath[predSiteOrderId]];
+                            // }
+                            // while (curSite == succSite && succSiteOrderId + 1 <= cellIdsInCriticalPath.size() - 1)
+                            // {
+                            //     succSiteOrderId++;
+                            //     succSite = cellId2PackingSite[cellIdsInCriticalPath[succSiteOrderId]];
+                            // }
+                            v1x = predSite->getCLBSite()->X() - curSite->getCLBSite()->X();
+                            v1y = predSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
+                            v2x = succSite->getCLBSite()->X() - curSite->getCLBSite()->X();
+                            v2y = succSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
+                        }
+                        else if (orderI == 0)
+                        {
+                            auto curSite = cellId2PackingSite[cellId];
+                            predSite = succSite = cellId2PackingSite[cellIdsInCriticalPath[orderI + 1]];
+                            assert(curSite && succSite);
+                            int succSiteOrderId = orderI + 1;
+                            while (curSite == succSite && succSiteOrderId + 1 <= cellIdsInCriticalPath.size() - 1)
+                            {
+                                succSiteOrderId++;
+                                succSite = cellId2PackingSite[cellIdsInCriticalPath[succSiteOrderId]];
+                            }
+                            v1x = v2x = succSite->getCLBSite()->X() - curSite->getCLBSite()->X();
+                            v1y = v2y = succSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
+                        }
+                        else
+                        {
+                            predSite = succSite = cellId2PackingSite[cellIdsInCriticalPath[orderI - 1]];
+                            auto curSite = cellId2PackingSite[cellId];
+                            assert(predSite && curSite);
+                            int predSiteOrderId = orderI - 1;
+                            while (curSite == predSite && predSiteOrderId - 1 >= 0)
+                            {
+                                predSiteOrderId--;
+                                predSite = cellId2PackingSite[cellIdsInCriticalPath[predSiteOrderId]];
+                            }
+                            v1x = v2x = predSite->getCLBSite()->X() - curSite->getCLBSite()->X();
+                            v1y = v2y = predSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
+                        }
+                        float neighborDis =
+                            std::fabs(v1x) + y2xRatio * std::fabs(v1y) + std::fabs(v2x) + y2xRatio * std::fabs(v2y);
+                        // if (std::fabs(v1x) + std::fabs(v1y) + std::fabs(v2x) + std::fabs(v2y) < 0.1)
+                        //     continue;
+
+                        int clockRegionX0, clockRegionY0;
+                        deviceInfo->getClockRegionByLocation(PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
+                                                             PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(),
+                                                             clockRegionX0, clockRegionY0);
+                        int clockRegionX1, clockRegionY1;
+                        deviceInfo->getClockRegionByLocation(predSite->getCLBSite()->X(), predSite->getCLBSite()->Y(),
+                                                             clockRegionX1, clockRegionY1);
+                        int clockRegionX2, clockRegionY2;
+                        deviceInfo->getClockRegionByLocation(succSite->getCLBSite()->X(), succSite->getCLBSite()->Y(),
+                                                             clockRegionX2, clockRegionY2);
+
+                        float disRange = displacementThr;
+                        if (orderI == cellIdsInCriticalPath.size() - 1 || orderI == 0)
+                        {
+                            disRange = 2;
+                            if (neighborDis > 5)
+                                disRange = 3;
+                        }
+                        else if (timingOptimizer->crossIOBank(predSite->getCLBSite()->X(),
+                                                              PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X()) &&
+                                 timingOptimizer->crossIOBank(succSite->getCLBSite()->X(),
+                                                              PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X()) &&
+                                 disRange < 2.5)
+                            disRange = 2.5;
+
+                        if (std::fabs(getAngle(v1x, v1y, v2x, v2y)) < M_PI / 2)
+                        {
+                            assert(PUId2PackingCLBSite[curPU->getId()]);
+                            assert(!PU2SiteConeOffsetPairs[curPU].first);
+                            auto tmp_cone = ownNeighbors(findNeiborSitesFromBinGrid(
+                                DesignInfo::CellType_LUT4, PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
+                                PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(), 0,
+                                (neighborDis >= 0.1 || disRange > 1) ? disRange : 1, y2xRatio, false, v1x, v1y, v2x,
+                                v2y, 20, false));
+                            PU2SiteConeOffsetPairs[curPU] =
+                                std::pair<std::vector<DeviceInfo::DeviceSite *> *, int>(tmp_cone, 0);
+                        }
+                    }
+                }
+            }
+        }
+
+        //#pragma omp parallel for
+        for (int orderI = 0; orderI < numCellInPath; orderI++)
+        {
+            auto cellId = cellIdsInCriticalPath[orderI];
+            auto curPU = placementInfo->getPlacementUnitByCellId(cellId);
+            auto curCell = designInfo->getCells()[cellId];
+            if (PUsTouched.find(curPU) != PUsTouched.end())
+            {
+                continue;
+            }
+            // std::cout << curCell << " has following candidates: \n";
+            if (!curPU->isLocked() && !curPU->checkHasCARRY() && !curPU->checkHasLUTRAM() && !curPU->checkHasBRAM() &&
+                !(curPU->checkHasDSP() || curPU->checkHasURAM()))
+            {
+
+                float disRange = 0.8 + displacementRatio;
+
+                float v1x = 0, v1y = 0, v2x = 0, v2y = 0;
+                PackingCLBSite *succSite = nullptr, *predSite = nullptr;
+                if (orderI > 0 && orderI < cellIdsInCriticalPath.size() - 1)
+                {
+                    predSite = cellId2PackingSite[cellIdsInCriticalPath[orderI - 1]];
+                    int predSiteOrderId = orderI - 1;
+                    auto curSite = cellId2PackingSite[cellId];
+                    succSite = cellId2PackingSite[cellIdsInCriticalPath[orderI + 1]];
+                    int succSiteOrderId = orderI + 1;
+                    assert(predSite && curSite && succSite);
+                    // while (curSite == predSite && predSiteOrderId - 1 >= 0)
+                    // {
+                    //     predSiteOrderId--;
+                    //     predSite = cellId2PackingSite[cellIdsInCriticalPath[predSiteOrderId]];
+                    // }
+                    // while (curSite == succSite && succSiteOrderId + 1 <= cellIdsInCriticalPath.size() -
+                    // 1)
+                    // {
+                    //     succSiteOrderId++;
+                    //     succSite = cellId2PackingSite[cellIdsInCriticalPath[succSiteOrderId]];
+                    // }
+                    v1x = predSite->getCLBSite()->X();
+                    v1y = predSite->getCLBSite()->Y();
+                    v2x = succSite->getCLBSite()->X();
+                    v2y = succSite->getCLBSite()->Y();
+                }
+                else if (orderI == 0)
+                {
+                    auto curSite = cellId2PackingSite[cellId];
+                    predSite = succSite = cellId2PackingSite[cellIdsInCriticalPath[orderI + 1]];
+                    assert(curSite && succSite);
+                    int succSiteOrderId = orderI + 1;
+                    while (curSite == succSite && succSiteOrderId + 1 <= cellIdsInCriticalPath.size() - 1)
+                    {
+                        succSiteOrderId++;
+                        succSite = cellId2PackingSite[cellIdsInCriticalPath[succSiteOrderId]];
+                    }
+                    v1x = v2x = succSite->getCLBSite()->X();
+                    v1y = v2y = succSite->getCLBSite()->Y();
+                }
+                else
+                {
+                    predSite = succSite = cellId2PackingSite[cellIdsInCriticalPath[orderI - 1]];
+                    auto curSite = cellId2PackingSite[cellId];
+                    assert(predSite && curSite);
+                    int predSiteOrderId = orderI - 1;
+                    while (curSite == predSite && predSiteOrderId - 1 >= 0)
+                    {
+                        predSiteOrderId--;
+                        predSite = cellId2PackingSite[cellIdsInCriticalPath[predSiteOrderId]];
+                    }
+                    v1x = v2x = predSite->getCLBSite()->X();
+                    v1y = v2y = predSite->getCLBSite()->Y();
+                }
+
+                int clockRegionX0, clockRegionY0;
+                deviceInfo->getClockRegionByLocation(PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
+                                                     PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(),
+                                                     clockRegionX0, clockRegionY0);
+                int clockRegionX1, clockRegionY1;
+                deviceInfo->getClockRegionByLocation(v1x, v1y, clockRegionX1, clockRegionY1);
+                int clockRegionX2, clockRegionY2;
+                deviceInfo->getClockRegionByLocation(v2x, v2y, clockRegionX2, clockRegionY2);
+
+                if (timingOptimizer->crossIOBank(predSite->getCLBSite()->X(),
+                                                 PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X()) &&
+                    timingOptimizer->crossIOBank(succSite->getCLBSite()->X(),
+                                                 PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X()))
+                    disRange = 3.5;
+                else if (timingOptimizer->crossIOBank(predSite->getCLBSite()->X(),
+                                                      PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X()) ||
+                         timingOptimizer->crossIOBank(succSite->getCLBSite()->X(),
+                                                      PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X()))
+                    disRange = 3;
+
+                if (useBigWindow)
+                    disRange = std::max(displacementThr, disRange);
+
+                assert(!PU2SiteNeighborOffsetPairs[curPU].first);
+                auto tmp_region = ownNeighbors(findNeiborSitesFromBinGrid(
+                    DesignInfo::CellType_LUT4, PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
+                    PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(), 0, disRange, y2xRatio, false));
+                PU2SiteNeighborOffsetPairs[curPU] =
+                    std::pair<std::vector<DeviceInfo::DeviceSite *> *, int>(tmp_region, 0);
+            }
+            else if (!curPU->isLocked() && !curPU->checkHasCARRY() && (curPU->checkHasDSP() || curPU->checkHasURAM()) && curPU->getDSPNum() == 1)
+            {
+                float disRange = 2.25;
+                if (useBigWindow)
+                    disRange = std::max(displacementThr, disRange);
+
+                assert(!PU2SiteNeighborOffsetPairs[curPU].first);
+                auto tmp_region = ownNeighbors(findNeiborSitesFromBinGrid(
+                    DesignInfo::CellType_DSP48E2, PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
+                    PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(), 0, disRange, y2xRatio, false));
+                PU2SiteNeighborOffsetPairs[curPU] =
+                    std::pair<std::vector<DeviceInfo::DeviceSite *> *, int>(tmp_region, 0);
+            }
+        }
+
+        // std::cout << "siteCandidateLimit=" << (useBigWindow ? 25 : 10) << "\n";
+        for (int siteCandidateLimit = 1; siteCandidateLimit <= (useBigWindow ? 25 : 10); siteCandidateLimit++)
+        {
+
             for (int orderI = cellIdsInCriticalPath.size() - 1; orderI >= 0; orderI--)
             {
                 auto cellId = cellIdsInCriticalPath[orderI];
@@ -603,76 +1461,23 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
                 if (!curPU->isLocked() && !curPU->checkHasCARRY() && !curPU->checkHasLUTRAM() &&
                     !curPU->checkHasBRAM() && !(curPU->checkHasDSP() || curPU->checkHasURAM()))
                 {
-                    float v1x = 0, v1y = 0, v2x = 0, v2y = 0;
-                    if (orderI > 0 && orderI < cellIdsInCriticalPath.size() - 1)
-                    {
-                        auto predSite = cellId2PackingSite[cellIdsInCriticalPath[orderI - 1]];
-                        int predSiteOrderId = orderI - 1;
-                        auto curSite = cellId2PackingSite[cellId];
-                        auto succSite = cellId2PackingSite[cellIdsInCriticalPath[orderI + 1]];
-                        int succSiteOrderId = orderI + 1;
-                        assert(predSite && curSite && succSite);
-                        // while (curSite == predSite && predSiteOrderId - 1 >= 0)
-                        // {
-                        //     predSiteOrderId--;
-                        //     predSite = cellId2PackingSite[cellIdsInCriticalPath[predSiteOrderId]];
-                        // }
-                        // while (curSite == succSite && succSiteOrderId + 1 <= cellIdsInCriticalPath.size() - 1)
-                        // {
-                        //     succSiteOrderId++;
-                        //     succSite = cellId2PackingSite[cellIdsInCriticalPath[succSiteOrderId]];
-                        // }
-                        v1x = predSite->getCLBSite()->X() - curSite->getCLBSite()->X();
-                        v1y = predSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
-                        v2x = succSite->getCLBSite()->X() - curSite->getCLBSite()->X();
-                        v2y = succSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
-                    }
-                    else if (orderI == 0)
-                    {
-                        auto curSite = cellId2PackingSite[cellId];
-                        auto succSite = cellId2PackingSite[cellIdsInCriticalPath[orderI + 1]];
-                        assert(curSite && succSite);
-                        int succSiteOrderId = orderI + 1;
-                        while (curSite == succSite && succSiteOrderId + 1 <= cellIdsInCriticalPath.size() - 1)
-                        {
-                            succSiteOrderId++;
-                            succSite = cellId2PackingSite[cellIdsInCriticalPath[succSiteOrderId]];
-                        }
-                        v1x = v2x = succSite->getCLBSite()->X() - curSite->getCLBSite()->X();
-                        v1y = v2y = succSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
-                    }
-                    else
-                    {
-                        auto predSite = cellId2PackingSite[cellIdsInCriticalPath[orderI - 1]];
-                        auto curSite = cellId2PackingSite[cellId];
-                        assert(predSite && curSite);
-                        int predSiteOrderId = orderI - 1;
-                        while (curSite == predSite && predSiteOrderId - 1 >= 0)
-                        {
-                            predSiteOrderId--;
-                            predSite = cellId2PackingSite[cellIdsInCriticalPath[predSiteOrderId]];
-                        }
-                        v1x = v2x = predSite->getCLBSite()->X() - curSite->getCLBSite()->X();
-                        v1y = v2y = predSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
-                    }
-                    if (std::fabs(v1x) + std::fabs(v1y) + std::fabs(v2x) + std::fabs(v2y) < 0.1)
+                    assert(PUId2PackingCLBSite[curPU->getId()]);
+                    if (!PU2SiteConeOffsetPairs[curPU].first)
                         continue;
-                    if (std::fabs(getAngle(v1x, v1y, v2x, v2y)) < M_PI / 2)
-                    {
-                        assert(PUId2PackingCLBSite[curPU->getId()]);
-                        std::unique_ptr<std::vector<DeviceInfo::DeviceSite *>> candidateSitesToPlaceTheCell_cone(
-                            findNeiborSitesFromBinGrid(
-                                DesignInfo::CellType_LUT4, PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
-                                PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(), 0, displacementThr, y2xRatio,
-                                false, v1x, v1y, v2x, v2y, 20));
 
-                        for (auto curDeviceSite : *candidateSitesToPlaceTheCell_cone)
+                    std::vector<DeviceInfo::DeviceSite *> *candidateSitesToPlaceTheCell_cone =
+                        PU2SiteConeOffsetPairs[curPU].first;
+                    int candidateOffsetIndex = PU2SiteConeOffsetPairs[curPU].second;
+                    for (int siteIndex = candidateOffsetIndex; siteIndex < candidateSitesToPlaceTheCell_cone->size();
+                         siteIndex++)
+                    {
+                        auto curDeviceSite = (*candidateSitesToPlaceTheCell_cone)[siteIndex];
+                        PU2SiteConeOffsetPairs[curPU].second = candidateOffsetIndex;
+                        if (deviceSite2PackingSite.find(curDeviceSite) == deviceSite2PackingSite.end())
+                            continue;
+                        PackingCLBSite *candidatePackingSite = deviceSite2PackingSite[curDeviceSite];
+                        if (cellId2CandidateSites[cellId].size() < siteCandidateLimit)
                         {
-                            if (deviceSite2PackingSite.find(curDeviceSite) == deviceSite2PackingSite.end())
-                                continue;
-                            PackingCLBSite *candidatePackingSite = deviceSite2PackingSite[curDeviceSite];
-                            if (cellId2CandidateSites[cellId].size() >= siteCandidateLimit)
-                                break;
                             bool duplicate = false;
                             for (auto existCandidate : cellId2CandidateSites[cellId])
                             {
@@ -682,7 +1487,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
                             if (duplicate)
                                 continue;
                             PackingCLBSite::PackingCLBCluster *trialCluster = nullptr;
-                            if (sitesCandidates.find(candidatePackingSite) == sitesCandidates.end())
+                            if (site2TrialCluster.find(candidatePackingSite) == site2TrialCluster.end())
                             {
                                 if (!candidatePackingSite->getDeterminedClusterInSite())
                                 {
@@ -705,9 +1510,9 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
                                 cellId2CandidateSites[cellId].push_back(candidatePackingSite);
                                 sitesCandidates.insert(candidatePackingSite);
                             }
-
-                            // }
                         }
+
+                        // }
                     }
                 }
             }
@@ -725,50 +1530,90 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
                 if (!curPU->isLocked() && !curPU->checkHasCARRY() && !curPU->checkHasLUTRAM() &&
                     !curPU->checkHasBRAM() && !(curPU->checkHasDSP() || curPU->checkHasURAM()))
                 {
-                    std::unique_ptr<std::vector<DeviceInfo::DeviceSite *>> candidateSitesToPlaceTheCell(
-                        findNeiborSitesFromBinGrid(
-                            DesignInfo::CellType_LUT4, PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
-                            PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(), 0, 0.8 + displacementRatio,
-                            y2xRatio, false));
-                    if (cellId2CandidateSites[cellId].size() >= siteCandidateLimit + 1)
-                        break;
-                    // std::cout << curCell << " has " << candidateSitesToPlaceTheCell->size()
-                    //           << " neighbors and candidates are:\n";
-                    for (auto curDeviceSite : *candidateSitesToPlaceTheCell)
+                    if (cellId2CandidateSites[cellId].size() < siteCandidateLimit + 1)
                     {
-                        if (deviceSite2PackingSite.find(curDeviceSite) == deviceSite2PackingSite.end())
+                        if (!PU2SiteNeighborOffsetPairs[curPU].first)
                             continue;
-                        PackingCLBSite *candidatePackingSite = deviceSite2PackingSite[curDeviceSite];
-                        bool duplicate = false;
-                        for (auto existCandidate : cellId2CandidateSites[cellId])
-                        {
-                            if (existCandidate == candidatePackingSite)
-                                duplicate = true;
-                        }
-                        if (duplicate)
-                            continue;
-                        PackingCLBSite::PackingCLBCluster *trialCluster = nullptr;
-                        if (sitesCandidates.find(candidatePackingSite) == sitesCandidates.end())
-                        {
-                            if (!candidatePackingSite->getDeterminedClusterInSite())
-                            {
-                                auto determinedClusterInSite =
-                                    new PackingCLBSite::PackingCLBCluster(candidatePackingSite);
-                                candidatePackingSite->setDeterminedClusterInSite(determinedClusterInSite);
-                            }
-                            trialCluster = new PackingCLBSite::PackingCLBCluster(
-                                candidatePackingSite->getDeterminedClusterInSite());
-                            site2TrialCluster[candidatePackingSite].reset(trialCluster);
-                        }
-                        else
-                        {
-                            trialCluster = site2TrialCluster[candidatePackingSite].get();
-                        }
 
-                        if (trialCluster->checkAddPU(curPU))
+                        std::vector<DeviceInfo::DeviceSite *> *candidateSitesToPlaceTheCell =
+                            PU2SiteNeighborOffsetPairs[curPU].first;
+                        int candidateOffsetIndex = PU2SiteNeighborOffsetPairs[curPU].second;
+                        for (int siteIndex = candidateOffsetIndex; siteIndex < candidateSitesToPlaceTheCell->size();
+                             siteIndex++)
                         {
-                            assert(trialCluster->addPU(curPU));
-                            cellId2CandidateSites[cellId].push_back(candidatePackingSite);
+                            auto curDeviceSite = (*candidateSitesToPlaceTheCell)[siteIndex];
+                            PU2SiteNeighborOffsetPairs[curPU].second = candidateOffsetIndex;
+                            if (deviceSite2PackingSite.find(curDeviceSite) == deviceSite2PackingSite.end())
+                                continue;
+                            PackingCLBSite *candidatePackingSite = deviceSite2PackingSite[curDeviceSite];
+                            bool duplicate = false;
+                            for (auto existCandidate : cellId2CandidateSites[cellId])
+                            {
+                                if (existCandidate == candidatePackingSite)
+                                    duplicate = true;
+                            }
+                            if (duplicate)
+                                continue;
+                            PackingCLBSite::PackingCLBCluster *trialCluster = nullptr;
+                            if (site2TrialCluster.find(candidatePackingSite) == site2TrialCluster.end())
+                            {
+                                if (!candidatePackingSite->getDeterminedClusterInSite())
+                                {
+                                    auto determinedClusterInSite =
+                                        new PackingCLBSite::PackingCLBCluster(candidatePackingSite);
+                                    candidatePackingSite->setDeterminedClusterInSite(determinedClusterInSite);
+                                }
+                                trialCluster = new PackingCLBSite::PackingCLBCluster(
+                                    candidatePackingSite->getDeterminedClusterInSite());
+                                site2TrialCluster[candidatePackingSite].reset(trialCluster);
+                            }
+                            else
+                            {
+                                trialCluster = site2TrialCluster[candidatePackingSite].get();
+                            }
+
+                            if (trialCluster->checkAddPU(curPU))
+                            {
+                                assert(trialCluster->addPU(curPU));
+                                cellId2CandidateSites[cellId].push_back(candidatePackingSite);
+                                sitesCandidates.insert(candidatePackingSite);
+                            }
+                        }
+                    }
+                }
+                else if (!curPU->isLocked() && !curPU->checkHasCARRY() && (curPU->checkHasDSP() || curPU->checkHasURAM()) &&
+                         curPU->getDSPNum() == 1)
+                {
+                    if (cellId2CandidateSites[cellId].size() < siteCandidateLimit + 1)
+                    {
+                        if (!PU2SiteNeighborOffsetPairs[curPU].first)
+                            continue;
+
+                        std::vector<DeviceInfo::DeviceSite *> *candidateSitesToPlaceTheCell =
+                            PU2SiteNeighborOffsetPairs[curPU].first;
+                        int candidateOffsetIndex = PU2SiteNeighborOffsetPairs[curPU].second;
+                        for (int siteIndex = candidateOffsetIndex; siteIndex < candidateSitesToPlaceTheCell->size();
+                             siteIndex++)
+                        {
+                            auto curDeviceSite = (*candidateSitesToPlaceTheCell)[siteIndex];
+                            PU2SiteNeighborOffsetPairs[curPU].second = candidateOffsetIndex;
+
+                            assert(deviceSite2PackingSite.find(curDeviceSite) != deviceSite2PackingSite.end());
+                            PackingCLBSite *candidatePackingSite = deviceSite2PackingSite[curDeviceSite];
+                            bool duplicate = false;
+                            for (auto existCandidate : cellId2CandidateSites[cellId])
+                            {
+                                if (existCandidate == candidatePackingSite)
+                                    duplicate = true;
+                            }
+                            if (duplicate)
+                                continue;
+
+                            if (candidatePackingSite->getNonCLBCell())
+                                continue;
+
+                            if (sitesCandidates.find(candidatePackingSite) == sitesCandidates.end())
+                                cellId2CandidateSites[cellId].push_back(candidatePackingSite);
                             sitesCandidates.insert(candidatePackingSite);
                         }
                     }
@@ -780,6 +1625,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
                 // }
             }
         }
+
 
         // calculate the shortest paths
         std::vector<std::vector<float>> shortestPath_LayerSite;
@@ -853,23 +1699,49 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
                 auto &curCandidates = cellId2CandidateSites[curCellId];
 
                 auto targetPackingSite = cellId2CandidateSites[curCellId][bestEndChoice];
-                if (!targetPackingSite->getDeterminedClusterInSite()->checkAddPU(curPU))
+
+                // movedPUs.insert(curPU);
+                // changedPackingSites.insert(targetPackingSite);
+                // changedPackingSites.insert(PUId2PackingCLBSite[curPU->getId()]);
+
+                if (curPU->getDSPNum() == 1)
                 {
-                    bestEndChoice = shortestPath_LayerSite_backtrace[i][bestEndChoice];
-                    continue;
+                    cellId2CandidateSites[curCellId][0]->clearNonCLBCell();
+                    assert(bestEndChoice < cellId2CandidateSites[curCellId].size());
+                    assert(!targetPackingSite->getNonCLBCell());
+                    targetPackingSite->setNonCLBCell(designInfo->getCells()[curCellId]);
+                    PUId2PackingCLBSite[curPU->getId()] = targetPackingSite;
+                    cellId2PackingSite[curCellId] = targetPackingSite;
+                    placementInfo->getPULegalSite()[curPU] =
+                        std::vector<DeviceInfo::DeviceSite *>(1, targetPackingSite->getCLBSite());
+                    // curPU->setAnchorLocationAndForgetTheOriginalOne(targetPackingSite->getCLBSite()->X(),
+                    //                                                 targetPackingSite->getCLBSite()->Y());
+                    // placementInfo->addPUIntoClockColumn(curPU, targetPackingSite->getCLBSite());
+                }
+                else
+                {
+                    if (!targetPackingSite->getDeterminedClusterInSite()->checkAddPU(curPU))
+                    {
+                        bestEndChoice = shortestPath_LayerSite_backtrace[i][bestEndChoice];
+                        continue;
+                    }
+
+                    cellId2CandidateSites[curCellId][0]->getDeterminedClusterInSite()->removePUToConstructDetCluster(
+                        curPU);
+
+                    assert(bestEndChoice < cellId2CandidateSites[curCellId].size());
+                    assert(targetPackingSite->getDeterminedClusterInSite()->addPU(curPU));
+                    PUId2PackingCLBSite[curPU->getId()] = targetPackingSite;
+                    placementInfo->addPUIntoClockColumn(curPU, targetPackingSite->getCLBSite());
+                    auto cellSet = targetPackingSite->getDeterminedClusterInSite()->getCellSet();
+                    for (auto cell : cellSet)
+                    {
+                        cellId2PackingSite[cell->getCellId()] = targetPackingSite;
+                    }
+                    // curPU->setAnchorLocationAndForgetTheOriginalOne(targetPackingSite->getCLBSite()->X(),
+                    //                                                 targetPackingSite->getCLBSite()->Y());
                 }
 
-                cellId2CandidateSites[curCellId][0]->getDeterminedClusterInSite()->removePUToConstructDetCluster(curPU);
-
-                assert(bestEndChoice < cellId2CandidateSites[curCellId].size());
-                assert(targetPackingSite->getDeterminedClusterInSite()->addPU(curPU));
-                PUId2PackingCLBSite[curPU->getId()] = targetPackingSite;
-                placementInfo->addPUIntoClockColumn(curPU, targetPackingSite->getCLBSite());
-                auto cellSet = targetPackingSite->getDeterminedClusterInSite()->getCellSet();
-                for (auto cell : cellSet)
-                {
-                    cellId2PackingSite[cell->getCellId()] = targetPackingSite;
-                }
                 replaceCnt++;
             }
             bestEndChoice = shortestPath_LayerSite_backtrace[i][bestEndChoice];
@@ -938,6 +1810,15 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
                 {
                     if (trialClusterWithNextPU->addPU(curPU))
                     {
+                        // movedPUs.insert(curPU);
+                        // movedPUs.insert(nextPU);
+                        // changedPackingSites.insert(curPackingSite);
+                        // changedPackingSites.insert(nextPackingSite);
+                        // curPU->setAnchorLocationAndForgetTheOriginalOne(nextPackingSite->getCLBSite()->X(),
+                        //                                                 nextPackingSite->getCLBSite()->Y());
+                        // nextPU->setAnchorLocationAndForgetTheOriginalOne(curPackingSite->getCLBSite()->X(),
+                        //                                                  curPackingSite->getCLBSite()->Y());
+
                         curPackingSite->getDeterminedClusterInSite()->removePUToConstructDetCluster(curPU);
                         assert(curPackingSite->getDeterminedClusterInSite()->addPU(nextPU));
                         nextPackingSite->getDeterminedClusterInSite()->removePUToConstructDetCluster(nextPU);
@@ -966,6 +1847,602 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
             }
         }
 
+        // float oriMaxFanoutDelay = timingOptimizer->getMaxDelay();
+        // timingOptimizer->incrementalStaticTimingAnalysis(movedPUs, true);
+        // if (timingOptimizer->getMaxIncrementalDelay() > oriMaxFanoutDelay)
+        // {
+        //     // print_warning("ParallelCLBPacker: critical path delay is increased to " +
+        //     //               std::to_string(timingOptimizer->getMaxIncrementalDelay()) + " and oriMaxFanoutDelay=" +
+        //     //               std::to_string(oriMaxFanoutDelay) + " . Give up this path optimization and recover");
+        //     partiallyRecoverToBestPacking(changedPackingSites);
+        //     timingOptimizer->recoverArrivalDelayFromLastIncrementalSTA();
+        //     movedPUs.clear();
+        // }
+        // else
+        // {
+        //     for (int orderI = cellIdsInCriticalPath.size() - 1; orderI >= 0; orderI--)
+        //     {
+        //         auto cellId = cellIdsInCriticalPath[orderI];
+        //         auto curPU = placementInfo->getPlacementUnitByCellId(cellId);
+        //         PUsTouched.insert(curPU);
+        //     }
+
+        //     // print_warning("ParallelCLBPacker: critical path delay is " +
+        //     //               std::to_string(timingOptimizer->getMaxIncrementalDelay()));
+        //     partiallyRecordBestPacking(changedPackingSites);
+        //     movedPUs.clear();
+        // }
+
+        for (int orderI = cellIdsInCriticalPath.size() - 1; orderI >= 0; orderI--)
+        {
+            auto cellId = cellIdsInCriticalPath[orderI];
+            auto curPU = placementInfo->getPlacementUnitByCellId(cellId);
+            PUsTouched.insert(curPU);
+        }
+    }
+
+    print_status("ParallelCLBPacker: conducted timing-driven detailed placement (shortest path) and " +
+                 std::to_string(replaceCnt) + " PlacementUnits are replaced.");
+    outfileTcl.close();
+    return replaceCnt;
+}
+
+int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, float displacementRatio,
+                                                                  float pathCriticalRatio, int lowIndex, int highIndex)
+{
+    AMF_PROFILE_FUNCTION("detailed_placement");
+    std::vector<std::unique_ptr<std::vector<DeviceInfo::DeviceSite *>>> neighborOwners;
+    auto ownNeighbors = [&](std::vector<DeviceInfo::DeviceSite *> *p) {
+        neighborOwners.emplace_back(p); return p;
+    };
+    print_status("ParallelCLBPacker: conducting timing-driven detailed placement based on shortest path (partial).");
+    auto oriCellIdsInCriticalPaths = timingOptimizer->findCriticalPaths(pathCriticalRatio, true, 1 + iterId * 20);
+    std::set<PlacementInfo::PlacementUnit *> PUsTouched;
+    PUsTouched.clear();
+    std::ofstream outfileTcl("./DetailedPlacementRecord");
+    int replaceCnt = 0;
+    for (auto oriCellIdsInCriticalPath : oriCellIdsInCriticalPaths)
+    {
+        neighborOwners.clear();
+        std::map<int, std::vector<PackingCLBSite *>> cellId2CandidateSites;
+        std::set<PackingCLBSite *> sitesCandidates;
+        std::map<PackingCLBSite *, std::unique_ptr<PackingCLBSite::PackingCLBCluster>> site2TrialCluster;
+        cellId2CandidateSites.clear();
+
+        std::vector<int> cellIdsInCriticalPath;
+        PlacementInfo::PlacementUnit *lastPU = nullptr;
+        std::set<PlacementInfo::PlacementUnit *> PUsInCriticalPathSet;
+        for (auto cellId : oriCellIdsInCriticalPath)
+        {
+            if (PUsInCriticalPathSet.find(placementInfo->getPlacementUnitByCellId(cellId)) ==
+                PUsInCriticalPathSet.end())
+            {
+                PUsInCriticalPathSet.insert(placementInfo->getPlacementUnitByCellId(cellId));
+                cellIdsInCriticalPath.push_back(cellId);
+            }
+        }
+        // std::cout << "processing endpoint [" << designInfo->getCells()[cellIdsInCriticalPath[0]] << "]  with "
+        //           << cellIdsInCriticalPath.size() << " nodes in path.\n";
+
+        bool CellUnmapped = false;
+        for (auto cellId : cellIdsInCriticalPath)
+        {
+            auto curPU = placementInfo->getPlacementUnitByCellId(cellId);
+            auto curPackingSite = cellId2PackingSite[cellId];
+            auto curCell = designInfo->getCells()[cellId];
+            if (!curPackingSite)
+            {
+                CellUnmapped = true;
+                // std::cout << "a cell of the PU does not map to sites: " << curCell << "\n";
+                break;
+            }
+            assert(curPackingSite);
+            cellId2CandidateSites[cellId] = std::vector<PackingCLBSite *>(1, curPackingSite);
+            sitesCandidates.insert(curPackingSite);
+            if (!curPackingSite->checkIsNonCLBSite())
+                site2TrialCluster[curPackingSite].reset(new PackingCLBSite::PackingCLBCluster(curPackingSite->getDeterminedClusterInSite()));
+        }
+        if (CellUnmapped)
+        {
+            continue;
+        }
+        // find candidate sites for each possible PU
+
+        std::map<PlacementInfo::PlacementUnit *, std::pair<std::vector<DeviceInfo::DeviceSite *> *, int>>
+            PU2SiteConeOffsetPairs;
+        std::map<PlacementInfo::PlacementUnit *, std::pair<std::vector<DeviceInfo::DeviceSite *> *, int>>
+            PU2SiteNeighborOffsetPairs;
+
+        // std::cout << "siteCandidateLimit=" << (useBigWindow ? 25 : 10) << "\n";
+
+        for (int siteCandidateLimit = 1; siteCandidateLimit <= (useBigWindow ? 25 : 10); siteCandidateLimit++)
+        {
+            float displacementThr = 5.0 * displacementRatio;
+            if (displacementThr < 1)
+                displacementThr = 1;
+            for (int orderI = lowIndex; orderI <= highIndex; orderI++)
+            {
+                if (orderI < 0 || orderI > cellIdsInCriticalPath.size() - 1)
+                    continue;
+                auto cellId = cellIdsInCriticalPath[orderI];
+                auto curPU = placementInfo->getPlacementUnitByCellId(cellId);
+                if (PUsTouched.find(curPU) != PUsTouched.end())
+                {
+                    continue;
+                }
+                auto curCell = designInfo->getCells()[cellId];
+                // std::cout << curCell << " has following candidates: \n";
+                if (!curPU->isLocked() && !curPU->checkHasCARRY() && !curPU->checkHasLUTRAM() &&
+                    !curPU->checkHasBRAM() && !(curPU->checkHasDSP() || curPU->checkHasURAM()))
+                {
+                    float v1x = 0, v1y = 0, v2x = 0, v2y = 0;
+                    PackingCLBSite *succSite = nullptr, *predSite = nullptr;
+                    if (orderI > 0 && orderI < cellIdsInCriticalPath.size() - 1)
+                    {
+                        predSite = cellId2PackingSite[cellIdsInCriticalPath[orderI - 1]];
+                        int predSiteOrderId = orderI - 1;
+                        auto curSite = cellId2PackingSite[cellId];
+                        succSite = cellId2PackingSite[cellIdsInCriticalPath[orderI + 1]];
+                        int succSiteOrderId = orderI + 1;
+                        assert(predSite && curSite && succSite);
+                        // while (curSite == predSite && predSiteOrderId - 1 >= 0)
+                        // {
+                        //     predSiteOrderId--;
+                        //     predSite = cellId2PackingSite[cellIdsInCriticalPath[predSiteOrderId]];
+                        // }
+                        // while (curSite == succSite && succSiteOrderId + 1 <= cellIdsInCriticalPath.size() - 1)
+                        // {
+                        //     succSiteOrderId++;
+                        //     succSite = cellId2PackingSite[cellIdsInCriticalPath[succSiteOrderId]];
+                        // }
+                        v1x = predSite->getCLBSite()->X() - curSite->getCLBSite()->X();
+                        v1y = predSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
+                        v2x = succSite->getCLBSite()->X() - curSite->getCLBSite()->X();
+                        v2y = succSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
+                    }
+                    else if (orderI == 0)
+                    {
+                        auto curSite = cellId2PackingSite[cellId];
+                        predSite = succSite = cellId2PackingSite[cellIdsInCriticalPath[orderI + 1]];
+                        assert(curSite && succSite);
+                        int succSiteOrderId = orderI + 1;
+                        while (curSite == succSite && succSiteOrderId + 1 <= cellIdsInCriticalPath.size() - 1)
+                        {
+                            succSiteOrderId++;
+                            succSite = cellId2PackingSite[cellIdsInCriticalPath[succSiteOrderId]];
+                        }
+                        v1x = v2x = succSite->getCLBSite()->X() - curSite->getCLBSite()->X();
+                        v1y = v2y = succSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
+                    }
+                    else
+                    {
+                        predSite = succSite = cellId2PackingSite[cellIdsInCriticalPath[orderI - 1]];
+                        auto curSite = cellId2PackingSite[cellId];
+                        assert(predSite && curSite);
+                        int predSiteOrderId = orderI - 1;
+                        while (curSite == predSite && predSiteOrderId - 1 >= 0)
+                        {
+                            predSiteOrderId--;
+                            predSite = cellId2PackingSite[cellIdsInCriticalPath[predSiteOrderId]];
+                        }
+                        v1x = v2x = predSite->getCLBSite()->X() - curSite->getCLBSite()->X();
+                        v1y = v2y = predSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
+                    }
+                    float neighborDis =
+                        std::fabs(v1x) + y2xRatio * std::fabs(v1y) + std::fabs(v2x) + y2xRatio * std::fabs(v2y);
+                    // if (std::fabs(v1x) + std::fabs(v1y) + std::fabs(v2x) + std::fabs(v2y) < 0.1)
+                    //     continue;
+
+                    int clockRegionX0, clockRegionY0;
+                    deviceInfo->getClockRegionByLocation(PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
+                                                         PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(),
+                                                         clockRegionX0, clockRegionY0);
+                    int clockRegionX1, clockRegionY1;
+                    deviceInfo->getClockRegionByLocation(predSite->getCLBSite()->X(), predSite->getCLBSite()->Y(),
+                                                         clockRegionX1, clockRegionY1);
+                    int clockRegionX2, clockRegionY2;
+                    deviceInfo->getClockRegionByLocation(succSite->getCLBSite()->X(), succSite->getCLBSite()->Y(),
+                                                         clockRegionX2, clockRegionY2);
+
+                    float disRange = displacementThr;
+                    if (orderI == cellIdsInCriticalPath.size() - 1 || orderI == 0)
+                    {
+                        disRange = 2;
+                        if (neighborDis > 5)
+                            disRange = 3;
+                    }
+                    else if (timingOptimizer->crossIOBank(predSite->getCLBSite()->X(),
+                                                          PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X()) &&
+                             timingOptimizer->crossIOBank(succSite->getCLBSite()->X(),
+                                                          PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X()) &&
+                             disRange < 2.5)
+                        disRange = 2.5;
+
+                    if (std::fabs(getAngle(v1x, v1y, v2x, v2y)) < M_PI / 2)
+                    {
+                        assert(PUId2PackingCLBSite[curPU->getId()]);
+
+                        if (PU2SiteConeOffsetPairs.find(curPU) == PU2SiteConeOffsetPairs.end())
+                        {
+                            auto tmp_cone = ownNeighbors(findNeiborSitesFromBinGrid(
+                                DesignInfo::CellType_LUT4, PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
+                                PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(), 0,
+                                (neighborDis >= 0.1 || disRange > 1) ? disRange : 1, y2xRatio, false, v1x, v1y, v2x,
+                                v2y, 20, false));
+                            PU2SiteConeOffsetPairs[curPU] =
+                                std::pair<std::vector<DeviceInfo::DeviceSite *> *, int>(tmp_cone, 0);
+                        }
+
+                        std::vector<DeviceInfo::DeviceSite *> *candidateSitesToPlaceTheCell_cone =
+                            PU2SiteConeOffsetPairs[curPU].first;
+                        int candidateOffsetIndex = PU2SiteConeOffsetPairs[curPU].second;
+                        for (int siteIndex = candidateOffsetIndex;
+                             siteIndex < candidateSitesToPlaceTheCell_cone->size(); siteIndex++)
+                        {
+                            auto curDeviceSite = (*candidateSitesToPlaceTheCell_cone)[siteIndex];
+                            PU2SiteConeOffsetPairs[curPU].second = candidateOffsetIndex;
+                            if (deviceSite2PackingSite.find(curDeviceSite) == deviceSite2PackingSite.end())
+                                continue;
+                            PackingCLBSite *candidatePackingSite = deviceSite2PackingSite[curDeviceSite];
+                            if (cellId2CandidateSites[cellId].size() < siteCandidateLimit)
+                            {
+                                bool duplicate = false;
+                                for (auto existCandidate : cellId2CandidateSites[cellId])
+                                {
+                                    if (existCandidate == candidatePackingSite)
+                                        duplicate = true;
+                                }
+                                if (duplicate)
+                                    continue;
+                                PackingCLBSite::PackingCLBCluster *trialCluster = nullptr;
+                                if (site2TrialCluster.find(candidatePackingSite) == site2TrialCluster.end())
+                                {
+                                    if (!candidatePackingSite->getDeterminedClusterInSite())
+                                    {
+                                        auto determinedClusterInSite =
+                                            new PackingCLBSite::PackingCLBCluster(candidatePackingSite);
+                                        candidatePackingSite->setDeterminedClusterInSite(determinedClusterInSite);
+                                    }
+                                    trialCluster = new PackingCLBSite::PackingCLBCluster(
+                                        candidatePackingSite->getDeterminedClusterInSite());
+                                    site2TrialCluster[candidatePackingSite].reset(trialCluster);
+                                }
+                                else
+                                {
+                                    trialCluster = site2TrialCluster[candidatePackingSite].get();
+                                }
+
+                                if (trialCluster->checkAddPU(curPU))
+                                {
+                                    assert(trialCluster->addPU(curPU));
+                                    cellId2CandidateSites[cellId].push_back(candidatePackingSite);
+                                    sitesCandidates.insert(candidatePackingSite);
+                                }
+                            }
+
+                            // }
+                        }
+                    }
+                }
+            }
+
+            for (int orderI = lowIndex; orderI <= highIndex; orderI++)
+            {
+                if (orderI < 0 || orderI > cellIdsInCriticalPath.size() - 1)
+                    continue;
+                auto cellId = cellIdsInCriticalPath[orderI];
+                auto curPU = placementInfo->getPlacementUnitByCellId(cellId);
+                auto curCell = designInfo->getCells()[cellId];
+                if (PUsTouched.find(curPU) != PUsTouched.end())
+                {
+                    continue;
+                }
+                // std::cout << curCell << " has following candidates: \n";
+                if (!curPU->isLocked() && !curPU->checkHasCARRY() && !curPU->checkHasLUTRAM() &&
+                    !curPU->checkHasBRAM() && !(curPU->checkHasDSP() || curPU->checkHasURAM()))
+                {
+                    if (cellId2CandidateSites[cellId].size() < siteCandidateLimit + 1)
+                    {
+                        float disRange = 0.8 + displacementRatio;
+
+                        float v1x = 0, v1y = 0, v2x = 0, v2y = 0;
+                        PackingCLBSite *succSite = nullptr, *predSite = nullptr;
+                        if (orderI > 0 && orderI < cellIdsInCriticalPath.size() - 1)
+                        {
+                            predSite = cellId2PackingSite[cellIdsInCriticalPath[orderI - 1]];
+                            int predSiteOrderId = orderI - 1;
+                            auto curSite = cellId2PackingSite[cellId];
+                            succSite = cellId2PackingSite[cellIdsInCriticalPath[orderI + 1]];
+                            int succSiteOrderId = orderI + 1;
+                            assert(predSite && curSite && succSite);
+                            // while (curSite == predSite && predSiteOrderId - 1 >= 0)
+                            // {
+                            //     predSiteOrderId--;
+                            //     predSite = cellId2PackingSite[cellIdsInCriticalPath[predSiteOrderId]];
+                            // }
+                            // while (curSite == succSite && succSiteOrderId + 1 <= cellIdsInCriticalPath.size() - 1)
+                            // {
+                            //     succSiteOrderId++;
+                            //     succSite = cellId2PackingSite[cellIdsInCriticalPath[succSiteOrderId]];
+                            // }
+                            v1x = predSite->getCLBSite()->X();
+                            v1y = predSite->getCLBSite()->Y();
+                            v2x = succSite->getCLBSite()->X();
+                            v2y = succSite->getCLBSite()->Y();
+                        }
+                        else if (orderI == 0)
+                        {
+                            auto curSite = cellId2PackingSite[cellId];
+                            predSite = succSite = cellId2PackingSite[cellIdsInCriticalPath[orderI + 1]];
+                            assert(curSite && succSite);
+                            int succSiteOrderId = orderI + 1;
+                            while (curSite == succSite && succSiteOrderId + 1 <= cellIdsInCriticalPath.size() - 1)
+                            {
+                                succSiteOrderId++;
+                                succSite = cellId2PackingSite[cellIdsInCriticalPath[succSiteOrderId]];
+                            }
+                            v1x = v2x = succSite->getCLBSite()->X();
+                            v1y = v2y = succSite->getCLBSite()->Y();
+                        }
+                        else
+                        {
+                            predSite = succSite = cellId2PackingSite[cellIdsInCriticalPath[orderI - 1]];
+                            auto curSite = cellId2PackingSite[cellId];
+                            assert(predSite && curSite);
+                            int predSiteOrderId = orderI - 1;
+                            while (curSite == predSite && predSiteOrderId - 1 >= 0)
+                            {
+                                predSiteOrderId--;
+                                predSite = cellId2PackingSite[cellIdsInCriticalPath[predSiteOrderId]];
+                            }
+                            v1x = v2x = predSite->getCLBSite()->X();
+                            v1y = v2y = predSite->getCLBSite()->Y();
+                        }
+
+                        int clockRegionX0, clockRegionY0;
+                        deviceInfo->getClockRegionByLocation(PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
+                                                             PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(),
+                                                             clockRegionX0, clockRegionY0);
+                        int clockRegionX1, clockRegionY1;
+                        deviceInfo->getClockRegionByLocation(v1x, v1y, clockRegionX1, clockRegionY1);
+                        int clockRegionX2, clockRegionY2;
+                        deviceInfo->getClockRegionByLocation(v2x, v2y, clockRegionX2, clockRegionY2);
+
+                        if (timingOptimizer->crossIOBank(predSite->getCLBSite()->X(),
+                                                         PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X()) &&
+                            timingOptimizer->crossIOBank(succSite->getCLBSite()->X(),
+                                                         PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X()))
+                            disRange = 3.5;
+                        else if (timingOptimizer->crossIOBank(predSite->getCLBSite()->X(),
+                                                              PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X()) ||
+                                 timingOptimizer->crossIOBank(succSite->getCLBSite()->X(),
+                                                              PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X()))
+                            disRange = 3;
+                        // std::cout << curCell << " has " << candidateSitesToPlaceTheCell->size()
+                        //           << " neighbors and candidates are:\n";
+                        if (PU2SiteNeighborOffsetPairs.find(curPU) == PU2SiteNeighborOffsetPairs.end())
+                        {
+                            auto tmp_region = ownNeighbors(findNeiborSitesFromBinGrid(
+                                DesignInfo::CellType_LUT4, PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
+                                PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(), 0, disRange, y2xRatio, false));
+                            PU2SiteNeighborOffsetPairs[curPU] =
+                                std::pair<std::vector<DeviceInfo::DeviceSite *> *, int>(tmp_region, 0);
+                        }
+
+                        std::vector<DeviceInfo::DeviceSite *> *candidateSitesToPlaceTheCell =
+                            PU2SiteNeighborOffsetPairs[curPU].first;
+                        int candidateOffsetIndex = PU2SiteNeighborOffsetPairs[curPU].second;
+                        for (int siteIndex = candidateOffsetIndex; siteIndex < candidateSitesToPlaceTheCell->size();
+                             siteIndex++)
+                        {
+                            auto curDeviceSite = (*candidateSitesToPlaceTheCell)[siteIndex];
+                            PU2SiteNeighborOffsetPairs[curPU].second = candidateOffsetIndex;
+                            if (deviceSite2PackingSite.find(curDeviceSite) == deviceSite2PackingSite.end())
+                                continue;
+                            PackingCLBSite *candidatePackingSite = deviceSite2PackingSite[curDeviceSite];
+                            bool duplicate = false;
+                            for (auto existCandidate : cellId2CandidateSites[cellId])
+                            {
+                                if (existCandidate == candidatePackingSite)
+                                    duplicate = true;
+                            }
+                            if (duplicate)
+                                continue;
+                            PackingCLBSite::PackingCLBCluster *trialCluster = nullptr;
+                            if (site2TrialCluster.find(candidatePackingSite) == site2TrialCluster.end())
+                            {
+                                if (!candidatePackingSite->getDeterminedClusterInSite())
+                                {
+                                    auto determinedClusterInSite =
+                                        new PackingCLBSite::PackingCLBCluster(candidatePackingSite);
+                                    candidatePackingSite->setDeterminedClusterInSite(determinedClusterInSite);
+                                }
+                                trialCluster = new PackingCLBSite::PackingCLBCluster(
+                                    candidatePackingSite->getDeterminedClusterInSite());
+                                site2TrialCluster[candidatePackingSite].reset(trialCluster);
+                            }
+                            else
+                            {
+                                trialCluster = site2TrialCluster[candidatePackingSite].get();
+                            }
+
+                            if (trialCluster->checkAddPU(curPU))
+                            {
+                                assert(trialCluster->addPU(curPU));
+                                cellId2CandidateSites[cellId].push_back(candidatePackingSite);
+                                sitesCandidates.insert(candidatePackingSite);
+                            }
+                        }
+                    }
+                }
+                else if (!curPU->isLocked() && !curPU->checkHasCARRY() && (curPU->checkHasDSP() || curPU->checkHasURAM()) &&
+                         curPU->getDSPNum() == 1)
+                {
+                    if (cellId2CandidateSites[cellId].size() < siteCandidateLimit + 1)
+                    {
+                        float disRange = 2.25;
+
+                        // std::cout << curCell << " has " << candidateSitesToPlaceTheCell->size()
+                        //           << " neighbors and candidates are:\n";
+                        if (PU2SiteNeighborOffsetPairs.find(curPU) == PU2SiteNeighborOffsetPairs.end())
+                        {
+                            auto tmp_region = ownNeighbors(findNeiborSitesFromBinGrid(
+                                DesignInfo::CellType_DSP48E2, PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
+                                PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(), 0, disRange, y2xRatio, false));
+                            PU2SiteNeighborOffsetPairs[curPU] =
+                                std::pair<std::vector<DeviceInfo::DeviceSite *> *, int>(tmp_region, 0);
+                        }
+
+                        std::vector<DeviceInfo::DeviceSite *> *candidateSitesToPlaceTheCell =
+                            PU2SiteNeighborOffsetPairs[curPU].first;
+                        int candidateOffsetIndex = PU2SiteNeighborOffsetPairs[curPU].second;
+                        for (int siteIndex = candidateOffsetIndex; siteIndex < candidateSitesToPlaceTheCell->size();
+                             siteIndex++)
+                        {
+                            auto curDeviceSite = (*candidateSitesToPlaceTheCell)[siteIndex];
+                            PU2SiteNeighborOffsetPairs[curPU].second = candidateOffsetIndex;
+
+                            assert(deviceSite2PackingSite.find(curDeviceSite) != deviceSite2PackingSite.end());
+                            PackingCLBSite *candidatePackingSite = deviceSite2PackingSite[curDeviceSite];
+                            bool duplicate = false;
+                            for (auto existCandidate : cellId2CandidateSites[cellId])
+                            {
+                                if (existCandidate == candidatePackingSite)
+                                    duplicate = true;
+                            }
+                            if (duplicate)
+                                continue;
+
+                            if (candidatePackingSite->getNonCLBCell())
+                                continue;
+
+                            if (sitesCandidates.find(candidatePackingSite) == sitesCandidates.end())
+                                cellId2CandidateSites[cellId].push_back(candidatePackingSite);
+                            sitesCandidates.insert(candidatePackingSite);
+                        }
+                    }
+                }
+
+                // for (auto packingSite : cellId2CandidateSites[cellId])
+                // {
+                //     std::cout << "      " << packingSite->getCLBSite()->getName() << "\n";
+                // }
+            }
+        }
+
+
+        // calculate the shortest paths
+        std::vector<std::vector<float>> shortestPath_LayerSite;
+        std::vector<std::vector<int>> shortestPath_LayerSite_backtrace;
+        shortestPath_LayerSite.push_back(
+            std::vector<float>(cellId2CandidateSites[cellIdsInCriticalPath[0]].size(), 0.0));
+        shortestPath_LayerSite_backtrace.push_back(
+            std::vector<int>(cellId2CandidateSites[cellIdsInCriticalPath[0]].size(), -1));
+
+        if (iterId > 100)
+        {
+            outfileTcl << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>\nCellsCandidate:\n";
+            for (int i = 0; i < cellIdsInCriticalPath.size(); i++)
+            {
+                auto curCellId = cellIdsInCriticalPath[i];
+                auto curCell = designInfo->getCells()[curCellId];
+                auto &curCandidates = cellId2CandidateSites[curCellId];
+                outfileTcl << "cell: " << curCell << "\n";
+                for (int k = 0; k < curCandidates.size(); k++)
+                {
+                    outfileTcl << "      " << cellId2CandidateSites[curCellId][k]->getCLBSite()->getName() << "\n";
+                }
+            }
+        }
+
+        int bestEndChoice = -1;
+        float bestChoiceDelay = 100000;
+        for (int i = 1; i < cellIdsInCriticalPath.size(); i++)
+        {
+            auto predCell = cellIdsInCriticalPath[i - 1];
+            auto curCell = cellIdsInCriticalPath[i];
+            auto &predCandidates = cellId2CandidateSites[predCell];
+            auto &curCandidates = cellId2CandidateSites[curCell];
+            shortestPath_LayerSite.push_back(std::vector<float>(cellId2CandidateSites[curCell].size(), 100000.0));
+            shortestPath_LayerSite_backtrace.push_back(std::vector<int>(cellId2CandidateSites[curCell].size(), -1));
+
+            for (int j = 0; j < predCandidates.size(); j++)
+            {
+                for (int k = 0; k < curCandidates.size(); k++)
+                {
+                    float delay = timingOptimizer->getDelayByModel(
+                        predCandidates[j]->getCLBSite()->X(), predCandidates[j]->getCLBSite()->Y(),
+                        curCandidates[k]->getCLBSite()->X(), curCandidates[k]->getCLBSite()->Y());
+
+                    if (shortestPath_LayerSite[i][k] > shortestPath_LayerSite[i - 1][j] + delay)
+                    {
+                        shortestPath_LayerSite[i][k] = shortestPath_LayerSite[i - 1][j] + delay;
+                        shortestPath_LayerSite_backtrace[i][k] = j;
+
+                        if (i == cellIdsInCriticalPath.size() - 1)
+                        {
+                            if (shortestPath_LayerSite[i][k] < bestChoiceDelay)
+                            {
+                                bestChoiceDelay = shortestPath_LayerSite[i][k];
+                                bestEndChoice = k;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        for (int i = shortestPath_LayerSite.size() - 1; i >= 0; i--)
+        {
+            assert(bestEndChoice >= 0);
+            if (bestEndChoice > 0)
+            {
+                auto curCellId = cellIdsInCriticalPath[i];
+                auto curPU = placementInfo->getPlacementUnitByCellId(curCellId);
+
+                auto &curCandidates = cellId2CandidateSites[curCellId];
+
+                auto targetPackingSite = cellId2CandidateSites[curCellId][bestEndChoice];
+
+                if (curPU->getDSPNum() == 1)
+                {
+                    cellId2CandidateSites[curCellId][0]->clearNonCLBCell();
+                    assert(bestEndChoice < cellId2CandidateSites[curCellId].size());
+                    assert(!targetPackingSite->getNonCLBCell());
+                    targetPackingSite->setNonCLBCell(designInfo->getCells()[curCellId]);
+                    PUId2PackingCLBSite[curPU->getId()] = targetPackingSite;
+                    cellId2PackingSite[curCellId] = targetPackingSite;
+                    placementInfo->getPULegalSite()[curPU] =
+                        std::vector<DeviceInfo::DeviceSite *>(1, targetPackingSite->getCLBSite());
+                    // placementInfo->addPUIntoClockColumn(curPU, targetPackingSite->getCLBSite());
+                }
+                else
+                {
+                    if (!targetPackingSite->getDeterminedClusterInSite()->checkAddPU(curPU))
+                    {
+                        bestEndChoice = shortestPath_LayerSite_backtrace[i][bestEndChoice];
+                        continue;
+                    }
+
+                    cellId2CandidateSites[curCellId][0]->getDeterminedClusterInSite()->removePUToConstructDetCluster(
+                        curPU);
+
+                    assert(bestEndChoice < cellId2CandidateSites[curCellId].size());
+                    assert(targetPackingSite->getDeterminedClusterInSite()->addPU(curPU));
+                    PUId2PackingCLBSite[curPU->getId()] = targetPackingSite;
+                    placementInfo->addPUIntoClockColumn(curPU, targetPackingSite->getCLBSite());
+                    auto cellSet = targetPackingSite->getDeterminedClusterInSite()->getCellSet();
+                    for (auto cell : cellSet)
+                    {
+                        cellId2PackingSite[cell->getCellId()] = targetPackingSite;
+                    }
+                }
+
+                replaceCnt++;
+            }
+            bestEndChoice = shortestPath_LayerSite_backtrace[i][bestEndChoice];
+        }
+
         for (int orderI = cellIdsInCriticalPath.size() - 1; orderI >= 0; orderI--)
         {
             auto cellId = cellIdsInCriticalPath[orderI];
@@ -983,8 +2460,12 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
 int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSlotMapping()
 {
     AMF_PROFILE_FUNCTION("detailed_placement");
+    std::vector<std::unique_ptr<std::vector<DeviceInfo::DeviceSite *>>> neighborOwners;
+    auto ownNeighbors = [&](std::vector<DeviceInfo::DeviceSite *> *p) {
+        neighborOwners.emplace_back(p); return p;
+    };
     print_status("ParallelCLBPacker: re-place some LUT-FF pairs since they are not connected via internal nets.");
-    auto oriCellIdsInCriticalPaths = timingOptimizer->findCriticalPaths(1, false, 100);
+    auto oriCellIdsInCriticalPaths = timingOptimizer->findCriticalPaths(0.9, false, 1000, 30, false);
 
     // auto &sortedTimingNodes = timingOptimizer->getSortedTimingNodes();
     // std::vector<bool> FFDirectlyDrivenButNotInOneSlot;
@@ -1021,9 +2502,10 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSl
     int replaceCnt = 0;
     for (auto oriCellIdsInCriticalPath : oriCellIdsInCriticalPaths)
     {
+        neighborOwners.clear();
         std::map<int, std::vector<PackingCLBSite *>> cellId2CandidateSites;
         std::set<PackingCLBSite *> sitesCandidates;
-        std::map<PackingCLBSite *, PackingCLBSite::PackingCLBCluster *> site2TrialCluster;
+        std::map<PackingCLBSite *, std::unique_ptr<PackingCLBSite::PackingCLBCluster>> site2TrialCluster;
         cellId2CandidateSites.clear();
 
         std::vector<int> cellIdsInCriticalPath;
@@ -1052,6 +2534,17 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSl
                 auto curPackingSite = cellId2PackingSite[oriCellIdsInCriticalPath[0]];
                 targetLUT = LUTFFPair->getCells()[0];
                 targetFF = LUTFFPair->getCells()[1];
+                assert(curPackingSite->getDeterminedClusterInSite());
+                if (curPackingSite->getDeterminedClusterInSite()->getPUs().find(LUTFFPair) ==
+                    curPackingSite->getDeterminedClusterInSite()->getPUs().end())
+                {
+                    std::cout << "cluster:" << curPackingSite->getDeterminedClusterInSite() << "\n";
+                    std::cout << "LUTFFPair:" << LUTFFPair << "\n";
+                }
+                assert(curPackingSite->getDeterminedClusterInSite()->getPUs().find(LUTFFPair) !=
+                       curPackingSite->getDeterminedClusterInSite()->getPUs().end());
+                // curPackingSite->finalMapToSlots();
+
                 auto LUTLoc = curPackingSite->getLUTSlot(targetLUT);
                 auto FFLoc = curPackingSite->getFFSlot(targetFF);
                 shouldRelocateLUTFFPair = !(LUTLoc[0] == FFLoc[0] && LUTLoc[1] == FFLoc[1] && LUTLoc[2] == FFLoc[2]);
@@ -1063,9 +2556,9 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSl
             continue;
 
         // std::cout << "handling " << LUTFFPair << "\n";
-        int siteCandidateLimit = 9;
+        int siteCandidateLimit = 20;
 
-        float displacementThr = 1.5;
+        float displacementThr = 1.6;
         int orderI = 0;
         auto cellId = cellIdsInCriticalPath[orderI];
         auto curPU = placementInfo->getPlacementUnitByCellId(cellId);
@@ -1092,23 +2585,78 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSl
             v1x = v2x = succSite->getCLBSite()->X() - curSite->getCLBSite()->X();
             v1y = v2y = succSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
 
-            if (std::fabs(v1x) + std::fabs(v1y) + std::fabs(v2x) + std::fabs(v2y) < 0.1)
-                continue;
+            // if (std::fabs(v1x) + std::fabs(v1y) + std::fabs(v2x) + std::fabs(v2y) < 0.1)
+            //     continue;
             if (std::fabs(getAngle(v1x, v1y, v2x, v2y)) < M_PI / 2)
             {
                 assert(PUId2PackingCLBSite[curPU->getId()]);
-                auto candidateSitesToPlaceTheCell_cone = findNeiborSitesFromBinGrid(
+                auto candidateSitesToPlaceTheCell_cone = ownNeighbors(findNeiborSitesFromBinGrid(
                     DesignInfo::CellType_LUT4, PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
                     PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(), 0, displacementThr, y2xRatio, false, v1x,
-                    v1y, v2x, v2y, 20);
+                    v1y, v2x, v2y, 20));
+
 
                 for (auto curDeviceSite : *candidateSitesToPlaceTheCell_cone)
                 {
                     if (deviceSite2PackingSite.find(curDeviceSite) == deviceSite2PackingSite.end())
                         continue;
                     PackingCLBSite *candidatePackingSite = deviceSite2PackingSite[curDeviceSite];
-                    if (cellId2CandidateSites[cellId].size() >= siteCandidateLimit)
-                        break;
+                    if (cellId2CandidateSites[cellId].size() < siteCandidateLimit)
+                    {
+                        bool duplicate = false;
+                        for (auto existCandidate : cellId2CandidateSites[cellId])
+                        {
+                            if (existCandidate == candidatePackingSite)
+                                duplicate = true;
+                        }
+                        if (duplicate)
+                            continue;
+                        PackingCLBSite::PackingCLBCluster *trialCluster = nullptr;
+                        if (site2TrialCluster.find(candidatePackingSite) == site2TrialCluster.end())
+                        {
+                            if (!candidatePackingSite->getDeterminedClusterInSite())
+                            {
+                                auto determinedClusterInSite =
+                                    new PackingCLBSite::PackingCLBCluster(candidatePackingSite);
+                                candidatePackingSite->setDeterminedClusterInSite(determinedClusterInSite);
+                            }
+                            trialCluster = new PackingCLBSite::PackingCLBCluster(
+                                candidatePackingSite->getDeterminedClusterInSite());
+                            site2TrialCluster[candidatePackingSite].reset(trialCluster);
+                        }
+                        else
+                        {
+                            trialCluster = site2TrialCluster[candidatePackingSite].get();
+                        }
+
+                        if (trialCluster->checkAddPU(curPU))
+                        {
+                            assert(trialCluster->addPU(curPU));
+                            cellId2CandidateSites[cellId].push_back(candidatePackingSite);
+                            sitesCandidates.insert(candidatePackingSite);
+                        }
+                    }
+
+                    // }
+                }
+
+            }
+        }
+
+        // std::cout << curCell << " has following candidates: \n";
+        if (!curPU->isLocked() && !curPU->checkHasCARRY() && !curPU->checkHasLUTRAM() && !curPU->checkHasBRAM() &&
+            !(curPU->checkHasDSP() || curPU->checkHasURAM()))
+        {
+            std::vector<DeviceInfo::DeviceSite *> *candidateSitesToPlaceTheCell = ownNeighbors(findNeiborSitesFromBinGrid(
+                DesignInfo::CellType_LUT4, PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
+                PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(), 0, displacementThr, y2xRatio, false));
+            if (cellId2CandidateSites[cellId].size() < siteCandidateLimit + 1)
+            {
+                for (auto curDeviceSite : *candidateSitesToPlaceTheCell)
+                {
+                    if (deviceSite2PackingSite.find(curDeviceSite) == deviceSite2PackingSite.end())
+                        continue;
+                    PackingCLBSite *candidatePackingSite = deviceSite2PackingSite[curDeviceSite];
                     bool duplicate = false;
                     for (auto existCandidate : cellId2CandidateSites[cellId])
                     {
@@ -1118,7 +2666,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSl
                     if (duplicate)
                         continue;
                     PackingCLBSite::PackingCLBCluster *trialCluster = nullptr;
-                    if (sitesCandidates.find(candidatePackingSite) == sitesCandidates.end())
+                    if (site2TrialCluster.find(candidatePackingSite) == site2TrialCluster.end())
                     {
                         if (!candidatePackingSite->getDeterminedClusterInSite())
                         {
@@ -1127,11 +2675,11 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSl
                         }
                         trialCluster =
                             new PackingCLBSite::PackingCLBCluster(candidatePackingSite->getDeterminedClusterInSite());
-                        site2TrialCluster[candidatePackingSite] = trialCluster;
+                        site2TrialCluster[candidatePackingSite].reset(trialCluster);
                     }
                     else
                     {
-                        trialCluster = site2TrialCluster[candidatePackingSite];
+                        trialCluster = site2TrialCluster[candidatePackingSite].get();
                     }
 
                     if (trialCluster->checkAddPU(curPU))
@@ -1140,63 +2688,9 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSl
                         cellId2CandidateSites[cellId].push_back(candidatePackingSite);
                         sitesCandidates.insert(candidatePackingSite);
                     }
-
-                    // }
-                }
-                delete candidateSitesToPlaceTheCell_cone;
-            }
-        }
-
-        // std::cout << curCell << " has following candidates: \n";
-        if (!curPU->isLocked() && !curPU->checkHasCARRY() && !curPU->checkHasLUTRAM() && !curPU->checkHasBRAM() &&
-            !(curPU->checkHasDSP() || curPU->checkHasURAM()))
-        {
-            std::vector<DeviceInfo::DeviceSite *> *candidateSitesToPlaceTheCell = findNeiborSitesFromBinGrid(
-                DesignInfo::CellType_LUT4, PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
-                PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(), 0, displacementThr, y2xRatio, false);
-            if (cellId2CandidateSites[cellId].size() >= siteCandidateLimit + 1)
-                break;
-            // std::cout << curCell << " has " << candidateSitesToPlaceTheCell->size()
-            //           << " neighbors and candidates are:\n";
-            for (auto curDeviceSite : *candidateSitesToPlaceTheCell)
-            {
-                if (deviceSite2PackingSite.find(curDeviceSite) == deviceSite2PackingSite.end())
-                    continue;
-                PackingCLBSite *candidatePackingSite = deviceSite2PackingSite[curDeviceSite];
-                bool duplicate = false;
-                for (auto existCandidate : cellId2CandidateSites[cellId])
-                {
-                    if (existCandidate == candidatePackingSite)
-                        duplicate = true;
-                }
-                if (duplicate)
-                    continue;
-                PackingCLBSite::PackingCLBCluster *trialCluster = nullptr;
-                if (sitesCandidates.find(candidatePackingSite) == sitesCandidates.end())
-                {
-                    if (!candidatePackingSite->getDeterminedClusterInSite())
-                    {
-                        auto determinedClusterInSite = new PackingCLBSite::PackingCLBCluster(candidatePackingSite);
-                        candidatePackingSite->setDeterminedClusterInSite(determinedClusterInSite);
-                    }
-                    trialCluster =
-                        new PackingCLBSite::PackingCLBCluster(candidatePackingSite->getDeterminedClusterInSite());
-                    site2TrialCluster[candidatePackingSite] = trialCluster;
-                }
-                else
-                {
-                    trialCluster = site2TrialCluster[candidatePackingSite];
-                }
-
-                if (trialCluster->checkAddPU(curPU))
-                {
-                    assert(trialCluster->addPU(curPU));
-                    cellId2CandidateSites[cellId].push_back(candidatePackingSite);
-                    sitesCandidates.insert(candidatePackingSite);
                 }
             }
 
-            delete candidateSitesToPlaceTheCell;
         }
 
         // calculate the shortest paths
@@ -1236,12 +2730,18 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSl
             curCandidates[bestEndChoice]->getSlotMappingRef().addLUTFFPair(targetLUT, targetFF);
             PUId2PackingCLBSite[LUTFFPair->getId()] = curCandidates[bestEndChoice];
             placementInfo->addPUIntoClockColumn(LUTFFPair, curCandidates[bestEndChoice]->getCLBSite());
-            replaceCnt++;
-        }
 
-        for (auto pair : site2TrialCluster)
-        {
-            delete pair.second;
+            auto cellSet = srcSite->getDeterminedClusterInSite()->getCellSet();
+            for (auto cell : cellSet)
+            {
+                cellId2PackingSite[cell->getCellId()] = srcSite;
+            }
+            cellSet = curCandidates[bestEndChoice]->getDeterminedClusterInSite()->getCellSet();
+            for (auto cell : cellSet)
+            {
+                cellId2PackingSite[cell->getCellId()] = curCandidates[bestEndChoice];
+            }
+            replaceCnt++;
         }
     }
 
@@ -1251,165 +2751,40 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSl
     return replaceCnt;
 }
 
-int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath_intermediate()
+int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(float disOffset, int iterId, bool preserverCriticalPath,
+                                                          float pathCriticalRatio)
 {
     AMF_PROFILE_FUNCTION("detailed_placement");
-    print_status("ParallelCLBPacker: conducting timing-driven detailed placement based on shortest path.");
-    auto oriCellIdsInCriticalPaths = timingOptimizer->findCriticalPaths(1);
-    std::set<PlacementInfo::PlacementUnit *> PUsTouched;
-    PUsTouched.clear();
-    std::vector<PlacementInfo::Location> &cellLoc = placementInfo->getCellId2location();
+    std::vector<std::unique_ptr<std::vector<DeviceInfo::DeviceSite *>>> neighborOwners;
+    auto ownNeighbors = [&](std::vector<DeviceInfo::DeviceSite *> *p) {
+        neighborOwners.emplace_back(p); return p;
+    };
+    // int pathNumThr = preserverCriticalPath ? (std::min(40 * placementInfo->getClusterNum(), 1000)) : (2 + iterId *
+    // 20); if (pathNumThr * placementInfo->getMediumPathThresholdLevel() > 1000)
+    // {
+    //     pathNumThr = 1000 / placementInfo->getMediumPathThresholdLevel();
+    // }
+    // print_status("ParallelCLBPacker: conducting timing-driven detailed placement based on swaping.");
+    // auto oriCellIdsInCriticalPaths =
+    //     timingOptimizer->findCriticalPaths(0.8, true, pathNumThr, preserverCriticalPath ? 20 : 30);
 
-    int replaceCnt = 0;
-    for (auto oriCellIdsInCriticalPath : oriCellIdsInCriticalPaths)
-    {
-        std::map<int, std::vector<PlacementInfo::Location>> cellId2CandidateLocation;
-        cellId2CandidateLocation.clear();
-
-        std::vector<int> cellIdsInCriticalPath;
-        PlacementInfo::PlacementUnit *lastPU = nullptr;
-        std::set<PlacementInfo::PlacementUnit *> PUsInCriticalPathSet;
-        for (auto cellId : oriCellIdsInCriticalPath)
-        {
-            if (PUsInCriticalPathSet.find(placementInfo->getPlacementUnitByCellId(cellId)) ==
-                PUsInCriticalPathSet.end())
-            {
-                PUsInCriticalPathSet.insert(placementInfo->getPlacementUnitByCellId(cellId));
-                cellIdsInCriticalPath.push_back(cellId);
-            }
-        }
-
-        bool CellUnmapped = false;
-        for (auto cellId : cellIdsInCriticalPath)
-        {
-            auto curPU = placementInfo->getPlacementUnitByCellId(cellId);
-            auto curPackingSite = cellId2PackingSite[cellId];
-            auto curCell = designInfo->getCells()[cellId];
-
-            cellId2CandidateLocation[cellId] = std::vector<PlacementInfo::Location>(1, cellLoc[cellId]);
-        }
-
-        for (int orderI = cellIdsInCriticalPath.size() - 1; orderI >= 0; orderI--)
-        {
-            auto cellId = cellIdsInCriticalPath[orderI];
-            auto curPackingSite = cellId2PackingSite[cellId];
-            if (curPackingSite)
-                continue;
-            auto curPU = placementInfo->getPlacementUnitByCellId(cellId);
-            auto curCell = designInfo->getCells()[cellId];
-            if (PUsTouched.find(curPU) != PUsTouched.end())
-            {
-                continue;
-            }
-            // std::cout << curCell << " has following candidates: \n";
-            if (!curPU->isLocked() && !curPU->isFixed() && !curPU->checkHasCARRY() && !curPU->checkHasLUTRAM() &&
-                !curPU->checkHasBRAM() && !(curPU->checkHasDSP() || curPU->checkHasURAM()))
-            {
-                auto curX = cellLoc[cellId].X;
-                auto curY = cellLoc[cellId].Y;
-                for (float cX = curX - 1.0; cX < curX + 1.1; cX += 0.5)
-                {
-                    for (float cY = curY - 1.0; cY < curY + 1.1; cY += 0.5)
-                    {
-                        if (std::fabs(cX - curX) + std::fabs(cY - curY) < 0.1)
-                            continue;
-                        PlacementInfo::Location newLoc;
-                        newLoc.X = cX;
-                        newLoc.Y = cY;
-                        cellId2CandidateLocation[cellId].push_back(newLoc);
-                    }
-                }
-            }
-        }
-        for (int orderI = cellIdsInCriticalPath.size() - 1; orderI >= 0; orderI--)
-        {
-            auto cellId = cellIdsInCriticalPath[orderI];
-            auto curPU = placementInfo->getPlacementUnitByCellId(cellId);
-            PUsTouched.insert(curPU);
-        }
-        // calculate the shortest paths
-        std::vector<std::vector<float>> shortestPath_LayerSite;
-        std::vector<std::vector<int>> shortestPath_LayerSite_backtrace;
-        shortestPath_LayerSite.push_back(
-            std::vector<float>(cellId2CandidateLocation[cellIdsInCriticalPath[0]].size(), 0.0));
-        shortestPath_LayerSite_backtrace.push_back(
-            std::vector<int>(cellId2CandidateLocation[cellIdsInCriticalPath[0]].size(), -1));
-
-        int bestEndChoice = -1;
-        float bestChoiceDelay = 100000;
-
-        for (int i = 1; i < cellIdsInCriticalPath.size(); i++)
-        {
-            auto predCell = cellIdsInCriticalPath[i - 1];
-            auto curCell = cellIdsInCriticalPath[i];
-            auto &predCandidates = cellId2CandidateLocation[predCell];
-            auto &curCandidates = cellId2CandidateLocation[curCell];
-            shortestPath_LayerSite.push_back(std::vector<float>(cellId2CandidateLocation[curCell].size(), 100000.0));
-            shortestPath_LayerSite_backtrace.push_back(std::vector<int>(cellId2CandidateLocation[curCell].size(), -1));
-
-            for (int j = 0; j < predCandidates.size(); j++)
-            {
-                for (int k = 0; k < curCandidates.size(); k++)
-                {
-                    float predX = predCandidates[j].X, predY = predCandidates[j].Y;
-                    float curX = curCandidates[k].X, curY = curCandidates[k].Y;
-
-                    float delay = timingOptimizer->getDelayByModel(predX, predY, curX, curY);
-
-                    if (shortestPath_LayerSite[i][k] > shortestPath_LayerSite[i - 1][j] + delay)
-                    {
-                        shortestPath_LayerSite[i][k] = shortestPath_LayerSite[i - 1][j] + delay;
-                        shortestPath_LayerSite_backtrace[i][k] = j;
-
-                        if (i == cellIdsInCriticalPath.size() - 1)
-                        {
-                            if (shortestPath_LayerSite[i][k] < bestChoiceDelay)
-                            {
-                                bestChoiceDelay = shortestPath_LayerSite[i][k];
-                                bestEndChoice = k;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        for (int i = shortestPath_LayerSite.size() - 1; i >= 0; i--)
-        {
-            if (bestEndChoice)
-            {
-                auto curCellId = cellIdsInCriticalPath[i];
-                auto curPU = placementInfo->getPlacementUnitByCellId(curCellId);
-
-                auto &curCandidates = cellId2CandidateLocation[curCellId];
-                if (!curPU->isLocked() && !curPU->isFixed() && !curPU->checkHasCARRY() && !curPU->checkHasLUTRAM() &&
-                    !curPU->checkHasBRAM() && !(curPU->checkHasDSP() || curPU->checkHasURAM()))
-                {
-                    curPU->setAnchorLocationAndForgetTheOriginalOne(curCandidates[bestEndChoice].X,
-                                                                    curCandidates[bestEndChoice].Y);
-                    replaceCnt++;
-                }
-            }
-            bestEndChoice = shortestPath_LayerSite_backtrace[i][bestEndChoice];
-        }
-    }
-
-    print_status("ParallelCLBPacker: conducted timing-driven detailed placement (shortest path) and " +
-                 std::to_string(replaceCnt) + " PlacementUnits are replaced.");
-    return replaceCnt;
-}
-
-int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(int iterId)
-{
-    AMF_PROFILE_FUNCTION("detailed_placement");
+    int pathNumThr = preserverCriticalPath ? (std::min(80 * placementInfo->getClusterNum(), 1000)) : (2 + iterId * 20);
+    // if (iterId != 100 && pathNumThr * placementInfo->getMediumPathThresholdLevel() > 1000)
+    // {
+    //     pathNumThr = 1000 / placementInfo->getMediumPathThresholdLevel();
+    // }
     print_status("ParallelCLBPacker: conducting timing-driven detailed placement based on swaping.");
-    auto oriCellIdsInCriticalPaths = timingOptimizer->findCriticalPaths(0.9);
+    auto oriCellIdsInCriticalPaths =
+        timingOptimizer->findCriticalPaths(pathCriticalRatio, true, pathNumThr, preserverCriticalPath ? 50 : 30);
+    fineTuneCandidateNum = oriCellIdsInCriticalPaths.size();
+    auto &timingNodes = placementInfo->getTimingInfo()->getSimplePlacementTimingInfo();
     std::set<PlacementInfo::PlacementUnit *> PUsTouched;
     std::set<PlacementInfo::PlacementUnit *> PUsDontTouch;
     PUsTouched.clear();
     PUsDontTouch.clear();
     for (auto oriCellIdsInCriticalPath : oriCellIdsInCriticalPaths)
     {
+        neighborOwners.clear();
         for (int orderI = oriCellIdsInCriticalPath.size() - 1; orderI >= 0; orderI--)
         {
             auto cellId = oriCellIdsInCriticalPath[orderI];
@@ -1419,14 +2794,21 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(int iterId)
     }
 
     int replaceCnt = 0;
+
     for (auto oriCellIdsInCriticalPath : oriCellIdsInCriticalPaths)
     {
+        neighborOwners.clear();
+        std::set<PackingCLBSite *> changedPackingSites;
+        std::set<PlacementInfo::PlacementUnit *, Packing_PUcompare> movedPUs;
+        movedPUs.clear();
+        changedPackingSites.clear();
         std::map<int, std::vector<PackingCLBSite *>> cellId2CandidateSites;
         std::set<PackingCLBSite *> sitesCandidates;
-        std::map<PackingCLBSite *, PackingCLBSite::PackingCLBCluster *> site2TrialCluster;
+        std::map<PackingCLBSite *, std::unique_ptr<PackingCLBSite::PackingCLBCluster>> site2TrialCluster;
         cellId2CandidateSites.clear();
 
         std::vector<int> cellIdsInCriticalPath;
+        std::vector<int> headCellIdsInCriticalPath;
         PlacementInfo::PlacementUnit *lastPU = nullptr;
         std::set<PlacementInfo::PlacementUnit *> PUsInCriticalPathSet;
         for (auto cellId : oriCellIdsInCriticalPath)
@@ -1436,6 +2818,11 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(int iterId)
             {
                 PUsInCriticalPathSet.insert(placementInfo->getPlacementUnitByCellId(cellId));
                 cellIdsInCriticalPath.push_back(cellId);
+                headCellIdsInCriticalPath.push_back(cellId);
+            }
+            else
+            {
+                headCellIdsInCriticalPath[headCellIdsInCriticalPath.size() - 1] = cellId;
             }
         }
 
@@ -1450,7 +2837,19 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(int iterId)
                 break;
             }
             assert(curPackingSite);
+            if (PUId2PackingCLBSite[curPU->getId()]->getDeterminedClusterInSite() &&
+                !curPackingSite->checkIsCarrySite() && !curPackingSite->checkIsNonCLBSite() &&
+                !curPackingSite->checkIsLUTRAMSite())
+            {
+                if (!PUId2PackingCLBSite[curPU->getId()]->getDeterminedClusterInSite()->contains(curPU))
+                {
+                    std::cout << PUId2PackingCLBSite[curPU->getId()]->getDeterminedClusterInSite() << "\n";
+                    std::cout << "Does not contain " << curPU << "\n";
+                    assert(false && "target packing site should contain a specific PU");
+                }
+            }
         }
+
         if (CellUnmapped)
             continue;
 
@@ -1458,25 +2857,190 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(int iterId)
         //           << cellIdsInCriticalPath.size() << " nodes in path.\n";
 
         // find candidate sites for each possible PU
-        for (int orderI = 1; orderI <= cellIdsInCriticalPath.size() - 2; orderI++)
+        for (int orderI = 0; orderI <= cellIdsInCriticalPath.size() - 1; orderI++)
         {
+            if (orderI < lowIndex || orderI > highIndex)
+                continue;
             auto cellId = cellIdsInCriticalPath[orderI];
             auto curPU = placementInfo->getPlacementUnitByCellId(cellId);
             auto curCell = designInfo->getCells()[cellId];
+
             // std::cout << "------ " << curPU << "  \n"
             //           << " cell: " << curCell << "\n";
-            if (curPU->getType() == PlacementInfo::PlacementUnitType_Macro)
-                continue;
-            if (PUsTouched.find(curPU) != PUsTouched.end())
+            auto curMacro = dynamic_cast<PlacementInfo::PlacementMacro *>(curPU);
+            if (curMacro)
             {
-                // std::cout << "bypassing touched\n";
+                if (curMacro->getBRAMNum() != 1 && curMacro->getDSPNum() != 1 &&
+                    curMacro->getMacroType() != PlacementInfo::PlacementMacro::PlacementMacroType_LUTFFPair)
+                    continue;
+            }
+
+            if (curPU->checkHasCARRY() || curPU->checkHasLUTRAM() || PUsTouched.find(curPU) != PUsTouched.end() ||
+                curPU->isLocked())
+            {
                 continue;
             }
-            if (curCell->isLUT())
-            {
-                float v1x = 0, v1y = 0, v2x = 0, v2y = 0;
 
-                auto predSite = cellId2PackingSite[cellIdsInCriticalPath[orderI - 1]];
+            if (cellId2PackingSite[curCell->getCellId()]->getDeterminedClusterInSite() !=
+                PUId2PackingCLBSite[curPU->getId()]->getDeterminedClusterInSite())
+            {
+                if (PUId2PackingCLBSite[curPU->getId()]->getDeterminedClusterInSite())
+                    std::cout << " PUId2PackingCLBSite[curPU->getId()]->getDeterminedClusterInSite():\n"
+                              << PUId2PackingCLBSite[curPU->getId()]->getDeterminedClusterInSite() << "\n";
+                if (cellId2PackingSite[curCell->getCellId()]->getDeterminedClusterInSite())
+                    std::cout << " cellId2PackingSite[curCell->getCellId()]->getDeterminedClusterInSite():\n"
+                              << cellId2PackingSite[curCell->getCellId()]->getDeterminedClusterInSite() << "\n";
+                std::cout << "Does not contain " << curPU << "\n";
+                assert(false && "cellId2PackingSite and PUId2PackingCLBSite should be coupled");
+            }
+
+            if (PUId2PackingCLBSite[curPU->getId()]->getDeterminedClusterInSite())
+            {
+                if (!PUId2PackingCLBSite[curPU->getId()]->getDeterminedClusterInSite()->contains(curPU))
+                {
+                    std::cout << PUId2PackingCLBSite[curPU->getId()]->getDeterminedClusterInSite() << "\n";
+                    std::cout << "Does not contain " << curPU << "\n";
+                    assert(false && "target packing site should contain a specific PU");
+                }
+            }
+
+            if ((curCell->isFF() || (curMacro && curMacro->getMacroType() ==
+                                                     PlacementInfo::PlacementMacro::PlacementMacroType_LUTFFPair)) &&
+                (orderI == 0 || orderI == cellIdsInCriticalPath.size() - 1))
+            {
+                PackingCLBSite *nextSite = nullptr;
+                if (orderI == 0)
+                {
+                    nextSite = cellId2PackingSite[cellIdsInCriticalPath[orderI + 1]];
+                }
+                else if (orderI == cellIdsInCriticalPath.size() - 1)
+                {
+                    nextSite = cellId2PackingSite[cellIdsInCriticalPath[orderI - 1]];
+                }
+
+                auto curSite = cellId2PackingSite[cellId];
+                assert(nextSite && curSite);
+
+                float oriDelay =
+                    timingOptimizer->getDelayByModel(curSite->getCLBSite()->X(), curSite->getCLBSite()->Y(),
+                                                     nextSite->getCLBSite()->X(), nextSite->getCLBSite()->Y());
+
+                if (oriDelay < 0.1)
+                    continue;
+
+                // std::cout << curCell << " oriDelay=" << oriDelay << " has following candidates: \n";
+
+                float neighborDis = std::fabs(curSite->getCLBSite()->X() - nextSite->getCLBSite()->X()) +
+                                    y2xRatio * std::fabs(curSite->getCLBSite()->Y() - nextSite->getCLBSite()->Y());
+
+                float disRange = 2.1 - iterId * 0.03;
+                if (neighborDis > 3)
+                {
+                    disRange = 2;
+                    if (neighborDis > 5)
+                        disRange = 3;
+                }
+
+                if (disRange < 1.6)
+                    disRange = 1.6;
+                assert(PUId2PackingCLBSite[curPU->getId()]);
+                if ((timingOptimizer->crossIOBank(nextSite->getCLBSite()->X(),
+                                                  PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X())) &&
+                    disRange < 2)
+                    disRange = 2;
+
+                auto candidateSitesToPlaceTheCell_cone = ownNeighbors(findNeiborSitesFromBinGrid(
+                    DesignInfo::CellType_LUT4, PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
+                    PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(), 0, disRange + disOffset, y2xRatio, false));
+
+                PackingCLBSite *bestCandidatePackingSite = nullptr;
+                PlacementInfo::PlacementUnit *bestSwapCandidatePU = nullptr;
+                float bestOverheadSlack = -1000000;
+
+                for (auto curDeviceSite : *candidateSitesToPlaceTheCell_cone)
+                {
+                    if (deviceSite2PackingSite.find(curDeviceSite) == deviceSite2PackingSite.end())
+                        continue;
+                    PackingCLBSite *candidatePackingSite = deviceSite2PackingSite[curDeviceSite];
+                    if (curSite == candidatePackingSite)
+                        continue;
+
+                    if (!candidatePackingSite->getDeterminedClusterInSite())
+                    {
+                        continue;
+                    }
+
+                    float newDelay = timingOptimizer->getDelayByModel(
+                        candidatePackingSite->getCLBSite()->X(), candidatePackingSite->getCLBSite()->Y(),
+                        nextSite->getCLBSite()->X(), nextSite->getCLBSite()->Y());
+
+                    // std::cout << "      " << candidatePackingSite->getCLBSite()->getName() << " newDelay=" <<
+                    // newDelay
+                    //           << "\n";
+                    if (newDelay > oriDelay)
+                        continue;
+
+                    if (candidatePackingSite->getDeterminedClusterInSite()->checkAddPU(curPU))
+                    {
+                        if (1000 - newDelay > bestOverheadSlack)
+                        {
+                            bestOverheadSlack = 1000 - newDelay;
+                            bestCandidatePackingSite = candidatePackingSite;
+                            bestSwapCandidatePU = nullptr;
+                        }
+                    }
+                }
+
+                if (bestOverheadSlack > -10000)
+                {
+
+                    std::set<PackingCLBSite *> local_changedPackingSites;
+                    std::set<PlacementInfo::PlacementUnit *, Packing_PUcompare> local_movedPUs;
+
+                    changedPackingSites.insert(PUId2PackingCLBSite[curPU->getId()]);
+                    changedPackingSites.insert(bestCandidatePackingSite);
+                    local_changedPackingSites.insert(PUId2PackingCLBSite[curPU->getId()]);
+                    local_changedPackingSites.insert(bestCandidatePackingSite);
+
+                    auto trialTargetCluster = bestCandidatePackingSite->getDeterminedClusterInSite();
+                    assert(trialTargetCluster->addPU(curPU));
+                    auto trialCurrentCluster = PUId2PackingCLBSite[curPU->getId()]->getDeterminedClusterInSite();
+                    trialCurrentCluster->removePUToConstructDetCluster(curPU);
+
+                    auto cellSet = bestCandidatePackingSite->getDeterminedClusterInSite()->getCellSet();
+                    for (auto cell : cellSet)
+                    {
+                        cellId2PackingSite[cell->getCellId()] = bestCandidatePackingSite;
+                    }
+                    cellSet = trialCurrentCluster->getCellSet();
+                    for (auto cell : cellSet)
+                    {
+                        cellId2PackingSite[cell->getCellId()] = PUId2PackingCLBSite[curPU->getId()];
+                    }
+
+                    auto tmpSwapPackingSite = bestCandidatePackingSite;
+                    PUId2PackingCLBSite[curPU->getId()] = bestCandidatePackingSite;
+                    curPU->setAnchorLocationAndForgetTheOriginalOne(bestCandidatePackingSite->getCLBSite()->X(),
+                                                                    bestCandidatePackingSite->getCLBSite()->Y());
+
+                    movedPUs.insert(curPU);
+                    local_movedPUs.insert(curPU);
+
+                    if (preserverCriticalPath && useLocalFineTune &&
+                        !tryAcceptLocalTimingDetailedPlacement(local_movedPUs, local_changedPackingSites))
+                    {
+                        for (auto aPU : local_movedPUs)
+                        {
+                            movedPUs.erase(aPU);
+                        }
+                    }
+                }
+
+            }
+            else if ((curCell->isLUT() || curCell->isMux()) && orderI != 0 &&
+                     orderI != cellIdsInCriticalPath.size() - 1)
+            {
+                auto predSite = cellId2PackingSite[headCellIdsInCriticalPath[orderI - 1]];
                 int predSiteOrderId = orderI - 1;
                 auto curSite = cellId2PackingSite[cellId];
                 auto succSite = cellId2PackingSite[cellIdsInCriticalPath[orderI + 1]];
@@ -1489,23 +3053,74 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(int iterId)
                     timingOptimizer->getDelayByModel(curSite->getCLBSite()->X(), curSite->getCLBSite()->Y(),
                                                      succSite->getCLBSite()->X(), succSite->getCLBSite()->Y());
 
-                if (oriDelay < 0.3)
+                if (oriDelay < 0.1)
                     continue;
 
-                v1x = predSite->getCLBSite()->X() - curSite->getCLBSite()->X();
-                v1y = predSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
-                v2x = succSite->getCLBSite()->X() - curSite->getCLBSite()->X();
-                v2y = succSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
+                int clockRegionX0, clockRegionY0;
+                deviceInfo->getClockRegionByLocation(PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
+                                                     PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(),
+                                                     clockRegionX0, clockRegionY0);
+                int clockRegionX1, clockRegionY1;
+                deviceInfo->getClockRegionByLocation(predSite->getCLBSite()->X(), predSite->getCLBSite()->Y(),
+                                                     clockRegionX1, clockRegionY1);
+                int clockRegionX2, clockRegionY2;
+                deviceInfo->getClockRegionByLocation(succSite->getCLBSite()->X(), succSite->getCLBSite()->Y(),
+                                                     clockRegionX2, clockRegionY2);
 
-                // std::cout << curCell << " oriDelay=" << oriDelay << " has following candidates: \n";
+                float neighborDis =
+                    std::min(std::fabs(curSite->getCLBSite()->X() - succSite->getCLBSite()->X()) +
+                                 y2xRatio * std::fabs(curSite->getCLBSite()->Y() - succSite->getCLBSite()->Y()),
+                             std::fabs(curSite->getCLBSite()->X() - predSite->getCLBSite()->X()) +
+                                 y2xRatio * std::fabs(curSite->getCLBSite()->Y() - predSite->getCLBSite()->Y()));
 
-                if (std::fabs(v1x) + std::fabs(v1y) < 0.1 || std::fabs(v2x) + std::fabs(v2y) < 0.1)
-                    continue;
+                float disRange = 2.2 - iterId * 0.03;
+                if ((timingOptimizer->crossIOBank(predSite->getCLBSite()->X(),
+                                                  PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X()) &&
+                     timingOptimizer->crossIOBank(succSite->getCLBSite()->X(),
+                                                  PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X())) &&
+                    disRange < std::min(neighborDis + 1, (float)4.0))
+                    disRange = std::min(neighborDis + 1, (float)4.0);
+                if (disRange < 1.6)
+                    disRange = 1.6;
+
+                if (!noSectorGuided && orderI > 0 && orderI < cellIdsInCriticalPath.size() - 1)
+                {
+                    float v1x = predSite->getCLBSite()->X() - curSite->getCLBSite()->X();
+                    float v1y = predSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
+                    float v2x = succSite->getCLBSite()->X() - curSite->getCLBSite()->X();
+                    float v2y = succSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
+                    if (std::fabs(getAngle(v1x, v1y, v2x, v2y)) < M_PI / 2)
+                    {
+                        float disTmpRange = ((std::fabs(v1x) + y2xRatio * std::fabs(v1y)) +
+                                             (std::fabs(v2x) + y2xRatio * std::fabs(v2y))) /
+                                            2;
+                        if (disTmpRange > disRange)
+                            disRange = disTmpRange;
+                        if (disRange > 4)
+                            disRange = 4;
+                    }
+                }
+                if (useBigWindow)
+                {
+                    float v1x = predSite->getCLBSite()->X() - curSite->getCLBSite()->X();
+                    float v1y = predSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
+                    float v2x = succSite->getCLBSite()->X() - curSite->getCLBSite()->X();
+                    float v2y = succSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
+
+                    float disTmpRange =
+                        ((std::fabs(v1x) + y2xRatio * std::fabs(v1y)) + (std::fabs(v2x) + y2xRatio * std::fabs(v2y))) /
+                        2;
+                    if (disTmpRange > disRange)
+                        disRange = disTmpRange;
+                    if (disRange > 4)
+                        disRange = 4;
+                }
 
                 assert(PUId2PackingCLBSite[curPU->getId()]);
-                auto candidateSitesToPlaceTheCell_cone = findNeiborSitesFromBinGrid(
+                auto candidateSitesToPlaceTheCell_cone = ownNeighbors(findNeiborSitesFromBinGrid(
                     DesignInfo::CellType_LUT4, PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
-                    PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(), 0, 1.1, y2xRatio, false);
+                    PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(), 0, disRange + disOffset, y2xRatio, false));
+
                 PackingCLBSite *bestCandidatePackingSite = nullptr;
                 PlacementInfo::PlacementUnit *bestSwapCandidatePU = nullptr;
                 float bestOverheadSlack = -1000000;
@@ -1535,80 +3150,269 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(int iterId)
                     // std::cout << "      " << candidatePackingSite->getCLBSite()->getName() << " newDelay=" <<
                     // newDelay
                     //           << "\n";
-                    if (newDelay > oriDelay - 0.05)
+                    if (newDelay > oriDelay)
                         continue;
 
-                    // find lowest slack LUT
-                    for (auto tmpPU : candidatePackingSite->getDeterminedClusterInSite()->getPUs())
+                    if (candidatePackingSite->getDeterminedClusterInSite()->checkAddPU(curPU))
                     {
-                        if (tmpPU->isLocked() || PUsDontTouch.find(tmpPU) != PUsDontTouch.end())
-                            continue;
-                        if (auto unpackedCell = dynamic_cast<PlacementInfo::PlacementUnpackedCell *>(tmpPU))
+                        if (1000 - newDelay > bestOverheadSlack)
                         {
-                            auto targetCell = unpackedCell->getCell();
-
-                            // try to swap LUTs
-                            if (targetCell->isLUT())
+                            bestOverheadSlack = 1000 - newDelay;
+                            bestCandidatePackingSite = candidatePackingSite;
+                            bestSwapCandidatePU = nullptr;
+                            if (newDelay < oriDelay - 0.2)
                             {
-                                auto trialTargetCluster = new PackingCLBSite::PackingCLBCluster(
-                                    candidatePackingSite->getDeterminedClusterInSite());
-                                trialTargetCluster->removePUToConstructDetCluster(tmpPU);
-                                if (trialTargetCluster->addPU(curPU))
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        bool findExchange = false;
+                        // find lowest slack LUT
+                        for (auto tmpPU : candidatePackingSite->getDeterminedClusterInSite()->getPUs())
+                        {
+                            if (tmpPU->isLocked() || PUsDontTouch.find(tmpPU) != PUsDontTouch.end())
+                                continue;
+                            if (auto unpackedCell = dynamic_cast<PlacementInfo::PlacementUnpackedCell *>(tmpPU))
+                            {
+                                auto targetCell = unpackedCell->getCell();
+
+                                // try to swap LUTs
+                                if (targetCell->isLUT())
                                 {
-                                    auto trialCurrentCluster = new PackingCLBSite::PackingCLBCluster(
-                                        PUId2PackingCLBSite[curPU->getId()]->getDeterminedClusterInSite());
-                                    trialCurrentCluster->removePUToConstructDetCluster(curPU);
-                                    if (trialCurrentCluster->addPU(tmpPU))
+                                    if (timingNodes[targetCell->getCellId()]->getOutEdges().size() > 200)
                                     {
-                                        // std::cout << "           " << tmpPU
-                                        //           << " worstSlack=" <<
-                                        //           timingOptimizer->getWorstSlackOfCell(targetCell)
-                                        //           << "\n";
-                                        float overhead = timingOptimizer->getWorstSlackOfCell(targetCell);
-                                        if (overhead > oriOverhead + 0.2)
+                                        continue; // don touch high fanout node
+                                    }
+                                    auto trialTargetCluster = new PackingCLBSite::PackingCLBCluster(
+                                        candidatePackingSite->getDeterminedClusterInSite());
+                                    trialTargetCluster->removePUToConstructDetCluster(tmpPU);
+                                    if (trialTargetCluster->addPU(curPU))
+                                    {
+                                        auto trialCurrentCluster = new PackingCLBSite::PackingCLBCluster(
+                                            PUId2PackingCLBSite[curPU->getId()]->getDeterminedClusterInSite());
+                                        trialCurrentCluster->removePUToConstructDetCluster(curPU);
+                                        if (trialCurrentCluster->addPU(tmpPU))
                                         {
-                                            if (overhead > bestOverheadSlack)
+                                            float overhead = timingOptimizer->getWorstSlackOfCell(targetCell);
+                                            if (overhead > 3 && iterId == 100)
                                             {
-                                                bestOverheadSlack = overhead;
-                                                bestCandidatePackingSite = candidatePackingSite;
-                                                bestSwapCandidatePU = tmpPU;
+                                                if (1000 - newDelay > bestOverheadSlack)
+                                                {
+                                                    bestOverheadSlack = 1000 - newDelay;
+                                                    bestCandidatePackingSite = candidatePackingSite;
+                                                    bestSwapCandidatePU = tmpPU;
+                                                }
+                                            }
+                                            else if (overhead > oriOverhead + 0.3)
+                                            {
+                                                if (overhead > bestOverheadSlack)
+                                                {
+                                                    bestOverheadSlack = overhead;
+                                                    bestCandidatePackingSite = candidatePackingSite;
+                                                    bestSwapCandidatePU = tmpPU;
+                                                }
                                             }
                                         }
+                                        delete trialCurrentCluster;
                                     }
-                                    delete trialCurrentCluster;
+                                    delete trialTargetCluster;
                                 }
-                                delete trialTargetCluster;
                             }
+                        }
+                        if (bestSwapCandidatePU && (newDelay < oriDelay - 0.2))
+                        {
+                            break;
                         }
                     }
                 }
 
-                if (bestCandidatePackingSite)
+                if (bestOverheadSlack > -10000)
                 {
+
+                    std::set<PackingCLBSite *> local_changedPackingSites;
+                    std::set<PlacementInfo::PlacementUnit *, Packing_PUcompare> local_movedPUs;
+
+                    changedPackingSites.insert(PUId2PackingCLBSite[curPU->getId()]);
+                    changedPackingSites.insert(bestCandidatePackingSite);
+                    local_changedPackingSites.insert(PUId2PackingCLBSite[curPU->getId()]);
+                    local_changedPackingSites.insert(bestCandidatePackingSite);
+
                     auto trialTargetCluster = bestCandidatePackingSite->getDeterminedClusterInSite();
-                    trialTargetCluster->removePUToConstructDetCluster(bestSwapCandidatePU);
+                    if (bestSwapCandidatePU)
+                        trialTargetCluster->removePUToConstructDetCluster(bestSwapCandidatePU);
                     assert(trialTargetCluster->addPU(curPU));
                     auto trialCurrentCluster = PUId2PackingCLBSite[curPU->getId()]->getDeterminedClusterInSite();
                     trialCurrentCluster->removePUToConstructDetCluster(curPU);
-                    assert(trialCurrentCluster->addPU(bestSwapCandidatePU));
-                    auto unpackedCell_curPU = dynamic_cast<PlacementInfo::PlacementUnpackedCell *>(curPU);
+                    if (bestSwapCandidatePU)
+                        assert(trialCurrentCluster->addPU(bestSwapCandidatePU));
                     auto unpackedCell_bestSwapCandidatePU =
                         dynamic_cast<PlacementInfo::PlacementUnpackedCell *>(bestSwapCandidatePU);
-                    cellId2PackingSite[unpackedCell_curPU->getCell()->getCellId()] = bestCandidatePackingSite;
-                    cellId2PackingSite[unpackedCell_bestSwapCandidatePU->getCell()->getCellId()] =
-                        PUId2PackingCLBSite[curPU->getId()];
 
-                    auto tmpSwapPackingSite = PUId2PackingCLBSite[bestSwapCandidatePU->getId()];
-                    PUId2PackingCLBSite[bestSwapCandidatePU->getId()] = PUId2PackingCLBSite[curPU->getId()];
-                    PUId2PackingCLBSite[curPU->getId()] = tmpSwapPackingSite;
-                    replaceCnt++;
+                    auto cellSet = bestCandidatePackingSite->getDeterminedClusterInSite()->getCellSet();
+                    for (auto cell : cellSet)
+                    {
+                        cellId2PackingSite[cell->getCellId()] = bestCandidatePackingSite;
+                    }
+                    cellSet = trialCurrentCluster->getCellSet();
+                    for (auto cell : cellSet)
+                    {
+                        cellId2PackingSite[cell->getCellId()] = PUId2PackingCLBSite[curPU->getId()];
+                    }
+
+                    if (bestSwapCandidatePU)
+                    {
+                        cellId2PackingSite[unpackedCell_bestSwapCandidatePU->getCell()->getCellId()] =
+                            PUId2PackingCLBSite[curPU->getId()];
+                    }
+                    if (bestSwapCandidatePU)
+                    {
+                        bestSwapCandidatePU->setAnchorLocationAndForgetTheOriginalOne(
+                            PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
+                            PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y());
+                        PUId2PackingCLBSite[bestSwapCandidatePU->getId()] = PUId2PackingCLBSite[curPU->getId()];
+                    }
+                    PUId2PackingCLBSite[curPU->getId()] = bestCandidatePackingSite;
+                    curPU->setAnchorLocationAndForgetTheOriginalOne(bestCandidatePackingSite->getCLBSite()->X(),
+                                                                    bestCandidatePackingSite->getCLBSite()->Y());
+
+                    if (bestSwapCandidatePU &&
+                        PUsInCriticalPathSet.find(bestSwapCandidatePU) == PUsInCriticalPathSet.end())
+                        PUsTouched.insert(bestSwapCandidatePU);
+
+                    movedPUs.insert(curPU);
+                    local_movedPUs.insert(curPU);
+                    if (bestSwapCandidatePU)
+                    {
+                        movedPUs.insert(bestSwapCandidatePU);
+                        local_movedPUs.insert(bestSwapCandidatePU);
+                    }
+
+                    if (preserverCriticalPath && useLocalFineTune &&
+                        !tryAcceptLocalTimingDetailedPlacement(local_movedPUs, local_changedPackingSites))
+                    {
+                        for (auto aPU : local_movedPUs)
+                        {
+                            movedPUs.erase(aPU);
+                        }
+                    }
                 }
-                delete candidateSitesToPlaceTheCell_cone;
+
+            }
+            else if (!curPU->isLocked() && !curPU->checkHasCARRY() && curPU->getDSPNum() == 1 &&
+                     (orderI == 0 || orderI == cellIdsInCriticalPath.size() - 1))
+            {
+                float disRange = 1.5;
+
+                PackingCLBSite *nextSite = nullptr;
+                if (orderI == 0)
+                {
+                    nextSite = cellId2PackingSite[cellIdsInCriticalPath[orderI + 1]];
+                }
+                else if (orderI == cellIdsInCriticalPath.size() - 1)
+                {
+                    nextSite = cellId2PackingSite[cellIdsInCriticalPath[orderI - 1]];
+                }
+                else
+                {
+                    assert(false);
+                }
+                auto curSite = cellId2PackingSite[cellId];
+                assert(nextSite && curSite);
+
+                float oriDelay =
+                    timingOptimizer->getDelayByModel(curSite->getCLBSite()->X(), curSite->getCLBSite()->Y(),
+                                                     nextSite->getCLBSite()->X(), nextSite->getCLBSite()->Y());
+
+                std::vector<DeviceInfo::DeviceSite *> *candidateSitesToPlaceTheCell = ownNeighbors(findNeiborSitesFromBinGrid(
+                    DesignInfo::CellType_DSP48E2, PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->X(),
+                    PUId2PackingCLBSite[curPU->getId()]->getCLBSite()->Y(), 0, disRange, y2xRatio, false));
+                // std::cout << curCell << " has " << candidateSitesToPlaceTheCell->size()
+                //           << " neighbors and candidates are:\n";
+                for (auto curDeviceSite : *candidateSitesToPlaceTheCell)
+                {
+                    assert(deviceSite2PackingSite.find(curDeviceSite) != deviceSite2PackingSite.end());
+                    PackingCLBSite *candidatePackingSite = deviceSite2PackingSite[curDeviceSite];
+                    bool duplicate = false;
+                    for (auto existCandidate : cellId2CandidateSites[cellId])
+                    {
+                        if (existCandidate == candidatePackingSite)
+                            duplicate = true;
+                    }
+                    if (duplicate)
+                        continue;
+
+                    float newDelay = timingOptimizer->getDelayByModel(
+                        candidatePackingSite->getCLBSite()->X(), candidatePackingSite->getCLBSite()->Y(),
+                        nextSite->getCLBSite()->X(), nextSite->getCLBSite()->Y());
+
+                    if (newDelay > oriDelay)
+                        continue;
+
+                    if (candidatePackingSite->getNonCLBCell()) // swap
+                    {
+                        auto curTargeDSPCell = candidatePackingSite->getNonCLBCell();
+                        int curTargeDSPCellId = curTargeDSPCell->getCellId();
+                        auto curTargetPU = placementInfo->getPlacementUnitByCell(curTargeDSPCell);
+                        if (PUsDontTouch.find(curTargetPU) != PUsDontTouch.end() || curTargetPU->getDSPNum() != 1)
+                            continue;
+                        if (curPU->getDSPNum() == 1)
+                        {
+
+                            std::set<PackingCLBSite *> local_changedPackingSites;
+                            std::set<PlacementInfo::PlacementUnit *, Packing_PUcompare> local_movedPUs;
+
+                            changedPackingSites.insert(PUId2PackingCLBSite[curPU->getId()]);
+                            changedPackingSites.insert(candidatePackingSite);
+                            local_changedPackingSites.insert(PUId2PackingCLBSite[curPU->getId()]);
+                            local_changedPackingSites.insert(candidatePackingSite);
+
+                            curSite->setNonCLBCell(curTargeDSPCell);
+                            candidatePackingSite->setNonCLBCell(curCell);
+
+                            PUId2PackingCLBSite[curPU->getId()] = candidatePackingSite;
+                            cellId2PackingSite[curCell->getCellId()] = candidatePackingSite;
+                            placementInfo->getPULegalSite()[curPU] =
+                                std::vector<DeviceInfo::DeviceSite *>(1, candidatePackingSite->getCLBSite());
+                            curPU->setAnchorLocationAndForgetTheOriginalOne(candidatePackingSite->getCLBSite()->X(),
+                                                                            candidatePackingSite->getCLBSite()->Y());
+
+                            PUId2PackingCLBSite[curTargetPU->getId()] = curSite;
+                            cellId2PackingSite[curTargeDSPCell->getCellId()] = curSite;
+                            placementInfo->getPULegalSite()[curTargetPU] =
+                                std::vector<DeviceInfo::DeviceSite *>(1, curSite->getCLBSite());
+                            // placementInfo->addPUIntoClockColumn(curPU, targetPackingSite->getCLBSite());
+                            curTargetPU->setAnchorLocationAndForgetTheOriginalOne(curSite->getCLBSite()->X(),
+                                                                                  curSite->getCLBSite()->Y());
+
+                            movedPUs.insert(curPU);
+                            movedPUs.insert(curTargetPU);
+
+                            local_movedPUs.insert(curPU);
+                            local_movedPUs.insert(curTargetPU);
+
+                            if (preserverCriticalPath && useLocalFineTune &&
+                                !tryAcceptLocalTimingDetailedPlacement(local_movedPUs, local_changedPackingSites))
+                            {
+                                for (auto aPU : local_movedPUs)
+                                {
+                                    movedPUs.erase(aPU);
+                                }
+                            }
+                        }
+                    }
+
+                    break;
+                }
+
             }
         }
 
         for (int i = 0; i < cellIdsInCriticalPath.size() - 1; i++)
         {
+            if (i < lowIndex || i > highIndex)
+                continue;
             auto curCellId = cellIdsInCriticalPath[i];
             auto curPU = placementInfo->getPlacementUnitByCellId(curCellId);
             auto nextCellId = cellIdsInCriticalPath[i + 1];
@@ -1638,7 +3442,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(int iterId)
 
             if (i > 0)
             {
-                auto prevCellId = cellIdsInCriticalPath[i - 1];
+                auto prevCellId = headCellIdsInCriticalPath[i - 1];
                 assert(cellId2PackingSite[prevCellId]);
                 float headX = cellId2PackingSite[prevCellId]->getCLBSite()->X();
                 float headY = cellId2PackingSite[prevCellId]->getCLBSite()->Y();
@@ -1671,12 +3475,22 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(int iterId)
                 {
                     if (trialClusterWithNextPU->addPU(curPU))
                     {
+                        std::set<PackingCLBSite *> local_changedPackingSites;
+                        std::set<PlacementInfo::PlacementUnit *, Packing_PUcompare> local_movedPUs;
+
+                        changedPackingSites.insert(curPackingSite);
+                        changedPackingSites.insert(nextPackingSite);
+                        local_changedPackingSites.insert(curPackingSite);
+                        local_changedPackingSites.insert(nextPackingSite);
+
                         curPackingSite->getDeterminedClusterInSite()->removePUToConstructDetCluster(curPU);
                         assert(curPackingSite->getDeterminedClusterInSite()->addPU(nextPU));
                         nextPackingSite->getDeterminedClusterInSite()->removePUToConstructDetCluster(nextPU);
                         assert(nextPackingSite->getDeterminedClusterInSite()->addPU(curPU));
 
                         PUId2PackingCLBSite[curPU->getId()] = nextPackingSite;
+                        curPU->setAnchorLocationAndForgetTheOriginalOne(nextPackingSite->getCLBSite()->X(),
+                                                                        nextPackingSite->getCLBSite()->Y());
                         placementInfo->addPUIntoClockColumn(curPU, nextPackingSite->getCLBSite());
                         auto cellSet = nextPackingSite->getDeterminedClusterInSite()->getCellSet();
                         for (auto cell : cellSet)
@@ -1685,11 +3499,27 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(int iterId)
                         }
 
                         PUId2PackingCLBSite[nextPU->getId()] = curPackingSite;
+                        nextPU->setAnchorLocationAndForgetTheOriginalOne(curPackingSite->getCLBSite()->X(),
+                                                                         curPackingSite->getCLBSite()->Y());
                         placementInfo->addPUIntoClockColumn(nextPU, curPackingSite->getCLBSite());
                         cellSet = curPackingSite->getDeterminedClusterInSite()->getCellSet();
                         for (auto cell : cellSet)
                         {
                             cellId2PackingSite[cell->getCellId()] = curPackingSite;
+                        }
+
+                        movedPUs.insert(curPU);
+                        movedPUs.insert(nextPU);
+                        local_movedPUs.insert(curPU);
+                        local_movedPUs.insert(nextPU);
+
+                        if (preserverCriticalPath && useLocalFineTune &&
+                            !tryAcceptLocalTimingDetailedPlacement(local_movedPUs, local_changedPackingSites))
+                        {
+                            for (auto aPU : local_movedPUs)
+                            {
+                                movedPUs.erase(aPU);
+                            }
                         }
                     }
                 }
@@ -1699,17 +3529,132 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(int iterId)
             }
         }
 
-        for (int orderI = cellIdsInCriticalPath.size() - 1; orderI >= 0; orderI--)
+        std::vector<PlacementInfo::Location> &cellLoc = placementInfo->getCellId2location();
+        for (auto tmpPU : movedPUs)
         {
-            auto cellId = cellIdsInCriticalPath[orderI];
-            auto curPU = placementInfo->getPlacementUnitByCellId(cellId);
-            PUsTouched.insert(curPU);
+            if (auto unpackCell = dynamic_cast<PlacementInfo::PlacementUnpackedCell *>(tmpPU))
+            {
+                cellLoc[unpackCell->getCell()->getCellId()].X = tmpPU->X();
+                cellLoc[unpackCell->getCell()->getCellId()].Y = tmpPU->Y();
+            }
+            else if (auto curMacro = dynamic_cast<PlacementInfo::PlacementMacro *>(tmpPU))
+            {
+                assert(curMacro->getCARRYNum() + curMacro->getDSPNum() + curMacro->getBRAMNum() <= 1);
+                assert(!curMacro->isPacked());
+                int cellIdInMacro = 0;
+                for (auto tmpCell : curMacro->getCells())
+                {
+                    cellLoc[tmpCell->getCellId()].X = tmpPU->X();
+                    cellLoc[tmpCell->getCellId()].Y = tmpPU->Y();
+                    cellIdInMacro++;
+                }
+            }
+
+            if (PUId2PackingCLBSite[tmpPU->getId()]->getDeterminedClusterInSite())
+            {
+                if (!PUId2PackingCLBSite[tmpPU->getId()]->getDeterminedClusterInSite()->contains(tmpPU))
+                {
+                    std::cout << PUId2PackingCLBSite[tmpPU->getId()]->getDeterminedClusterInSite() << "\n";
+                    std::cout << "Does not contain " << tmpPU << "\n";
+                    assert(false && "target packing site should contain a specific PU");
+                }
+            }
         }
+
+        if (preserverCriticalPath && !useLocalFineTune && movedPUs.size())
+        {
+            float oriMaxFanoutDelay = timingOptimizer->getMaxDelay();
+            timingOptimizer->incrementalStaticTimingAnalysis(movedPUs, true);
+            if (timingNodes[cellIdsInCriticalPath[0]]->checkIsRegister())
+            {
+                oriMaxFanoutDelay = timingOptimizer->getOriginalMaxIncrementalDelay();
+            }
+
+            if ((timingOptimizer->getMaxIncrementalDelay() > oriMaxFanoutDelay * 1.01) ||
+                (-timingOptimizer->getIncrementalTotalTimingBenefit() >
+                     (oriMaxFanoutDelay - timingOptimizer->getMaxIncrementalDelay()) * 0.8 &&
+                 timingOptimizer->getIncrementalTotalTimingBenefit() < 0.05 &&
+                 (oriMaxFanoutDelay - timingOptimizer->getMaxIncrementalDelay()) > 0.05))
+            {
+                // print_warning("ParallelCLBPacker: critical path delay is increased to " +
+                //               std::to_string(timingOptimizer->getMaxIncrementalDelay()) + " and oriMaxFanoutDelay=" +
+                //               std::to_string(oriMaxFanoutDelay) + " . Give up this path optimization and recover");
+                partiallyRecoverToBestPacking(changedPackingSites);
+                timingOptimizer->recoverArrivalDelayFromLastIncrementalSTA();
+                movedPUs.clear();
+            }
+            else
+            {
+                for (int orderI = cellIdsInCriticalPath.size() - 1; orderI >= 0; orderI--)
+                {
+                    auto cellId = cellIdsInCriticalPath[orderI];
+                    auto curPU = placementInfo->getPlacementUnitByCellId(cellId);
+                    PUsTouched.insert(curPU);
+                    PUsDontTouch.insert(curPU);
+                }
+
+                // print_warning("ParallelCLBPacker: critical path delay is " +
+                //               std::to_string(timingOptimizer->getMaxIncrementalDelay()));
+                partiallyRecordBestPacking(changedPackingSites);
+                // Keep accepted moves until replaceCnt is updated below.
+                // movedPUs is scoped to this path and discarded afterwards.
+            }
+        }
+        else
+        {
+            for (int orderI = cellIdsInCriticalPath.size() - 1; orderI >= 0; orderI--)
+            {
+                auto cellId = cellIdsInCriticalPath[orderI];
+                auto curPU = placementInfo->getPlacementUnitByCellId(cellId);
+                PUsTouched.insert(curPU);
+                PUsDontTouch.insert(curPU);
+            }
+        }
+
+        replaceCnt += movedPUs.size();
+        if (replaceCnt > 2000 && preserverCriticalPath)
+            break;
     }
 
     print_status("ParallelCLBPacker: conducted timing-driven detailed placement (swaping) and " +
                  std::to_string(replaceCnt) + " PlacementUnits are replaced.");
     return replaceCnt;
+}
+
+bool ParallelCLBPacker::tryAcceptLocalTimingDetailedPlacement(
+    std::set<PlacementInfo::PlacementUnit *, Packing_PUcompare> &movedPUs,
+    std::set<ParallelCLBPacker::PackingCLBSite *> &changedPackingSites)
+{
+    timingOptimizer->incrementalStaticTimingAnalysis(movedPUs, true);
+    float oriMaxFanoutDelay = timingOptimizer->getOriginalMaxIncrementalDelay();
+
+    // bool res = !(timingOptimizer->getMaxIncrementalDelay() > oriMaxFanoutDelay * 1.005) ||
+    //            (-timingOptimizer->getIncrementalTotalTimingBenefit() >
+    //                 (oriMaxFanoutDelay - timingOptimizer->getMaxIncrementalDelay()) * 0.8 &&
+    //             timingOptimizer->getIncrementalTotalTimingBenefit() < 0.05 &&
+    //             (oriMaxFanoutDelay - timingOptimizer->getMaxIncrementalDelay()) > 0.05);
+
+    bool res = !(timingOptimizer->getMaxIncrementalDelay() > oriMaxFanoutDelay * 1.005) ||
+               ((timingOptimizer->getMaxIncrementalDelay() < oriMaxFanoutDelay + 0.025) &&
+                (timingOptimizer->getIncrementalTotalTimingBenefit() >
+                 (timingOptimizer->getMaxIncrementalDelay() - oriMaxFanoutDelay + 0.05)));
+
+    if (!res)
+    {
+        // print_warning("ParallelCLBPacker: critical path delay is increased to " +
+        //               std::to_string(timingOptimizer->getMaxIncrementalDelay()) + " and oriMaxFanoutDelay=" +
+        //               std::to_string(oriMaxFanoutDelay) + " . Give up this path optimization and recover");
+        partiallyRecoverToBestPacking(changedPackingSites);
+        timingOptimizer->recoverArrivalDelayFromLastIncrementalSTA();
+    }
+    else
+    {
+        // print_warning("ParallelCLBPacker: critical path delay is " +
+        //               std::to_string(timingOptimizer->getMaxIncrementalDelay()));
+        partiallyRecordBestPacking(changedPackingSites);
+    }
+
+    return res;
 }
 
 void ParallelCLBPacker::checkPackedPUsAndUnpackedPUs()
@@ -1781,6 +3726,49 @@ void ParallelCLBPacker::exceptionHandling(bool verbose)
 
     size_t previousUnpacked = PUPoints.size();
     int stagnantRounds = 0;
+    int tmpFFCnt = 0, tmpLUTCnt = 0;
+    float avgFFWeight = 0, avgLUTWeight = 0;
+    for (unsigned int i = 0; i < PUPoints.size(); i++)
+    {
+        auto tmpPU = PUPoints[i].getPU();
+        if (auto unpackCell = dynamic_cast<PlacementInfo::PlacementUnpackedCell *>(tmpPU))
+        {
+            if (unpackCell->getCell()->isFF())
+            {
+                tmpFFCnt++;
+                avgFFWeight += placementInfo->getActualOccupation(unpackCell->getCell());
+            }
+            else if (unpackCell->getCell()->isLUT())
+            {
+                tmpLUTCnt++;
+                avgLUTWeight += placementInfo->getActualOccupation(unpackCell->getCell());
+            }
+        }
+        else if (auto curMacro = dynamic_cast<PlacementInfo::PlacementMacro *>(tmpPU))
+        {
+            assert(curMacro->getMacroType() != PlacementInfo::PlacementMacro::PlacementMacroType_CARRY &&
+                   curMacro->getMacroType() != PlacementInfo::PlacementMacro::PlacementMacroType_MCLB);
+            assert(!curMacro->isPacked());
+            for (auto tmpCell : curMacro->getCells())
+            {
+                if (tmpCell->isFF())
+                {
+                    tmpFFCnt++;
+                    avgFFWeight += placementInfo->getActualOccupation(tmpCell);
+                }
+                else if (tmpCell->isLUT())
+                {
+                    tmpLUTCnt++;
+                    avgLUTWeight += placementInfo->getActualOccupation(tmpCell);
+                }
+            }
+        }
+    }
+    if (tmpFFCnt) avgFFWeight /= tmpFFCnt;
+    if (tmpLUTCnt) avgLUTWeight /= tmpLUTCnt;
+    print_info("there are " + std::to_string(tmpFFCnt) + " FFs(avgW=" + std::to_string(avgFFWeight) + ") and " +
+               std::to_string(tmpLUTCnt) + " LUTs(avgW=" + std::to_string(avgLUTWeight) + ") ");
+
     while (PUPoints.size())
     {
         timingOptimizer->getPUId2Slack(true); // update PU slack information
@@ -1941,11 +3929,11 @@ void ParallelCLBPacker::exceptionHandling(bool verbose)
                 }
             }
         }
-        avgFFWeight /= tmpFFCnt;
-        avgLUTWeight /= tmpLUTCnt;
+        if (tmpFFCnt) avgFFWeight /= tmpFFCnt;
+        if (tmpLUTCnt) avgLUTWeight /= tmpLUTCnt;
         print_info("there are " + std::to_string(tmpFFCnt) + " FFs(avgW=" + std::to_string(avgFFWeight) + ") and " +
                    std::to_string(tmpLUTCnt) + " LUTs(avgW=" + std::to_string(avgLUTWeight) + ") ");
-        placementInfo->updateElementBinGrid();
+        placementInfo->updateElementBinGrid(false);
         timingOptimizer->conductStaticTimingAnalysis();
     }
 
@@ -2333,7 +4321,7 @@ std::vector<DeviceInfo::DeviceSite *> *
 ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCellType, float targetX, float targetY,
                                               float displacementLowerbound, float displacementUpperbound,
                                               float y2xRatio, bool clockRegionAware, float v1x, float v1y, float v2x,
-                                              float v2y, int numLimit)
+                                              float v2y, int numLimit, bool sortCandidate)
 {
     AMF_PROFILE_FUNCTION("final_packing");
     assert(displacementLowerbound < displacementUpperbound);
@@ -2355,6 +4343,12 @@ ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCell
     float vxCom, vyCom;
     vxCom = v1x + v2x;
     vyCom = v1y + v2y;
+    float site1X = targetX + v1x;
+    float site1Y = targetY + v1y;
+    float site2X = targetX + v2x;
+    float site2Y = targetY + v2y;
+
+    std::vector<DeviceSiteWithScore> resToBeSorted;
 
     for (auto sharedTypeId : sharedTypeIds)
     {
@@ -2397,10 +4391,19 @@ ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCell
                     if (!deviceSite2PackingSite.count(tmpSite))
                         continue;
 
-                    res->push_back(tmpSite);
+                    if (sortCandidate)
+                    {
+                        float newDelay = timingOptimizer->getDelayByModel(tmpSite->X(), tmpSite->Y(), site1X, site1Y) +
+                                         timingOptimizer->getDelayByModel(tmpSite->X(), tmpSite->Y(), site2X, site2Y);
+                        resToBeSorted.emplace_back(tmpSite, newDelay);
+                    }
+                    else
+                        res->push_back(tmpSite);
                 }
             }
 
+            if (resToBeSorted.size() > numLimit)
+                break;
             if (res->size() > numLimit)
                 break;
 
@@ -2459,6 +4462,17 @@ ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCell
                 }
             }
         }
+    }
+    if (sortCandidate)
+    {
+        std::sort(resToBeSorted.begin(), resToBeSorted.end(),
+                  [](const DeviceSiteWithScore &a, const DeviceSiteWithScore &b) -> bool {
+                      return a.score == b.score ? (a.site->getElementIdInParent() > b.site->getElementIdInParent())
+                                                : (a.score < b.score);
+                  });
+
+        for (auto site_delay : resToBeSorted)
+            res->push_back(site_delay.site);
     }
 
     return res;
@@ -2577,10 +4591,24 @@ void ParallelCLBPacker::setPULocationToPackedSite()
                     }
                 }
             }
+            else if (packingSite->checkIsNonCLBSite())
+            {
+                if (packingSite->getNonCLBCell())
+                {
+                    auto curPU = placementInfo->getPlacementUnitByCellId(packingSite->getNonCLBCell()->getCellId());
+                    if (curPU->isLocked())
+                    {
+                        continue;
+                    }
+                    curPU->setAnchorLocationAndForgetTheOriginalOne(packingSite->getCLBSite()->X(),
+                                                                    packingSite->getCLBSite()->Y());
+                    curPU->setFixed();
+                }
+            }
         }
     }
-    placementInfo->updateElementBinGrid();
-    placementInfo->updateB2BAndGetTotalHPWL();
+    placementInfo->updateElementBinGrid(false);
+    //  placementInfo->updateB2BAndGetTotalHPWL();
 }
 
 void ParallelCLBPacker::setPUsToBePacked()
@@ -2789,6 +4817,7 @@ bool hasLUT62(ParallelCLBPacker::PackingCLBSite::SiteBELMapping &slots)
 void ParallelCLBPacker::addNonCLBPackingSites()
 {
     AMF_PROFILE_FUNCTION("final_packing");
+    print_status("ParallelCLBPacker: handling Non-CLB Packing Sites");
     for (auto &DSPBRAM_LegalSitePair : placementInfo->getPULegalSite())
     {
         if (auto tmpMacro = dynamic_cast<PlacementInfo::PlacementMacro *>(DSPBRAM_LegalSitePair.first))
@@ -2907,6 +4936,32 @@ void ParallelCLBPacker::addNonCLBPackingSites()
             packingSites.push_back(tmpPackingSite);
         }
     }
+
+    auto sharedTypeIds = placementInfo->getPotentialBELTypeIDs(DesignInfo::CellType_DSP48E2);
+
+    for (auto sharedTypeId : sharedTypeIds)
+    {
+        std::vector<std::vector<PlacementInfo::PlacementBinInfo *>> &curBinGrid =
+            placementInfo->getBinGrid(sharedTypeId);
+        for (auto &row : curBinGrid)
+        {
+            for (auto curBin : row)
+            {
+                for (auto curSite : curBin->getCorrespondingSites())
+                {
+                    if (deviceSite2PackingSite.find(curSite) != deviceSite2PackingSite.end())
+                        continue;
+                    PackingCLBSite *tmpPackingSite =
+                        new PackingCLBSite(placementInfo, curSite, unchangedIterationThr, numNeighbor, deltaD, curD,
+                                           maxD, PQSize, y2xRatio, HPWLWeight, PUId2PackingCLBSite);
+                    tmpPackingSite->clearNonCLBCell();
+                    deviceSite2PackingSite[curSite] = tmpPackingSite;
+                    packingSites.push_back(tmpPackingSite);
+                }
+            }
+        }
+    }
+    print_status("ParallelCLBPacker: added Non-CLB Packing Sites");
 }
 
 void ParallelCLBPacker::dumpDSPBRAMPlacementTcl(std::ofstream &outfileTcl)
@@ -3101,7 +5156,7 @@ void ParallelCLBPacker::dumpCLBPlacementTcl(std::ofstream &outfileTcl, bool pack
             }
             else if (tmpPackingSite->checkIsLUTRAMSite())
             {
-                auto tmpMacro = tmpPackingSite->getLUTRAMMacro();
+                for(auto tmpMacro:tmpPackingSite->getLUTRAMMacros())
                 if (containLUTRAMCells(tmpMacro))
                 {
                     // A valid macro may have an odd number of cells (two SRLs
@@ -3290,38 +5345,33 @@ void ParallelCLBPacker::dumpFinalPacking()
             if (tmpPackingSite->getDeterminedClusterInSite())
             {
                 outfile0 << tmpPackingSite->getDeterminedClusterInSite() << "\n";
-                if (tmpPackingSite->checkIsCarrySite())
+
+                outfile0 << "LUTSlots:\n";
+                for (int i = 0; i < 2; i++)
                 {
-                    outfile0 << "LUTSlots:\n";
-                    for (int i = 0; i < 2; i++)
+                    for (int j = 0; j < 2; j++)
                     {
                         for (int k = 0; k < 4; k++)
                         {
-                            for (int j = 0; j < 2; j++)
+                            if (tmpPackingSite->getSlotMapping().LUTs[i][j][k])
                             {
-                                if (tmpPackingSite->getSlotMapping().LUTs[i][j][k])
-                                {
-                                    outfile0 << "i,j,k:" << i << "," << j << "," << k << "   "
-                                             << tmpPackingSite->getSlotMapping().LUTs[i][j][k] << "\n";
-                                }
+                                outfile0 << "i,j,k:" << i << "," << j << "," << k << "   "
+                                         << tmpPackingSite->getSlotMapping().LUTs[i][j][k] << "\n";
                             }
                         }
                     }
                 }
-                if (tmpPackingSite->checkIsCarrySite())
+                outfile0 << "FFSlots:\n";
+                for (int i = 0; i < 2; i++)
                 {
-                    outfile0 << "FFSlots:\n";
-                    for (int i = 0; i < 2; i++)
+                    for (int j = 0; j < 2; j++)
                     {
                         for (int k = 0; k < 4; k++)
                         {
-                            for (int j = 0; j < 2; j++)
+                            if (tmpPackingSite->getSlotMapping().FFs[i][j][k])
                             {
-                                if (tmpPackingSite->getSlotMapping().FFs[i][j][k])
-                                {
-                                    outfile0 << "i,j,k:" << i << "," << j << "," << k << "   "
-                                             << tmpPackingSite->getSlotMapping().FFs[i][j][k] << "\n";
-                                }
+                                outfile0 << "i,j,k:" << i << "," << j << "," << k << "   "
+                                         << tmpPackingSite->getSlotMapping().FFs[i][j][k] << "\n";
                             }
                         }
                     }
@@ -3463,6 +5513,11 @@ void ParallelCLBPacker::dumpFinalPacking()
         print_status("ParallelCLBPacker: dumping placementTcl archieve to: " + dumpTclFile);
         dumpPlacementTcl(dumpTclFile);
         print_status("ParallelCLBPacker: dumped placementTcl archieve to: " + dumpTclFile);
+        char buf[PATH_MAX]; /* PATH_MAX incudes the \0 so +1 is not required */
+        char *res = realpath(dumpTclFile.c_str(), buf);
+        assert(res && "this path should exist.");
+        std::string absPath(res);
+        print_warning("try Tcl command to P&R in Vivado: source " + absPath);
         DumpCLBPackingCnt++;
     }
 }

@@ -360,6 +360,14 @@ void InitialPacker::setDSPRegs(std::vector<DesignInfo::DesignCell *> &DSPTailsTo
                                 if (cellId2PlacementUnit[nextCell->getCellId()] !=
                                     cellId2PlacementUnit[startCell->getCellId()])
                                 {
+                                    if (startCell->getName().size() > 3)
+                                    {
+                                        if (startCell->getName()[startCell->getName().size() - 1] == 'm' &&
+                                            startCell->getName()[startCell->getName().size() - 2] == '/')
+                                        {
+                                            continue;
+                                        }
+                                    }
                                     startCell->setHasDSPReg(true);
                                     DSPRegCount++;
                                     found = true;
@@ -1882,38 +1890,62 @@ void InitialPacker::loadFixedPlacementUnits(std::string fixedPlacementUnitsFromV
             else if (PlacementInfo::PlacementMacro *curMacro = dynamic_cast<PlacementInfo::PlacementMacro *>(
                          cellId2PlacementUnit[curCell->getElementIdInType()]))
             {
-                // We can only handle BRAM36 currently
-                assert(curCell->getCellType() == DesignInfo::CellType_RAMB36E2);
-                assert(curMacro->getCells().size() == 2);
-                assert(curMacro->getCells()[0]->getCellType() == DesignInfo::CellType_RAMB36E2);
-                assert(curMacro->getCells()[1]->getCellType() == DesignInfo::CellType_RAMB18E2 &&
-                       curMacro->getCells()[1]->isVirtualCell());
+                if (curCell->getCellType() != DesignInfo::CellType_RAMB36E2)
+                {
+                    // Pro only reserved the listed site even for a multi-site macro.
+                    // Accept the complete single-cell case; reject incomplete reservations.
+                    if (curMacro->getCells().size() != 1 || curMacro->getCells()[0] != curCell)
+                        throw std::runtime_error("Fixed multi-cell macro requires a complete resource mapping: " +
+                                                 curMacro->getName());
+                    auto fixedSite = deviceInfo->getSite(siteName);
+                    if (!fixedSite)
+                        throw std::runtime_error("Unknown fixed site: " + siteName);
+                    curMacro->addFixedCellInfo(curCell, siteName, BELName);
+                    fixedSite->setOccupied();
+                    curMacro->setAnchorLocation(fixedSite->X(), fixedSite->Y());
+                    curMacro->setFixed();
+                    curMacro->setPlaced();
+                    curMacro->setLocked();
 
-                // 12
-                // 012345678901
-                // RAMB18_X16Y2 bel=>  RAMB180.RAMB18E2_L
-                int locY = std::stoi(siteName.substr(siteName.find('Y') + 1, siteName.size() - siteName.find('Y') - 1));
-                std::string newSiteName = siteName.substr(0, siteName.find('Y') + 1);
-                std::string oriS = "RAMB36_";
-                std::string newS = "RAMB18_";
-                packerUtil_StrReplaceAll(newSiteName, oriS, newS);
-                std::string newSiteNameA = newSiteName + std::to_string(locY * 2);
-                std::string newSiteNameB = newSiteName + std::to_string(locY * 2 + 1);
-                std::string newBELNameA = "RAMB180.RAMB18E2_L";
-                std::string newBELNameB = "RAMB181.RAMB18E2_U";
+                    fixedPlacementUnits.push_back(curMacro);
+                }
+                else
+                {
+                    // We can only handle BRAM36 currently
+                    assert(curCell->getCellType() == DesignInfo::CellType_RAMB36E2);
+                    assert(curMacro->getCells().size() == 2);
+                    assert(curMacro->getCells()[0]->getCellType() == DesignInfo::CellType_RAMB36E2);
+                    assert(curMacro->getCells()[1]->getCellType() == DesignInfo::CellType_RAMB18E2 &&
+                           curMacro->getCells()[1]->isVirtualCell());
 
-                curMacro->addFixedCellInfo(curMacro->getCells()[0], newSiteNameA, newBELNameA);
-                curMacro->addFixedCellInfo(curMacro->getCells()[1], newSiteNameB, newBELNameB);
-                deviceInfo->getSite(newSiteNameA)->setOccupied();
-                deviceInfo->getSite(newSiteNameB)->setOccupied();
-                curMacro->setAnchorLocation(deviceInfo->getSite(newSiteNameA)->X(),
-                                            deviceInfo->getSite(newSiteNameA)->Y());
+                    // 12
+                    // 012345678901
+                    // RAMB18_X16Y2 bel=>  RAMB180.RAMB18E2_L
+                    int locY =
+                        std::stoi(siteName.substr(siteName.find('Y') + 1, siteName.size() - siteName.find('Y') - 1));
+                    std::string newSiteName = siteName.substr(0, siteName.find('Y') + 1);
+                    std::string oriS = "RAMB36_";
+                    std::string newS = "RAMB18_";
+                    packerUtil_StrReplaceAll(newSiteName, oriS, newS);
+                    std::string newSiteNameA = newSiteName + std::to_string(locY * 2);
+                    std::string newSiteNameB = newSiteName + std::to_string(locY * 2 + 1);
+                    std::string newBELNameA = "RAMB180.RAMB18E2_L";
+                    std::string newBELNameB = "RAMB181.RAMB18E2_U";
 
-                curMacro->setFixed();
-                curMacro->setPlaced();
-                curMacro->setLocked();
+                    curMacro->addFixedCellInfo(curMacro->getCells()[0], newSiteNameA, newBELNameA);
+                    curMacro->addFixedCellInfo(curMacro->getCells()[1], newSiteNameB, newBELNameB);
+                    deviceInfo->getSite(newSiteNameA)->setOccupied();
+                    deviceInfo->getSite(newSiteNameB)->setOccupied();
+                    curMacro->setAnchorLocation(deviceInfo->getSite(newSiteNameA)->X(),
+                                                deviceInfo->getSite(newSiteNameA)->Y());
 
-                fixedPlacementUnits.push_back(curMacro);
+                    curMacro->setFixed();
+                    curMacro->setPlaced();
+                    curMacro->setLocked();
+
+                    fixedPlacementUnits.push_back(curMacro);
+                }
+
                 // assert(false && "unimplemented.");
             }
         }

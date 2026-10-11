@@ -35,13 +35,35 @@ int main()
                 if(d>6)expected=.01f*std::pow(nets,1.1);
                 else if(d>3 && !dsp)expected=.01f*nets;
                 else if(d>0 && !dsp)expected=(d/3)*.01f*nets;
-                require(std::fabs(hierarchical_boundary::anchorWeight(.01f,d,nets,dsp)-expected)<1e-5,
+                require(std::fabs(hierarchical_boundary::anchorWeight(.01f,d,nets,!dsp)-expected)<1e-5,
                         "One-sided weight differs from original piecewise formula");
                 for(int direction : {-1,1})
-                    require(hierarchical_boundary::anchorWeight(.01f,direction*(50-(50+direction*2)),nets,dsp)==0,
+                    require(hierarchical_boundary::anchorWeight(.01f,direction*(50-(50+direction*2)),nets,!dsp)==0,
                             "Crossing the center reversed the attraction");
             }
-        std::cout << "PASS majority, stretch, 100 original-formula cases and center-crossing checks\n";
+        struct DieRegion { int slr; float y0,y1; };
+        std::vector<DieRegion> dies{{3,240,480},{9,720,960},{7,0,240},
+                                    {5,480,720},{7,0,240},{3,240,480}};
+        for (int i=0;i<int(dies.size());++i)
+            require(hierarchical_boundary::slrPullDirection(dies,i)==
+                    (dies[i].slr==7?-1:(dies[i].slr==9?1:0)),
+                    "SLR outer/middle rule depends on ID, order, or HPIO side");
+        // Compare all three rotated cases against the original X branches.
+        // Interior regions may reverse after crossing center; outer ones may not.
+        for(bool dsp : {false,true}) for(size_t nets : {0,1,2,10,100})
+            for(float offset : {-100.f,-6.01f,-6.f,-3.f,-.01f,0.f,.01f,3.f,6.f,6.01f,100.f})
+                for(int direction : {-1,0,1}) {
+                    const float y=360+offset;
+                    const float d=direction<0?y-360:(direction>0?360-y:std::fabs(y-360));
+                    float expected=0;
+                    if(d>6)expected=.01f*std::pow(nets,1.1);
+                    else if(d>3 && !dsp)expected=.01f*nets;
+                    else if(d>0 && !dsp)expected=d/3*.01f*nets;
+                    const float actual=hierarchical_boundary::anchorWeight(.01f,
+                        hierarchical_boundary::anchorDistance(y,360,direction),nets,!dsp);
+                    require(std::fabs(actual-expected)<1e-5,"Rotated SLR weight differs from upstream branch");
+                }
+        std::cout << "PASS majority, stretch, 100 original-formula and 330 rotated-branch cases\n";
         return 0;
     } catch (const std::exception &e) { std::cerr << e.what() << '\n'; return 1; }
 }

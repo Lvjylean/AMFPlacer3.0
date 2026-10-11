@@ -106,6 +106,7 @@ class ClusterPlacer
     bool verbose;
 
     bool randomInitialPlacement = false;
+    bool noPathLenCluster = false;
 
     /**
      * @brief the requirement of the average size of clusters (the number of cells)
@@ -134,6 +135,7 @@ class ClusterPlacer
     //  the cluster-level netlist information
 
     std::vector<std::vector<float>> clusterAdjMat;
+    std::vector<std::pair<std::vector<int>, float>> net2HPWLClustersWeight;
     std::vector<float> clusterCLBCellWeights;
     std::vector<float> clusterDSPCellWeights;
     std::vector<float> clusterBRAMCellWeights;
@@ -147,6 +149,7 @@ class ClusterPlacer
     std::vector<int> placementUnitId2ClusterUnitId;
     std::vector<PlacementInfo::ClusterUnit *> clusterUnits;
     std::vector<PlacementInfo::ClusterNet *> clusterNets;
+    std::vector<std::vector<int>> enhancedClusterCluster;
 
     int clockRegionXNum, clockRegionYNum;
 
@@ -238,6 +241,10 @@ class ClusterPlacer
      *
      */
     void hypergraphPartitioning();
+
+    void FFPartitioning();
+
+    bool hasTimingEndpoint(DesignInfo::DesignCell *cell);
 
     /**
      * @brief pure connectivity-based partitioning based on PaToH

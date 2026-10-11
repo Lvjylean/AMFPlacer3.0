@@ -14,6 +14,8 @@
 
 #include "CLBLegalizer.h"
 #include <algorithm>
+#include <array>
+#include <iomanip>
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
@@ -81,6 +83,19 @@ void CLBLegalizer::legalize(bool exactLegalization)
         noTarget = true;
         return;
     }
+    if (legalization_trace::enabled()) {
+        ++legalization_trace::call;
+        AMF_PROFILE_SCOPE("diagnostics", "MCLB available-site region census");
+        std::map<std::pair<int,int>,std::array<size_t,4>> regions;
+        for(auto type:siteTypesToLegalize)for(auto site:deviceInfo->getSitesInType(type)) {
+            auto &a=regions[{site->getClockRegionX(),site->getClockRegionY()}];
+            ++a[0];a[1]+=!site->isMapped()&&!site->isOccupied();a[2]+=site->isMapped();a[3]+=site->isOccupied();
+        }
+        for(const auto &r:regions)print_info("AMF_MCLB_RESOURCE call="+std::to_string(legalization_trace::call)+
+            " name="+legalizerName+" cr_x="+std::to_string(r.first.first)+" cr_y="+std::to_string(r.first.second)+
+            " total="+std::to_string(r.second[0])+" available="+std::to_string(r.second[1])+
+            " mapped="+std::to_string(r.second[2])+" occupied="+std::to_string(r.second[3]));
+    }
     roughlyLegalize();
 
     updatePUMatchingLocation(true, !exactLegalization);
@@ -106,20 +121,56 @@ void CLBLegalizer::legalize(bool exactLegalization)
 void CLBLegalizer::roughlyLegalize()
 {
     AMF_PROFILE_FUNCTION("clb_legalization");
+    int traceAttempt=0;
     while (PUsToLegalize.size())
     {
+        ++traceAttempt;
+        const auto traceBegin=legalization_trace::Clock::now();
+        const auto traceUnmatched=PUsToLegalize.size();
         findPU2SitesInDistance();
+        const double traceSearch=legalization_trace::seconds(traceBegin);
+        auto traceMark=legalization_trace::Clock::now();
         findPossibleLegalLocation(false);
+        const double traceCandidates=legalization_trace::seconds(traceMark);
+        traceMark=legalization_trace::Clock::now();
         resetPU2SitesInDistance();
+        const double traceClear=legalization_trace::seconds(traceMark);
+        traceMark=legalization_trace::Clock::now();
 
         createBipartiteGraph();
+        const double traceGraph=legalization_trace::seconds(traceMark);
+        const auto traceDiagnosticStart=legalization_trace::Clock::now();
+        legalization_trace::Graph traceStats;
+        if(legalization_trace::enabled())traceStats=legalization_trace::graph(adjList,rightSiteIds.size());
+        const double traceDiagnostic=legalization_trace::seconds(traceDiagnosticStart);
+        traceMark=legalization_trace::Clock::now();
         minCostBipartiteMatcher =
             new MinCostBipartiteMatcher(PU2Sites.size(), rightSiteIds.size(), PU2Sites.size(), adjList, nJobs, verbose,
                 JSONCfg.count("BipartiteMatchingBackend") ? JSONCfg.at("BipartiteMatchingBackend") : "legacy",
                 JSONCfg.count("BipartiteMatchingForwardBias") ? std::stod(JSONCfg.at("BipartiteMatchingForwardBias")) : 0.0);
 
+        const double traceConstruct=legalization_trace::seconds(traceMark);
+        traceMark=legalization_trace::Clock::now();
         minCostBipartiteMatcher->solve();
+        const double traceSolve=legalization_trace::seconds(traceMark);
+        traceMark=legalization_trace::Clock::now();
         updateMatchingAndUnmatchedPUs();
+        const double traceUpdate=legalization_trace::seconds(traceMark);
+        if(legalization_trace::enabled()) {
+            std::ostringstream line;line<<std::setprecision(12)<<"AMF_MCLB_MATCH call="<<legalization_trace::call
+              <<" name="<<legalizerName<<" phase="<<legalization_trace::phase<<" phase_call="<<legalization_trace::phaseCall
+              <<" round="<<legalization_trace::round<<" local_iter="<<legalization_trace::localIteration
+              <<" function="<<__func__<<" attempt="<<traceAttempt<<" radius="<<displacementThreshold<<" topk="<<maxNumCandidate
+              <<" left="<<traceUnmatched<<" right="<<rightSiteIds.size()<<" unmatched="<<PUsToLegalize.size()
+              <<" search_wall_s="<<traceSearch<<" candidate_wall_s="<<traceCandidates<<" clear_wall_s="<<traceClear
+              <<" graph_wall_s="<<traceGraph<<" construct_wall_s="<<traceConstruct<<" solve_wall_s="<<traceSolve
+              <<" update_wall_s="<<traceUpdate<<" graph_diagnostic_s="<<traceDiagnostic
+              <<" edges="<<traceStats.edges<<" zero="<<traceStats.zero<<" candidate_p50="<<traceStats.p50<<" candidate_p95="<<traceStats.p95
+              <<" components="<<traceStats.components<<" largest_left="<<traceStats.largestLeft<<" largest_right="<<traceStats.largestRight
+              <<" component_deficit="<<traceStats.deficit<<" mean_site_competition="<<traceStats.meanCompetition
+              <<" max_site_competition="<<traceStats.maxCompetition;
+            print_info(line.str());
+        }
 
         displacementThreshold *= 2;
         if ((int)(maxNumCandidate * 2) > maxNumCandidate + 1)
@@ -139,19 +190,55 @@ void CLBLegalizer::fixedColumnLegalize()
 
     PUsToLegalize = initialPUsToLegalize;
 
+    int traceAttempt=0;
     while (PUsToLegalize.size())
     {
+        ++traceAttempt;
+        const auto traceBegin=legalization_trace::Clock::now();
+        const auto traceUnmatched=PUsToLegalize.size();
         findPU2SitesInDistance();
+        const double traceSearch=legalization_trace::seconds(traceBegin);
+        auto traceMark=legalization_trace::Clock::now();
         findPossibleLegalLocation(true);
+        const double traceCandidates=legalization_trace::seconds(traceMark);
+        traceMark=legalization_trace::Clock::now();
         resetPU2SitesInDistance();
+        const double traceClear=legalization_trace::seconds(traceMark);
+        traceMark=legalization_trace::Clock::now();
         createBipartiteGraph();
+        const double traceGraph=legalization_trace::seconds(traceMark);
+        const auto traceDiagnosticStart=legalization_trace::Clock::now();
+        legalization_trace::Graph traceStats;
+        if(legalization_trace::enabled())traceStats=legalization_trace::graph(adjList,rightSiteIds.size());
+        const double traceDiagnostic=legalization_trace::seconds(traceDiagnosticStart);
+        traceMark=legalization_trace::Clock::now();
         minCostBipartiteMatcher =
             new MinCostBipartiteMatcher(PU2Sites.size(), rightSiteIds.size(), PU2Sites.size(), adjList, nJobs, verbose,
                 JSONCfg.count("BipartiteMatchingBackend") ? JSONCfg.at("BipartiteMatchingBackend") : "legacy",
                 JSONCfg.count("BipartiteMatchingForwardBias") ? std::stod(JSONCfg.at("BipartiteMatchingForwardBias")) : 0.0);
 
+        const double traceConstruct=legalization_trace::seconds(traceMark);
+        traceMark=legalization_trace::Clock::now();
         minCostBipartiteMatcher->solve();
+        const double traceSolve=legalization_trace::seconds(traceMark);
+        traceMark=legalization_trace::Clock::now();
         updateMatchingAndUnmatchedPUs();
+        const double traceUpdate=legalization_trace::seconds(traceMark);
+        if(legalization_trace::enabled()) {
+            std::ostringstream line;line<<std::setprecision(12)<<"AMF_MCLB_MATCH call="<<legalization_trace::call
+              <<" name="<<legalizerName<<" phase="<<legalization_trace::phase<<" phase_call="<<legalization_trace::phaseCall
+              <<" round="<<legalization_trace::round<<" local_iter="<<legalization_trace::localIteration
+              <<" function="<<__func__<<" attempt="<<traceAttempt<<" radius="<<displacementThreshold<<" topk="<<maxNumCandidate
+              <<" left="<<traceUnmatched<<" right="<<rightSiteIds.size()<<" unmatched="<<PUsToLegalize.size()
+              <<" search_wall_s="<<traceSearch<<" candidate_wall_s="<<traceCandidates<<" clear_wall_s="<<traceClear
+              <<" graph_wall_s="<<traceGraph<<" construct_wall_s="<<traceConstruct<<" solve_wall_s="<<traceSolve
+              <<" update_wall_s="<<traceUpdate<<" graph_diagnostic_s="<<traceDiagnostic
+              <<" edges="<<traceStats.edges<<" zero="<<traceStats.zero<<" candidate_p50="<<traceStats.p50<<" candidate_p95="<<traceStats.p95
+              <<" components="<<traceStats.components<<" largest_left="<<traceStats.largestLeft<<" largest_right="<<traceStats.largestRight
+              <<" component_deficit="<<traceStats.deficit<<" mean_site_competition="<<traceStats.meanCompetition
+              <<" max_site_competition="<<traceStats.maxCompetition;
+            print_info(line.str());
+        }
 
         displacementThreshold *= 2;
         if ((int)(maxNumCandidate * 2) > maxNumCandidate + 1)
@@ -179,6 +266,8 @@ void CLBLegalizer::finalLegalizeBasedOnDP()
     if (verbose)
         print_info("CLBLegalizer Macro Cell Average Final Legalization Displacement = " +
                    std::to_string(finalAverageDisplacement));
+    expandSharedSRLTargets();
+    if(!sharedSRLGroups.empty()) finalAverageDisplacement=sharingAverageDisplacement();
     placementInfo->setPULegalSite(PU2LegalSites);
     placementInfo->setPULegalXY(PU2X, PU2Y);
 }
@@ -365,6 +454,7 @@ void CLBLegalizer::getPUsToLegalize()
             }
         }
     }
+    buildSRLSharingGroups();
     initialPUsToLegalize = PUsToLegalize;
     for (auto curPU : PUsToLegalize)
     {
@@ -482,11 +572,15 @@ void CLBLegalizer::findPossibleLegalLocation(bool fixedColumn)
     }
 
     int numPUs = PUsToLegalize.size();
+    std::vector<legalization_trace::Candidate> traceRows(numPUs);
 
 #pragma omp parallel for
     for (int i = 0; i < numPUs; i++)
     {
         auto curPU = PUsToLegalize[i];
+        auto &tr=traceRows[i];
+        auto traceStart=legalization_trace::Clock::now();
+        legalization_trace::costSeconds=0;legalization_trace::costMisses=0;
         std::string curSiteType = "";
         if (curPU->isLCLB())
             curSiteType = "SLICEL";
@@ -531,6 +625,7 @@ void CLBLegalizer::findPossibleLegalLocation(bool fixedColumn)
         }
 
         assert(candidateSite);
+        tr.raw=candidateSite->size();
 
         for (auto curSite : *candidateSite)
         {
@@ -538,19 +633,38 @@ void CLBLegalizer::findPossibleLegalLocation(bool fixedColumn)
             if ((!fixedColumn && curDisp < displacementThreshold) ||
                 (fixedColumn && curDisp < 2 * displacementThreshold))
             {
-                if (placementInfo->isLegalLocation(curPU, curSite->X(), curSite->Y()))
+                if (sharingLocationLegal(curPU, curSite->X(), curSite->Y()))
                 {
                     if (matchedSites.find(curSite) !=
                         matchedSites.end()) // the matched sites should not in the candidate set
-                        continue;
+                    { ++tr.occupiedByMatch; continue; }
                     PU2Sites[curPU].push_back(curSite);
-                }
-            }
+                } else ++tr.illegal;
+            } else ++tr.distanceRejected;
         }
+        tr.legal=PU2Sites[curPU].size();
+        tr.filterSeconds=legalization_trace::seconds(traceStart);
+        traceStart=legalization_trace::Clock::now();
         if (PU2Sites[curPU].size() > 1)
             quick_sort_WLChange(curPU, PU2Sites[curPU], 0, PU2Sites[curPU].size() - 1);
         if (PU2Sites[curPU].size() > (unsigned int)maxNumCandidate)
             PU2Sites[curPU].resize(maxNumCandidate);
+        tr.kept=PU2Sites[curPU].size();
+        tr.sortWithCostSeconds=legalization_trace::seconds(traceStart);
+        tr.costSeconds=legalization_trace::costSeconds;tr.misses=legalization_trace::costMisses;
+    }
+    if(legalization_trace::enabled()) {
+        legalization_trace::Candidate sum;
+        for(const auto &a:traceRows){sum.raw+=a.raw;sum.distanceRejected+=a.distanceRejected;sum.illegal+=a.illegal;
+            sum.occupiedByMatch+=a.occupiedByMatch;sum.legal+=a.legal;sum.kept+=a.kept;sum.misses+=a.misses;
+            sum.filterSeconds+=a.filterSeconds;sum.sortWithCostSeconds+=a.sortWithCostSeconds;sum.costSeconds+=a.costSeconds;}
+        std::ostringstream line;line<<std::setprecision(12)<<"AMF_MCLB_CANDIDATES call="<<legalization_trace::call
+          <<" name="<<legalizerName<<" fixed_column="<<fixedColumn<<" left="<<numPUs<<" raw="<<sum.raw
+          <<" distance_rejected="<<sum.distanceRejected<<" illegal="<<sum.illegal<<" already_matched="<<sum.occupiedByMatch
+          <<" legal_before_topk="<<sum.legal<<" kept="<<sum.kept<<" cost_cache_misses="<<sum.misses
+          <<" filter_worker_wall_sum_s="<<sum.filterSeconds<<" sort_and_cost_worker_wall_sum_s="<<sum.sortWithCostSeconds
+          <<" cost_worker_wall_sum_s="<<sum.costSeconds<<" sort_excluding_cost_worker_wall_sum_s="<<sum.sortWithCostSeconds-sum.costSeconds;
+        print_info(line.str());
     }
     // print_info("#total macro cell = " + std::to_string(PU2Sites.size()));
     // print_info("#total macro candidate site (might be duplicated) = " + std::to_string(totalSiteNum));
@@ -815,6 +929,11 @@ void CLBLegalizer::updatePUMatchingLocation(bool isRoughLegalization, bool updat
     for (int i = 0; i < LCLBColumnNum; i++)
         sortPUsByPU2Y(LCLBColumn2PUs[i]);
 
+    expandSharedSRLTargets();
+    if(!sharedSRLGroups.empty() && updateDisplacement) {
+        if(isRoughLegalization) roughAverageDisplacement=sharingAverageDisplacement();
+        else fixedColumnAverageDisplacement=sharingAverageDisplacement();
+    }
     placementInfo->setPULegalXY(PU2X, PU2Y);
 }
 
@@ -1028,4 +1147,193 @@ void CLBLegalizer::resetSitesMapped()
         }
     }
     PULevelMatching.clear();
+}
+
+// Preserve all original PUs. Only the legalizer's left-hand matching objects
+// represent compatible site-sharing groups, rebuilt from current locations.
+void CLBLegalizer::buildSRLSharingGroups()
+{
+    AMF_PROFILE_SCOPE("clb_legalization", "SRL site-sharing groups");
+    sharedSRLGroups.clear();
+    if (!JSONCfg.count("SRLMaxPerSLICEM") || JSONCfg.at("SRLMaxPerSLICEM") == "1") return;
+    if (JSONCfg.at("SRLMaxPerSLICEM") != "4") throw std::runtime_error("SRLMaxPerSLICEM must be 1 or 4");
+    if (!srlControlsLoaded) {
+        if (!JSONCfg.count("SRL control metadata file")) throw std::runtime_error("Missing SRL control metadata file");
+        std::ifstream input(JSONCfg.at("SRL control metadata file"));
+        if (!input) throw std::runtime_error("Cannot open SRL control metadata");
+        std::string line;
+        std::getline(input,line);
+        while (std::getline(input,line)) {
+            std::vector<std::string> fields;
+            size_t begin=0;
+            for (size_t pos=0;pos<=line.size();++pos) if(pos==line.size() || line[pos]=='\t') {
+                fields.push_back(line.substr(begin,pos-begin));begin=pos+1;
+            }
+            if (fields.size()!=8 || fields[0].empty() || srlControlMetadata.count(fields[0]))
+                throw std::runtime_error("Malformed/duplicate SRL metadata row");
+            // Empty inversion is Vivado's unspecified/default value. Compare it
+            // as a distinct raw class; never conflate it with an explicit value.
+            srlControlMetadata[fields[0]]=fields;
+        }
+        srlControlsLoaded=true;
+    }
+    using PU=PlacementInfo::PlacementUnit;
+    using Macro=PlacementInfo::PlacementMacro;
+    struct Group { PU *representative; srl_site_sharing::Layout layout; std::vector<PU*> members; };
+    std::vector<Group> groups;
+    std::map<std::string,std::vector<size_t>> buckets;
+    std::map<PU*,srl_site_sharing::Unit> descriptors;
+    std::map<std::string,size_t> rejected;
+    std::vector<PU*> ordered=PUsToLegalize;
+    std::sort(ordered.begin(),ordered.end(),[](PU*a,PU*b){return a->getId()<b->getId();});
+    for (auto pu:ordered) {
+        auto macro=dynamic_cast<Macro*>(pu);
+        if (!macro || !pu->isMCLB() || pu->isLocked() || pu->isFixed()) {++rejected["not_movable_srl_macro"];continue;}
+        if (!originalSRLFixed.count(macro)) originalSRLFixed[macro]=macro->getFixedCellInfoVec();
+        macro->getFixedCellInfoVec()=originalSRLFixed.at(macro);
+        std::map<DesignInfo::DesignCell*,std::string> original;
+        for (const auto &fixed:originalSRLFixed.at(macro)) original[fixed.cell]=fixed.BELName;
+        std::set<DesignInfo::DesignCell*> members(macro->getCells().begin(),macro->getCells().end());
+        srl_site_sharing::Unit descriptor;descriptor.id=pu->getId();
+        bool valid=true;
+        for (size_t index=0;index<macro->getCells().size();++index) {
+            auto cell=macro->getCells()[index];
+            if (cell->isVirtualCell() || macro->getCellOffsetXInMacro(cell)!=0 || macro->getCellOffsetYInMacro(cell)!=0) {valid=false;break;}
+            if (cell->originallyIsShifter()) {
+                ++descriptor.srlCount;
+                auto meta=srlControlMetadata.find(cell->getName());
+                if(meta==srlControlMetadata.end() || meta->second[5]!="0" || meta->second[6]!="0" || meta->second[4]=="UNKNOWN") {valid=false;break;}
+                std::string clk,ce;
+                for(auto pin:cell->getInputPins()) {
+                    if(pin->getRefPinName()=="CLK" && pin->getNet()) clk=pin->getNet()->getName();
+                    if(pin->getRefPinName()=="CE" && pin->getNet()) ce=pin->getNet()->getName();
+                }
+                if(clk.empty() || ce.empty()) {valid=false;break;}
+                // The metadata supplies inversion; connectivity comes from the
+                // actual AMF netlist, including canonicalized constant nets.
+                std::string controls=clk+"\t"+ce+"\t"+meta->second[4];
+                if(!descriptor.controls.empty() && descriptor.controls!=controls) {valid=false;break;}
+                descriptor.controls=controls;
+                for(auto pin:cell->getOutputPins()) if(pin->getRefPinName()=="Q31" && pin->getNet())
+                    for(auto sink:pin->getNet()->getPinsBeDriven())
+                        if(!members.count(sink->getCell())) descriptor.externalQ31.insert(index);
+                if(original.count(cell)) descriptor.bels.push_back(original.at(cell));
+                else if(macro->getCells().size()==1) descriptor.bels.push_back(descriptor.externalQ31.count(index)?"A6LUT":"H6LUT");
+                else {valid=false;break;}
+            } else if(cell->getOriCellType()==DesignInfo::CellType_MUXF7 && original.count(cell)) {
+                descriptor.bels.push_back(original.at(cell));
+            } else {valid=false;break;}
+        }
+        if(!valid || descriptor.srlCount<1 || descriptor.srlCount>4) {++rejected["type_controls_or_bel"];continue;}
+        int crX=-1,crY=-1;
+        deviceInfo->getClockRegionByLocation(pu->X(),pu->Y(),crX,crY);
+        int region=-1;
+        auto pref=placementInfo->getRegionPreferences().find(pu);
+        if(pref!=placementInfo->getRegionPreferences().end()) region=pref->second.region;
+        const auto key=descriptor.controls+"\t"+std::to_string(crX)+":"+std::to_string(crY)+":"+std::to_string(region);
+        size_t best=groups.size();float bestDistance=std::numeric_limits<float>::max();
+        srl_site_sharing::Layout bestLayout;
+        for(size_t index:buckets[key]) {
+            auto &group=groups[index];
+            bool close=true;float distance=0;
+            for(auto other:group.members) {
+                float d=std::fabs(pu->X()-other->X())+y2xRatio*std::fabs(pu->Y()-other->Y());
+                if(d>initialDisplacementThreshold) {close=false;break;}
+                distance+=d;
+            }
+            if(!close) {++rejected["existing_search_radius"];continue;}
+            distance/=group.members.size();
+            srl_site_sharing::Layout candidate;
+            if(distance<bestDistance && srl_site_sharing::append(descriptor,group.layout,candidate)) {
+                best=index;bestDistance=distance;bestLayout=std::move(candidate);
+            }
+        }
+        if(best==groups.size()) {
+            srl_site_sharing::Layout layout;
+            if(!srl_site_sharing::append(descriptor,{},layout)) {++rejected["unsupported_bel_layout"];continue;}
+            buckets[key].push_back(groups.size());groups.push_back({pu,std::move(layout),{pu}});
+        } else {groups[best].layout=std::move(bestLayout);groups[best].members.push_back(pu);}
+        descriptors[pu]=std::move(descriptor);
+    }
+    std::set<PU*> followers;
+    size_t histogram[5]={}, shared=0, saved=0;
+    for(auto &group:groups) {
+        ++histogram[group.layout.srlCount];
+        if(group.members.size()<2) continue;
+        ++shared;saved+=group.members.size()-1;
+        sharedSRLGroups[group.representative]=group.members;
+        for(auto pu:group.members) {
+            if(pu!=group.representative) followers.insert(pu);
+            auto macro=dynamic_cast<Macro*>(pu);
+            macro->getFixedCellInfoVec().clear();
+            const auto &bels=group.layout.assignments.at(pu->getId());
+            for(size_t i=0;i<bels.size();++i) macro->addFixedCellInfo(macro->getCells()[i],"SLICEM",bels[i]);
+        }
+    }
+    const size_t originalCount=PUsToLegalize.size();
+    PUsToLegalize.erase(std::remove_if(PUsToLegalize.begin(),PUsToLegalize.end(),[&](PU*pu){return followers.count(pu);}),PUsToLegalize.end());
+    for(auto pu:followers) {PUsToLegalizeSet.erase(pu);MCLBPUs.erase(pu);}
+    std::ostringstream message;
+    message<<"AMF_SRL_SHARING round="<<legalization_trace::round<<" original_pus="<<originalCount
+      <<" matching_objects="<<PUsToLegalize.size()<<" shared_sites="<<shared<<" sites_saved="<<saved
+      <<" eligible_srl_pus="<<descriptors.size()<<" srl1="<<histogram[1]<<" srl2="<<histogram[2]
+      <<" srl3="<<histogram[3]<<" srl4="<<histogram[4]<<" pu_count_unchanged="<<placementInfo->getPlacementUnits().size();
+    for(const auto &r:rejected)message<<" reject_"<<r.first<<"="<<r.second;
+    print_info(message.str());
+}
+
+PlacementInfo::Location CLBLegalizer::sharingCenter(PlacementInfo::PlacementUnit *pu) const
+{
+    auto found=sharedSRLGroups.find(pu);
+    if(found==sharedSRLGroups.end()) return PlacementInfo::Location{pu->X(),pu->Y()};
+    float x=0,y=0;
+    for(auto member:found->second) {x+=member->X();y+=member->Y();}
+    return PlacementInfo::Location{x/found->second.size(),y/found->second.size()};
+}
+bool CLBLegalizer::sharingLocationLegal(PlacementInfo::PlacementUnit *pu, float x,float y) const
+{
+    if(!placementInfo->isLegalLocation(pu,x,y)) return false;
+    auto found=sharedSRLGroups.find(pu);
+    if(found!=sharedSRLGroups.end()) for(auto member:found->second)
+        if(!placementInfo->isLegalLocation(member,x,y)) return false;
+    return true;
+}
+float CLBLegalizer::sharingHPWLChange(PlacementInfo::PlacementUnit *pu,float x,float y)
+{
+    const auto &members=sharedSRLGroups.at(pu);
+    std::set<PlacementInfo::PlacementUnit*> moved(members.begin(),members.end());
+    std::map<int,PlacementInfo::PlacementNet*> nets;
+    for(auto member:members)for(auto net:placementInfo->getPlacementUnitId2Nets()[member->getId()]) nets[net->getId()]=net;
+    float result=0;
+    for(const auto &entry:nets) {
+        auto net=entry.second;
+        if(net->getDesignNet()->getPins().size()>10000) continue;
+        float minX=1e5,maxX=-1e5,minY=1e5,maxY=-1e5;
+        const auto &units=net->getUnits();const auto &offsets=net->getPinOffsetsInUnit();
+        for(size_t i=0;i<units.size();++i) {
+            float px=(moved.count(units[i])?x:units[i]->X())+offsets[i].x;
+            float py=(moved.count(units[i])?y:units[i]->Y())+offsets[i].y;
+            minX=std::min(minX,px);maxX=std::max(maxX,px);minY=std::min(minY,py);maxY=std::max(maxY,py);
+        }
+        result+=std::fabs(maxX-minX)+y2xRatio*std::fabs(maxY-minY)-net->getHPWL(y2xRatio);
+    }
+    return result;
+}
+void CLBLegalizer::expandSharedSRLTargets()
+{
+    for(const auto &group:sharedSRLGroups) {
+        auto representative=group.first;
+        if(!PU2X.count(representative) || !PU2Y.count(representative)) throw std::runtime_error("Missing SRL group target");
+        for(auto member:group.second) {
+            PU2X[member]=PU2X.at(representative);PU2Y[member]=PU2Y.at(representative);
+            if(PU2LegalSites.count(representative)) PU2LegalSites[member]=PU2LegalSites.at(representative);
+        }
+    }
+}
+float CLBLegalizer::sharingAverageDisplacement() const
+{
+    if(PU2X.empty()) return 10000.0f;
+    double total=0;
+    for(const auto &entry:PU2X) total+=std::fabs(entry.first->X()-entry.second)+std::fabs(entry.first->Y()-PU2Y.at(entry.first));
+    return total/PU2X.size();
 }

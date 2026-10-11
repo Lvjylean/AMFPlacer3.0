@@ -369,11 +369,16 @@ class AMFPlacer
             print_status("Initial placement inspection done; no global placement or routing");
             return;
         }
-        if(placementInfo->boundaryClusteringEnabled()) timingOptimizer->clusterCriticalPathsByPhysicalRegion();
+        if(placementInfo->boundaryClusteringEnabled()) timingOptimizer->clusterCriticalPathsByPhysicalRegion(true);
         else timingOptimizer->clusterLongPathInOneClockRegion(longPathThr, 0.5);
+        if (!JSON.count("ProFFClustering") || JSON.at("ProFFClustering") != "false")
+            placementInfo->FFPartitioning();
         globalPlacer->GlobalPlacement_fixedCLB(1, 0.0002);
 
         placementInfo->getTimingInfo()->setDSPInnerDelay();
+
+        // Make SLR X room only after the six fixedCLB initialization QPs.
+        timingOptimizer->spreadPaperBoundarySLR();
 
         globalPlacer->GlobalPlacement_CLBElements(std::stoi(JSON["GlobalPlacementIteration"]) / 3, false, 5, true, true,
                                                   200, timingOptimizer);

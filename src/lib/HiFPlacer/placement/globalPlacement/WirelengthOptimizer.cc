@@ -12,8 +12,8 @@
  * Technology. All rights reserved.
  *
  */
-
 #include "WirelengthOptimizer.h"
+#include "MacroStudyControl.h"
 #include "TimingWeightGuard.h"
 #include <stdexcept>
 
@@ -37,8 +37,17 @@ WirelengthOptimizer::WirelengthOptimizer(PlacementInfo *placementInfo, std::map<
     {
         pin2pinEnhance = std::stof(JSONCfg["pin2pinEnhance"]);
     }
-    if (JSONCfg.find("DSPCritical") != JSONCfg.end())
-        DSPCritical = JSONCfg["DSPCritical"] == "true";
+    if (JSONCfg.find("noWNSGPOpt") != JSONCfg.end())
+    {
+        noWNSGPOpt = (JSONCfg["noWNSGPOpt"] == "true");
+    }
+    if (JSONCfg.count("BoundaryWeakAttraction")) {
+        const auto &value = JSONCfg.at("BoundaryWeakAttraction");
+        if (value != "true" && value != "false")
+            throw std::invalid_argument("BoundaryWeakAttraction must be true or false");
+        boundaryWeakAttraction = value == "true";
+    }
+    print_info(std::string("BoundaryWeakAttraction=") + (boundaryWeakAttraction ? "true" : "false"));
     if (JSONCfg.find("y2xRatio") != JSONCfg.end())
         y2xRatio = std::stof(JSONCfg["y2xRatio"]);
     if (JSONCfg.count("TimingMaxEnhancement"))
@@ -108,7 +117,8 @@ void WirelengthOptimizer::reloadPlacementInfo()
 void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool firstIteration,
                                                  bool forwardSolutionToNextIteration, bool enableMacroPseudoNet2Site,
                                                  bool considerNetNum, bool enableUserDefinedClusterOpt,
-                                                 float displacementLimit, PlacementTimingOptimizer *timingOptimizer)
+                                                 float displacementLimit, PlacementTimingOptimizer *timingOptimizer,
+                                                 bool enableFFClusterOpt)
 {
     AMF_PROFILE_FUNCTION("qp_model");
     if (verbose)
@@ -125,7 +135,7 @@ void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool fir
     }
 
     updateB2BNetWeight(pesudoNetWeight, enableMacroPseudoNet2Site, considerNetNum, enableUserDefinedClusterOpt,
-                       timingOptimizer);
+                       timingOptimizer, enableFFClusterOpt);
     if (firstIteration)
         solverLoadData();
 
@@ -292,7 +302,7 @@ void WirelengthOptimizer::solverWriteBackData(float displacementLimit)
 
 void WirelengthOptimizer::updateB2BNetWeight(float pesudoNetWeight, bool enableMacroPseudoNet2Site, bool considerNetNum,
                                              bool enableUserDefinedClusterOpt,
-                                             PlacementTimingOptimizer *timingOptimizer)
+                                             PlacementTimingOptimizer *timingOptimizer, bool enableFFClusterOpt)
 {
     AMF_PROFILE_FUNCTION("qp_model");
     if (verbose)
@@ -328,10 +338,7 @@ void WirelengthOptimizer::updateB2BNetWeight(float pesudoNetWeight, bool enableM
                                        pin2pinEnhance, timingOptimizer);
     }
 
-    if (enableUserDefinedClusterOpt)
-    {
-        updatePseudoNetForUserDefinedClusters(pesudoNetWeight);
-    }
+    updatePseudoNetsForClusters(pesudoNetWeight, enableUserDefinedClusterOpt, enableFFClusterOpt);
 
     addPseudoNet2LoctionForAllPUs(pesudoNetWeight, considerNetNum);
     updatePseudoNetForClockRegion(0.2 * pesudoNetWeight);
@@ -385,6 +392,7 @@ void WirelengthOptimizer::addPseudoNetForMacros(float pesudoNetWeight, bool cons
     AMF_PROFILE_FUNCTION("qp_model");
     std::map<PlacementInfo::PlacementUnit *, float> &PUX = placementInfo->getPULegalXY().first;
     std::map<PlacementInfo::PlacementUnit *, float> &PUY = placementInfo->getPULegalXY().second;
+    if(macro_study::active("macro-weight-x8")) pesudoNetWeight *= 8.0f;
     macroPseudoNetCnt++;
 
     if (placementInfo->getProgress() > 0.8)
@@ -465,6 +473,9 @@ void WirelengthOptimizer::addPseudoNet_SlackBased(float timingWeight, double sla
     AMF_PROFILE_FUNCTION("qp_model");
     if (calculate)
     {
+        auto &PUsSkewRisky = placementInfo->getPUsSkewRisky();
+        PUsTimingCriticality = std::vector<float>(placementInfo->getPlacementUnits().size(), 0.0);
+        PUsTimingCritical_TargetPUId = std::vector<int>(placementInfo->getPlacementUnits().size(), -1);
         for (auto list : PNetId2SlackEnhanceTuples)
         {
             if (list)
@@ -576,7 +587,21 @@ void WirelengthOptimizer::addPseudoNet_SlackBased(float timingWeight, double sla
                 enhanceNetCnt++;
                 // enhance the net based on the slack
                 float enhanceRatio = TimingWeightGuard::enhancement(
-                    slack, clockPeriod, slackPowFactor, slackThr, timingMaxEnhancement);
+                    slack, clockPeriod, slackPowFactor, noWNSGPOpt ? 0.0f : slackThr, timingMaxEnhancement);
+                if (!noWNSGPOpt && slackThr < -1e-6f && slack < slackThr)
+                {
+                    float critVal = slack / slackThr - 1;
+#pragma omp critical
+                    {
+                        if (critVal > PUsTimingCriticality[PUs[pinBeDriven]->getId()] &&
+                            sinkNode->getForwardLevel() == srcNode->getForwardLevel() + 1 &&
+                            (PUs[pinBeDriven]->getNetsSetPtr()->size() >= 10 || netActualSlackPinNum[curNet] >= 8))
+                        {
+                            PUsTimingCriticality[PUs[pinBeDriven]->getId()] = critVal;
+                            PUsTimingCritical_TargetPUId[PUs[pinBeDriven]->getId()] = PUs[driverPinInNet]->getId();
+                        }
+                    }
+                }
                 // * std::pow(netDelay / expectedAvgDelay_driver, 0.6);
 
                 if (timingOptimizer->getEffectFactor() < 0.5)
@@ -685,6 +710,8 @@ void WirelengthOptimizer::addPseudoNet_SlackBased(float timingWeight, double sla
     {
 
         int netNum = placementInfo->getPlacementNets().size();
+        auto &PUs = placementInfo->getPlacementUnits();
+        bool macroMovementOpt = timingOptimizer->getEffectFactor() > 1.05;
         for (int PNetId = 0; PNetId < netNum; PNetId++)
         {
             auto curNet = placementInfo->getPlacementNets()[PNetId];
@@ -699,8 +726,42 @@ void WirelengthOptimizer::addPseudoNet_SlackBased(float timingWeight, double sla
                     ySolver->solverData.objectiveMatrixTripletList, ySolver->solverData.objectiveMatrixDiag,
                     ySolver->solverData.objectiveVector, enhanceTuple.weight, y2xRatio, false, true, enhanceTuple.PUAId,
                     enhanceTuple.PUBId, enhanceTuple.PinAId, enhanceTuple.PinBId);
+
+                if (macroMovementOpt)
+                {
+                    // if (PUsTimingCritical_TargetPUId[enhanceTuple.PUAId] == enhanceTuple.PUBId &&
+                    //     PUs[enhanceTuple.PUAId]->getNetsSetPtr()->size() > 10)
+                    // {
+                    //     placementInfo->addPseudoNetsInPlacementInfo(
+                    //         xSolver->solverData.objectiveMatrixTripletList, xSolver->solverData.objectiveMatrixDiag,
+                    //         xSolver->solverData.objectiveVector, PUs[enhanceTuple.PUAId],
+                    //         PUs[enhanceTuple.PUBId]->X(), 0.5 * enhanceTuple.weight, y2xRatio, true, false); //
+                    //         DSP-BRAM-like element
+                    //     placementInfo->addPseudoNetsInPlacementInfo(
+                    //         ySolver->solverData.objectiveMatrixTripletList, ySolver->solverData.objectiveMatrixDiag,
+                    //         ySolver->solverData.objectiveVector, PUs[enhanceTuple.PUAId],
+                    //         PUs[enhanceTuple.PUBId]->Y(), 0.5 * enhanceTuple.weight, y2xRatio, false, true); //
+                    //         DSP-BRAM-like element
+                    // }
+                    if (PUsTimingCritical_TargetPUId[enhanceTuple.PUBId] ==
+                        enhanceTuple.PUAId) // only the PU driven should be pulled
+                    {
+                        placementInfo->addPseudoNetsInPlacementInfo(
+                            xSolver->solverData.objectiveMatrixTripletList, xSolver->solverData.objectiveMatrixDiag,
+                            xSolver->solverData.objectiveVector, PUs[enhanceTuple.PUBId], PUs[enhanceTuple.PUAId]->X(),
+                            0.2 * enhanceTuple.weight, y2xRatio, true,
+                            false); // DSP-BRAM-like element
+                        placementInfo->addPseudoNetsInPlacementInfo(
+                            ySolver->solverData.objectiveMatrixTripletList, ySolver->solverData.objectiveMatrixDiag,
+                            ySolver->solverData.objectiveVector, PUs[enhanceTuple.PUBId], PUs[enhanceTuple.PUAId]->Y(),
+                            0.2 * enhanceTuple.weight, y2xRatio, false,
+                            true); // DSP-BRAM-like element
+                    }
+                }
             }
         }
+        if (macroMovementOpt)
+            print_status("WirelengthOptimizer: enable extra pseudo net to reduce");
     }
 
     print_status("WirelengthOptimizer: addPseudoNet_SlackBased done");
@@ -726,6 +787,8 @@ void WirelengthOptimizer::LUTLUTPairing_TimingDriven(float timingWeight, float d
 
     int LUTLUTPairCnt = 0;
     int longLenThr = placementInfo->getLongPathThresholdLevel();
+
+    bool anchorBasedConstraint = timingOptimizer->getEffectFactor() > 1.05;
 
     // std::sort(LUTsToEnhanceNet.begin(), LUTsToEnhanceNet.end(),
     //           [](const CellWithScore &a, const CellWithScore &b) -> bool { return a.score < b.score; });
@@ -855,6 +918,20 @@ void WirelengthOptimizer::LUTLUTPairing_TimingDriven(float timingWeight, float d
                             ySolver->solverData.objectiveMatrixTripletList, ySolver->solverData.objectiveMatrixDiag,
                             ySolver->solverData.objectiveVector, w * enhanceRatio, y2xRatio, false, true,
                             predLUTPU->getId(), succLUTPU->getId(), driverPinInNet, pinBeDriven);
+
+                        // if (anchorBasedConstraint)
+                        // {
+                        //     placementInfo->addPseudoNetsInPlacementInfo(
+                        //         xSolver->solverData.objectiveMatrixTripletList,
+                        //         xSolver->solverData.objectiveMatrixDiag, xSolver->solverData.objectiveVector,
+                        //         succLUTPU, predLUTPU->X(), w * std::pow(enhanceRatio, 1.2), y2xRatio, true, false);
+                        //         // DSP-BRAM-like element
+                        //     placementInfo->addPseudoNetsInPlacementInfo(
+                        //         ySolver->solverData.objectiveMatrixTripletList,
+                        //         ySolver->solverData.objectiveMatrixDiag, ySolver->solverData.objectiveVector,
+                        //         succLUTPU, predLUTPU->Y(), w * std::pow(enhanceRatio, 1.2), y2xRatio, false, true);
+                        //         // DSP-BRAM-like element
+                        // }
                     }
                 }
             }
@@ -1001,18 +1078,46 @@ void WirelengthOptimizer::addPseudoNet2LoctionForAllPUs(float pesudoNetWeight, b
     }
 }
 
-void WirelengthOptimizer::updatePseudoNetForUserDefinedClusters(float pesudoNetWeight)
+void WirelengthOptimizer::updatePseudoNetsForClusters(float pesudoNetWeight, bool enableUserDefinedClusterOpt,
+                                                       bool enableFFClusterOpt)
+{
+    ++clusterPseudoNetUpdateCount;
+    const bool ffEnabled = enableFFClusterOpt &&
+        (!JSONCfg.count("ProFFClustering") || JSONCfg.at("ProFFClustering") != "false");
+    ClusterPseudoNetStats userStats, ffStats;
+    userStats.inputClusters = placementInfo->getDesignInfo()->getPredefinedClusters().size();
+    ffStats.inputClusters = placementInfo->getFFBasedClusters().size();
+    if (enableUserDefinedClusterOpt)
+        userStats = updatePseudoNetForUserDefinedClusters(pesudoNetWeight);
+    if (ffEnabled)
+        ffStats = updatePseudoNetForFFClusters(pesudoNetWeight);
+
+    auto report = [&](const char *kind, bool enabled, float fade, const ClusterPseudoNetStats &stats) {
+        print_info("ClusterPseudoNets qp_update=" + std::to_string(clusterPseudoNetUpdateCount) +
+                   " kind=" + kind + " enabled=" + std::to_string(enabled) +
+                   " input_clusters=" + std::to_string(stats.inputClusters) +
+                   " inserted_clusters=" + std::to_string(stats.insertedClusters) +
+                   " inserted_x=" + std::to_string(stats.xTerms) +
+                   " inserted_y=" + std::to_string(stats.yTerms) +
+                   " unique_pus=" + std::to_string(stats.uniquePUs) +
+                   " fade=" + std::to_string(fade));
+    };
+    report("user", enableUserDefinedClusterOpt, userDefinedClusterFadeOutFactor, userStats);
+    report("ff", ffEnabled, ffClusterFadeOutFactor, ffStats);
+}
+
+WirelengthOptimizer::ClusterPseudoNetStats
+WirelengthOptimizer::updatePseudoNetForUserDefinedClusters(float pesudoNetWeight)
 {
     AMF_PROFILE_FUNCTION("qp_model");
+    ClusterPseudoNetStats stats;
+    auto &predefinedCellClusters = placementInfo->getDesignInfo()->getPredefinedClusters();
+    stats.inputClusters = predefinedCellClusters.size();
     userDefinedClusterFadeOutFactor *= 0.9;
     if (userDefinedClusterFadeOutFactor < 0.1)
-        return;
-    std::vector<std::vector<DesignInfo::DesignCell *>> &predefinedCellClusters =
-        placementInfo->getDesignInfo()->getPredefinedClusters();
-
+        return stats;
     std::set<PlacementInfo::PlacementUnit *> reallocatedPUs;
 
-    int reallocateCells = 0;
     for (auto &clusterCellSet : predefinedCellClusters)
     {
         std::set<PlacementInfo::PlacementUnit *> PUsInCurCluster;
@@ -1059,6 +1164,7 @@ void WirelengthOptimizer::updatePseudoNetForUserDefinedClusters(float pesudoNetW
                 avgX /= totalNetNum;
                 avgY /= totalNetNum;
 
+                const size_t beforeXTerms = stats.xTerms;
                 for (auto tmpPU : PUsInCurCluster)
                 {
                     float fX = avgX;
@@ -1076,18 +1182,202 @@ void WirelengthOptimizer::updatePseudoNetForUserDefinedClusters(float pesudoNetW
                         1.0 / y2xRatio * userDefinedClusterFadeOutFactor * clusterFactor * pesudoNetWeight, y2xRatio,
                         false, true);
 
-                    if (reallocatedPUs.find(tmpPU) == reallocatedPUs.end())
+                    // The underlying insertion skips fixed PUs. Zero-weight
+                    // calls do not contribute a term to the QP objective.
+                    if (!tmpPU->isFixed() && userDefinedClusterFadeOutFactor * clusterFactor * pesudoNetWeight != 0.0f)
                     {
+                        ++stats.xTerms;
+                        ++stats.yTerms;
                         reallocatedPUs.insert(tmpPU);
-                        reallocateCells += tmpPU->getWeight();
                     }
+                }
+                if (stats.xTerms > beforeXTerms)
+                    ++stats.insertedClusters;
+            }
+        }
+    }
+
+    stats.uniquePUs = reallocatedPUs.size();
+    return stats;
+}
+
+WirelengthOptimizer::ClusterPseudoNetStats
+WirelengthOptimizer::updatePseudoNetForFFClusters(float pesudoNetWeight)
+{
+    AMF_PROFILE_FUNCTION("qp_model");
+    ClusterPseudoNetStats stats;
+    stats.inputClusters = placementInfo->getFFBasedClusters().size();
+    // Do not consume the FF fade window before FFPartitioning creates groups.
+    if (!stats.inputClusters)
+        return stats;
+    ffClusterFadeOutFactor *= 0.9;
+    if (ffClusterFadeOutFactor < 0.1)
+        return stats;
+    std::set<PlacementInfo::PlacementUnit *> reallocatedPUs;
+
+    for (auto &clusterCellSet : placementInfo->getFFBasedClusters())
+    {
+        std::set<PlacementInfo::PlacementUnit *> PUsInCurCluster;
+        PUsInCurCluster.clear();
+
+        double avgX = 0;
+        double avgY = 0;
+        int totalCellNum = clusterCellSet.size();
+        if (totalCellNum < 5000)
+            continue;
+        float clusterFactor = 0.001;
+        if (clusterFactor > 1)
+            clusterFactor = 1;
+        // if (clusterFactor < 0.5)
+        //     clusterFactor = 0.333;
+        int totalNetNum = 0;
+
+        float x0 = 10000, y0 = 10000, x1 = -10000, y1 = -10000;
+        for (auto tmpCell : clusterCellSet)
+        {
+            auto tmpPU = placementInfo->getPlacementUnitByCell(tmpCell);
+            if (PUsInCurCluster.find(tmpPU) == PUsInCurCluster.end())
+            {
+                PUsInCurCluster.insert(tmpPU);
+                avgX += tmpPU->X() * tmpPU->getNetsSetPtr()->size();
+                avgY += tmpPU->Y() * tmpPU->getNetsSetPtr()->size();
+                totalNetNum += tmpPU->getNetsSetPtr()->size();
+
+                if (tmpPU->X() < x0)
+                    x0 = tmpPU->X();
+                if (tmpPU->X() > x1)
+                    x1 = tmpPU->X();
+                if (tmpPU->Y() < y0)
+                    y0 = tmpPU->Y();
+                if (tmpPU->Y() > y1)
+                    y1 = tmpPU->Y();
+            }
+        }
+
+        if (PUsInCurCluster.size() > 1)
+        {
+            if ((x1 - x0) * (y1 - y0) / PUsInCurCluster.size() < 1 && (x1 - x0) * (y1 - y0) > 1)
+            {
+                avgX /= totalNetNum;
+                avgY /= totalNetNum;
+
+                const size_t beforeXTerms = stats.xTerms;
+                for (auto tmpPU : PUsInCurCluster)
+                {
+                    float fX = avgX;
+                    float fY = avgY;
+                    placementInfo->legalizeXYInArea(tmpPU, fX, fY);
+
+                    placementInfo->addPseudoNetsInPlacementInfo(
+                        xSolver->solverData.objectiveMatrixTripletList, xSolver->solverData.objectiveMatrixDiag,
+                        xSolver->solverData.objectiveVector, tmpPU, fX,
+                        ffClusterFadeOutFactor * clusterFactor * pesudoNetWeight, y2xRatio, true, false);
+
+                    placementInfo->addPseudoNetsInPlacementInfo(
+                        ySolver->solverData.objectiveMatrixTripletList, ySolver->solverData.objectiveMatrixDiag,
+                        ySolver->solverData.objectiveVector, tmpPU, fY,
+                        1.0 / y2xRatio * ffClusterFadeOutFactor * clusterFactor * pesudoNetWeight, y2xRatio,
+                        false, true);
+
+                    // The underlying insertion skips fixed PUs. Zero-weight
+                    // calls do not contribute a term to the QP objective.
+                    if (!tmpPU->isFixed() && ffClusterFadeOutFactor * clusterFactor * pesudoNetWeight != 0.0f)
+                    {
+                        ++stats.xTerms;
+                        ++stats.yTerms;
+                        reallocatedPUs.insert(tmpPU);
+                    }
+                }
+                if (stats.xTerms > beforeXTerms)
+                    ++stats.insertedClusters;
+            }
+        }
+    }
+
+    stats.uniquePUs = reallocatedPUs.size();
+    return stats;
+}
+
+void WirelengthOptimizer::updatePseudoNetForDataPathClusters(float pesudoNetWeight)
+{
+    std::vector<std::vector<DesignInfo::DesignCell *>> &predefinedCellClusters = placementInfo->getDatapathClusters();
+
+    std::set<PlacementInfo::PlacementUnit *> reallocatedPUs;
+
+    int reallocateCells = 0;
+    std::set<PlacementInfo::PlacementUnit *> PUsInCurClusters;
+    PUsInCurClusters.clear();
+    for (auto &clusterCellSet : predefinedCellClusters)
+    {
+        std::set<PlacementInfo::PlacementUnit *> PUsInCurCluster;
+        PUsInCurCluster.clear();
+
+        double avgX = 0;
+        double avgY = 0;
+        int totalCellNum = clusterCellSet.size();
+
+        // if (clusterFactor < 0.5)
+        //     clusterFactor = 0.333;
+        int totalNetNum = 0;
+
+        float x0 = 10000, y0 = 10000, x1 = -10000, y1 = -10000;
+        for (auto tmpCell : clusterCellSet)
+        {
+            auto tmpPU = placementInfo->getPlacementUnitByCell(tmpCell);
+            if (PUsInCurCluster.find(tmpPU) == PUsInCurCluster.end() &&
+                PUsInCurClusters.find(tmpPU) == PUsInCurClusters.end())
+            {
+                PUsInCurCluster.insert(tmpPU);
+                PUsInCurClusters.insert(tmpPU);
+                avgX += tmpPU->X();
+                avgY += tmpPU->Y();
+                totalNetNum += 1;
+
+                if (tmpPU->X() < x0)
+                    x0 = tmpPU->X();
+                if (tmpPU->X() > x1)
+                    x1 = tmpPU->X();
+                if (tmpPU->Y() < y0)
+                    y0 = tmpPU->Y();
+                if (tmpPU->Y() > y1)
+                    y1 = tmpPU->Y();
+            }
+        }
+
+        if (PUsInCurCluster.size() > 3)
+        {
+            float clusterFactor = 8.0;
+
+            avgX /= totalNetNum;
+            avgY /= totalNetNum;
+
+            for (auto tmpPU : PUsInCurCluster)
+            {
+                float fX = avgX;
+                float fY = avgY;
+                placementInfo->legalizeXYInArea(tmpPU, fX, fY);
+
+                placementInfo->addPseudoNetsInPlacementInfo(
+                    xSolver->solverData.objectiveMatrixTripletList, xSolver->solverData.objectiveMatrixDiag,
+                    xSolver->solverData.objectiveVector, tmpPU, fX, 0.2 * clusterFactor * pesudoNetWeight, y2xRatio,
+                    true, false);
+
+                placementInfo->addPseudoNetsInPlacementInfo(
+                    ySolver->solverData.objectiveMatrixTripletList, ySolver->solverData.objectiveMatrixDiag,
+                    ySolver->solverData.objectiveVector, tmpPU, fY, 0.4 * clusterFactor * pesudoNetWeight, y2xRatio,
+                    false, true);
+
+                if (reallocatedPUs.find(tmpPU) == reallocatedPUs.end())
+                {
+                    reallocatedPUs.insert(tmpPU);
+                    reallocateCells += tmpPU->getWeight();
                 }
             }
         }
     }
 
-    print_warning("set user-defined cluster pseudo net for " + std::to_string(reallocatedPUs.size()) + " PU(s) and " +
-                  std::to_string(reallocateCells) + " cell(s).");
+    print_warning("WirelengthOptimizer:set datapath cluster pseudo net for " + std::to_string(reallocatedPUs.size()) +
+                  " PU(s) and " + std::to_string(reallocateCells) + " cell(s).");
 }
 
 void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
@@ -1098,7 +1388,10 @@ void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
     if(placementInfo->boundaryClusteringEnabled())
     {
         placementInfo->refreshRegionPreferences();
-        int xTargets=0,yTargets=0;
+        int xTargets=0,yTargets=0,entryOmitted=0;
+        size_t diagCarryX=0,diagCarryY=0,diagCarryXOpposed=0,diagCarryYOpposed=0;
+        double diagCarryWX=0,diagCarryWY=0;
+        const bool stopOnRegionEntry = JSONCfg["BoundaryAnchorStopOnRegionEntry"] == "true";
         for(auto entry:placementInfo->getRegionPreferences())
         {
             auto pu=entry.first;
@@ -1111,10 +1404,34 @@ void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
                 const size_t nets = pu->getNetsSetPtr()->size();
                 const float beta = pesudoNetWeight * pref.strength;
                 const bool slrStage = placementInfo->paperSLRStage();
+                // Optional migration-only policy: stop boundary attraction once
+                // the whole PU fits its phase target. Keep preferences for the
+                // existing spreading fence; recheck membership at every QP.
+                if (stopOnRegionEntry)
+                {
+                    float left, right, bottom, top;
+                    if (placementInfo->paperRegionBounds(pu, pref, !slrStage, left, right, bottom, top) &&
+                        pu->Y() >= bottom && pu->Y() <= top &&
+                        (slrStage || !pref.guideX || (pu->X() >= left && pu->X() <= right)))
+                    {
+                        ++entryOmitted;
+                        continue;
+                    }
+                }
                 const float wx = !slrStage && pref.guideX ? hierarchical_boundary::anchorWeight(
-                    beta, pref.pullX * (x - pu->X()), nets, DSPCritical) : 0;
+                    beta, pref.pullX * (x - pu->X()), nets, boundaryWeakAttraction) : 0;
+                // Keep attraction axes separate: SLR anchors act only in the
+                // SLR phase. HPIO retains the SLR fence and Y room-making.
                 const float wy = slrStage && pref.guideY ? hierarchical_boundary::anchorWeight(
-                    beta, pref.pullY * (y - pu->Y()), nets, DSPCritical) : 0;
+                    beta, hierarchical_boundary::anchorDistance(pu->Y(), y, pref.pullY), nets, boundaryWeakAttraction) : 0;
+                if (pu->checkHasCARRY()) {
+                    diagCarryX += wx>0; diagCarryY += wy>0;
+                    diagCarryWX += wx; diagCarryWY += wy;
+                    const auto &legal=placementInfo->getPULegalXY();
+                    auto lx=legal.first.find(pu),ly=legal.second.find(pu);
+                    if(lx!=legal.first.end() && wx>0 && (x-pu->X())*(lx->second-pu->X())<0)++diagCarryXOpposed;
+                    if(ly!=legal.second.end() && wy>0 && (y-pu->Y())*(ly->second-pu->Y())<0)++diagCarryYOpposed;
+                }
                 if (wx > 0)
                 {
                     ++xTargets;
@@ -1152,10 +1469,14 @@ void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
         if(!JSONCfg["BoundaryReportDirectory"].empty())
         {
             std::ofstream f(JSONCfg["BoundaryReportDirectory"]+"/qp_region_targets.tsv",std::ios::app);
-            if(f.tellp()==0)f<<"preferences\tx_attractions\ty_attractions\tweight\tstage\n";
+            if(f.tellp()==0)f<<"preferences\tx_attractions\ty_attractions\tweight\tstage\tentry_omitted\tstop_on_region_entry\tweak_attraction\n";
             f<<placementInfo->getRegionPreferences().size()<<'\t'<<xTargets<<'\t'<<yTargets<<'\t'<<pesudoNetWeight<<'\t'
-             <<(placementInfo->paperBoundaryClusteringEnabled() ? (placementInfo->paperSLRStage() ? "slr" : "hpio") : "region-gain")<<'\n';
+             <<(placementInfo->paperBoundaryClusteringEnabled() ? (placementInfo->paperSLRStage() ? "slr" : "hpio") : "region-gain")<<'\t'<<entryOmitted<<'\t'<<stopOnRegionEntry<<'\t'<<boundaryWeakAttraction<<'\n';
         }
+        print_info("AMF_DIAG_CARRY_ANCHOR x=" + std::to_string(diagCarryX) +
+          " y=" + std::to_string(diagCarryY) + " x_opposed=" + std::to_string(diagCarryXOpposed) +
+          " y_opposed=" + std::to_string(diagCarryYOpposed) +
+          " wx_sum=" + std::to_string(diagCarryWX) + " wy_sum=" + std::to_string(diagCarryWY));
         return;
     }
     auto &PU2ClockRegionCenter = placementInfo->getPU2ClockRegionCenters();
@@ -1189,12 +1510,12 @@ void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
                         xSolver->solverData.objectiveMatrixTripletList, xSolver->solverData.objectiveMatrixDiag,
                         xSolver->solverData.objectiveVector, curPU, cX,
                         pesudoNetWeight * std::pow(curPU->getNetsSetPtr()->size(), 1.1), y2xRatio, true, false);
-                else if (std::fabs(curPU->X() - cX) > 3 && !DSPCritical)
+                else if (std::fabs(curPU->X() - cX) > 3 && boundaryWeakAttraction)
                     placementInfo->addPseudoNetsInPlacementInfo(
                         xSolver->solverData.objectiveMatrixTripletList, xSolver->solverData.objectiveMatrixDiag,
                         xSolver->solverData.objectiveVector, curPU, cX,
                         pesudoNetWeight * curPU->getNetsSetPtr()->size(), y2xRatio, true, false);
-                else if (!DSPCritical)
+                else if (boundaryWeakAttraction)
                     placementInfo->addPseudoNetsInPlacementInfo(
                         xSolver->solverData.objectiveMatrixTripletList, xSolver->solverData.objectiveMatrixDiag,
                         xSolver->solverData.objectiveVector, curPU, cX,
@@ -1212,12 +1533,12 @@ void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
                         xSolver->solverData.objectiveMatrixTripletList, xSolver->solverData.objectiveMatrixDiag,
                         xSolver->solverData.objectiveVector, curPU, cX,
                         pesudoNetWeight * std::pow(curPU->getNetsSetPtr()->size(), 1.1), y2xRatio, true, false);
-                else if ((curPU->X() - cX) > 3 && !DSPCritical)
+                else if ((curPU->X() - cX) > 3 && boundaryWeakAttraction)
                     placementInfo->addPseudoNetsInPlacementInfo(
                         xSolver->solverData.objectiveMatrixTripletList, xSolver->solverData.objectiveMatrixDiag,
                         xSolver->solverData.objectiveVector, curPU, cX,
                         pesudoNetWeight * curPU->getNetsSetPtr()->size(), y2xRatio, true, false);
-                else if ((curPU->X() - cX) > 0 && !DSPCritical)
+                else if ((curPU->X() - cX) > 0 && boundaryWeakAttraction)
                     placementInfo->addPseudoNetsInPlacementInfo(
                         xSolver->solverData.objectiveMatrixTripletList, xSolver->solverData.objectiveMatrixDiag,
                         xSolver->solverData.objectiveVector, curPU, cX,
@@ -1234,12 +1555,12 @@ void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
                         xSolver->solverData.objectiveMatrixTripletList, xSolver->solverData.objectiveMatrixDiag,
                         xSolver->solverData.objectiveVector, curPU, cX,
                         pesudoNetWeight * std::pow(curPU->getNetsSetPtr()->size(), 1.1), y2xRatio, true, false);
-                else if ((curPU->X() - cX) < -3 && !DSPCritical)
+                else if ((curPU->X() - cX) < -3 && boundaryWeakAttraction)
                     placementInfo->addPseudoNetsInPlacementInfo(
                         xSolver->solverData.objectiveMatrixTripletList, xSolver->solverData.objectiveMatrixDiag,
                         xSolver->solverData.objectiveVector, curPU, cX,
                         pesudoNetWeight * curPU->getNetsSetPtr()->size(), y2xRatio, true, false);
-                else if ((curPU->X() - cX) < 0 && !DSPCritical)
+                else if ((curPU->X() - cX) < 0 && boundaryWeakAttraction)
                     placementInfo->addPseudoNetsInPlacementInfo(
                         xSolver->solverData.objectiveMatrixTripletList, xSolver->solverData.objectiveMatrixDiag,
                         xSolver->solverData.objectiveVector, curPU, cX,

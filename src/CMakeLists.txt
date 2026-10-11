@@ -229,4 +229,14 @@ target_link_libraries(checkExternalFloorplan GlobalPlacer Packing Legalization D
 add_executable(checkHierarchicalBoundaryPolicy EXCLUDE_FROM_ALL tests/check_hierarchical_boundary_policy.cc)
 
 add_executable(checkPaperBoundaryClustering EXCLUDE_FROM_ALL tests/check_paper_boundary_clustering.cc)
-target_link_libraries(checkPaperBoundaryClustering GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(checkPaperBoundaryClustering GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+# Explicit opt-in primitive timing and production stage-gate regression.
+add_executable(checkProPrimitiveTiming EXCLUDE_FROM_ALL tests/check_pro_primitive_timing.cc)
+target_link_libraries(checkProPrimitiveTiming DesignInfo DeviceInfo PlacementInfo PlacementTiming Utils pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkStageExperiment EXCLUDE_FROM_ALL tests/check_stage_experiment.cc)
+target_link_libraries(checkStageExperiment GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkSRLSharingInput EXCLUDE_FROM_ALL tests/check_srl_sharing_input.cc)
+target_link_libraries(checkSRLSharingInput Packing GlobalPlacer Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})

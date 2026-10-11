@@ -1,0 +1,64 @@
+{
+  "diff_check": {
+    "returncode": 0
+  },
+  "python_tests": {
+    "returncode": 0
+  },
+  "cli_help": {
+    "returncode": 0
+  },
+  "machine_profiles": {
+    "result": "passed"
+  },
+  "config_matrix": {
+    "result": "passed",
+    "default": "max2 weak-on",
+    "period_ns": 10,
+    "primitive_timing": false,
+    "srl_per_site": 4
+  },
+  "initial_stale_test": {
+    "observed_failure": "One-sided weight differs from original piecewise formula",
+    "resolution": "Corrected old DSPCritical test argument to independent weakAttraction polarity; no production code change"
+  },
+  "max2_source_verification": {
+    "variant": "max2",
+    "source_files": 3432,
+    "inputs_verified": 11,
+    "source_commit": "e7f6ac93b76c0c798d126ee1d66eb326929f1447",
+    "result": "passed"
+  },
+  "max2_check_srl_sharing_policy": {
+    "returncode": 0,
+    "output": "PASS SRL sharing policy, exhaustive pairs=128 and capacity/control/cascade/MUX checks"
+  },
+  "max2_check_hierarchical_boundary_policy": {
+    "returncode": 0,
+    "output": "PASS majority, stretch, 100 original-formula and 330 rotated-branch cases"
+  },
+  "merged_source_verification": {
+    "variant": "merged",
+    "source_files": 3433,
+    "inputs_verified": 0,
+    "source_commit": "447b35b937f03529696b734abefd8ff453162019",
+    "result": "passed"
+  },
+  "merged_check_srl_sharing_policy": {
+    "returncode": 0,
+    "output": "PASS SRL sharing policy, exhaustive pairs=128 and capacity/control/cascade/MUX checks"
+  },
+  "merged_check_hierarchical_boundary_policy": {
+    "returncode": 0,
+    "output": "PASS majority, stretch, 100 original-formula and 330 rotated-branch cases"
+  },
+  "algorithm_implementation_changed_since_experiments": false,
+  "publication_full_place_route_rerun": false,
+  "python_test_count": 169,
+  "staged_whitespace_check": {
+    "result": "passed_except_verbatim_snapshot",
+    "preserved_file": "variants/merged/src/CMakeLists.txt",
+    "inherited_trailing_whitespace_lines": 9,
+    "reason": "Keep archived merged source byte-identical to the validated experiment; no new whitespace issues elsewhere."
+  }
+}

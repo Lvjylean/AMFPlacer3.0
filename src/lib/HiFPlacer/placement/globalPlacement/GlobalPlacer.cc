@@ -1,3 +1,4 @@
+#include "../legalization/LegalizationTrace.h"
 #include "../../../utils/RuntimeProfiler.h"
 /**
  * @file GlobalPlacer.cc
@@ -13,8 +14,11 @@
  */
 
 #include "GlobalPlacer.h"
+#include "MacroMechanismTrace.h"
+#include "MacroStudyControl.h"
 
 #include <cmath>
+#include <chrono>
 #include <codecvt>
 
 GlobalPlacer::GlobalPlacer(PlacementInfo *placementInfo, std::map<std::string, std::string> &JSONCfg,
@@ -124,7 +128,44 @@ void GlobalPlacer::GlobalPlacement_CLBElements(int iterNum, bool continuePreviou
                                                PlacementTimingOptimizer *timingOptimizer)
 {
     AMF_PROFILE_FUNCTION("global_orchestration");
+    // Only a newly built multi-SLR cluster generation starts an SLR phase.
+    // Give it a separate, bounded copy of this call's ordinary GP budget.
+    // A normal early exit ends that phase, not the following HPIO phase.
+    if (iterNum > 0 && timingOptimizer && placementInfo->paperBoundaryClusteringEnabled() &&
+        placementInfo->paperSLRStage())
+    {
+        {
+            AMF_PROFILE_SCOPE("global_placement", "SLR independent budget");
+            // Experiment: each cluster generation gets at most two SLR GP rounds.
+            GlobalPlacement_CLBPhase(macro_study::mode()=="independent-after-init" ? iterNum : std::min(iterNum, 2), continuePreviousIteration, lowerBoundIterNum,
+                                     enableMacroPseudoNet2Site, true, spreadRegionBinNumLimit,
+                                     timingOptimizer, "slr");
+        }
+        timingOptimizer->advancePaperBoundaryStage();
+        // Carry the dynamically updated weight and placement state forward.
+        // The HPIO phase still has a fresh local iteration/convergence counter.
+        continuePreviousIteration = true;
+    }
+    const char *phase = placementInfo->paperBoundaryClusteringEnabled() &&
+                                !placementInfo->getRegionPreferences().empty()
+                            ? (placementInfo->paperSLRStage() ? "slr" : "hpio")
+                            : "ordinary";
+    GlobalPlacement_CLBPhase(iterNum, continuePreviousIteration, lowerBoundIterNum,
+                             enableMacroPseudoNet2Site, stopStrictly, spreadRegionBinNumLimit,
+                             timingOptimizer, phase);
+}
+
+void GlobalPlacer::GlobalPlacement_CLBPhase(int iterNum, bool continuePreviousIteration, int lowerBoundIterNum,
+                                           bool enableMacroPseudoNet2Site, bool stopStrictly,
+                                           unsigned int spreadRegionBinNumLimit,
+                                           PlacementTimingOptimizer *timingOptimizer, const char *phase)
+{
+    AMF_PROFILE_FUNCTION("global_orchestration");
+    const auto phaseStarted = std::chrono::steady_clock::now();
     print_status("GlobalPlacer GlobalPlacement_CLBElements started");
+    print_info("Global placement phase: name=" + std::string(phase) + " budget=" + std::to_string(iterNum) +
+               " strict=" + (stopStrictly ? "true" : "false") +
+               " continue=" + (continuePreviousIteration ? "true" : "false"));
 
     WLOptimizer->reloadPlacementInfo();
     for (auto tmpNet : placementInfo->getDesignInfo()->getNets())
@@ -158,11 +199,24 @@ void GlobalPlacer::GlobalPlacement_CLBElements(int iterNum, bool continuePreviou
     lowerBoundHPWL = 1;
 
     int iterCntAfterMacrosFixed = 0;
+    int completedIterations = 0;
+    const char *stopReason = "budget";
+    print_info("Global placement phase initial weight: " + std::to_string(pseudoNetWeight));
+    ++legalization_trace::phaseCall;legalization_trace::phase=phase;
+
 
     // global placement iterations
     for (int i = 0; i < iterNum || (!stopStrictly); i++)
     {
 
+        macro_study::begin(placementInfo, CARRYMacroLegalizer, phase, i, pseudoNetWeight);
+        const int diagnosticRound = ++macro_mechanism::round;
+        legalization_trace::round=diagnosticRound;legalization_trace::localIteration=i;
+
+        auto diagnosticSnapshot = [&](const char *step) {
+            macro_mechanism::snapshot(placementInfo, CARRYMacroLegalizer, phase, i, step);
+        };
+        diagnosticSnapshot("begin");
         float displacementLimit = -10;
         if (timingOptimizer)
         {
@@ -176,11 +230,26 @@ void GlobalPlacer::GlobalPlacement_CLBElements(int iterNum, bool continuePreviou
             }
             placementInfo->enhanceHighFanoutNet();
 
+            placementInfo->updateElementBinGrid(false);
             timingOptimizer->conductStaticTimingAnalysis();
+            if ((timingOptimizer->getMaxDelay() <
+                     placementInfo->getTimingInfo()->getSimplePlacementTimingGraph()->getClockPeriod() + 0.5 ||
+                 timingOptimizer->getMaxDelay() <
+                     placementInfo->getTimingInfo()->getSimplePlacementTimingGraph()->getClockPeriod() * 1.05) &&
+                i > 1)
+            {
+                placementInfo->getTimingInfo()->reduceClockPeriodToRatio(0.9);
+                timingOptimizer->setClockEnhanced();
+            }
             if (timingOptimizer->getEffectFactor() > 1)
-                timingDrivenDetailedPlacement_shortestPath_intermediate(timingOptimizer);
+                DPReplaceCnt = timingDrivenDetailedPlacement_shortestPath_intermediate(timingOptimizer);
+            // else if (timingOptimizer->getEffectFactor() > 0.3 &&
+            //          timingOptimizer->getMaxDelay() >
+            //              placementInfo->getTimingInfo()->getSimplePlacementTimingGraph()->getClockPeriod() * 2.5)
+            //     timingDrivenDetailedPlacement_shortestPath_intermediate(timingOptimizer);
         }
 
+        diagnosticSnapshot("after_timing");
         // lowerBound: Quadratic Programming based Wirelength Optimization
         lowerBoundIterNum = (placementInfo->getProgress() < 0.965 && !macroCloseToSite) ? 2 : 2;
 
@@ -188,7 +257,9 @@ void GlobalPlacer::GlobalPlacement_CLBElements(int iterNum, bool continuePreviou
         {
             WLOptimizer->GlobalPlacementQPSolve(
                 pseudoNetWeight, j == 0, true, enableMacroPseudoNet2Site, pseudoNetWeightConsiderNetNum,
-                (i > 1 || continuePreviousIteration) && hasUserDefinedClusterInfo, displacementLimit, timingOptimizer);
+                (i > 1 || continuePreviousIteration) && hasUserDefinedClusterInfo, displacementLimit, timingOptimizer,
+                i > 1 || continuePreviousIteration);
+            diagnosticSnapshot(j == 0 ? "after_qp1" : "after_qp2");
             if (progressRatio > 0.5)
                 timingOptEnabled = true;
         }
@@ -206,12 +277,25 @@ void GlobalPlacer::GlobalPlacement_CLBElements(int iterNum, bool continuePreviou
         // upperBound: Placement Unit Spreading
 
         spreading(i, spreadRegionBinNumLimit, displacementLimit);
+        macro_study::summarize();
+        diagnosticSnapshot("after_spreading");
+        // if (timingOptimizer)
+        // {
+        //     if (timingOptimizer->getEffectFactor() > 1.0)
+        //     {
+        //         timingOptimizer->pauseCounter();
+        //         timingOptimizer->conductStaticTimingAnalysis();
+        //         int replaceCnt =
+        //             timingDrivenDetailedPlacement_shortestPath_intermediate(timingOptimizer, 0.75, false, 10);
+        //         timingOptimizer->startCounter();
+        //     }
+        // }
 
-        // Complete SLR guidance and density spreading before preparing HPIO
-        // guidance for the next existing iteration. Do not add QP iterations.
-        // Also cover preferred PUs not selected by an overflow-bin spreader.
+        // Keep the current phase through all of its GP iterations. Clipping
+        // also covers preferred PUs not selected by an overflow-bin spreader.
+        // The public driver prepares HPIO only after the SLR phase finishes.
         placementInfo->clipPaperRegionLocations();
-        if (timingOptimizer) timingOptimizer->advancePaperBoundaryStage();
+        diagnosticSnapshot("after_clip");
 
         upperBoundHPWL = placementInfo->updateB2BAndGetTotalHPWL();
         print_status("Spreader Iteration#" + to_string_align3(i) + " Done HPWL=" + std::to_string(upperBoundHPWL));
@@ -240,11 +324,12 @@ void GlobalPlacer::GlobalPlacement_CLBElements(int iterNum, bool continuePreviou
             }
             else
             {
-                macroLegalize(i, timingDrivenLegalization);
+                macroLegalize(i, timingDrivenLegalization, timingOptimizer);
                 print_status("Legalization Iteration#" + to_string_align3(i) + " Done");
             }
         }
 
+        diagnosticSnapshot("after_legalization");
         if (printHPWL)
         {
             print_info("HPWL after LG=" + std::to_string(upperBoundHPWL) +
@@ -276,7 +361,7 @@ void GlobalPlacer::GlobalPlacement_CLBElements(int iterNum, bool continuePreviou
         // heuristic update pseudoNetWeight
         updatePseudoNetWeight(pseudoNetWeight, i);
 
-        print_info("upperBoundHPWL / lowerBoundHPWL=" + std::to_string(upperBoundHPWL / lowerBoundHPWL));
+        print_info("upperBoundHPWL / std::max(1e-9f, lowerBoundHPWL)=" + std::to_string(upperBoundHPWL / std::max(1e-9f, lowerBoundHPWL)));
         print_info("averageMacroLegalDisplacementL=" + std::to_string(averageMacroLegalDisplacement));
         print_info("macroCloseToSite=" + std::to_string(macroCloseToSite));
         print_info("macroLegalizationFixed=" + std::to_string(macroLegalizationFixed));
@@ -286,21 +371,23 @@ void GlobalPlacer::GlobalPlacement_CLBElements(int iterNum, bool continuePreviou
         print_info("clockLegal=" + std::to_string(clockLegal));
 
         // converge criteria
-        bool criteria0 = upperBoundHPWL / lowerBoundHPWL < 1.02 &&
+        bool criteria0 = upperBoundHPWL / std::max(1e-9f, lowerBoundHPWL) < 1.02 &&
                          ((averageMacroLegalDisplacement < 1 && macroCloseToSite) || macroLegalizationFixed) &&
                          pseudoNetWeight > 0.02;
         bool criteria1 = (progressRatio > 0.98 || (progressRatio > 0.95 && HPWLChangeLittle)) &&
                          ((macroCloseToSite && averageMacroLegalDisplacement < 1) || macroLegalizationFixed);
         bool criteria2 = upperBoundHPWL < minHPWL * 2 && macroLegalizationFixed && i > 30;
-        bool criteria3 = iterCntAfterMacrosFixed >= 2 && progressRatio > 0.925 && upperBoundHPWL / minHPWL < 1.02 &&
+        bool criteria3 = iterCntAfterMacrosFixed >= 2 && progressRatio > 0.925 && upperBoundHPWL / std::max(1e-9f, minHPWL) < 1.02 &&
                          macroLegalizationFixed;
         bool criteria4 = iterCntAfterMacrosFixed >= 2 && macroLegalizationFixed;
 
         if (macroLegalizationFixed)
             iterCntAfterMacrosFixed++;
+        ++completedIterations;
         // criteria0 || criteria1 || criteria2 ||
         if (criteria3 || criteria4)
         {
+            stopReason = "macro_fixed";
             print_status("Global Placer: B2B converge");
             BRAMDSPLegalizer->dumpMatching(true, true);
             CARRYMacroLegalizer->dumpMatching(true, true);
@@ -310,6 +397,7 @@ void GlobalPlacer::GlobalPlacement_CLBElements(int iterNum, bool continuePreviou
 
         if (progressRatio > 0.98 && macroCloseToSite && !continuePreviousIteration)
         {
+            stopReason = "packing_ready";
             print_status("Global Placer: Should do packing now before further optimization");
             break;
         }
@@ -323,6 +411,12 @@ void GlobalPlacer::GlobalPlacement_CLBElements(int iterNum, bool continuePreviou
     placementInfo->setPseudoNetWeight(oriPseudoNetWeight);
     placementInfo->setMacroLegalizationParameters(WLOptimizer->getMacroPseudoNetEnhanceCnt(),
                                                   WLOptimizer->getMacroLegalizationWeight());
+    const double phaseSeconds = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - phaseStarted).count();
+    print_info("Global placement phase completed: name=" + std::string(phase) +
+               " rounds=" + std::to_string(completedIterations) + " reason=" + stopReason +
+               " seconds=" + std::to_string(phaseSeconds) +
+               " pseudoNetWeight=" + std::to_string(oriPseudoNetWeight));
     // macroSpreader->spreadPlacementUnits();
 }
 
@@ -608,13 +702,13 @@ void GlobalPlacer::macroLegalize(int curIteration, bool timingDriven, PlacementT
             print_warning("Macros will be locked for a while");
         }
     }
-    placementInfo->updateElementBinGrid();
+    placementInfo->updateElementBinGrid(false);
 }
 
 void GlobalPlacer::spreading(int currentIteration, int spreadRegionSizeLimit, float displacementLimit)
 {
     AMF_PROFILE_FUNCTION("global_orchestration");
-    placementInfo->updateElementBinGrid();
+    placementInfo->updateElementBinGrid(false);
     float supplyRatio = (placementInfo->getBinGridW() < 2.5) ? 0.95 : (0.80 + 0.1 * progressRatio);
 
     if (!macroLegalizationFixed)
@@ -665,7 +759,9 @@ void GlobalPlacer::spreading(int currentIteration, int spreadRegionSizeLimit, fl
 void GlobalPlacer::updatePseudoNetWeight(float &pseudoNetWeight, int curIter)
 {
     AMF_PROFILE_FUNCTION("global_orchestration");
-    progressRatio = lowerBoundHPWL / upperBoundHPWL;
+    // A collapsed tiny design can have zero wirelength before spreading.
+    // Do not feed 0/0 into the pseudo-net schedule and then into the QP.
+    progressRatio = upperBoundHPWL > 0 ? lowerBoundHPWL / upperBoundHPWL : 1.0f;
     if (progressRatio > 1)
         progressRatio = 0.999;
     if (std::pow(progressRatio, 0.6) > 0.4 && spreadingForgetRatio < 1)
@@ -689,6 +785,11 @@ void GlobalPlacer::updatePseudoNetWeight(float &pseudoNetWeight, int curIter)
     {
         print_warning("GlobalPlacer: clock region aware optimization is enabled.");
         enableClockRegionAware = true;
+    }
+    else
+    {
+        if (placementInfo->getPU2ClockRegionCenters().size() < 10000 && placementInfo->getClusterNum() <= 8)
+            enableClockRegionAware = true;
     }
 
     if (progressRatio > 0.75)
@@ -717,7 +818,7 @@ void GlobalPlacer::updatePseudoNetWeight(float &pseudoNetWeight, int curIter)
                 pseudoNetWeight *= 0.75;
             }
         }
-        else if (progressRatio > 0.8 && upperBoundHPWL / minHPWL > 1.333 && updateMinHPWLAfterLegalization)
+        else if (progressRatio > 0.8 && upperBoundHPWL / std::max(1e-9f, minHPWL) > 1.333 && updateMinHPWLAfterLegalization)
         {
             print_warning(
                 "GlobalPlacer: The upperbound HPWL increases too much, pseudoNetWeight is reduced by 50% to recover.");
@@ -727,12 +828,12 @@ void GlobalPlacer::updatePseudoNetWeight(float &pseudoNetWeight, int curIter)
         }
         err = std::sqrt(err / 5);
         print_info("GlobalPlacer: err=" + std::to_string(err) + " minHPWL=" + std::to_string(minHPWL) +
-                   " err/minHPWL=" + std::to_string(err / minHPWL) + " progressRatio=" + std::to_string(progressRatio));
+                   " err/minHPWL=" + std::to_string(err / std::max(1e-9f, minHPWL)) + " progressRatio=" + std::to_string(progressRatio));
 
         if (averageMacroLegalDisplacement > 3 && progressRatio > 0.98)
             pseudoNetWeight *= 1.05;
 
-        if (err / minHPWL < 1.0 / 100.0 && progressRatio > 0.85 &&
+        if (err / std::max(1e-9f, minHPWL) < 1.0 / 100.0 && progressRatio > 0.85 &&
             BRAMDSPLegalizer->getAverageDisplacementOfExactLegalization() < 3)
         {
             print_status("Global Placer: B2B MAYBE converge");
@@ -743,7 +844,7 @@ void GlobalPlacer::updatePseudoNetWeight(float &pseudoNetWeight, int curIter)
     }
     else if (numRecorded > 2 && updateMinHPWLAfterLegalization)
     {
-        if (progressRatio > 0.6 && upperBoundHPWL / minHPWL > 1.333 && curIter > 10)
+        if (progressRatio > 0.6 && upperBoundHPWL / std::max(1e-9f, minHPWL) > 1.333 && curIter > 10)
         {
             print_warning(
                 "GlobalPlacer: The upperbound HPWL increases too much, pseudoNetWeight is reduced by 50% to recover.");
@@ -1197,25 +1298,45 @@ void GlobalPlacer::dumpBRAMCoordinate(bool enforced)
     }
 }
 
-int GlobalPlacer::timingDrivenDetailedPlacement_shortestPath_intermediate(PlacementTimingOptimizer *timingOptimizer)
+int GlobalPlacer::timingDrivenDetailedPlacement_shortestPath_intermediate(PlacementTimingOptimizer *timingOptimizer,
+                                                                          float range, bool macroMovable,
+                                                                          int strictPathNum)
 {
     AMF_PROFILE_FUNCTION("detailed_placement");
-    float range = 0.75;
-    print_status("ParallelCLBPacker: conducting timing-driven detailed placement based on shortest path.");
-    auto oriCellIdsInCriticalPaths = timingOptimizer->findCriticalPaths(0.9);
+    SPAlgoCnt++;
+    auto &PUsSkewRisky = placementInfo->getPUsSkewRisky();
+    auto &PU2ClockRegionCenters = placementInfo->getPU2ClockRegionCenters();
+    auto &PU2ClockRegionColumn = placementInfo->getPU2ClockRegionColumn();
+    PUsSkewRisky.clear();
+    print_status("GlobalPlacer: conducting timing-driven detailed placement based on shortest path.");
+    float furtherOpt = 0;
+    if (timingOptimizer->getMaxDelay() <
+        placementInfo->getTimingInfo()->getSimplePlacementTimingGraph()->getClockPeriod() * 1.15)
+        furtherOpt = 0.1;
+    auto oriCellIdsInCriticalPaths = timingOptimizer->findCriticalPaths(
+        0.9 - furtherOpt, true,
+        strictPathNum > 0 ? strictPathNum : (2000 - (timingOptimizer->getEffectFactor() - 0.99) * 10000));
+
+    print_info("GlobalPlacer: find #CriticalPaths=" + std::to_string(oriCellIdsInCriticalPaths.size()));
+
     std::set<PlacementInfo::PlacementUnit *> PUsTouched;
     PUsTouched.clear();
     std::vector<PlacementInfo::Location> &cellLoc = placementInfo->getCellId2location();
 
     int replaceCnt = 0;
+    int index = 0;
+    int totalPathNum = oriCellIdsInCriticalPaths.size();
     for (auto oriCellIdsInCriticalPath : oriCellIdsInCriticalPaths)
     {
+        index++;
         std::map<int, std::vector<PlacementInfo::Location>> cellId2CandidateLocation;
         cellId2CandidateLocation.clear();
 
         std::vector<int> cellIdsInCriticalPath;
+        std::vector<int> headCellIdsInCriticalPath;
         PlacementInfo::PlacementUnit *lastPU = nullptr;
         std::set<PlacementInfo::PlacementUnit *> PUsInCriticalPathSet;
+        std::vector<PlacementInfo::PlacementUnit *> PUsVec;
         for (auto cellId : oriCellIdsInCriticalPath)
         {
             if (PUsInCriticalPathSet.find(placementInfo->getPlacementUnitByCellId(cellId)) ==
@@ -1223,6 +1344,36 @@ int GlobalPlacer::timingDrivenDetailedPlacement_shortestPath_intermediate(Placem
             {
                 PUsInCriticalPathSet.insert(placementInfo->getPlacementUnitByCellId(cellId));
                 cellIdsInCriticalPath.push_back(cellId);
+                PUsVec.push_back(placementInfo->getPlacementUnitByCellId(cellId));
+                headCellIdsInCriticalPath.push_back(cellId);
+            }
+            else
+            {
+                headCellIdsInCriticalPath[headCellIdsInCriticalPath.size() - 1] = cellId;
+            }
+        }
+
+        for (int orderI = 1; orderI < PUsVec.size() - 1; orderI++)
+        {
+            if (PUsTouched.find(PUsVec[orderI]) != PUsTouched.end())
+            {
+                continue;
+            }
+            if (PU2ClockRegionColumn.find(PUsVec[orderI]) != PU2ClockRegionColumn.end())
+            {
+                int clockRegionX0, clockRegionY0, clockRegionX1, clockRegionY1;
+                placementInfo->getDeviceInfo()->getClockRegionByLocation(
+                    PUsVec[orderI - 1]->X(), PUsVec[orderI - 1]->Y(), clockRegionX0, clockRegionY0);
+                placementInfo->getDeviceInfo()->getClockRegionByLocation(
+                    PUsVec[orderI + 1]->X(), PUsVec[orderI + 1]->Y(), clockRegionX1, clockRegionY1);
+                if (PU2ClockRegionColumn[PUsVec[orderI]] != clockRegionX0 &&
+                    PU2ClockRegionColumn[PUsVec[orderI]] != clockRegionX1)
+                {
+                    // print_warning("GlobalPlacer: erase the following PU:");
+                    // std::cout << PUsVec[orderI] << "\n";
+                    PU2ClockRegionColumn.erase(PUsVec[orderI]);
+                    PU2ClockRegionCenters.erase(PUsVec[orderI]);
+                }
             }
         }
 
@@ -1244,14 +1395,14 @@ int GlobalPlacer::timingDrivenDetailedPlacement_shortestPath_intermediate(Placem
                 continue;
             }
             // std::cout << curCell << " has following candidates: \n";
-            if (!curPU->isFixed() && !curPU->isLocked() && !curPU->checkHasLUTRAM() && !curPU->checkHasBRAM() &&
-                !curPU->checkHasDSP() && !curPU->checkHasURAM())
+            if (!curPU->isFixed() && !curPU->isLocked() && !curPU->checkHasURAM() &&
+                (!curPU->checkHasLUTRAM() && !curPU->checkHasBRAM() && !curPU->checkHasDSP() || macroMovable))
             {
                 float tmpRange = range;
-                if (curPU->checkHasCARRY())
+                if (curPU->checkHasCARRY() && !macroMovable)
                 {
                     if (curPU->getCARRYNum() <= 2)
-                        tmpRange = tmpRange / curPU->getCARRYNum();
+                        tmpRange = tmpRange; // / curPU->getCARRYNum();
                     else
                         continue;
                 }
@@ -1296,12 +1447,20 @@ int GlobalPlacer::timingDrivenDetailedPlacement_shortestPath_intermediate(Placem
             auto &curCandidates = cellId2CandidateLocation[curCell];
             shortestPath_LayerSite.push_back(std::vector<float>(cellId2CandidateLocation[curCell].size(), 100000.0));
             shortestPath_LayerSite_backtrace.push_back(std::vector<int>(cellId2CandidateLocation[curCell].size(), -1));
+            auto predMacro =
+                dynamic_cast<PlacementInfo::PlacementMacro *>(placementInfo->getPlacementUnitByCellId(predCell));
+            float calibX = 0, calibY = 0;
+            if (predMacro)
+            {
+                calibY = -predMacro->getCellOffsetYInMacro(placementInfo->getCells()[predCell]) +
+                         predMacro->getCellOffsetYInMacro(placementInfo->getCells()[headCellIdsInCriticalPath[i - 1]]);
+            }
 
             for (int j = 0; j < predCandidates.size(); j++)
             {
+                float predX = predCandidates[j].X, predY = predCandidates[j].Y + calibY;
                 for (int k = 0; k < curCandidates.size(); k++)
                 {
-                    float predX = predCandidates[j].X, predY = predCandidates[j].Y;
                     float curX = curCandidates[k].X, curY = curCandidates[k].Y;
 
                     float delay = timingOptimizer->getDelayByModel(predX, predY, curX, curY);
@@ -1358,6 +1517,7 @@ int GlobalPlacer::timingDrivenDetailedPlacement_shortestPath_intermediate(Placem
 
                             cellLoc[curCellInMacro->getCellId()].X = cellX;
                             cellLoc[curCellInMacro->getCellId()].Y = cellY;
+                            placementInfo->transferCellBinInfo(curCellInMacro->getCellId(), cellX, cellY);
                         }
                     }
                     else if (auto unpacked = dynamic_cast<PlacementInfo::PlacementUnpackedCell *>(curPU))
@@ -1368,6 +1528,7 @@ int GlobalPlacer::timingDrivenDetailedPlacement_shortestPath_intermediate(Placem
                                                                         curCandidates[bestEndChoice].Y);
                         cellLoc[unpacked->getCell()->getCellId()].X = curCandidates[bestEndChoice].X;
                         cellLoc[unpacked->getCell()->getCellId()].Y = curCandidates[bestEndChoice].Y;
+                        placementInfo->transferCellBinInfo(unpacked->getCell()->getCellId(), curPU->X(), curPU->Y());
                     }
                     replaceCnt++;
                 }
@@ -1376,8 +1537,10 @@ int GlobalPlacer::timingDrivenDetailedPlacement_shortestPath_intermediate(Placem
         }
     }
 
-    placementInfo->updateElementBinGrid();
-    print_status("ParallelCLBPacker: conducted timing-driven detailed placement (shortest path) and " +
-                 std::to_string(replaceCnt) + " PlacementUnits are replaced.");
+    // timingOptimizer->incrementalStaticTimingAnalysis(PUsMoved);
+
+    //  placementInfo->updateElementBinGrid(false);
+    print_status("GlobalPlacer: conducted timing-driven detailed placement (shortest path) and " +
+                 std::to_string(replaceCnt) + " PlacementUnits are updated.");
     return replaceCnt;
 }

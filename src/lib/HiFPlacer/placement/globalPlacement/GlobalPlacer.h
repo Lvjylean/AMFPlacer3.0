@@ -83,7 +83,8 @@ class GlobalPlacer
     /**
      * @brief wirelength optimization + cell spreading + legalization + area adjustion
      *
-     * @param iterNum the current placement iteration
+     * @param iterNum nominal GP budget; a newly active paper SLR stage receives
+     * an independent bounded budget of the same size before the HPIO budget.
      * @param continuePreviousIteration whether we should use the information from previous iterations
      * @param lowerBoundIterNum the iteration number for the lower-bound wirelength optimization
      * @param enableMacroPseudoNet2Site enable pseudo nets for macro legalization
@@ -198,9 +199,23 @@ class GlobalPlacer
         return WLOptimizer;
     }
 
-    int timingDrivenDetailedPlacement_shortestPath_intermediate(PlacementTimingOptimizer *timingOptimizer);
+    int timingDrivenDetailedPlacement_shortestPath_intermediate(PlacementTimingOptimizer *timingOptimizer,
+                                                                float range = 0.75, bool macroMovable = false,
+                                                                int strictPathNum = -1);
+
+    inline double manhattanDis(double x0, double y0, double x1, double y1)
+    {
+        return std::abs(x0 - x1) + y2xRatio * std::abs(y0 - y1);
+    }
 
   private:
+    // A complete GP phase with its own iteration/convergence counters. The
+    // public driver can prepend an SLR phase without consuming HPIO's budget.
+    void GlobalPlacement_CLBPhase(int iterNum, bool continuePreviousIteration, int lowerBoundIterNum,
+                                 bool enableMacroPseudoNet2Site, bool stopStrictly,
+                                 unsigned int spreadRegionBinNumLimit,
+                                 PlacementTimingOptimizer *timingOptimizer, const char *phase);
+
     PlacementInfo *placementInfo;
 
     // settings
@@ -437,6 +452,9 @@ class GlobalPlacer
     bool enableClockRegionAware = false;
     bool timingOptEnabled = false;
     bool printHPWL = false;
+
+    int DPReplaceCnt = -1;
+    int SPAlgoCnt = 0;
 };
 
 #endif
