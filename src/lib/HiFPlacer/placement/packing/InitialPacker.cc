@@ -41,7 +41,10 @@ void InitialPacker::pack(bool hardResourcesOnly)
                 PlacementInfo::PlacementMacro::PlacementMacroType_DFXStatic);
             macro->addCell(cell, cell->getCellType(), 0, 0);
             macro->addFixedCellInfo(cell, location.site, location.bel);
-            macro->setWeight(0);
+            // Keep the normal PU bookkeeping invariant (weight >= member count).
+            // DFX static resource occupation is separately excluded by PlacementInfo.
+            macro->setWeight(placementInfo->getCompatiblePlacementTable()
+                                 ->cellType2sharedBELTypeOccupation[cell->getCellType()]);
             macro->setAnchorLocation(site->X(), site->Y());
             macro->setFixed(); macro->setPlaced(); macro->setLocked();
             placementUnits.push_back(macro); placementMacros.push_back(macro);

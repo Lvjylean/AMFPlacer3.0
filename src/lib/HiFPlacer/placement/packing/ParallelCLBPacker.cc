@@ -5540,7 +5540,10 @@ void ParallelCLBPacker::dumpFinalPacking()
         char *res = realpath(dumpTclFile.c_str(), buf);
         assert(res && "this path should exist.");
         std::string absPath(res);
-        print_warning("try Tcl command to P&R in Vivado: source " + absPath);
+        if (placementInfo->getIncrementalContext().enabled)
+            print_info("DFX placement data exported; use the dedicated dfx-run backend: " + absPath);
+        else
+            print_warning("try Tcl command to P&R in Vivado: source " + absPath);
         DumpCLBPackingCnt++;
     }
 }
