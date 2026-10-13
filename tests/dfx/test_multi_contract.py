@@ -41,5 +41,17 @@ class MultiContract(unittest.TestCase):
         p=Path(__file__).resolve().parents[2]/'scripts/dfx_multi_assemble.tcl'
         lines=[x.strip() for x in p.read_text().splitlines() if not x.lstrip().startswith('#')]
         self.assertFalse(any('place_design' in x or 'route_design' in x for x in lines))
+    def test_shared_net_audit_is_partition_scoped(self):
+        helper=Path(__file__).resolve().parents[2]/'scripts/dfx_multi_common.tcl'
+        script='source {'+str(helper)+'}\n'+r'''
+proc get_property {property object} {return $object}
+set footprint [dict create INT_A 1]
+set before [amf_multi::footprint_resources {INT_A/CTRL INT_A/VCC INT_B/OLD} $footprint]
+set other_change [amf_multi::footprint_resources {INT_A/CTRL INT_A/VCC INT_B/NEW} $footprint]
+set own_change [amf_multi::footprint_resources {INT_A/NEW INT_A/VCC INT_B/OLD} $footprint]
+puts [expr {$before eq $other_change}]
+puts [expr {$before eq $own_change}]
+'''
+        self.assertEqual(subprocess.check_output(['tclsh'],input=script,text=True),'1\n0\n')
 
 if __name__=='__main__': unittest.main()

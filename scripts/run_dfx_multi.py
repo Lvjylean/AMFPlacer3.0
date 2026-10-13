@@ -75,7 +75,7 @@ def settings(job, out, extra=None):
 
 def snapshot(out):
     (out/'inputs').mkdir(); (out/'logs').mkdir()
-    names=('run_dfx_multi.py','dfx_multi_shell.tcl','dfx_multi_assemble.tcl','dfx_multi_common.tcl','dfx_common.tcl',
+    names=('run_dfx_multi.py','resume_dfx_multi.py','dfx_multi_shell.tcl','dfx_multi_assemble.tcl','dfx_multi_common.tcl','dfx_common.tcl',
            'run_dfx.py','dfx_prepare.tcl','dfx_backend.tcl','summarize_dfx.py','summarize_full_flow.py','summarize_face_detect_flow.py')
     for n in names: shutil.copy2(SCRIPT/n,out/'inputs'/n)
     return {n:sha(out/'inputs'/n) for n in names}

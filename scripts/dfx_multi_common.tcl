@@ -34,11 +34,29 @@ namespace eval amf_multi {
         foreach object $objects {lappend result [get_property NAME $object]}
         return [lsort $result]
     }
+    proc route_footprint {rp} {
+        set tiles [names [get_dfx_footprint -route -of_objects [get_cells $rp]]]
+        if {![llength $tiles]} {error "Empty routing footprint for $rp"}
+        return $tiles
+    }
+    proc footprint_resources {objects footprint} {
+        set result {}
+        foreach object $objects {
+            set name [get_property NAME $object]
+            if {[dict exists $footprint [lindex [split $name /] 0]]} {lappend result $name}
+        }
+        return [lsort $result]
+    }
     proc module_routing {rp} {
+        # Hierarchical clock/constant segments expose the full shared net, also
+        # including other RPs. Compare this RP's actual DFX routing footprint;
+        # pr_verify independently verifies the locked static routing context.
+        set footprint [dict create]
+        foreach tile [route_footprint $rp] {dict set footprint $tile 1}
         set data [dict create]
         foreach n [get_nets -hierarchical] {
             if {[string first "$rp/" $n] != 0} {continue}
-            dict set data [get_property NAME $n] [list [names [get_nodes -quiet -of_objects $n]] [names [get_pips -quiet -of_objects $n]]]
+            dict set data [get_property NAME $n] [list [footprint_resources [get_nodes -quiet -of_objects $n] $footprint] [footprint_resources [get_pips -quiet -of_objects $n] $footprint]]
         }
         return $data
     }

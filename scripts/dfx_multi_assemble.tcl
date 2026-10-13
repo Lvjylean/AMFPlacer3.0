@@ -5,7 +5,7 @@ proc main {} {
     set out $dfx(output)
     set_param general.maxThreads $dfx(vivado_threads)
     # Snapshot each fully routed worker before assembling only its own module.
-    set placements [dict create]; set routes [dict create]
+    set placements [dict create]; set routes [dict create]; set footprints [dict create]
     foreach row $dfx(rps) {
         lassign $row id rp pb
         set worker $dfx(workers)/$id
@@ -14,6 +14,7 @@ proc main {} {
         amf_dfx::save_dict $out/${id}_routing.tcldata [amf_multi::module_routing $rp]
         dict set placements $id [amf_dfx::read_dict $out/${id}_placement.tcldata]
         dict set routes $id [amf_dfx::read_dict $out/${id}_routing.tcldata]
+        dict set footprints $id [amf_multi::route_footprint $rp]
         close_design
     }
     amf_dfx::timed open_reference {open_checkpoint $dfx(reference_checkpoint)}
@@ -36,11 +37,12 @@ proc main {} {
     amf_multi::validate_regions
     amf_dfx::assert_same $static [amf_multi::static_snapshot] "Assembly static placement"
     set f [open $out/module_preservation.tsv w]
-    puts $f "id\tprimitive_count\tinternal_net_count\tplacement_equal\trouting_equal\tboundary_equal"
+    puts $f "id\tprimitive_count\thierarchical_net_count\tplacement_equal\tfootprint_routing_equal\tboundary_equal"
     foreach row $dfx(rps) {
         lassign $row id rp pb
         set dfx(active_partition) $rp
         amf_dfx::assert_same [dict get $placements $id] [amf_multi::module_snapshot $rp] "Module placement $id"
+        if {[dict get $footprints $id] ne [amf_multi::route_footprint $rp]} {error "Routing footprint changed for $id"}
         amf_dfx::assert_same [dict get $routes $id] [amf_multi::module_routing $rp] "Module routing $id"
         amf_dfx::assert_same [dict get $boundaries $id] [amf_dfx::boundary_snapshot] "Partition boundary $id"
         set allowed [get_sites -of_objects [get_pblocks $pb]]
