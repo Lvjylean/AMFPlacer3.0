@@ -128,10 +128,10 @@ def run(args):
 
     def stage(name, command, cwd=None, env=None):
         save(out/'status.json', dict(state='running', stage=name))
-        t = time.monotonic()
+        t = time.monotonic(); epoch_start = time.time()
         with (out/'logs'/f'{name}.log').open('w') as log:
             result = subprocess.run(command, cwd=cwd or out, env=env, stdout=log, stderr=subprocess.STDOUT)
-        manifest['stages'].append(dict(name=name, command=command, seconds=time.monotonic()-t, exit_code=result.returncode))
+        manifest['stages'].append(dict(name=name, command=command, seconds=time.monotonic()-t, started_epoch=epoch_start, ended_epoch=time.time(), exit_code=result.returncode))
         save(out/'manifest.json', manifest)
         if result.returncode: raise RuntimeError(f'{name} failed ({result.returncode}); see {out}/logs/{name}.log')
 

@@ -51,6 +51,8 @@ proc main {} {
     # partition interfaces against the first routed configuration as well.
     amf_dfx::timed pr_verify {pr_verify -full_check $dfx(reference_checkpoint) $out/routed.dcp}
     set f [open $out/pr_verify_passed.txt w]; puts $f full_check_passed; close $f
+    # Also preserve the routed module for multi-RP assembly. The full design remains the audit reference.
+    amf_dfx::timed write_rm_routed {write_checkpoint -cell $dfx(active_partition) $out/rm_routed.dcp}
     amf_dfx::timed full_bitstream {write_bitstream $out/full.bit}
     amf_dfx::timed partial_bitstream {write_bitstream -cell $dfx(active_partition) $out/partial.bit}
     puts "AMF_DFX_BACKEND_COMPLETED"

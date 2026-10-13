@@ -235,9 +235,20 @@ def dfx_shell(args):
     print(run(args))
 
 
+def dfx_multi(args):
+    from run_dfx_multi import run
+    print(run(args))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
+    p = sub.add_parser('dfx-multi', help='Parallel multi-RP AMF placement and Vivado routing with routed assembly')
+    p.add_argument('mode', choices=['shell', 'run'])
+    p.add_argument('--config', required=True)
+    p.add_argument('--output', required=True)
+    p.add_argument('--binary')
+    p.set_defaults(action=dfx_multi)
     p = sub.add_parser('dfx-resume', help='Reuse a completed DFX AMF stage for a new backend run')
     p.add_argument('--run', required=True)
     p.add_argument('--output', required=True)
