@@ -78,3 +78,22 @@ python3 scripts/amf3.py dfx-resume --run experiments/runs/<amf-completed-id> --o
 2. **资源覆盖**：增加 SRL 级联、CARRY、BRAM/URAM、DSP 注册/旁路输出的模块替换测试，复核宏边界、连续 site、静态占用和专用级联；通过前不把 LUT/FF 样例推广到 HLS 全资源支持。
 3. **约束/兼容性回归**：端口宽度或方向改变、Pblock 不兼容、器件或时钟不一致应拒绝；无变化 RM 与连接变化 RM 各自保存证据，多 RP 另行设计。
 4. **性能验收**：以同一个替换后的设计比较全量与静态复用流程，分别记录准备、AMF、导入、Vivado place/route、审计和 bitstream 时间；大设计才评估区域化数据加载/STA 是否值得实现。
+
+
+## 2026-10-13 多区域并行扩展
+
+新增 `amf3.py dfx-multi shell|run`。配置中的 `partitions` 每项提供 `id`、`active_partition`、`pblock`、`pblock_ranges`、`expected_slr` 和替换用 `rm_checkpoint`。`max_parallel` 限制独立任务数量；嵌套区域、重复实例/标识、实际 site 重叠及预期 SLR 不符均拒绝。`require_distinct_slrs=true` 用于本轮跨 die 验收。
+
+基准配置同时建立所有硬 Pblock，完成一次全设计实现。从同一 `base_routed.dcp` 分别 black-box 每个目标 RP，并锁定其余设计，派生一目标一份完整上下文 shell。每个 worker 复用既有单活动 RP 的 AMF 硬区域/冻结约束，独立执行准备、AMF、Vivado place/route、审计、PR Verify 和 bitstream，不等待其他 worker 的 AMF 完成后才布线。
+
+本轮使用完整上下文的标准 DFX shell，不声称使用 Abstract Shell。这样保留当前 AMF 所需的真实静态 fabric 连通性与端点；以后改用 Abstract Shell 时必须适配其裁减后的边界对象和时序预算，不能直接丢弃端点。此次没有更改 AMF 的 GP、匹配或延迟参数；复用已验收的单区域 C++ 二进制，由调度层提供相互隔离的区域输入。
+
+worker 输出额外的 `rm_routed.dcp`。装配器从共同基准移除全部待更新模块，锁定静态区，逐个导入已经布线的 RM；不调用全设计 place_design 或 route_design。检查静态 LOC/BEL、每个模块 LOC/BEL 和内部 net 的 node/PIP 与 worker 一致，核对 partition-pin 信息及区域归属，执行整体路由/DRC/时序、`pr_verify -full_check`，生成完整及每个 RP 的局部 bitstream。
+
+`write_checkpoint -cell` 不保留模块局部约束。通用配置必须在 `assembly_xdc_files` 提供使用完整实例路径的局部时钟/例外约束；本测试没有模块内部时钟或时序例外，故此列表为空。精确的 partition-pin arrival/required budget 回注 AMF 仍未实现，最后必须评估实际组合后的完整设计，不能将两个 worker 各自时序通过视为组合时序通过。
+
+首个测试使用 `tests/dfx/u250_multi/static_top.v`，A 位于 X1Y1/SLR0，B 位于 X1Y5/SLR1，两个 RM 通过静态 bridge 寄存器连接。每个 RP 从原先 RM_a 更新为 RM_b。该用例只覆盖 fabric LUT/FF、单时钟、同层双 RP；代码接受更多同层 RP，但尚未据此宣称任意数量/复杂资源已经验收。
+
+计时按用户约定：Vivado placement 单列作兼容处理开销，不计入主要增量耗时；保留实际总墙钟。并行 worker 的耗时不能直接相加当作总墙钟，扣除 placement 后的各 worker 耗时及装配时间需分别报告。DCP/bitstream 仅留服务器。
+
+参考：AMD UG909 2026.1 的 [独立 RP 实现及 routed DCP 装配](https://docs.amd.com/r/en-US/ug909-vivado-partial-reconfiguration/Implementing-Reconfigurable-Modules-in-Abstract-Shells) 与 [模块局部约束恢复](https://docs.amd.com/r/en-US/ug909-vivado-partial-reconfiguration/Implementation)。

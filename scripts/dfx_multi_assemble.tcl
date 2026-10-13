@@ -10,8 +10,10 @@ proc main {} {
         lassign $row id rp pb
         set worker $dfx(workers)/$id
         open_checkpoint $worker/routed.dcp
-        dict set placements $id [amf_multi::module_snapshot $rp]
-        dict set routes $id [amf_multi::module_routing $rp]
+        amf_dfx::save_dict $out/${id}_placement.tcldata [amf_multi::module_snapshot $rp]
+        amf_dfx::save_dict $out/${id}_routing.tcldata [amf_multi::module_routing $rp]
+        dict set placements $id [amf_dfx::read_dict $out/${id}_placement.tcldata]
+        dict set routes $id [amf_dfx::read_dict $out/${id}_routing.tcldata]
         close_design
     }
     amf_dfx::timed open_reference {open_checkpoint $dfx(reference_checkpoint)}

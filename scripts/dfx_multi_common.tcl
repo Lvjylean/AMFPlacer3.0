@@ -23,15 +23,22 @@ namespace eval amf_multi {
         set data [dict create]
         foreach c [amf_dfx::primitive_cells] {
             if {[string first "$rp/" $c] != 0 || [amf_dfx::constant $c]} {continue}
-            dict set data $c [list [get_property REF_NAME $c] [get_property LOC $c] [get_property BEL $c]]
+            dict set data [get_property NAME $c] [list [get_property REF_NAME $c] [get_property LOC $c] [get_property BEL $c]]
         }
         return $data
+    }
+    proc names {objects} {
+        # Vivado object handles turn into null after close_design/read_checkpoint.
+        # Materialize property strings before persisting data between designs.
+        set result {}
+        foreach object $objects {lappend result [get_property NAME $object]}
+        return [lsort $result]
     }
     proc module_routing {rp} {
         set data [dict create]
         foreach n [get_nets -hierarchical] {
             if {[string first "$rp/" $n] != 0} {continue}
-            dict set data $n [list [lsort [get_nodes -quiet -of_objects $n]] [lsort [get_pips -quiet -of_objects $n]]]
+            dict set data [get_property NAME $n] [list [names [get_nodes -quiet -of_objects $n]] [names [get_pips -quiet -of_objects $n]]]
         }
         return $data
     }
