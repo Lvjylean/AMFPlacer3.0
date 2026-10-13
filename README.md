@@ -82,3 +82,10 @@ U250 已开放输入检查和独立硬资源分配/合法化，覆盖 URAM 与 C
 该结果证明现有约束下的全量布局布线链路可用，不能作为增量功能、多芯粒优化或完整板级签核的通过证据。详见 `experiments/baselines/faceDetect-20260925.json` 和 `docs/research/face-detect-benchmark-validation.md`。
 
 需求入口：`docs/requirements/task-3-final.pdf`、`docs/requirements/traceability.md`。开发顺序与已知问题见 `docs/roadmap.md`、`docs/known-issues.md`。原 AMF 说明保存在 `docs/upstream-AMF2-README.md`。
+
+
+## DFX 增量编译独立副本（2026-10-13）
+
+本副本新增 opt-in `IncremenralCompilation`。`scripts/amf3.py dfx-shell` 从 RTL 的 `bblock` 属性建立首个静态配置；`dfx-run` 在锁定静态区中调用 AMF 放置活动 RM，再经 Vivado 布线、`pr_verify -full_check` 生成完整与局部 bitstream。普通全量入口不自动启用此流程。
+
+设计范围、配置、分步计划和限制见 [DFX 实现说明](docs/research/dfx-incremental-compilation.md)，小型 U250 实际验收见 [DFX 验收报告](docs/research/dfx-u250-validation.md)。DCP/bitstream 留服务器。此副本不代表正式主仓库已经合并了 DFX 功能。
