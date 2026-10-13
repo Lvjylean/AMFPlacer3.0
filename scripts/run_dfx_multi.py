@@ -2,8 +2,8 @@
 """Parallel per-RP AMF + Vivado DFX implementation, followed by routed assembly.
 
 Workers use independent full-context shells derived from one immutable parent.
-This first implementation deliberately preserves the existing AMF static timing
-context; it does not claim Abstract Shell support or exact AMF boundary budgets.
+AMF receives only the active RP and its fixed interface timing cones.
+Vivado retains the full shell; this does not claim Abstract Shell support or exact AMF boundary budgets.
 """
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -81,7 +81,7 @@ def settings(job, out, extra=None):
 def snapshot(out):
     (out/'inputs').mkdir(); (out/'logs').mkdir()
     names=('run_dfx_multi.py','resume_dfx_multi.py','dfx_multi_shell.tcl','dfx_rm_synth.tcl','dfx_multi_assemble.tcl','dfx_multi_common.tcl','dfx_common.tcl',
-           'run_dfx.py','dfx_prepare.tcl','dfx_backend.tcl','summarize_dfx.py','summarize_full_flow.py','summarize_face_detect_flow.py')
+           'run_dfx.py','dfx_prepare.tcl','dfx_input_scope.tcl','dfx_backend.tcl','summarize_dfx.py','summarize_full_flow.py','summarize_face_detect_flow.py')
     for n in names: shutil.copy2(SCRIPT/n,out/'inputs'/n)
     return {n:sha(out/'inputs'/n) for n in names}
 
@@ -167,7 +167,7 @@ def run(args):
     record=dict(schema='amf-dfx-multi-'+args.mode+'-v1',job=job,state='running',
                 started=dt.datetime.now().astimezone().isoformat(),started_epoch=time.time(),stages=[],
                 source_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
-                script_hashes=hashes,dcp_storage='server-only',shell_mode='full-context, one active RP per worker')
+                script_hashes=hashes,dcp_storage='server-only',shell_mode='full Vivado shell; scoped AMF interface context, one active RP per worker')
     record['input_hashes']={f:sha(f) for k in ('rtl_sources','ip_scripts','xdc_files','assembly_xdc_files') for f in job.get(k,[])}
     if recovery: record['synthesis_recovery']=recovery
     def update(stage):

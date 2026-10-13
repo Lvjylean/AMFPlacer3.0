@@ -30,5 +30,11 @@ int main(int argc, char **argv)
     rejects([&] {IncrementalContext invalid(cfg);});
     write("fixed", "cell\tsite\tbel\nstatic/a\tSLICE_X2Y2\tAFF\nstatic/a\tSLICE_X2Y2\tBFF\n");
     rejects([&] {IncrementalContext invalid(cfg);});
+    write("fixed", "cell\tsite\tbel\n");
+    rejects([&] {IncrementalContext invalid(cfg);});
+    cfg["DFX input scope"] = "rm-boundary-cone-v1";
+    IncrementalContext isolated(cfg); assert(isolated.fixed.empty() && isolated.enabled);
+    cfg["DFX input scope"] = "typo";
+    rejects([&] {IncrementalContext invalid(cfg);});
     return 0;
 }

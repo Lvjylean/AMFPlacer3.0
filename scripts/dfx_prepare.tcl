@@ -38,109 +38,11 @@ proc main {} {
     foreach s [split [read $f] \n] { if {$s ne ""} {dict set modeled $s 1} }; close $f
     amf_dfx::timed resource_tables {amf_dfx::resource_tables $out $modeled}
 
-    # Fresh control metadata belongs to this linked design, never to the template case.
-    set f [open $out/srl_controls.tsv w]
-    puts $f "cell\ttype\tclk\tce\tclk_inverted\tloc_fixed\tbel_fixed\tq31_sinks"
-    foreach cell [lsort [get_cells -hier -filter {REF_NAME =~ SRL*}]] {
-        set clk {}; set ce {}; set sinks {}; set invert UNKNOWN
-        foreach pin [get_pins -of_objects $cell] {
-            set ref [get_property REF_PIN_NAME $pin]
-            set net [get_nets -quiet -top_net_of_hierarchical_group -of_objects $pin]
-            if {$ref eq "CLK"} {set clk $net}
-            if {$ref eq "CE"} {set ce $net}
-            if {$ref eq "Q31" && [llength $net]} {set sinks [get_pins -quiet -leaf -of_objects $net -filter {DIRECTION == IN}]}
-        }
-        if {[lsearch -exact [list_property $cell] IS_CLK_INVERTED] >= 0} {set invert [get_property IS_CLK_INVERTED $cell]}
-        puts $f [join [list $cell [get_property REF_NAME $cell] $clk $ce $invert [get_property IS_LOC_FIXED $cell] [get_property IS_BEL_FIXED $cell] $sinks] "\t"]
-    }
-    close $f
-
-    set included [dict create]
-    set canonical [dict create]
-    foreach c [amf_dfx::primitive_cells] {dict set canonical $c [get_property REF_NAME $c]}
-    set activeCount 0
-    set staticf [open $out/static_placement.tsv w]; puts $staticf "cell\tsite\tbel"
-    set cellsf [open $out/cells.tsv w]; puts $cellsf "cell\tprimitive\tactive"
-    foreach c [amf_dfx::primitive_cells] {
-        if {[amf_dfx::constant $c]} {continue}
-        set type [get_property REF_NAME $c]
-        set active [amf_dfx::active $c]
-        set loc [get_property LOC $c]
-        if {!$active && ![dict exists $modeled $loc]} {continue}
-        if {$active && ![regexp {^(LUT[1-6](_2)?|FD(RE|SE|CE|PE)|CARRY8|MUXF[789]|SRL(C32E|16E)|RAM.*|DSP48E2|URAM288.*)$} $type]} {
-            error "DFX v1 unsupported RM primitive: $c ($type)"
-        }
-        if {[regexp {\s} $c]} {error "AMF format cannot represent whitespace in primitive names"}
-        dict set included $c 1
-        puts $cellsf "$c\t$type\t$active"
-        if {$active} {incr activeCount} else { puts $staticf "$c\t$loc\t[get_property BEL $c]" }
-    }
-    close $staticf; close $cellsf
-    if {!$activeCount} {error "Active RM has no supported primitives"}
-    set f [open $out/netlist.txt w]
-    set clocks [dict create]
-    # Shared high-fanout nets occur at many pins. Resolve each driver once in
-    # this immutable linked design; emitted netlist semantics stay unchanged.
-    set netInfo [dict create]
-    set dspUsed [dict create]
-    amf_dfx::timed netlist_export {
-    foreach c [lsort [dict keys $included]] {
-        puts $f "curCell=> $c type=> [get_property REF_NAME [get_cells $c]]"
-        foreach pin [get_pins -of_objects [get_cells $c]] {
-            set dir [get_property DIRECTION $pin]; set ref [get_property REF_PIN_NAME $pin]
-            set net [get_nets -quiet -top_net_of_hierarchical_group -of_objects $pin]
-            if {[llength $net] == 0} { puts $f " pin=> $pin refpin=> $ref dir=> $dir net=> drivepin=>"; continue }
-            if {[llength $net] != 1} {error "Multiple nets at $pin"}
-            if {![dict exists $netInfo $net]} {
-                dict set netInfo $net [amf_dfx::canonical_net_driver $net $canonical]
-            }
-            lassign [dict get $netInfo $net] driver dc dtype netType
-            if {$dir eq "IN" && $dtype eq "DSP48E2" && [dict exists $included $dc]} {
-                dict set dspUsed $dc [get_property REF_PIN_NAME $driver] 1
-            }
-            if {$dtype eq "GND"} {set driver <const0>}
-            if {$dtype eq "VCC"} {set driver <const1>}
-            set isClock [expr {[get_property IS_CLOCK $pin] == 1 || $netType eq "GLOBAL_CLOCK"}]
-            if {![dict exists $included $dc] && $dtype ni {GND VCC}} {
-                if {[amf_dfx::active $c] && !$isClock && $dir eq "IN"} {
-                    error "DFX v1 requires a modeled static driver at RM data boundary: $pin"
-                }
-                set driver @STATIC/$driver
-            }
-            if {[amf_dfx::active $c] && !$isClock && $dir eq "OUT"} {
-                foreach sink [amf_dfx::canonical_net_pins $net IN $canonical] {
-                    set sc [string range $sink 0 [expr {[string last / $sink]-1}]]
-                    if {![dict exists $included $sc]} {
-                        error "DFX v1 requires a modeled static endpoint at RM data boundary: $sink"
-                    }
-                }
-            }
-            if {$isClock && $dir eq "IN"} {dict set clocks $driver 1}
-            puts $f " pin=> $pin refpin=> $ref dir=> $dir net=> $net drivepin=> $driver"
-        }
-    }
-    }
-    close $f
-    # Same conservative certification as the ordinary GETRF importer. The
-    # metadata is regenerated from this DCP, never copied from another design.
-    set f [open $out/dsp_registered_outputs.txt w]
-    puts $f "AMF_DSP_REGISTERED_OUTPUTS 1"
-    set audit [open $out/dsp_certification.tsv w]
-    puts $audit "cell\tPREG\tused_outputs\tcertified"
-    foreach dc [lsort [dict keys $dspUsed]] {
-        set preg [get_property PREG [get_cells $dc]]
-        set pins [lsort [dict keys [dict get $dspUsed $dc]]]
-        set valid [expr {$preg == 1}]
-        foreach pin $pins {if {![regexp {^P\[([0-9]|[1-3][0-9]|4[0-7])\]$} $pin]} {set valid 0}}
-        if {$valid} {puts $f "$dc PREG=1"}
-        puts $audit "$dc\t$preg\t$pins\t$valid"
-    }
-    close $f;close $audit
-    unset netInfo
-    set f [open $out/clocks w]; puts $f [join [lsort [dict keys $clocks]] \n]; close $f
+    source [file join [file dirname [info script]] dfx_input_scope.tcl]
+    amf_dfx::timed scoped_amf_input {amf_dfx_scope::export $out $modeled}
+    # Interface identity is mandatory. Full-design timing/DRC reports before
+    # placement repeat backend work and do not validate an unplaced RM.
     amf_dfx::save_dict $out/linked_boundary.tcldata [amf_dfx::boundary_snapshot]
-    amf_dfx::timed linked_audit {amf_dfx::audit $out linked}
-    puts "AMF_DFX_PREPARED active=$activeCount fabric_context=[dict size $included]"
 }
 if {[catch {main} msg opts]} {puts stderr $msg; puts stderr [dict get $opts -errorinfo]; exit 2}
 exit 0

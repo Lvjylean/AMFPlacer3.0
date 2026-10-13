@@ -9,7 +9,7 @@
 #include <vector>
 
 // Version 1 handles one active RP. Vivado owns static routing and partition pins;
-// AMF retains modeled static fabric connectivity across the RM interface.
+// AMF retains only the real-cell timing cones crossing the RM interface.
 struct IncrementalContext
 {
     struct FixedCell { std::string site, bel; };
@@ -67,7 +67,13 @@ struct IncrementalContext
                 throw std::runtime_error("Invalid DFX static placement row: " + line);
             blockedSites.insert(f[1]);
         }
-        if (fixed.empty()) throw std::runtime_error("DFX requires a nonempty fixed static context");
+        const auto scope = cfg.find("DFX input scope");
+        if (scope != cfg.end() && scope->second != "rm-boundary-cone-v1")
+            throw std::runtime_error("Unknown DFX input scope");
+        // A self-contained RM can legitimately have no external data timing cone.
+        // Legacy full-context inputs retain their previous missing-context guard.
+        if (fixed.empty() && scope == cfg.end())
+            throw std::runtime_error("DFX requires a nonempty fixed static context");
     }
     bool isActive(const std::string &name) const
     { return name.compare(0, partition.size() + 1, partition + "/") == 0; }

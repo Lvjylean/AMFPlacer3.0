@@ -152,11 +152,11 @@ def run(args):
     started = time.monotonic()
     manifest = dict(schema='amf-dfx-run-v1', started=dt.datetime.now().astimezone().isoformat(),
                     job=job, stages=[], state='running', dcp_storage='server-only',
-                    scope='one active fabric RP; static fabric timing context; static routing owned by Vivado',
+                    scope='active RP plus fixed interface timing cones; static routing remains in Vivado',
                     source_commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
                     input_hashes={k: sha(job[k]) for k in ('static_checkpoint','reference_checkpoint','rm_checkpoint','amf_config')})
     if recovery: manifest['prepare_recovery'] = recovery
-    for name in ('dfx_prepare.tcl', 'dfx_backend.tcl', 'dfx_common.tcl', 'run_dfx.py', 'summarize_dfx.py',
+    for name in ('dfx_prepare.tcl', 'dfx_input_scope.tcl', 'dfx_backend.tcl', 'dfx_common.tcl', 'run_dfx.py', 'summarize_dfx.py',
                  'summarize_full_flow.py', 'summarize_face_detect_flow.py'):
         shutil.copy2(SCRIPT / name, out / 'inputs' / name)
     manifest['script_hashes'] = {p.name: sha(p) for p in (out/'inputs').iterdir()}
@@ -193,6 +193,8 @@ def run(args):
         settings_path = out/'inputs/settings.tcl'
         settings_path.write_text('\n'.join('set dfx('+k+') '+tcl_word(v) for k,v in settings.items())+'\n')
         stage('prepare', [job['vivado'], '-mode', 'batch', '-source', str(out/'inputs/dfx_prepare.tcl'), '-tclargs', str(settings_path)])
+        manifest['amf_input_scope'] = dict(line.split('\t', 1) for line in (out/'input_scope.tsv').read_text().splitlines())
+        save(out/'manifest.json', manifest)
         if args.prepare_only:
             manifest['state'] = 'prepared'
             return out
@@ -208,7 +210,7 @@ def run(args):
         manifest['model_input_hashes'] = {k:sha(v) for k,v in cfg.items() if ('file' in k or k=='mergedSharedCellType2sharedCellType') and Path(v).is_file()}
         with zipfile.ZipFile(out/'netlist.zip', 'w', zipfile.ZIP_DEFLATED) as z:
             z.write(out/'netlist.txt', 'netlist')
-        cfg.update({'IncremenralCompilation':'true', 'DFX active partition':job['active_partition'],
+        cfg.update({'IncremenralCompilation':'true', 'DFX input scope':'rm-boundary-cone-v1', 'DFX active partition':job['active_partition'],
                     'DFX allowed sites file':str(out/'allowed_sites.txt'), 'DFX blocked sites file':str(out/'blocked_sites.txt'),
                     'DFX static placement file':str(out/'static_placement.tsv'),
                     'SRL control metadata file':str(out/'srl_controls.tsv'),
