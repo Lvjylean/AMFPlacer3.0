@@ -12,7 +12,8 @@ namespace eval amf_dfx {
             set loc [get_property LOC $cell]
             set bel [get_property BEL $cell]
             if {$loc eq "" || $bel eq ""} { error "Unplaced static primitive: $cell" }
-            dict set data $cell [list [get_property REF_NAME $cell] $loc $bel]
+            # read_checkpoint may invalidate every Vivado handle. Snapshot plain names, not handles.
+            dict set data [get_property NAME $cell] [list [get_property REF_NAME $cell] $loc $bel]
         }
         return $data
     }
@@ -25,7 +26,12 @@ namespace eval amf_dfx {
         return $result
     }
     proc assert_same {before after label} {
-        if {[lsort [dict keys $before]] ne [lsort [dict keys $after]]} {error "$label membership changed"}
+        if {[lsort [dict keys $before]] ne [lsort [dict keys $after]]} {
+            set removed {}; set added {}
+            dict for {k v} $before {if {![dict exists $after $k]} {lappend removed $k}}
+            dict for {k v} $after {if {![dict exists $before $k]} {lappend added $k}}
+            error "$label membership changed: removed=$removed added=$added"
+        }
         dict for {name value} $before {
             if {$value ne [dict get $after $name]} {error "$label changed at $name"}
         }

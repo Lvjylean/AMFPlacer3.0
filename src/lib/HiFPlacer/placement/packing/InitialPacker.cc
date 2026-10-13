@@ -43,7 +43,7 @@ void InitialPacker::pack(bool hardResourcesOnly)
             macro->addFixedCellInfo(cell, location.site, location.bel);
             macro->setWeight(0);
             macro->setAnchorLocation(site->X(), site->Y());
-            macro->setFixed(); macro->setLocked(); macro->setPlaced();
+            macro->setFixed(); macro->setPlaced(); macro->setLocked();
             placementUnits.push_back(macro); placementMacros.push_back(macro);
             fixedPlacementUnits.push_back(macro); cellInMacros.insert(cell);
             cellId2PlacementUnit[cell->getCellId()] = macro;
