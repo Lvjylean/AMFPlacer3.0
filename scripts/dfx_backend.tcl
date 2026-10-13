@@ -18,6 +18,15 @@ proc main {} {
         place_cell [list $c $target]
     }
     close $f
+    set f [open $out/import_retention.tsv w]; puts $f "cell\trequested\tloc\tbel"
+    dict for {c target} $requested {
+        set cell [get_cells $c]
+        set loc [get_property LOC $cell]; set bel [get_property BEL $cell]
+        puts $f "$c\t$target\t$loc\t$bel"
+        if {"$loc/[lindex [split $bel .] end]" ne $target} {error "AMF strict import moved $c"}
+    }
+    close $f
+    puts "AMF_DFX_IMPORT_VERIFIED count=[dict size $requested]"
     amf_dfx::assert_same $before [amf_dfx::static_snapshot] "After AMF import"
     amf_dfx::timed write_imported {write_checkpoint $out/imported.dcp}
     amf_dfx::timed audit_imported {amf_dfx::audit $out imported}
