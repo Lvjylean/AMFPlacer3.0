@@ -10,7 +10,9 @@ proc main {} {
     set before [amf_dfx::static_snapshot]
     amf_dfx::save_dict $out/static_snapshot.tcldata $before
     amf_dfx::save_dict $out/shell_boundary.tcldata [amf_dfx::boundary_snapshot]
+    set interface [amf_dfx::boundary_signature]
     read_checkpoint -cell $dfx(active_partition) $dfx(rm_checkpoint)
+    amf_dfx::assert_same $interface [amf_dfx::boundary_signature] "RM port names/directions"
     amf_dfx::assert_same $before [amf_dfx::static_snapshot] "RM insertion/static placement"
     opt_design
     amf_dfx::assert_same $before [amf_dfx::static_snapshot] "RM opt/static placement"

@@ -72,6 +72,11 @@ namespace eval amf_dfx {
         }
         return $result
     }
+    proc boundary_signature {} {
+        set result [dict create]
+        dict for {name details} [boundary_snapshot] {dict set result $name [lindex $details 0]}
+        return $result
+    }
     proc audit {out stage} {
         global dfx
         assert_context

@@ -1,0 +1,14 @@
+{
+  "IncremenralCompilation": true,
+  "part": "xcu250-figd2104-2L-e",
+  "active_partition": "rm_inst",
+  "pblock": "pblock_rm",
+  "clock_name": "dfx_clk",
+  "clock_period_ns": 10,
+  "amf_config": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-dfx-incremental/repo/configs/experiments/dfx-u250-template.json",
+  "static_checkpoint": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-dfx-incremental/repo/experiments/runs/dfx-u250-generic-shell-03/static_locked.dcp",
+  "reference_checkpoint": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-dfx-incremental/repo/experiments/runs/dfx-u250-generic-shell-03/base_routed.dcp",
+  "rm_checkpoint": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-dfx-incremental/repo/experiments/runs/dfx-u250-fixture-02/rm_b.dcp",
+  "vivado": "/Projects/Xilinx26/2026.1/Vivado/bin/vivado",
+  "vivado_threads": 4
+}
