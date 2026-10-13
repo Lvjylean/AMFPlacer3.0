@@ -25,7 +25,7 @@ namespace eval amf_dfx_scope {
         }
         return [lsort -unique $result]
     }
-    proc net {name} {
+    proc net {name {withSinks 0}} {
         variable netCache
         if {![dict exists $netCache $name]} {
             set drivers [canonical_pins $name OUT]
@@ -37,11 +37,14 @@ namespace eval amf_dfx_scope {
             set driver [lindex $drivers 0]
             set t [type [owner $driver]]
             # Power fanout is not a timing cone and must not expand the static design.
-            set sinks {}
-            if {$t ni {GND VCC}} {set sinks [canonical_pins $name IN]}
-            dict set netCache $name [list $driver $t $sinks]
+            dict set netCache $name [list $driver $t {} 0]
         }
-        return [dict get $netCache $name]
+        lassign [dict get $netCache $name] driver t sinks haveSinks
+        if {$withSinks && !$haveSinks} {
+            if {$t ni {GND VCC}} {set sinks [canonical_pins $name IN]}
+            dict set netCache $name [list $driver $t $sinks 1]
+        }
+        return [lrange [dict get $netCache $name] 0 2]
     }
     proc pins {cell} {
         variable pinCache
@@ -71,12 +74,14 @@ namespace eval amf_dfx_scope {
             foreach row [pins $cell] {
                 lassign $row p ref dir n clk
                 if {$dir ne "OUT" || $n eq "" || $clk} {continue}
-                lassign [net $n] driver kind sinks
+                lassign [net $n 1] driver kind sinks
                 if {![llength $sinks]} {continue}
                 lappend used $ref
                 if {![regexp {^P\[([0-9]|[1-3][0-9]|4[0-7])\]$} $ref]} {set yes 0}
             }
             dict set dspCertificates $cell [list $preg [lsort $used] $yes]
+            global dfx
+            if {![info exists dfx(dsp_critical)] || !$dfx(dsp_critical)} {set yes 1}
         }
         dict set terminalCache $cell $yes
         return $yes
@@ -103,7 +108,7 @@ namespace eval amf_dfx_scope {
     proc output {pin n} {
         variable keep; variable down
         if {$n eq ""} {return}
-        lassign [net $n] driver kind sinks
+        lassign [net $n 1] driver kind sinks
         if {$driver ne $pin} {error "Output/driver mismatch: $pin $driver"}
         foreach sink $sinks {
             set c [owner $sink]
@@ -115,7 +120,10 @@ namespace eval amf_dfx_scope {
     proc select {activeCells} {
         variable selected; variable keep; variable up; variable down
         variable seenUp; variable seenDown
+        set scanned 0
         foreach c $activeCells {
+            incr scanned
+            if {$scanned % 512 == 0} {puts "AMF_DFX_SCOPE_SCAN active=$scanned/[llength $activeCells]"}
             if {[type $c] in {GND VCC}} {continue}
             include $c active
             foreach row [pins $c] {

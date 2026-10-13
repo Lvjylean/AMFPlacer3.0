@@ -181,7 +181,8 @@ def run(args):
             sites = re.findall(r'^site=> (\S+)', z.read(names[0]).decode(), re.M)
         (out/'modeled_sites.txt').write_text('\n'.join(sorted(set(sites)))+'\n')
         manifest['device_sha256'] = sha(device)
-        settings = dict(job, output=str(out), modeled_sites=str(out/'modeled_sites.txt'))
+        settings = dict(job, output=str(out), modeled_sites=str(out/'modeled_sites.txt'),
+                        dsp_critical=int(cfg.get('DSPCritical', 'false') == 'true'))
         if recovery:
             copy_start = time.monotonic()
             for name, info in recovery['files'].items():

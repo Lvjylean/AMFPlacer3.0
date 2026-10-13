@@ -1,6 +1,7 @@
 """Fixed-graph tests of the real Tcl selector; no whole-design extraction mock."""
 from pathlib import Path
 import subprocess
+import random
 import tempfile
 import unittest
 
@@ -28,14 +29,14 @@ class ScopedInput(unittest.TestCase):
         for c,t in types.items():
             if t in ('FDRE','DSP48E2','SRL16E'):
                 rows[c].append([c+'/CLK','CLK','IN','global_clock',1])
-        script='source '+word(ROOT/'scripts/dfx_input_scope.tcl')+'\n'
+        script='source '+word(ROOT/'scripts/dfx_input_scope.tcl')+'\nset dfx(dsp_critical) 1\n'
         script+='namespace eval amf_dfx {proc active {c} {return [string match {top/rm/*} $c]}\nproc timed {label script} {uplevel 1 $script}}\n'
         script+='set ::testTypes [dict create '+lst([x for c,t in types.items() for x in (c,t)])+']\n'
         script+='set ::testRows [dict create '+lst([x for c,rs in rows.items() for x in (c,lst([lst(r) for r in rs]))])+']\n'
         script+='set ::testNets [dict create '+lst([x for n,r in nets.items() for x in (n,lst(r))])+']\n'
         script+='rename amf_dfx_scope::type amf_dfx_scope::real_type\nproc amf_dfx_scope::type {c} {dict get $::testTypes $c}\n'
         script+='rename amf_dfx_scope::pins amf_dfx_scope::real_pins\nproc amf_dfx_scope::pins {c} {dict get $::testRows $c}\n'
-        script+='rename amf_dfx_scope::net amf_dfx_scope::real_net\nproc amf_dfx_scope::net {n} {dict get $::testNets $n}\n'
+        script+='rename amf_dfx_scope::net amf_dfx_scope::real_net\nproc amf_dfx_scope::net {n {withSinks 0}} {dict get $::testNets $n}\n'
         script+='proc get_cells {c} {return $c}\n'
         script+=f'proc get_property {{key c}} {{switch $key {{PREG {{return {dsp_preg}}} LOC {{return SITE}} BEL {{return BEL}} IS_CLK_INVERTED {{return 0}} IS_LOC_FIXED {{return 0}} IS_BEL_FIXED {{return 0}} default {{error "Unexpected property $key"}}}}}}\n'
         script+='set chosen [amf_dfx_scope::select '+word(lst(active))+']\n'
@@ -85,6 +86,34 @@ class ScopedInput(unittest.TestCase):
         types={'top/rm/a':'FDRE','dsp':'DSP48E2','launch':'FDRE'}
         got,_=self.run_graph(types,[('launch/Q','dsp/A[0]'),('dsp/ACOUT[0]','top/rm/a/D')],['top/rm/a'])
         self.assertEqual(got,set(types))
+
+    def test_random_graph_retains_every_register_path_through_active_cells(self):
+        # Independent path enumeration on the original graph, then on the cut graph.
+        # Includes reconvergence, extra fanout and static side inputs.
+        for seed in range(20):
+            rng=random.Random(seed)
+            names=['launch0','launch1']+[('top/rm/' if i in (2,5) else 'static/')+str(i) for i in range(8)]+['capture0','capture1']
+            types={n:('FDRE' if n.startswith(('launch','capture')) else 'LUT6') for n in names}
+            edges=[]
+            for i,a in enumerate(names[:-2]):
+                for j in range(max(2,i+1),len(names)):
+                    if rng.random()<0.22:edges.append((a+'/O'+str(j),names[j]+'/I'+str(i)))
+            active=[n for n in names if n.startswith('top/rm/')]
+            chosen,pins=self.run_graph(types,edges,active)
+            def paths(allowed):
+                adjacency={n:[] for n in names}
+                for a,b in allowed:adjacency[a.rsplit('/',1)[0]].append(b.rsplit('/',1)[0])
+                result=set()
+                def visit(n,path):
+                    if len(path)>1 and types[n]=='FDRE':
+                        if any(x in active for x in path):result.add(tuple(path))
+                        return
+                    for v in adjacency[n]:visit(v,path+[v])
+                for n in names:
+                    if types[n]=='FDRE':visit(n,[n])
+                return result
+            cut=[(a,b) for a,b in edges if a in pins and b in pins]
+            self.assertEqual(paths(edges),paths(cut),seed)
 
     def test_isolated_rm_requires_no_fixed_context(self):
         got,_=self.run_graph({'top/rm/a':'FDRE','other':'UNSUPPORTED'},[],['top/rm/a'])
