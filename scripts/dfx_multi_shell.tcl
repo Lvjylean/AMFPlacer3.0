@@ -4,6 +4,9 @@ proc main {} {
     global dfx
     set out $dfx(output)
     set_param general.maxThreads $dfx(vivado_threads)
+    if {[info exists dfx(resume_synthesis_checkpoint)]} {
+        amf_dfx::timed reopen_synthesis {open_checkpoint $dfx(resume_synthesis_checkpoint)}
+    } else {
     if {[llength $dfx(ip_scripts)]} {
         create_project dfx_shell $out/ip_project -part $dfx(part)
         amf_dfx::timed ip_generation {foreach f $dfx(ip_scripts) {source $f}}
@@ -14,13 +17,19 @@ proc main {} {
     foreach f $dfx(xdc_files) {read_xdc $f}
     amf_dfx::timed synthesis {synth_design -top $dfx(top) -part $dfx(part) -flatten_hierarchy none}
     amf_dfx::timed write_synth_dcp {write_checkpoint $out/base_synth.dcp}
-    report_utilization -hierarchical -file $out/base_synth_utilization.rpt
+    }
+    amf_dfx::timed synthesis_utilization {report_utilization -hierarchical -file $out/base_synth_utilization.rpt}
     set marked {}; set expected {}
-    foreach c [get_cells -hierarchical] {
-        if {[lsearch -nocase -exact [list_property $c] bblock]>=0 && [string tolower [get_property bblock $c]] in {true 1 yes}} {lappend marked [get_property NAME $c]}
+    amf_dfx::timed bblock_discovery {
+        # Avoid enumerating every property of every cell in large netlists.
+        # Glob character classes preserve the previous case-insensitive values.
+        set cells [get_cells -hierarchical -quiet -filter {bblock =~ [tT][rR][uU][eE] || bblock == 1 || bblock =~ [yY][eE][sS]}]
+        foreach c $cells {lappend marked [get_property NAME $c]}
     }
     foreach row $dfx(rps) {lappend expected [lindex $row 1]}
     if {[lsort $marked] ne [lsort $expected]} {error "RTL bblock set disagrees with configured partitions: $marked vs $expected"}
+    }
+    amf_dfx::timed pblock_configuration {
     foreach row $dfx(rps) {
         lassign $row id rp pb ranges slr
         set_property HD.RECONFIGURABLE true [get_cells $rp]
@@ -34,6 +43,7 @@ proc main {} {
         set_property CONTAIN_ROUTING true [get_pblocks $pb]
     }
     amf_multi::validate_regions
+    }
     amf_dfx::timed opt {opt_design}
     amf_dfx::timed write_opt_dcp {write_checkpoint $out/base_opt.dcp}
     amf_dfx::timed vivado_place {place_design}

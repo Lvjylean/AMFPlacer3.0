@@ -46,7 +46,7 @@ def validate(job):
 
 def load(path):
     path=Path(path).resolve(); job=validate(json.loads(path.read_text()))
-    for k in ('vivado', 'amf_config', 'shell_run'):
+    for k in ('vivado', 'amf_config', 'shell_run', 'resume_synthesis_run'):
         if k in job: job[k]=str((path.parent/job[k]).resolve())
     for k in ('rtl_sources','ip_scripts','xdc_files','assembly_xdc_files'):
         if k in job: job[k]=[str((path.parent/v).resolve()) for v in job[k]]
@@ -115,12 +115,38 @@ def check_shell(job):
     return shell,m
 
 
+def check_synthesis_resume(job):
+    """Reuse a completed synthesis stage only with identical design inputs."""
+    parent=Path(job['resume_synthesis_run'])
+    old=json.loads((parent/'manifest.json').read_text())
+    if old.get('schema')!='amf-dfx-multi-shell-v1': raise ValueError('Invalid synthesis parent')
+    for key in ('part','top','clock_name','clock_period_ns','partitions','vivado','vivado_threads','rtl_sources','ip_scripts','xdc_files','prepare_worker_shells'):
+        if old['job'].get(key)!=job.get(key): raise ValueError('Synthesis parent mismatch: '+key)
+    current={f:sha(f) for k in ('rtl_sources','ip_scripts','xdc_files','assembly_xdc_files') for f in job.get(k,[])}
+    if current!=old['input_hashes']: raise ValueError('Synthesis input hashes changed')
+    stages=[line.split('\t') for line in (parent/'stage_times.tsv').read_text().splitlines()]
+    for stage in ('synthesis','write_synth_dcp'):
+        if not any(s[0]==stage and s[2]=='0' for s in stages): raise ValueError('Incomplete '+stage)
+    checkpoint=parent/'base_synth.dcp'
+    if not checkpoint.is_file(): raise ValueError('Missing synthesis checkpoint')
+    job['resume_synthesis_checkpoint']=str(checkpoint)
+    return dict(parent_run=str(parent),parent_manifest_sha256=sha(parent/'manifest.json'),
+                checkpoint=str(checkpoint),checkpoint_sha256=sha(checkpoint),
+                inherited_stage_seconds={s[0]:float(s[1]) for s in stages if s[2]=='0'},
+                synthesis_rerun=False,timing_note='Resume wall time excludes original synthesis and interrupted metadata scan; report separately')
+
+
 def run(args):
     job=load(args.config); out=Path(args.output).resolve()
     # Validate external inputs before creating work or dispatching processes.
     for k in ('rtl_sources','ip_scripts','xdc_files','assembly_xdc_files'):
         for f in job.get(k,[]):
             if not Path(f).is_file(): raise ValueError('Missing input '+f)
+    recovery=None
+    if 'resume_synthesis_checkpoint' in job: raise ValueError('Use resume_synthesis_run for validated recovery')
+    if 'resume_synthesis_run' in job:
+        if args.mode!='shell': raise ValueError('Synthesis recovery applies only to shell mode')
+        recovery=check_synthesis_resume(job)
     if args.mode=='run':
         shell,parent=check_shell(job)
         amf_configuration(job)
@@ -140,6 +166,7 @@ def run(args):
                 source_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
                 script_hashes=hashes,dcp_storage='server-only',shell_mode='full-context, one active RP per worker')
     record['input_hashes']={f:sha(f) for k in ('rtl_sources','ip_scripts','xdc_files','assembly_xdc_files') for f in job.get(k,[])}
+    if recovery: record['synthesis_recovery']=recovery
     def update(stage):
         save(out/'manifest.json',record);save(out/'status.json',dict(state=record['state'],stage=stage,error=record.get('error')))
     update('starting')

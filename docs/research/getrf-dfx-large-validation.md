@@ -53,6 +53,16 @@ V0 建壳为一次性成本，不计入一次 V1 增量复用成本，另报首�
 ## 状态
 2026-10-13：源码核对、RTL 修改、控制器检查及 OOC 综合已通过；大规模完整 DFX 结果待验收。
 
+### 2026-10-13 综合后属性检查修复
+
+- V0 全量综合 1,792.420 秒，V1 全量综合 1,777.863 秒；分别写出 base_synth.dcp，综合均为 0 error、0 critical warning。完整设计的层次 cell 查询返回 1,022,006 项，未发生静态上下文被整体优化掉的情况。
+- 原脚本对每个 cell 调用 list_property 寻找 bblock。只读重放中，前 1,000 个 cell 就需 9.928 秒；批量查询整个网表耗时 9.573 秒且准确返回两个配置 RP。这是元数据检查的实现开销，不是 AMF placement、Vivado opt/place/route 耗时。
+- 修复改为批量筛选，保留 true/1/yes 的原大小写语义、完整标记集合与配置集合一致性校验，不改变 Pblock、时钟或布局算法。实际 DCP 上大小写变体检查通过；恢复入口和 DFX 合同共 11 个测试通过。
+- 15:46 HKT 仅停止这两个精确识别的 Vivado 批处理 PID，原 run 和日志保留。二者尚未执行 opt/place/route。原调度器正常记录子任务失败并退出；主动中断原因另存 attribute-scan-recovery-01/interruption.json，不能将退出码解释为设计 DRC 失败。
+- 后续在独立 resume-02 run 从已完成综合检查点继续；恢复前核对 RTL/IP/XDC 内容哈希、器件、周期、模块、分区、Vivado 路径与线程配置，不重新综合。V1 增量队列指向恢复后的 V0 壳。
+- 原综合时间、失败检查开销、恢复读 DCP 开销和包括中断的总墙钟分开记录；不能把恢复 run 的墙钟直接称为完整编译耗时。
+- 恢复索引：experiments/evidence/getrf-dfx-large-01/attribute-scan-recovery-01/campaign.json。
+
 ## 大规模接入补齐
 - Vivado 的 IS_PRIMITIVE 会包括 DSP48E2 内部 INTERNAL 结构。导入和位置审计以完整 DSP 等可布局 primitive 为边界，不能给其内部 DSP_OUTPUT 等单独分配 site。
 - 网表解析遍历层次别名后保留这些 primitive 的外部 pin，避免使用 -leaf 深入 DSP 内部。等值 GND/VCC 的多个层次驱动归一为同种常量；普通多驱动仍拒绝。
