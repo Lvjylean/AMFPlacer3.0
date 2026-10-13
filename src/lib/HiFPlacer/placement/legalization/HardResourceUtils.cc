@@ -36,8 +36,10 @@ bool isCarryCascade(DesignInfo::DesignPin *driver, DesignInfo::DesignPin *sink)
 }
 
 static bool prefix(const std::string &value, const std::string &head) { return value.find(head) == 0; }
-static std::vector<Edge> cascadeEdges(DesignInfo *design)
+static std::vector<Edge> cascadeEdges(PlacementInfo *placement)
 {
+    auto design = placement->getDesignInfo();
+    const auto &dfx = placement->getIncrementalContext();
     std::vector<Edge> result;
     std::set<std::pair<int, int>> seen;
     for (auto cell : design->getCells())
@@ -48,6 +50,11 @@ static std::vector<Edge> cascadeEdges(DesignInfo *design)
             auto driver = pin->getDriverPin();
             if (!driver) continue;
             auto source = driver->getCell();
+            // Fixed interface context is not assigned by the RM legalizer.
+            // Its routing/cascades remain owned and verified by Vivado.
+            const bool sourceStatic = dfx.enabled && dfx.staticCellIds.count(source->getCellId());
+            const bool sinkStatic = dfx.enabled && dfx.staticCellIds.count(cell->getCellId());
+            if (sourceStatic && sinkStatic) continue;
             const auto in = pin->getRefPinName(), out = driver->getRefPinName();
             std::string family;
             if (isCarryCascade(driver, pin)) family = "CARRY8";
@@ -61,7 +68,11 @@ static std::vector<Edge> cascadeEdges(DesignInfo *design)
             if (cell->isURAM() && source->isURAM() && prefix(in, "CAS_IN") && prefix(out, "CAS_OUT"))
                 throw std::runtime_error("URAM cascade is not supported by the independent-URAM legalizer: " + cell->getName());
             if (!family.empty() && seen.insert({source->getCellId(), cell->getCellId()}).second)
+            {
+                if (sourceStatic != sinkStatic)
+                    throw std::runtime_error("Dedicated cascade crosses the active RP boundary: " + cell->getName());
                 result.push_back({source, cell, family});
+            }
         }
     }
     return result;
@@ -81,7 +92,7 @@ static std::vector<Cell *> cores(PlacementInfo::PlacementMacro *macro)
 void validateCascadeMacros(PlacementInfo *placement)
 {
     AMF_PROFILE_FUNCTION("validation");
-    for (const auto &edge : cascadeEdges(placement->getDesignInfo()))
+    for (const auto &edge : cascadeEdges(placement))
     {
         auto sourcePU = placement->getPlacementUnitByCell(edge.source);
         auto sinkPU = placement->getPlacementUnitByCell(edge.sink);
@@ -100,6 +111,7 @@ void validateCascadeMacros(PlacementInfo *placement)
 CellSites validatePlacement(PlacementInfo *placement)
 {
     AMF_PROFILE_FUNCTION("validation");
+    const auto &dfx = placement->getIncrementalContext();
     CellSites assigned;
     std::set<Site *> occupied;
     for (const auto &mapping : placement->getPULegalSite())
@@ -132,6 +144,7 @@ CellSites validatePlacement(PlacementInfo *placement)
     }
     for (auto cell : placement->getCells())
     {
+        if (dfx.enabled && dfx.staticCellIds.count(cell->getCellId())) continue;
         if (cell->isVirtualCell() || (!cell->isURAM() && !cell->isDSP() && !cell->isBRAM() && !cell->isCarry())) continue;
         if (!assigned.count(cell)) throw std::runtime_error("Unassigned hard resource: " + cell->getName());
         auto name = assigned.at(cell)->getName();
@@ -139,7 +152,7 @@ CellSites validatePlacement(PlacementInfo *placement)
             (cell->isCarry() && !prefix(name, "SLICE_")) || (cell->isBRAM() && !prefix(name, "RAMB")))
             throw std::runtime_error("Incompatible hard-resource site: " + cell->getName());
     }
-    for (const auto &edge : cascadeEdges(placement->getDesignInfo()))
+    for (const auto &edge : cascadeEdges(placement))
     {
         auto a = assigned.at(edge.source), b = assigned.at(edge.sink);
         if (a->getSLRId() != b->getSLRId() || a->getSiteX() != b->getSiteX() || a->getSiteY() + 1 != b->getSiteY())
@@ -188,7 +201,7 @@ void writePlacement(PlacementInfo *placement, const std::string &directory)
     tcl << "place_cell $amf_resources\nunset amf_resources\n";
     std::ofstream cascades(directory + "/cascades.tsv");
     cascades << "source\tsink\tfamily\n";
-    for (const auto &edge : cascadeEdges(placement->getDesignInfo()))
+    for (const auto &edge : cascadeEdges(placement))
     {
         edges[edge.family]++;
         cascades << edge.source->getName() << '\t' << edge.sink->getName() << '\t' << edge.family << '\n';

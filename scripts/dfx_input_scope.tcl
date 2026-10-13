@@ -4,6 +4,21 @@ namespace eval amf_dfx_scope {
     variable types {}; variable netCache {}; variable pinCache {}; variable terminalCache {}
     variable selected {}; variable keep {}; variable up {}; variable down {}
     variable seenUp {}; variable seenDown {}; variable dspCertificates {}
+    variable clockCache {}
+
+    proc clock_driver {name} {
+        variable clockCache
+        if {![dict exists $clockCache $name]} {
+            set drivers [canonical_pins $name OUT]
+            if {[llength $drivers]!=1} {error "Expected one clock driver at $name: $drivers"}
+            set token @DFX_CLOCK/[lindex $drivers 0]
+            # One physical clock may have hundreds of hierarchical aliases.
+            # Cache the entire alias group once, without expanding clock sinks.
+            foreach alias [get_property NAME [get_nets -quiet -segments $name]] {dict set clockCache $alias $token}
+            dict set clockCache $name $token
+        }
+        return [dict get $clockCache $name]
+    }
 
     proc type {cell} {
         variable types
@@ -230,7 +245,7 @@ namespace eval amf_dfx_scope {
                     if {$n ne ""} {
                         if {$clk} {
                             # An external clock identifier, not a fabricated physical cell.
-                            set driver @DFX_CLOCK/$n
+                            set driver [clock_driver $n]
                             if {$dir eq "IN"} {dict set clocks $driver 1}
                         } else {
                             lassign [net $n] driver kind sinks

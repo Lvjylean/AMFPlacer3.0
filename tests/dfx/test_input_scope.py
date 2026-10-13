@@ -135,6 +135,27 @@ if {[amf_dfx_scope::net GROUND] ne {<const0> GND {}}} {error "bad cached zero"}
             cut=[(a,b) for a,b in edges if a in pins and b in pins]
             self.assertEqual(paths(edges),paths(cut),seed)
 
+    def test_clock_aliases_share_one_driver_without_clock_fanout(self):
+        script='source '+word(ROOT/'scripts/dfx_input_scope.tcl')+'\n'+r'''
+set queries 0
+rename amf_dfx_scope::canonical_pins amf_dfx_scope::real_canonical_pins
+proc amf_dfx_scope::canonical_pins {name direction} {
+    if {$direction ne "OUT"} {error "clock fanout expanded"}
+    incr ::queries
+    return clock_buf/O
+}
+proc get_nets {args} {return {clk rm/ap_clk static/clk}}
+proc get_property {property objects} {if {$property ne "NAME"} {error "unexpected property"};return $objects}
+foreach alias {clk rm/ap_clk static/clk} {
+    if {[amf_dfx_scope::clock_driver $alias] ne "@DFX_CLOCK/clock_buf/O"} {error "clock alias not canonical"}
+}
+if {$queries != 1} {error "clock aliases redundantly queried"}
+'''
+        with tempfile.TemporaryDirectory() as d:
+            f=Path(d)/'case.tcl';f.write_text(script)
+            result=subprocess.run(['tclsh',str(f)],text=True,capture_output=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+
     def test_isolated_rm_requires_no_fixed_context(self):
         got,_=self.run_graph({'top/rm/a':'FDRE','other':'UNSUPPORTED'},[],['top/rm/a'])
         self.assertEqual(got,{'top/rm/a'})
