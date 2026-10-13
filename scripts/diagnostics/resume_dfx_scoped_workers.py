@@ -98,7 +98,7 @@ def run(args):
             m['input_validation']=validate(target);save(target/'input-validation.json',m['input_validation'])
             m['amf_input_scope']=dict(line.split('\t',1) for line in (target/'input_scope.tsv').read_text().splitlines())
             m['input_copy_normalization_seconds']=time.time()-started
-            for n in ('dfx_common.tcl','dfx_backend.tcl'):shutil.copy2(ROOT/'scripts'/n,target/'inputs'/n)
+            for n in ('dfx_common.tcl','dfx_backend.tcl','dfx_import.tcl'):shutil.copy2(ROOT/'scripts'/n,target/'inputs'/n)
             settings_path=target/'inputs/settings.tcl'
             values=dict(old['job'],output=str(target),modeled_sites=str(target/'modeled_sites.txt'))
             settings_path.write_text('\n'.join('set dfx('+k+') '+tcl_word(v) for k,v in values.items())+'\n')

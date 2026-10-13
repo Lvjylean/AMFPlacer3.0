@@ -1,5 +1,6 @@
 source [lindex $argv 0]
 source [file join [file dirname [info script]] dfx_common.tcl]
+source [file join [file dirname [info script]] dfx_import.tcl]
 proc main {} {
     global dfx
     set out $dfx(output)
@@ -13,10 +14,17 @@ proc main {} {
         lassign [split $line \t] c target
         if {![amf_dfx::active $c] || [dict exists $requested $c]} {error "Invalid active placement row: $line"}
         dict set requested $c $target
-        # A failed placement command aborts; native active-RM LUT remapping is audited below.
-        place_cell [list $c $target]
     }
     close $f
+    # AMF has supplied a new legal packing. Synthesis LUT pairing must not
+    # silently move another active cell while importing its requested BEL.
+    amf_dfx::timed reset_active_lut_groups {amf_dfx::reset_active_lut_groups $out $requested}
+    amf_dfx::timed import_amf_placement {
+        dict for {c target} $requested {
+            # Abort on failed placement; never silently fall back to native placement.
+            place_cell [list $c $target]
+        }
+    }
     set f [open $out/allowed_sites.txt r]; set allowed [split [string trim [read $f]] \n]; close $f
     set f [open $out/blocked_sites.txt r]; set blocked [split [string trim [read $f]] \n]; close $f
     set remapped 0

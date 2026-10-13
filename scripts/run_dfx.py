@@ -156,7 +156,7 @@ def run(args):
                     source_commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
                     input_hashes={k: sha(job[k]) for k in ('static_checkpoint','reference_checkpoint','rm_checkpoint','amf_config')})
     if recovery: manifest['prepare_recovery'] = recovery
-    for name in ('dfx_prepare.tcl', 'dfx_input_scope.tcl', 'dfx_backend.tcl', 'dfx_common.tcl', 'run_dfx.py', 'summarize_dfx.py',
+    for name in ('dfx_prepare.tcl', 'dfx_input_scope.tcl', 'dfx_backend.tcl', 'dfx_import.tcl', 'dfx_common.tcl', 'run_dfx.py', 'summarize_dfx.py',
                  'summarize_full_flow.py', 'summarize_face_detect_flow.py'):
         shutil.copy2(SCRIPT / name, out / 'inputs' / name)
     manifest['script_hashes'] = {p.name: sha(p) for p in (out/'inputs').iterdir()}
