@@ -22,13 +22,18 @@ def summarize(root):
         if observed['errors'] != d['totals'].get('Error',0) or observed['critical_warnings'] != d['totals'].get('Critical Warning',0):
             raise ValueError('DRC report/count mismatch')
     rows = list(csv.DictReader((root/'placement_retention.tsv').open(), delimiter='\t'))
+    allowed=set((root/'allowed_sites.txt').read_text().splitlines())
+    blocked=set((root/'blocked_sites.txt').read_text().splitlines())
+    domain_violations=[r['cell'] for r in rows if r['loc'] not in allowed or r['loc'] in blocked]
     matches = sum(r['requested'] == r['loc']+'/'+r['bel'].split('.')[-1] for r in rows)
     result = dict(routing_counts=counts, routing_complete=routing_complete(counts), drc=d,
                   timing={stage:timing(root/(stage+'_timing.rpt')) for stage in ('imported','placed','routed')},
-                  final_rm_placement=dict(requested=len(rows), exact_matches=matches, moved=len(rows)-matches),
+                  final_rm_placement=dict(requested=len(rows), exact_matches=matches, moved=len(rows)-matches,
+                    site_matches=sum(r['requested'].split('/')[0]==r['loc'] for r in rows),
+                    domain_violations=domain_violations),
                   pr_verify_full_check=(root/'pr_verify_passed.txt').read_text().strip()=='full_check_passed')
     result['implementation_verified'] = (result['routing_complete'] and result['pr_verify_full_check'] and
-        d['totals'].get('Error',0)==0 and d['totals'].get('Critical Warning',0)==0 and len(rows)>0)
+        d['totals'].get('Error',0)==0 and d['totals'].get('Critical Warning',0)==0 and len(rows)>0 and not domain_violations)
     result['timing_met'] = all(result['timing']['routed'][k]>=0 for k in ('wns_ns','whs_ns','wpws_ns'))
     result['vivado_stage_seconds'] = {}
     for line in (root/'stage_times.tsv').read_text().splitlines():

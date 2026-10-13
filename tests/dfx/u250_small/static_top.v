@@ -8,7 +8,7 @@ module static_top;
   wire [7:0] result;
   BSCANE2 #(.JTAG_CHAIN(1)) jtag (
     .TCK(tck), .TDI(tdi), .SHIFT(shift), .RESET(reset), .SEL(sel),
-    .TDO(sink[0]), .CAPTURE(), .DRCK(), .RUNTEST(), .TMS(), .UPDATE());
+    .TDO(^sink), .CAPTURE(), .DRCK(), .RUNTEST(), .TMS(), .UPDATE());
   BUFG clock_buffer (.I(tck), .O(clk));
   always @(posedge clk) begin
     source <= {source[6:0], source[7] ^ source[5] ^ tdi};

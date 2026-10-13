@@ -15,6 +15,7 @@ proc main {} {
     amf_dfx::assert_same $interface [amf_dfx::boundary_signature] "RM port names/directions"
     amf_dfx::assert_same $before [amf_dfx::static_snapshot] "RM insertion/static placement"
     opt_design
+    amf_dfx::assert_same $interface [amf_dfx::boundary_signature] "RM optimized port names/directions"
     amf_dfx::assert_same $before [amf_dfx::static_snapshot] "RM opt/static placement"
     write_checkpoint $out/linked.dcp
 
@@ -94,6 +95,14 @@ proc main {} {
                     error "DFX v1 requires a modeled static driver at RM data boundary: $pin"
                 }
                 set driver @STATIC/$driver
+            }
+            if {[amf_dfx::active $c] && !$isClock && $dir eq "OUT"} {
+                foreach sink [get_pins -quiet -leaf -of_objects $net -filter {DIRECTION == IN}] {
+                    set sc [get_cells -of_objects $sink]
+                    if {![dict exists $included $sc]} {
+                        error "DFX v1 requires a modeled static endpoint at RM data boundary: $sink"
+                    }
+                }
             }
             if {$isClock && $dir eq "IN"} {dict set clocks $driver 1}
             puts $f " pin=> $pin refpin=> $ref dir=> $dir net=> $net drivepin=> $driver"

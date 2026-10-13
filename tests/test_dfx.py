@@ -33,6 +33,20 @@ class DfxContractTests(unittest.TestCase):
                                             ({'rm/a[0]'}, {'SLICE_X1Y1'}, {'SLICE_X1Y1'})]:
                 with self.assertRaises(ValueError): dfx.placement_rows(path, cells, allowed, blocked)
 
+    def test_export_file_cannot_be_sourced(self):
+        # Sourcing the data artifact must stop before any placement command executes.
+        text = 'proc place_cell {args} {puts "MOVED"}\nerror {DFX placement data: use dfx-run}\nplace_cell {rm/a S/AFF}\n'
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.tcl') as f:
+            f.write(text); f.flush()
+            result = subprocess.run(['tclsh',f.name],text=True,capture_output=True)
+        self.assertNotEqual(result.returncode,0)
+        self.assertNotIn('MOVED',result.stdout)
+
+    def test_pblock_range_value_has_no_embedded_quotes(self):
+        ranges = ['CLOCKREGION_X1Y4:CLOCKREGION_X1Y4','SLICE_X1Y240:SLICE_X2Y299']
+        script = 'set ranges '+dfx.tcl_word(' '.join(ranges))+'\nputs $ranges\n'
+        self.assertEqual(subprocess.check_output(['tclsh'],input=script,text=True).strip(),' '.join(ranges))
+
     def test_duplicate_placement_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             p=Path(tmp)/'placement.tcl'
