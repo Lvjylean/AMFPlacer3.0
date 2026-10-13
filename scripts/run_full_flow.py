@@ -75,6 +75,8 @@ def run(root, args):
             raise ValueError('Binary lacks global-placement inspection; refusing a full placement fallback')
     config_path = root / args.placement_run / 'config.json' if args.placement_run else root / args.config
     config = json.loads(config_path.read_text())
+    if config.get("IncremenralCompilation") in (True, "true"):
+        raise ValueError("Use amf3.py dfx-run for a locked static shell; full-run unplaces the whole design")
     inputs = {}
     for key in ('vivado extracted device information file', 'vivado extracted design information file',
                 'physical boundary model file', 'special pin offset info file', 'clock file', 'mergedSharedCellType2sharedCellType',

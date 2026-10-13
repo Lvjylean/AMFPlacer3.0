@@ -29,10 +29,10 @@ proc main {} {
     set f [open $out/allowed_sites.txt w]; puts $f [join [lsort [dict keys $allowed]] \n]; close $f
     # PROHIBIT and occupied static sites are hard exclusions. Locked routing may
     # impose further BEL/pin restrictions, which Vivado import/DFX DRC must check.
-    set f [open $out/blocked_sites.txt w]
-    foreach s [get_sites -filter {PROHIBIT == 1}] {if {[dict exists $modeled $s]} {puts $f $s}}
-    dict for {c v} $before { if {[dict exists $modeled [lindex $v 1]]} {puts $f [lindex $v 1]} }
-    close $f
+    set blocked [dict create]
+    foreach s [get_sites -filter {PROHIBIT == 1}] {if {[dict exists $modeled $s]} {dict set blocked $s 1}}
+    dict for {c v} $before { if {[dict exists $modeled [lindex $v 1]]} {dict set blocked [lindex $v 1] 1} }
+    set f [open $out/blocked_sites.txt w]; puts $f [join [lsort [dict keys $blocked]] \n]; close $f
 
     set included [dict create]
     set activeCount 0

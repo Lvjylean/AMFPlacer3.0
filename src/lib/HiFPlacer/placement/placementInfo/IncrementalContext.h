@@ -9,7 +9,7 @@
 #include <vector>
 
 // Version 1 handles one active RP. Vivado owns static routing and partition pins;
-// AMF receives the complete primitive netlist, not an electrically cut RM graph.
+// AMF retains modeled static fabric connectivity across the RM interface.
 struct IncrementalContext
 {
     struct FixedCell { std::string site, bel; };
