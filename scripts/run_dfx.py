@@ -57,6 +57,8 @@ def load_job(path):
     if not job['active_partition'] or job['active_partition'].endswith('/'):
         raise ValueError('Invalid active partition')
     job.setdefault('vivado_threads', 4)
+    if job.get('static_placement_audit', 'full') not in ('full', 'skip'):
+        raise ValueError('Invalid static_placement_audit mode')
     return job
 
 

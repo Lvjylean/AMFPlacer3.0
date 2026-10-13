@@ -18,7 +18,9 @@ proc main {} {
         close_design
     }
     amf_dfx::timed open_reference {open_checkpoint $dfx(reference_checkpoint)}
-    set static [amf_multi::static_snapshot]
+    if {[amf_dfx::static_audit_enabled]} {
+        amf_dfx::save_dict $out/static_snapshot.tcldata [amf_multi::static_snapshot]
+    }
     set boundaries [dict create]
     foreach row $dfx(rps) {
         lassign $row id rp pb
@@ -35,7 +37,7 @@ proc main {} {
     # supplied full-hierarchy XDCs (empty only when there are no RM-local constraints).
     foreach f $dfx(assembly_xdc_files) {read_xdc $f}
     amf_multi::validate_regions
-    amf_dfx::assert_same $static [amf_multi::static_snapshot] "Assembly static placement"
+    amf_dfx::check_static_placement $out/static_snapshot.tcldata assembly multi
     set f [open $out/module_preservation.tsv w]
     puts $f "id\tprimitive_count\thierarchical_net_count\tplacement_equal\tfootprint_routing_equal\tboundary_equal"
     foreach row $dfx(rps) {

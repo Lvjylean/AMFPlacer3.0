@@ -6,8 +6,7 @@ proc main {} {
     set_param general.maxThreads $dfx(vivado_threads)
     amf_dfx::timed open_linked {open_checkpoint $out/linked.dcp}
     amf_dfx::assert_context
-    set before [amf_dfx::read_dict $out/static_snapshot.tcldata]
-    amf_dfx::assert_same $before [amf_dfx::static_snapshot] "Before AMF import"
+    amf_dfx::check_static_placement $out/static_snapshot.tcldata before_amf_import
     set f [open $out/placement.tsv r]
     set requested [dict create]
     while {[gets $f line] >= 0} {
@@ -33,7 +32,7 @@ proc main {} {
     }
     close $f
     puts "AMF_DFX_IMPORT_AUDITED count=[dict size $requested] native_remaps=$remapped"
-    amf_dfx::assert_same $before [amf_dfx::static_snapshot] "After AMF import"
+    amf_dfx::check_static_placement $out/static_snapshot.tcldata after_amf_import
     amf_dfx::timed write_imported {write_checkpoint $out/imported.dcp}
     amf_dfx::timed audit_imported {amf_dfx::audit $out imported}
     amf_dfx::timed vivado_place {place_design}

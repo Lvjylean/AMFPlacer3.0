@@ -70,6 +70,28 @@ namespace eval amf_dfx {
     proc save_dict {path data} {
         set f [open $path w]; puts $f $data; close $f
     }
+    proc static_audit_enabled {} {
+        global dfx
+        if {![info exists dfx(static_placement_audit)]} {return 1}
+        if {$dfx(static_placement_audit) ni {full skip}} {error "Invalid static_placement_audit mode"}
+        return [expr {$dfx(static_placement_audit) eq "full"}]
+    }
+    proc check_static_placement {snapshot label {scope single}} {
+        global dfx
+        # Test the mode before loading or recomputing any full-design snapshot.
+        if {![static_audit_enabled]} {
+            set f [open $dfx(output)/static_placement_audit.tsv a]
+            puts $f "$label\tskipped\texplicit_job_configuration"; close $f
+            puts "AMF_DFX_STATIC_AUDIT_SKIPPED $label"
+            return
+        }
+        timed static_audit_$label {
+            if {$scope eq "multi"} {set after [amf_multi::static_snapshot]} else {set after [static_snapshot]}
+            assert_same [read_dict $snapshot] $after "Static placement $label"
+        }
+        set f [open $dfx(output)/static_placement_audit.tsv a]
+        puts $f "$label\tpassed\tfull_snapshot_comparison"; close $f
+    }
     proc read_dict {path} {
         set f [open $path r]; set result [string trim [read $f]]; close $f
         dict size $result
@@ -118,7 +140,7 @@ namespace eval amf_dfx {
     proc audit {out stage} {
         global dfx
         assert_context
-        assert_same [read_dict $out/static_snapshot.tcldata] [static_snapshot] "Static placement"
+        check_static_placement $out/static_snapshot.tcldata $stage
         report_timing_summary -delay_type min_max -report_unconstrained -file $out/${stage}_timing.rpt
         report_timing -through [get_pins -of_objects [get_cells $dfx(active_partition)]] \
             -max_paths 100 -path_type full_clock_expanded -file $out/${stage}_boundary_timing.rpt

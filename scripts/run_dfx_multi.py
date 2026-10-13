@@ -41,6 +41,8 @@ def validate(job):
             raise ValueError('Explicit Pblock ranges required')
     if not 0 < float(job['clock_period_ns']) < 10000: raise ValueError('Invalid clock period')
     if int(job.get('max_parallel', 2)) < 1: raise ValueError('Invalid parallel budget')
+    if job.get('static_placement_audit', 'full') not in ('full', 'skip'):
+        raise ValueError('Invalid static_placement_audit mode')
     return job
 
 
@@ -188,6 +190,7 @@ def run(args):
             workers=out/'workers';workers.mkdir();record['workers']={}
             def worker(r):
                 name=r['id'];cfg={k:job[k] for k in ('IncremenralCompilation','part','clock_name','clock_period_ns','amf_config','vivado','vivado_threads')}
+                cfg['static_placement_audit']=job.get('static_placement_audit', 'full')
                 begin=time.time(); frontend_step=None
                 checkpoint=r.get('rm_checkpoint')
                 if r.get('rm_rtl_sources'):

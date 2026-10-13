@@ -37,6 +37,13 @@ def summarize(root):
         imported=list(csv.DictReader(imp.open(),delimiter='\t'))
         result['imported_rm_placement']=dict(requested=len(imported),exact_matches=sum(x['requested']==x['loc']+'/'+x['bel'].split('.')[-1] for x in imported))
     result['import_policy']='active-RM native remapping audited; static locked; failed placement command aborts'
+    audit_file=root/'static_placement_audit.tsv'
+    if audit_file.exists():
+        audit_rows=[line.split('\t') for line in audit_file.read_text().splitlines()]
+        result['static_placement_audit']=dict(
+            checks=[dict(stage=r[0],status=r[1],reason=r[2]) for r in audit_rows],
+            all_recorded_checks_passed=bool(audit_rows) and all(r[1]=='passed' for r in audit_rows),
+            skipped=any(r[1]=='skipped' for r in audit_rows))
     result['implementation_verified'] = (result['routing_complete'] and result['pr_verify_full_check'] and
         d['totals'].get('Error',0)==0 and d['totals'].get('Critical Warning',0)==0 and len(rows)>0 and not domain_violations)
     result['timing_met'] = all(result['timing']['routed'][k]>=0 for k in ('wns_ns','whs_ns','wpws_ns'))

@@ -7,16 +7,17 @@ proc main {} {
     set_param general.maxThreads $dfx(vivado_threads)
     amf_dfx::timed open_static_dcp {open_checkpoint $dfx(static_checkpoint)}
     amf_dfx::assert_context
-    set before [amf_dfx::static_snapshot]
+    # The initial occupancy snapshot is still needed for AMF's blocked sites.
+    set before [amf_dfx::timed static_occupancy_snapshot {amf_dfx::static_snapshot}]
     amf_dfx::save_dict $out/static_snapshot.tcldata $before
     amf_dfx::save_dict $out/shell_boundary.tcldata [amf_dfx::boundary_snapshot]
     set interface [amf_dfx::boundary_signature]
     amf_dfx::timed link_rm {read_checkpoint -cell $dfx(active_partition) $dfx(rm_checkpoint)}
     amf_dfx::assert_same $interface [amf_dfx::boundary_signature] "RM port names/directions"
-    amf_dfx::assert_same $before [amf_dfx::static_snapshot] "RM insertion/static placement"
+    amf_dfx::check_static_placement $out/static_snapshot.tcldata rm_insertion
     amf_dfx::timed active_opt {opt_design}
     amf_dfx::assert_same $interface [amf_dfx::boundary_signature] "RM optimized port names/directions"
-    amf_dfx::assert_same $before [amf_dfx::static_snapshot] "RM opt/static placement"
+    amf_dfx::check_static_placement $out/static_snapshot.tcldata rm_opt
     amf_dfx::timed write_linked_dcp {write_checkpoint $out/linked.dcp}
 
     # Real device site allowlist after Vivado has snapped the Pblock. Deliberately
