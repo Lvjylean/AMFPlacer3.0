@@ -168,6 +168,7 @@ def run(args):
                     'DFX allowed sites file':str(out/'allowed_sites.txt'), 'DFX blocked sites file':str(out/'blocked_sites.txt'),
                     'DFX static placement file':str(out/'static_placement.tsv'),
                     'SRL control metadata file':str(out/'srl_controls.tsv'),
+                    'DSP registered outputs file':str(out/'dsp_registered_outputs.txt'),
                     'vivado extracted design information file':str(out/'netlist.zip'), 'clock file':str(out/'clocks'),
                     'ClockPeriod':str(job['clock_period_ns']), 'dumpDirectory':str(out/'placement'),
                     'DumpCLBPacking':'DumpCLBPacking', 'BoundaryReportDirectory':str(out/'reports/physical')})

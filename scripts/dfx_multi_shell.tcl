@@ -4,9 +4,17 @@ proc main {} {
     global dfx
     set out $dfx(output)
     set_param general.maxThreads $dfx(vivado_threads)
-    create_project -in_memory -part $dfx(part)
+    if {[llength $dfx(ip_scripts)]} {
+        create_project dfx_shell $out/ip_project -part $dfx(part)
+        amf_dfx::timed ip_generation {foreach f $dfx(ip_scripts) {source $f}}
+    } else {
+        create_project -in_memory -part $dfx(part)
+    }
     foreach f $dfx(rtl_sources) {read_verilog -sv $f}
+    foreach f $dfx(xdc_files) {read_xdc $f}
     amf_dfx::timed synthesis {synth_design -top $dfx(top) -part $dfx(part) -flatten_hierarchy none}
+    amf_dfx::timed write_synth_dcp {write_checkpoint $out/base_synth.dcp}
+    report_utilization -hierarchical -file $out/base_synth_utilization.rpt
     set marked {}; set expected {}
     foreach c [get_cells -hierarchical] {
         if {[lsearch -nocase -exact [list_property $c] bblock]>=0 && [string tolower [get_property bblock $c]] in {true 1 yes}} {lappend marked [get_property NAME $c]}
@@ -25,14 +33,16 @@ proc main {} {
         set_property EXCLUDE_PLACEMENT true [get_pblocks $pb]
         set_property CONTAIN_ROUTING true [get_pblocks $pb]
     }
-    foreach f $dfx(xdc_files) {read_xdc $f}
     amf_multi::validate_regions
     amf_dfx::timed opt {opt_design}
+    amf_dfx::timed write_opt_dcp {write_checkpoint $out/base_opt.dcp}
     amf_dfx::timed vivado_place {place_design}
-    write_checkpoint $out/base_placed.dcp
+    amf_dfx::timed write_placed_dcp {write_checkpoint $out/base_placed.dcp}
+    report_timing_summary -delay_type min_max -file $out/base_placed_timing.rpt
     amf_dfx::timed vivado_route {route_design}
-    write_checkpoint $out/base_routed.dcp
-    amf_multi::reports $out/base
+    amf_dfx::timed write_routed_dcp {write_checkpoint $out/base_routed.dcp}
+    amf_dfx::timed reports {amf_multi::reports $out/base}
+    report_utilization -file $out/base_utilization.rpt
     amf_dfx::save_dict $out/static_snapshot.tcldata [amf_multi::static_snapshot]
     foreach row $dfx(rps) {
         lassign $row id rp pb
@@ -40,13 +50,21 @@ proc main {} {
         amf_dfx::save_dict $out/${id}_boundary.tcldata [amf_dfx::boundary_snapshot]
     }
     amf_dfx::timed full_bitstream {write_bitstream $out/base_full.bit}
-    close_design
     foreach row $dfx(rps) {
         lassign $row id rp pb
-        open_checkpoint $out/base_routed.dcp
+        amf_dfx::timed partial_bitstream_$id {write_bitstream -cell $rp $out/${id}_partial.bit}
+    }
+    close_design
+    if {[info exists dfx(prepare_worker_shells)] && !$dfx(prepare_worker_shells)} {
+        puts AMF_MULTI_SHELL_COMPLETED
+        return
+    }
+    foreach row $dfx(rps) {
+        lassign $row id rp pb
+        amf_dfx::timed reopen_for_lock_$id {open_checkpoint $out/base_routed.dcp}
         update_design -cell $rp -black_box
         lock_design -level routing
-        write_checkpoint $out/${id}_locked.dcp
+        amf_dfx::timed write_locked_dcp_$id {write_checkpoint $out/${id}_locked.dcp}
         close_design
     }
     puts AMF_MULTI_SHELL_COMPLETED

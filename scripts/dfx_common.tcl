@@ -3,9 +3,12 @@ namespace eval amf_dfx {
         global dfx
         set start [clock milliseconds]
         set code [catch {uplevel 1 $script} value options]
-        set seconds [expr {([clock milliseconds] - $start)/1000.0}]
+        set end [clock milliseconds]
+        set seconds [expr {($end - $start)/1000.0}]
         set f [open $dfx(output)/stage_times.tsv a]
         puts $f "$label\t$seconds\t$code"; close $f
+        set f [open $dfx(output)/stage_intervals.tsv a]
+        puts $f "$label\t$start\t$end\t$code"; close $f
         puts "AMF_DFX_STAGE $label seconds=$seconds code=$code"
         if {$code} {return -options $options $value}
         return $value
@@ -15,7 +18,42 @@ namespace eval amf_dfx {
         global dfx
         return [expr {$name eq $dfx(active_partition) || [string first "$dfx(active_partition)/" $name] == 0}]
     }
-    proc primitive_cells {} { return [get_cells -hierarchical -filter {IS_PRIMITIVE == 1}] }
+    proc primitive_cells {} {
+        # DSP48E2/URAM/RAMB are placer cells; their INTERNAL Unisim children
+        # are implementation details with no independently assignable LOC/BEL.
+        return [get_cells -hierarchical -filter {IS_PRIMITIVE == 1 && PRIMITIVE_LEVEL != INTERNAL}]
+    }
+    proc canonical_net_pins {net direction canonical} {
+        set result {}
+        set segments [get_nets -quiet -segments $net]
+        if {![llength $segments]} {error "Missing hierarchical net segments: $net"}
+        # Follow all hierarchy aliases, then retain only top primitive ports.
+        # -leaf would descend inside DSP48E2 and return DSP_OUTPUT pins.
+        for {set offset 0} {$offset<[llength $segments]} {incr offset 128} {
+            set group [lrange $segments $offset [expr {$offset+127}]]
+            foreach pin [get_pins -quiet -of_objects $group -filter "DIRECTION == $direction"] {
+                set owner [string range $pin 0 [expr {[string last / $pin]-1}]]
+                if {[dict exists $canonical $owner]} {lappend result $pin}
+            }
+        }
+        return [lsort -unique $result]
+    }
+    proc canonical_net_driver {net canonical} {
+        set drivers [canonical_net_pins $net OUT $canonical]
+        set kinds {}
+        foreach pin $drivers {
+            set owner [string range $pin 0 [expr {[string last / $pin]-1}]]
+            lappend kinds [dict get $canonical $owner]
+        }
+        set kinds [lsort -unique $kinds]
+        if {[llength $drivers]>1 && [llength $kinds]==1 && [lindex $kinds 0] in {GND VCC}} {
+            set drivers [lrange $drivers 0 0]
+        }
+        if {[llength $drivers]!=1} {error "Expected one canonical driver at $net: $drivers"}
+        set driver [lindex $drivers 0]
+        set owner [string range $driver 0 [expr {[string last / $driver]-1}]]
+        return [list $driver $owner [dict get $canonical $owner] [get_property TYPE $net]]
+    }
     proc constant {cell} { return [expr {[get_property REF_NAME $cell] in {GND VCC}}] }
     proc static_snapshot {} {
         set data [dict create]

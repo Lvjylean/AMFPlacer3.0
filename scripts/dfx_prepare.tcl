@@ -5,19 +5,19 @@ proc main {} {
     global dfx
     set out $dfx(output)
     set_param general.maxThreads $dfx(vivado_threads)
-    open_checkpoint $dfx(static_checkpoint)
+    amf_dfx::timed open_static_dcp {open_checkpoint $dfx(static_checkpoint)}
     amf_dfx::assert_context
     set before [amf_dfx::static_snapshot]
     amf_dfx::save_dict $out/static_snapshot.tcldata $before
     amf_dfx::save_dict $out/shell_boundary.tcldata [amf_dfx::boundary_snapshot]
     set interface [amf_dfx::boundary_signature]
-    read_checkpoint -cell $dfx(active_partition) $dfx(rm_checkpoint)
+    amf_dfx::timed link_rm {read_checkpoint -cell $dfx(active_partition) $dfx(rm_checkpoint)}
     amf_dfx::assert_same $interface [amf_dfx::boundary_signature] "RM port names/directions"
     amf_dfx::assert_same $before [amf_dfx::static_snapshot] "RM insertion/static placement"
-    opt_design
+    amf_dfx::timed active_opt {opt_design}
     amf_dfx::assert_same $interface [amf_dfx::boundary_signature] "RM optimized port names/directions"
     amf_dfx::assert_same $before [amf_dfx::static_snapshot] "RM opt/static placement"
-    write_checkpoint $out/linked.dcp
+    amf_dfx::timed write_linked_dcp {write_checkpoint $out/linked.dcp}
 
     # Real device site allowlist after Vivado has snapped the Pblock. Deliberately
     # restrict v1 to fabric RMs; static clock/configuration cells remain in Vivado.
@@ -55,6 +55,8 @@ proc main {} {
     close $f
 
     set included [dict create]
+    set canonical [dict create]
+    foreach c [amf_dfx::primitive_cells] {dict set canonical $c [get_property REF_NAME $c]}
     set activeCount 0
     set staticf [open $out/static_placement.tsv w]; puts $staticf "cell\tsite\tbel"
     set cellsf [open $out/cells.tsv w]; puts $cellsf "cell\tprimitive\tactive"
@@ -76,6 +78,11 @@ proc main {} {
     if {!$activeCount} {error "Active RM has no supported primitives"}
     set f [open $out/netlist.txt w]
     set clocks [dict create]
+    # Shared high-fanout nets occur at many pins. Resolve each driver once in
+    # this immutable linked design; emitted netlist semantics stay unchanged.
+    set netInfo [dict create]
+    set dspUsed [dict create]
+    amf_dfx::timed netlist_export {
     foreach c [lsort [dict keys $included]] {
         puts $f "curCell=> $c type=> [get_property REF_NAME [get_cells $c]]"
         foreach pin [get_pins -of_objects [get_cells $c]] {
@@ -83,13 +90,16 @@ proc main {} {
             set net [get_nets -quiet -top_net_of_hierarchical_group -of_objects $pin]
             if {[llength $net] == 0} { puts $f " pin=> $pin refpin=> $ref dir=> $dir net=> drivepin=>"; continue }
             if {[llength $net] != 1} {error "Multiple nets at $pin"}
-            set drivers [get_pins -quiet -leaf -of_objects $net -filter {DIRECTION == OUT}]
-            if {[llength $drivers] != 1} {error "DFX v1 requires one primitive driver: $net"}
-            set driver [lindex $drivers 0]; set dc [get_cells -of_objects $driver]
-            set dtype [get_property REF_NAME $dc]
+            if {![dict exists $netInfo $net]} {
+                dict set netInfo $net [amf_dfx::canonical_net_driver $net $canonical]
+            }
+            lassign [dict get $netInfo $net] driver dc dtype netType
+            if {$dir eq "IN" && $dtype eq "DSP48E2" && [dict exists $included $dc]} {
+                dict set dspUsed $dc [get_property REF_PIN_NAME $driver] 1
+            }
             if {$dtype eq "GND"} {set driver <const0>}
             if {$dtype eq "VCC"} {set driver <const1>}
-            set isClock [expr {[get_property IS_CLOCK $pin] == 1 || [get_property TYPE $net] eq "GLOBAL_CLOCK"}]
+            set isClock [expr {[get_property IS_CLOCK $pin] == 1 || $netType eq "GLOBAL_CLOCK"}]
             if {![dict exists $included $dc] && $dtype ni {GND VCC}} {
                 if {[amf_dfx::active $c] && !$isClock && $dir eq "IN"} {
                     error "DFX v1 requires a modeled static driver at RM data boundary: $pin"
@@ -97,8 +107,8 @@ proc main {} {
                 set driver @STATIC/$driver
             }
             if {[amf_dfx::active $c] && !$isClock && $dir eq "OUT"} {
-                foreach sink [get_pins -quiet -leaf -of_objects $net -filter {DIRECTION == IN}] {
-                    set sc [get_cells -of_objects $sink]
+                foreach sink [amf_dfx::canonical_net_pins $net IN $canonical] {
+                    set sc [string range $sink 0 [expr {[string last / $sink]-1}]]
                     if {![dict exists $included $sc]} {
                         error "DFX v1 requires a modeled static endpoint at RM data boundary: $sink"
                     }
@@ -108,10 +118,27 @@ proc main {} {
             puts $f " pin=> $pin refpin=> $ref dir=> $dir net=> $net drivepin=> $driver"
         }
     }
+    }
     close $f
+    # Same conservative certification as the ordinary GETRF importer. The
+    # metadata is regenerated from this DCP, never copied from another design.
+    set f [open $out/dsp_registered_outputs.txt w]
+    puts $f "AMF_DSP_REGISTERED_OUTPUTS 1"
+    set audit [open $out/dsp_certification.tsv w]
+    puts $audit "cell\tPREG\tused_outputs\tcertified"
+    foreach dc [lsort [dict keys $dspUsed]] {
+        set preg [get_property PREG [get_cells $dc]]
+        set pins [lsort [dict keys [dict get $dspUsed $dc]]]
+        set valid [expr {$preg == 1}]
+        foreach pin $pins {if {![regexp {^P\[([0-9]|[1-3][0-9]|4[0-7])\]$} $pin]} {set valid 0}}
+        if {$valid} {puts $f "$dc PREG=1"}
+        puts $audit "$dc\t$preg\t$pins\t$valid"
+    }
+    close $f;close $audit
+    unset netInfo
     set f [open $out/clocks w]; puts $f [join [lsort [dict keys $clocks]] \n]; close $f
     amf_dfx::save_dict $out/linked_boundary.tcldata [amf_dfx::boundary_snapshot]
-    amf_dfx::audit $out linked
+    amf_dfx::timed linked_audit {amf_dfx::audit $out linked}
     puts "AMF_DFX_PREPARED active=$activeCount fabric_context=[dict size $included]"
 }
 if {[catch {main} msg opts]} {puts stderr $msg; puts stderr [dict get $opts -errorinfo]; exit 2}
