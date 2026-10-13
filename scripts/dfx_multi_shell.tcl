@@ -7,16 +7,16 @@ proc main {} {
     if {[info exists dfx(resume_synthesis_checkpoint)]} {
         amf_dfx::timed reopen_synthesis {open_checkpoint $dfx(resume_synthesis_checkpoint)}
     } else {
-    if {[llength $dfx(ip_scripts)]} {
-        create_project dfx_shell $out/ip_project -part $dfx(part)
-        amf_dfx::timed ip_generation {foreach f $dfx(ip_scripts) {source $f}}
-    } else {
-        create_project -in_memory -part $dfx(part)
-    }
-    foreach f $dfx(rtl_sources) {read_verilog -sv $f}
-    foreach f $dfx(xdc_files) {read_xdc $f}
-    amf_dfx::timed synthesis {synth_design -top $dfx(top) -part $dfx(part) -flatten_hierarchy none}
-    amf_dfx::timed write_synth_dcp {write_checkpoint $out/base_synth.dcp}
+        if {[llength $dfx(ip_scripts)]} {
+            create_project dfx_shell $out/ip_project -part $dfx(part)
+            amf_dfx::timed ip_generation {foreach f $dfx(ip_scripts) {source $f}}
+        } else {
+            create_project -in_memory -part $dfx(part)
+        }
+        foreach f $dfx(rtl_sources) {read_verilog -sv $f}
+        foreach f $dfx(xdc_files) {read_xdc $f}
+        amf_dfx::timed synthesis {synth_design -top $dfx(top) -part $dfx(part) -flatten_hierarchy none}
+        amf_dfx::timed write_synth_dcp {write_checkpoint $out/base_synth.dcp}
     }
     amf_dfx::timed synthesis_utilization {report_utilization -hierarchical -file $out/base_synth_utilization.rpt}
     set marked {}; set expected {}
@@ -25,9 +25,8 @@ proc main {} {
         # Glob character classes preserve the previous case-insensitive values.
         set cells [get_cells -hierarchical -quiet -filter {bblock =~ [tT][rR][uU][eE] || bblock == 1 || bblock =~ [yY][eE][sS]}]
         foreach c $cells {lappend marked [get_property NAME $c]}
-    }
-    foreach row $dfx(rps) {lappend expected [lindex $row 1]}
-    if {[lsort $marked] ne [lsort $expected]} {error "RTL bblock set disagrees with configured partitions: $marked vs $expected"}
+        foreach row $dfx(rps) {lappend expected [lindex $row 1]}
+        if {[lsort $marked] ne [lsort $expected]} {error "RTL bblock set disagrees with configured partitions: $marked vs $expected"}
     }
     amf_dfx::timed pblock_configuration {
     foreach row $dfx(rps) {

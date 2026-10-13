@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """One-shot recovery from GETRF synthesis checkpoints; no automatic retries."""
 import datetime
+import argparse
 import json
 import os
 from pathlib import Path
@@ -13,19 +14,19 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 from run_dfx import sha, save
 from run_dfx_multi import load, check_synthesis_resume
 
-EVIDENCE = ROOT / 'experiments/evidence/getrf-dfx-large-01/attribute-scan-recovery-01'
-
-
-def main():
+def main(attempt):
+    if attempt < 2:
+        raise ValueError('Recovery attempt must be at least 2')
+    EVIDENCE = ROOT / f'experiments/evidence/getrf-dfx-large-01/attribute-scan-recovery-{attempt-1:02d}'
     previous = json.loads((EVIDENCE.parent / 'campaign.json').read_text())
     assert previous['state'] == 'failed', 'Original campaign must have exited'
     assert not (EVIDENCE / 'campaign.json').exists(), 'Recovery already launched'
     binary = Path(previous['binary'])
     assert sha(binary) == previous['binary_sha256']
     jobs = {
-        'v0': ('getrf-dfx-v0-full-resume-02.json', 'getrf-dfx-v0-shell-resume-02', 'shell'),
-        'v1_full': ('getrf-dfx-v1-full-resume-02.json', 'getrf-dfx-v1-full-resume-02', 'shell'),
-        'v1_incremental': ('getrf-dfx-v1-incremental-resume-02.json', 'getrf-dfx-v1-parallel-02', 'run'),
+        'v0': (f'getrf-dfx-v0-full-resume-{attempt:02d}.json', f'getrf-dfx-v0-shell-resume-{attempt:02d}', 'shell'),
+        'v1_full': (f'getrf-dfx-v1-full-resume-{attempt:02d}.json', f'getrf-dfx-v1-full-resume-{attempt:02d}', 'shell'),
+        'v1_incremental': (f'getrf-dfx-v1-incremental-resume-{attempt:02d}.json', f'getrf-dfx-v1-parallel-{attempt:02d}', 'run'),
     }
     recovery = {}
     for label, (config, name, mode) in jobs.items():
@@ -90,4 +91,6 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--attempt', type=int, default=2)
+    sys.exit(main(parser.parse_args().attempt))

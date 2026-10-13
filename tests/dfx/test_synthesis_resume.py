@@ -2,6 +2,7 @@ import copy
 import json
 from pathlib import Path
 import sys
+import subprocess
 import tempfile
 import unittest
 
@@ -49,6 +50,13 @@ class SynthesisResume(unittest.TestCase):
         (self.path / 'stage_times.tsv').write_text('synthesis\t10.5\t0\nwrite_synth_dcp\t1.2\t1\n')
         with self.assertRaises(ValueError):
             check_synthesis_resume(self.job)
+
+    def test_tcl_defines_main_without_executing_design_commands(self):
+        script = (Path(__file__).resolve().parents[2] / 'scripts/dfx_multi_shell.tcl').read_text()
+        definition = '\n'.join(script.split('if {[catch {main}')[0].splitlines()[2:])
+        path = self.path / 'scope_check.tcl'
+        path.write_text(definition + '\nputs [expr {[llength [info procs main]] == 1}]\n')
+        self.assertEqual(subprocess.check_output(['tclsh', str(path)], text=True), '1\n')
 
 
 if __name__ == '__main__':
