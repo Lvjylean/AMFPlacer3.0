@@ -1,0 +1,135 @@
+{
+  "schema": "amf-u250-local-distance-calibration-v1",
+  "status": "candidate artifact; not loaded by placer",
+  "part": "xcu250-figd2104-2L-e",
+  "date": "2026-09-29",
+  "coefficient_unit": "ps before /1000",
+  "formula": "max(0.05,(c0+c1*(2dx)^0.3+c2*dy^0.3+c3*(2dx)^0.5+c4*dy^0.5)/1000)",
+  "squared_distance_thresholds": [
+    9,
+    36
+  ],
+  "floor_ns": 0.05,
+  "scope": {
+    "endpoints": "LUT/FF ordinary data pins",
+    "fanout": [
+      1,
+      8
+    ],
+    "same_slr": true,
+    "endpoint_boundary_crossings": 0
+  },
+  "old_coefficients_ps": {
+    "near": [
+      95.05263521,
+      -26.50563359,
+      77.42394117,
+      106.29195883,
+      -14.975527
+    ],
+    "middle": [
+      123.05017047,
+      -169.25614191,
+      -117.28028144,
+      208.53573639,
+      174.2573465
+    ],
+    "far": [
+      234.7694101,
+      -433.99467294,
+      -64.96319998,
+      373.78606257,
+      139.45226658
+    ]
+  },
+  "fitted_coefficients_ps": {
+    "near": [
+      88.46724977551794,
+      -45.80800736561953,
+      75.94994698565303,
+      84.996542395116,
+      -8.973703926067682
+    ],
+    "middle": [
+      177.72924376900065,
+      71.00770131152753,
+      39.05204877652653,
+      -12.103419112181193,
+      4.684482502770804
+    ],
+    "far": [
+      197.84592263631367,
+      -144.4779156109579,
+      -116.27739370365661,
+      128.038486759077,
+      129.93810755698246
+    ]
+  },
+  "recommended_local_candidate_coefficients_ps": {
+    "near": [
+      95.05263521,
+      -26.50563359,
+      77.42394117,
+      106.29195883,
+      -14.975527
+    ],
+    "middle": [
+      177.72924376900065,
+      71.00770131152753,
+      39.05204877652653,
+      -12.103419112181193,
+      4.684482502770804
+    ],
+    "far": [
+      197.84592263631367,
+      -144.4779156109579,
+      -116.27739370365661,
+      128.038486759077,
+      129.93810755698246
+    ]
+  },
+  "decision": {
+    "near": "retain old: RMSE delta CI includes zero and P95 worsens",
+    "middle": "local candidate only",
+    "far": "local candidate only; global transfer fails"
+  },
+  "boundary_penalties": "unchanged",
+  "defaults_modified": false,
+  "new_placement_or_routing_executed": false,
+  "training_sample_extents": {
+    "near": {
+      "dx": [
+        0.0,
+        2.5
+      ],
+      "dy": [
+        0.0,
+        2.0
+      ]
+    },
+    "middle": {
+      "dx": [
+        0.0,
+        5.5
+      ],
+      "dy": [
+        0.0,
+        5.0
+      ]
+    },
+    "far": {
+      "dx": [
+        0.0,
+        114.0
+      ],
+      "dy": [
+        0.0,
+        168.0
+      ]
+    }
+  },
+  "evidence": {
+    "fit.json": "e9f8a013b4edaeed7e6b07b6993f7ad9307088dec494d97e4d05fd66f6e2deb5",
+    "fit-audit.json": "d2dfadc88dcaf439500b94769637700ffb85caabf55496f02fb119d553c7fc75"
+  }
+}

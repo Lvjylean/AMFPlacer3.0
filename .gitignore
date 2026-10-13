@@ -1,0 +1,25 @@
+/build/
+/builds/*
+!/builds/.gitkeep
+/experiments/runs/*
+!/experiments/runs/.gitkeep
+/data/*
+!/data/README.md
+/artifacts/
+/local-reports/
+/archives/
+/experiments/preflight/
+/experiments/evidence/
+*.dcp
+*.DCP
+*.bit
+*.jou
+*.log
+*.lic
+__pycache__/
+*.pyc
+.Xil/
+.DS_Store
+
+# Runtime comparison manifests and logs; configs/scripts are versioned.
+/experiments/comparisons/

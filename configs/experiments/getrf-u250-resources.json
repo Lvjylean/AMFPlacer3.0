@@ -1,0 +1,13 @@
+{
+  "device": "U250",
+  "jobs": "8",
+  "vivado extracted device information file": "data/devices/u250-vivado-2024.2/exportSiteLocation.zip",
+  "vivado extracted design information file": "data/reference/getrf-u250/amf-inputs/netlist.zip",
+  "clock file": "data/reference/getrf-u250/amf-inputs/clocks",
+  "cellType2fixedAmo file": "configs/devices/u250/cellType2fixedAmo",
+  "cellType2sharedCellType file": "configs/devices/u250/cellType2sharedCellType",
+  "sharedCellType2BELtype file": "configs/devices/u250/sharedCellType2BELtype",
+  "mergedSharedCellType2sharedCellType": "configs/devices/u250/mergedSharedCellType2sharedCellType",
+  "allow floating placement": "true",
+  "MacroLegalizationVerbose": "true"
+}
