@@ -14,19 +14,25 @@ proc main {} {
         lassign [split $line \t] c target
         if {![amf_dfx::active $c] || [dict exists $requested $c]} {error "Invalid active placement row: $line"}
         dict set requested $c $target
-        # Strict import: no global unplace, no failed-cell fallback to new sites.
+        # A failed placement command aborts; native active-RM LUT remapping is audited below.
         place_cell [list $c $target]
     }
     close $f
+    set f [open $out/allowed_sites.txt r]; set allowed [split [string trim [read $f]] \n]; close $f
+    set f [open $out/blocked_sites.txt r]; set blocked [split [string trim [read $f]] \n]; close $f
+    set remapped 0
     set f [open $out/import_retention.tsv w]; puts $f "cell\trequested\tloc\tbel"
     dict for {c target} $requested {
         set cell [get_cells $c]
         set loc [get_property LOC $cell]; set bel [get_property BEL $cell]
         puts $f "$c\t$target\t$loc\t$bel"
-        if {"$loc/[lindex [split $bel .] end]" ne $target} {error "AMF strict import moved $c"}
+        if {[lsearch -exact $allowed $loc] < 0 || [lsearch -exact $blocked $loc] >= 0} {
+            error "AMF import placed RM cell outside its available sites: $c ($loc)"
+        }
+        if {"$loc/[lindex [split $bel .] end]" ne $target} {incr remapped}
     }
     close $f
-    puts "AMF_DFX_IMPORT_VERIFIED count=[dict size $requested]"
+    puts "AMF_DFX_IMPORT_AUDITED count=[dict size $requested] native_remaps=$remapped"
     amf_dfx::assert_same $before [amf_dfx::static_snapshot] "After AMF import"
     amf_dfx::timed write_imported {write_checkpoint $out/imported.dcp}
     amf_dfx::timed audit_imported {amf_dfx::audit $out imported}

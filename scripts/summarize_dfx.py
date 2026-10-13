@@ -32,6 +32,11 @@ def summarize(root):
                     site_matches=sum(r['requested'].split('/')[0]==r['loc'] for r in rows),
                     domain_violations=domain_violations),
                   pr_verify_full_check=(root/'pr_verify_passed.txt').read_text().strip()=='full_check_passed')
+    imp=root/'import_retention.tsv'
+    if imp.exists():
+        imported=list(csv.DictReader(imp.open(),delimiter='\t'))
+        result['imported_rm_placement']=dict(requested=len(imported),exact_matches=sum(x['requested']==x['loc']+'/'+x['bel'].split('.')[-1] for x in imported))
+    result['import_policy']='active-RM native remapping audited; static locked; failed placement command aborts'
     result['implementation_verified'] = (result['routing_complete'] and result['pr_verify_full_check'] and
         d['totals'].get('Error',0)==0 and d['totals'].get('Critical Warning',0)==0 and len(rows)>0 and not domain_violations)
     result['timing_met'] = all(result['timing']['routed'][k]>=0 for k in ('wns_ns','whs_ns','wpws_ns'))

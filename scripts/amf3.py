@@ -224,6 +224,11 @@ def dfx_run(args):
     print(run(args))
 
 
+def dfx_resume(args):
+    from resume_dfx import run
+    print(run(args))
+
+
 def dfx_shell(args):
     require_server()
     from create_dfx_shell import run
@@ -233,6 +238,10 @@ def dfx_shell(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
+    p = sub.add_parser('dfx-resume', help='Reuse a completed DFX AMF stage for a new backend run')
+    p.add_argument('--run', required=True)
+    p.add_argument('--output', required=True)
+    p.set_defaults(action=dfx_resume)
     p = sub.add_parser('dfx-shell', help='Create a DFX static shell from one RTL bblock instance')
     p.add_argument('--config', required=True)
     p.add_argument('--output', required=True)
