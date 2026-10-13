@@ -25,7 +25,7 @@
 
 PlacementInfo::PlacementInfo(DesignInfo *designInfo, DeviceInfo *deviceInfo,
                              std::map<std::string, std::string> &JSONCfg)
-    : designInfo(designInfo), deviceInfo(deviceInfo), JSONCfg(JSONCfg)
+    : designInfo(designInfo), deviceInfo(deviceInfo), JSONCfg(JSONCfg), incremental(JSONCfg)
 {
     AMF_PROFILE_FUNCTION("placement_bookkeeping");
 
@@ -50,6 +50,40 @@ PlacementInfo::PlacementInfo(DesignInfo *designInfo, DeviceInfo *deviceInfo,
     globalMinY = getMinYFromSites(deviceInfo->getSites());
     globalMaxX = getMaxXFromSites(deviceInfo->getSites());
     globalMaxY = getMaxYFromSites(deviceInfo->getSites());
+
+    if (incremental.enabled)
+    {
+        std::map<std::string, DeviceInfo::DeviceSite *> byName;
+        std::vector<DeviceInfo::DeviceSite *> activeSites;
+        for (auto site : deviceInfo->getSites()) byName.emplace(site->getName(), site);
+        for (const auto &name : incremental.allowedSites)
+        {
+            if (!byName.count(name)) throw std::runtime_error("DFX allowed site absent from device model: " + name);
+            if (incremental.siteAllowed(name)) activeSites.push_back(byName.at(name));
+        }
+        for (const auto &entry : incremental.fixed)
+            if (!byName.count(entry.second.site))
+                throw std::runtime_error("DFX static site absent from device model: " + entry.second.site);
+        if (activeSites.empty()) throw std::runtime_error("DFX Pblock has no available modeled sites");
+        incremental.minX = getMinXFromSites(activeSites) - 0.001f;
+        incremental.maxX = getMaxXFromSites(activeSites) + 0.001f;
+        incremental.minY = getMinYFromSites(activeSites) - 0.001f;
+        incremental.maxY = getMaxYFromSites(activeSites) + 0.001f;
+        for (auto site : deviceInfo->getSites())
+            if (!incremental.siteAllowed(site->getName())) site->setOccupied();
+        size_t active = 0;
+        for (auto cell : designInfo->getCells())
+        {
+            if (incremental.isActive(cell->getName())) { ++active; continue; }
+            if (!incremental.fixed.count(cell->getName()))
+                throw std::runtime_error("Missing fixed DFX static primitive: " + cell->getName());
+            incremental.staticCellIds.insert(cell->getCellId());
+        }
+        if (!active || incremental.staticCellIds.size() != incremental.fixed.size())
+            throw std::runtime_error("DFX netlist/static placement coverage mismatch");
+        print_info("DFX_CONTEXT active=" + std::to_string(active) + " static=" +
+                   std::to_string(incremental.fixed.size()) + " available_sites=" + std::to_string(activeSites.size()));
+    }
 
     cellId2PlacementUnit.clear();
     placementUnits.clear();
@@ -441,11 +475,13 @@ void PlacementInfo::createGridBins(float _binWidth, float _binHeight)
                     while (SharedBELTypeBinGrid[targetSharedBELTypeId][i][j]->inRange(sitesInType[siteIndex]->X(),
                                                                                       sitesInType[siteIndex]->Y()))
                     {
+                        if (!incremental.enabled || !sitesInType[siteIndex]->isOccupied()) {
                         SharedBELTypeBinGrid[targetSharedBELTypeId][i][j]->addSiteIntoBin(sitesInType[siteIndex]);
                         globalBinGrid[i][j]->addSiteIntoBin(sitesInType[siteIndex]);
                         if (actualSharedBELTypeId != targetSharedBELTypeId)
                             SharedBELTypeBinGrid[actualSharedBELTypeId][i][j]->addSiteIntoBin(sitesInType[siteIndex]);
                         countedSites.insert(sitesInType[siteIndex]);
+                        }
                         siteIndex++;
                         if (siteIndex >= sitesInType.size())
                             break;

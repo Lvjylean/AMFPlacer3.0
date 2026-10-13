@@ -5288,6 +5288,16 @@ void ParallelCLBPacker::dumpPlacementTcl(std::string dumpTclFile)
     std::ofstream outfileTcl(dumpTclFile);
     assert(outfileTcl.is_open() && outfileTcl.good() &&
            "The path for placement Tcl dumping does not exist and please check your path settings");
+    if (placementInfo->getIncrementalContext().enabled)
+    {
+        // Data-only export: the DFX adapter parses place_cell lists. Never source
+        // this file on a locked shell or execute whole-design unplace commands.
+        outfileTcl << "error {DFX placement data: use scripts/run_dfx.py, do not source this file}\n";
+        dumpDSPBRAMPlacementTcl(outfileTcl);
+        dumpCLBPlacementTcl(outfileTcl, true);
+        dumpCLBPlacementTcl(outfileTcl, false);
+        return;
+    }
     outfileTcl << "set script_path [ file dirname [ file normalize [ info script ] ] ]\n";
     outfileTcl
         << "set fo [open \"${script_path}/initialPlacementError\" \"w\"]\nplace_design -unplace\nset errorNum 0\n";

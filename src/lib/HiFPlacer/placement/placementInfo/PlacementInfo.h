@@ -28,6 +28,7 @@
 
 #include "DesignInfo.h"
 #include "DeviceInfo.h"
+#include "IncrementalContext.h"
 #include "Eigen/Core"
 #include "Eigen/SparseCore"
 #include "PlacementTimingInfo.h"
@@ -1616,7 +1617,8 @@ class PlacementInfo
             PlacementMacroType_BRAM,  // Cascaded BRAMs
             PlacementMacroType_MUX7,  // MUXF7, its directly connected LUTs/FFs and routing BELs.
             PlacementMacroType_MUX8,  // MUXF7, its directly connected MUXF7/LUTs/FFs and routing BELs.
-            PlacementMacroType_MUX9   // MUXF9, its directly connected MUXF7/MUXF8/LUTs/FFs and routing BELs.
+            PlacementMacroType_MUX9,   // MUXF9, its directly connected MUXF7/MUXF8/LUTs/FFs and routing BELs.
+            PlacementMacroType_DFXStatic // Frozen static context; never a movable packing macro.
         };
 
         PlacementMacro(std::string name, int id, PlacementMacroType macroType)
@@ -3042,6 +3044,7 @@ class PlacementInfo
      */
     inline float getActualOccupation(DesignInfo::DesignCell *cell)
     {
+        if (incremental.enabled && incremental.staticCellIds.count(cell->getCellId())) return 0;
         return compatiblePlacementTable->getActualOccupation(cell);
     }
 
@@ -3080,6 +3083,7 @@ class PlacementInfo
      */
     inline float getActualOccupationByCellId(int id)
     {
+        if (incremental.enabled && incremental.staticCellIds.count(id)) return 0;
         return compatiblePlacementTable->getActualOccupationByCellId(id);
     }
 
@@ -3555,8 +3559,15 @@ class PlacementInfo
      * @param fX output X of PlacementUnit that can ensure the cells in it are within the device area.
      * @param fY output Y of PlacementUnit that can ensure the cells in it are within the device area.
      */
+    const IncrementalContext &getIncrementalContext() const { return incremental; }
+
     inline void legalizeXYInArea(PlacementUnit *curPU, float &fX, float &fY)
     {
+        if (incremental.enabled && curPU->isFixed()) { fX = curPU->X(); fY = curPU->Y(); return; }
+        const float globalMinX = incremental.enabled ? incremental.minX : this->globalMinX;
+        const float globalMaxX = incremental.enabled ? incremental.maxX : this->globalMaxX;
+        const float globalMinY = incremental.enabled ? incremental.minY : this->globalMinY;
+        const float globalMaxY = incremental.enabled ? incremental.maxY : this->globalMaxY;
         if (curPU->getType() == PlacementUnitType_UnpackedCell)
         {
             fX = std::max(globalMinX + eps, (std::min(fX, globalMaxX - eps)));
@@ -3595,6 +3606,11 @@ class PlacementInfo
      */
     inline void enforceLegalizeXYInArea(PlacementUnit *curPU, bool forget = true)
     {
+        if (incremental.enabled && curPU->isFixed()) { return; }
+        const float globalMinX = incremental.enabled ? incremental.minX : this->globalMinX;
+        const float globalMaxX = incremental.enabled ? incremental.maxX : this->globalMaxX;
+        const float globalMinY = incremental.enabled ? incremental.minY : this->globalMinY;
+        const float globalMaxY = incremental.enabled ? incremental.maxY : this->globalMaxY;
         float fX = curPU->X();
         float fY = curPU->Y();
         if (curPU->getType() == PlacementUnitType_UnpackedCell)
@@ -3648,6 +3664,10 @@ class PlacementInfo
      */
     inline bool isLegalLocation(DesignInfo::DesignCell *curCell, float targetX, float targetY)
     {
+        const float globalMinX = incremental.enabled ? incremental.minX : this->globalMinX;
+        const float globalMaxX = incremental.enabled ? incremental.maxX : this->globalMaxX;
+        const float globalMinY = incremental.enabled ? incremental.minY : this->globalMinY;
+        const float globalMaxY = incremental.enabled ? incremental.maxY : this->globalMaxY;
         auto curPU = cellId2PlacementUnit[curCell->getCellId()];
 
         if (curPU->getType() == PlacementUnitType_UnpackedCell)
@@ -4844,6 +4864,7 @@ class PlacementInfo
     float placementProressRatio = 0.01;
 
     std::map<std::string, std::string> &JSONCfg;
+    IncrementalContext incremental;
     std::string cellType2fixedAmoFileName;
     std::string cellType2sharedCellTypeFileName;
     std::string sharedCellType2BELtypeFileName;

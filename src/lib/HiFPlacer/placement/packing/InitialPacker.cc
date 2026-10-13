@@ -25,6 +25,35 @@ void InitialPacker::pack(bool hardResourcesOnly)
     cellInMacros.clear();
     placementUnpackedCells.clear();
 
+    // Keep static primitives separate from movable RM macros. A one-cell fixed
+    // macro preserves the macro-first PU ordering required by incremental packing.
+    const auto &dfx = placementInfo->getIncrementalContext();
+    if (dfx.enabled)
+    {
+        fixedPlacementUnits.clear();
+        for (auto cell : designInfo->getCells())
+        {
+            if (!dfx.staticCellIds.count(cell->getCellId())) continue;
+            const auto &location = dfx.fixed.at(cell->getName());
+            auto siteName = location.site;
+            auto site = deviceInfo->getSite(siteName);
+            auto macro = new PlacementInfo::PlacementMacro(cell->getName(), placementUnits.size(),
+                PlacementInfo::PlacementMacro::PlacementMacroType_DFXStatic);
+            macro->addCell(cell, cell->getCellType(), 0, 0);
+            macro->addFixedCellInfo(cell, location.site, location.bel);
+            macro->setWeight(0);
+            macro->setAnchorLocation(site->X(), site->Y());
+            macro->setFixed(); macro->setLocked(); macro->setPlaced();
+            placementUnits.push_back(macro); placementMacros.push_back(macro);
+            fixedPlacementUnits.push_back(macro); cellInMacros.insert(cell);
+            cellId2PlacementUnit[cell->getCellId()] = macro;
+            for (auto pin : cell->getPins()) {
+                pin->setFixed();
+                if (pin->getNet()) pin->getNet()->setContainFixedPins();
+            }
+        }
+    }
+
     print_status("InitialPacker Finding Macros");
     findCARRYMacros();
     if (!hardResourcesOnly) findMuxMacros();
@@ -63,7 +92,12 @@ void InitialPacker::pack(bool hardResourcesOnly)
     print_status("InitialPacker Finding unpacked units");
     findUnpackedUnits();
 
-    if (JSONCfg.find("fixed units file") != JSONCfg.end())
+    if (dfx.enabled)
+    {
+        if (JSONCfg.count("fixed units file"))
+            throw std::runtime_error("DFX uses its complete static context, not an additional fixed units file");
+    }
+    else if (JSONCfg.find("fixed units file") != JSONCfg.end())
     {
         loadFixedPlacementUnits(JSONCfg["fixed units file"]);
     }
