@@ -59,7 +59,39 @@ def load_job(path):
     job.setdefault('vivado_threads', 4)
     if job.get('static_placement_audit', 'full') not in ('full', 'skip'):
         raise ValueError('Invalid static_placement_audit mode')
+    if 'resume_linked_checkpoint' in job:
+        raise ValueError('Use prepare_from_run for validated linked-checkpoint recovery')
+    if 'prepare_from_run' in job:
+        job['prepare_from_run'] = str((path.parent / job['prepare_from_run']).resolve())
     return job
+
+
+def check_prepare_resume(job):
+    """Recover export from a completed linked DCP, never from a live parent."""
+    parent = Path(job['prepare_from_run'])
+    old = json.loads((parent/'manifest.json').read_text())
+    status = json.loads((parent/'status.json').read_text())
+    if old.get('schema') != 'amf-dfx-run-v1' or old.get('state') not in ('failed', 'prepared', 'completed'):
+        raise ValueError('Linked recovery requires a stopped DFX parent')
+    if status.get('state') == 'running': raise ValueError('Linked parent is still running')
+    for key in ('part', 'active_partition', 'pblock', 'clock_name', 'clock_period_ns', 'vivado'):
+        if old['job'].get(key) != job.get(key): raise ValueError('Linked parent mismatch: '+key)
+    for key in ('static_checkpoint', 'reference_checkpoint', 'rm_checkpoint', 'amf_config'):
+        if sha(job[key]) != old['input_hashes'][key]: raise ValueError('Linked input hash mismatch: '+key)
+    rows = [line.split('\t') for line in (parent/'stage_times.tsv').read_text().splitlines()]
+    if not any(row[0] == 'write_linked_dcp' and row[2] == '0' for row in rows):
+        raise ValueError('Linked checkpoint write was not completed')
+    names = ['linked.dcp', 'shell_boundary.tcldata']
+    if job.get('static_placement_audit', 'full') == 'full': names.append('static_snapshot.tcldata')
+    files = {}
+    for name in names:
+        p = parent/name
+        if not p.is_file() or not p.stat().st_size: raise ValueError('Missing linked recovery artifact: '+name)
+        files[name] = dict(path=str(p), sha256=sha(p), bytes=p.stat().st_size)
+    return dict(parent_run=str(parent), parent_manifest_sha256=sha(parent/'manifest.json'), files=files,
+                inherited_stage_seconds={row[0]:float(row[1]) for row in rows if row[2]=='0'},
+                link_and_opt_rerun=False,
+                timing_note='Current wall excludes inherited link/opt; checkpoint reread/copy and interrupted parent overhead remain separate')
 
 
 def amf_configuration(job):
@@ -112,6 +144,7 @@ foreach {cell target} $raw {puts "$cell\t$target"}
 def run(args):
     job = load_job(args.config)
     cfg = amf_configuration(job)
+    recovery = check_prepare_resume(job) if 'prepare_from_run' in job else None
     out = Path(args.output).resolve()
     out.mkdir(parents=True, exist_ok=False)
     (out / 'logs').mkdir(); (out / 'placement').mkdir(); (out / 'inputs').mkdir()
@@ -122,6 +155,7 @@ def run(args):
                     scope='one active fabric RP; static fabric timing context; static routing owned by Vivado',
                     source_commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
                     input_hashes={k: sha(job[k]) for k in ('static_checkpoint','reference_checkpoint','rm_checkpoint','amf_config')})
+    if recovery: manifest['prepare_recovery'] = recovery
     for name in ('dfx_prepare.tcl', 'dfx_backend.tcl', 'dfx_common.tcl', 'run_dfx.py', 'summarize_dfx.py',
                  'summarize_full_flow.py', 'summarize_face_detect_flow.py'):
         shutil.copy2(SCRIPT / name, out / 'inputs' / name)
@@ -148,6 +182,14 @@ def run(args):
         (out/'modeled_sites.txt').write_text('\n'.join(sorted(set(sites)))+'\n')
         manifest['device_sha256'] = sha(device)
         settings = dict(job, output=str(out), modeled_sites=str(out/'modeled_sites.txt'))
+        if recovery:
+            copy_start = time.monotonic()
+            for name, info in recovery['files'].items():
+                shutil.copy2(info['path'], out/name)
+                if sha(out/name) != info['sha256']: raise ValueError('Recovery copy hash mismatch: '+name)
+            manifest['prepare_recovery']['copy_seconds'] = time.monotonic()-copy_start
+            settings['resume_linked_checkpoint'] = str(out/'linked.dcp')
+            save(out/'manifest.json', manifest)
         settings_path = out/'inputs/settings.tcl'
         settings_path.write_text('\n'.join('set dfx('+k+') '+tcl_word(v) for k,v in settings.items())+'\n')
         stage('prepare', [job['vivado'], '-mode', 'batch', '-source', str(out/'inputs/dfx_prepare.tcl'), '-tclargs', str(settings_path)])

@@ -5,38 +5,38 @@ proc main {} {
     global dfx
     set out $dfx(output)
     set_param general.maxThreads $dfx(vivado_threads)
-    amf_dfx::timed open_static_dcp {open_checkpoint $dfx(static_checkpoint)}
-    amf_dfx::assert_context
-    # The initial occupancy snapshot is still needed for AMF's blocked sites.
-    set before [amf_dfx::timed static_occupancy_snapshot {amf_dfx::static_snapshot}]
-    amf_dfx::save_dict $out/static_snapshot.tcldata $before
-    amf_dfx::save_dict $out/shell_boundary.tcldata [amf_dfx::boundary_snapshot]
-    set interface [amf_dfx::boundary_signature]
-    amf_dfx::timed link_rm {read_checkpoint -cell $dfx(active_partition) $dfx(rm_checkpoint)}
-    amf_dfx::assert_same $interface [amf_dfx::boundary_signature] "RM port names/directions"
-    amf_dfx::check_static_placement $out/static_snapshot.tcldata rm_insertion
-    amf_dfx::timed active_opt {opt_design}
-    amf_dfx::assert_same $interface [amf_dfx::boundary_signature] "RM optimized port names/directions"
-    amf_dfx::check_static_placement $out/static_snapshot.tcldata rm_opt
-    amf_dfx::timed write_linked_dcp {write_checkpoint $out/linked.dcp}
+    if {[info exists dfx(resume_linked_checkpoint)]} {
+        amf_dfx::timed open_linked_dcp {open_checkpoint $dfx(resume_linked_checkpoint)}
+        amf_dfx::assert_context
+        amf_dfx::assert_same [amf_dfx::read_dict $out/shell_boundary.tcldata] \
+            [amf_dfx::boundary_snapshot] "Resumed RM boundary"
+        puts "AMF_DFX_RESUME linked_checkpoint; shell read/link/opt inherited from verified parent"
+    } else {
+        amf_dfx::timed open_static_dcp {open_checkpoint $dfx(static_checkpoint)}
+        amf_dfx::assert_context
+        # Full placement audits are optional; resource allocation no longer
+        # requires a full-design static snapshot.
+        if {[amf_dfx::static_audit_enabled]} {
+            amf_dfx::save_dict $out/static_snapshot.tcldata \
+                [amf_dfx::timed initial_static_audit_snapshot {amf_dfx::static_snapshot}]
+        }
+        amf_dfx::save_dict $out/shell_boundary.tcldata [amf_dfx::boundary_snapshot]
+        set interface [amf_dfx::boundary_signature]
+        amf_dfx::timed link_rm {read_checkpoint -cell $dfx(active_partition) $dfx(rm_checkpoint)}
+        amf_dfx::assert_same $interface [amf_dfx::boundary_signature] "RM port names/directions"
+        amf_dfx::check_static_placement $out/static_snapshot.tcldata rm_insertion
+        amf_dfx::timed active_opt {opt_design}
+        amf_dfx::assert_same $interface [amf_dfx::boundary_signature] "RM optimized port names/directions"
+        amf_dfx::check_static_placement $out/static_snapshot.tcldata rm_opt
+        amf_dfx::timed write_linked_dcp {write_checkpoint $out/linked.dcp}
+    }
 
     # Real device site allowlist after Vivado has snapped the Pblock. Deliberately
     # restrict v1 to fabric RMs; static clock/configuration cells remain in Vivado.
     set modeled [dict create]
     set f [open $dfx(modeled_sites) r]
     foreach s [split [read $f] \n] { if {$s ne ""} {dict set modeled $s 1} }; close $f
-    set allowed [dict create]
-    foreach s [get_sites -of_objects [get_pblocks $dfx(pblock)]] {
-        if {[dict exists $modeled $s] && ![get_property PROHIBIT $s]} {dict set allowed $s 1}
-    }
-    if {![dict size $allowed]} {error "Pblock contains no modeled fabric sites"}
-    set f [open $out/allowed_sites.txt w]; puts $f [join [lsort [dict keys $allowed]] \n]; close $f
-    # PROHIBIT and occupied static sites are hard exclusions. Locked routing may
-    # impose further BEL/pin restrictions, which Vivado import/DFX DRC must check.
-    set blocked [dict create]
-    foreach s [get_sites -filter {PROHIBIT == 1}] {if {[dict exists $modeled $s]} {dict set blocked $s 1}}
-    dict for {c v} $before { if {[dict exists $modeled [lindex $v 1]]} {dict set blocked [lindex $v 1] 1} }
-    set f [open $out/blocked_sites.txt w]; puts $f [join [lsort [dict keys $blocked]] \n]; close $f
+    amf_dfx::timed resource_tables {amf_dfx::resource_tables $out $modeled}
 
     # Fresh control metadata belongs to this linked design, never to the template case.
     set f [open $out/srl_controls.tsv w]

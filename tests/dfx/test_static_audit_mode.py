@@ -67,7 +67,7 @@ if {![catch {amf_dfx::assert_same {port IN} {port OUT} interface}]} {error "inte
             text = (ROOT / 'scripts' / name).read_text()
             self.assertIn('pr_verify -full_check', text)
         prepare = (ROOT / 'scripts/dfx_prepare.tcl').read_text()
-        self.assertIn('dict for {c v} $before', prepare)
+        self.assertIn('amf_dfx::resource_tables $out $modeled', prepare)
         self.assertIn('"RM port names/directions"', prepare)
 
 

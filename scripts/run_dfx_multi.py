@@ -54,6 +54,7 @@ def load(path):
         if k in job: job[k]=[str((path.parent/v).resolve()) for v in job[k]]
     for r in job['partitions']:
         if 'rm_checkpoint' in r: r['rm_checkpoint']=str((path.parent/r['rm_checkpoint']).resolve())
+        if 'prepare_from_run' in r: r['prepare_from_run']=str((path.parent/r['prepare_from_run']).resolve())
         for k in ('rm_rtl_sources','rm_ip_scripts'):
             if k in r: r[k]=[str((path.parent/v).resolve()) for v in r[k]]
     job.setdefault('vivado_threads',4); job.setdefault('max_parallel',2)
@@ -205,6 +206,7 @@ def run(args):
                     checkpoint=str(front/'rm.dcp')
                 cfg.update(active_partition=r['active_partition'],pblock=r['pblock'],rm_checkpoint=checkpoint,
                            static_checkpoint=str(shell/(name+'_locked.dcp')),reference_checkpoint=str(shell/'base_routed.dcp'))
+                if 'prepare_from_run' in r: cfg['prepare_from_run']=r['prepare_from_run']
                 path=out/'inputs'/f'{name}.json';save(path,cfg)
                 cmd=[sys.executable,str(out/'inputs/run_dfx.py'),'--config',str(path),'--output',str(workers/name),'--binary',str(binary)]
                 with (out/'logs'/f'{name}.log').open('w') as f: rc=subprocess.run(cmd,cwd=ROOT,stdout=f,stderr=subprocess.STDOUT).returncode

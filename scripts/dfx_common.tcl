@@ -55,6 +55,53 @@ namespace eval amf_dfx {
         return [list $driver $owner [dict get $canonical $owner] [get_property TYPE $net]]
     }
     proc constant {cell} { return [expr {[get_property REF_NAME $cell] in {GND VCC}}] }
+    proc resource_tables {out modeled} {
+        global dfx
+        # Sites outside this hard Pblock are already excluded by AMF's allowlist.
+        # Query only its physical sites; static routing is owned by Vivado.
+        set regionSites [get_sites -of_objects [get_pblocks $dfx(pblock)]]
+        if {![llength $regionSites]} {error "Pblock contains no physical sites"}
+        set allowed [dict create]; set blocked [dict create]
+        set region [dict create]; set prohibited 0
+        timed resource_site_properties {
+            foreach site $regionSites {
+                dict set region $site 1
+                if {![dict exists $modeled $site]} {continue}
+                if {[get_property PROHIBIT $site]} {
+                    dict set blocked $site 1; incr prohibited
+                } else {dict set allowed $site 1}
+            }
+        }
+        set staticCells 0; set occupied [dict create]
+        timed resource_local_occupancy {
+            foreach cell [get_cells -quiet -of_objects $regionSites -filter {IS_PRIMITIVE == 1 && PRIMITIVE_LEVEL != INTERNAL}] {
+                if {[active $cell] || [constant $cell]} {continue}
+                set loc [get_property LOC $cell]
+                if {![dict exists $region $loc]} {error "Local occupancy query returned an outside site: $cell $loc"}
+                incr staticCells; dict set occupied $loc 1
+                if {[dict exists $modeled $loc]} {dict set blocked $loc 1}
+            }
+        }
+        if {[get_property EXCLUDE_PLACEMENT [get_pblocks $dfx(pblock)]] && $staticCells} {
+            error "Exclusive Pblock contains $staticCells static primitives"
+        }
+        if {![dict size $allowed]} {error "Pblock contains no modeled fabric sites"}
+        set available 0
+        dict for {site value} $allowed {if {![dict exists $blocked $site]} {incr available}}
+        if {!$available} {error "Pblock contains no available modeled fabric sites"}
+        foreach {name data} [list allowed_sites $allowed blocked_sites $blocked] {
+            set f [open $out/$name.txt w]
+            if {[dict size $data]} {puts $f [join [lsort [dict keys $data]] \n]}
+            close $f
+        }
+        set f [open $out/resource_scope.tsv w]
+        puts $f "scope\tpblock_only"
+        foreach {key value} [list pblock_sites [llength $regionSites] allowed_modeled_sites [dict size $allowed] \
+            prohibited_modeled_sites $prohibited static_cells $staticCells static_occupied_sites [dict size $occupied] \
+            blocked_modeled_sites [dict size $blocked] available_modeled_sites $available] {puts $f "$key\t$value"}
+        close $f
+        puts "AMF_DFX_RESOURCES scope=pblock_only sites=[llength $regionSites] allowed=[dict size $allowed] blocked=[dict size $blocked] static_cells=$staticCells"
+    }
     proc static_snapshot {} {
         set data [dict create]
         foreach cell [primitive_cells] {
