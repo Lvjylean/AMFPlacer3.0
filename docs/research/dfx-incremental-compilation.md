@@ -60,7 +60,7 @@ python3 scripts/amf3.py dfx-resume --run experiments/runs/<amf-completed-id> --o
 
 `tests/dfx/u250_small/` 包含静态 JTAG/BUFG、寄存器接口及两个可替换 RM。两版 RM 端口一致，逻辑与优化后 primitive 数量不同。无需板级 I/O 分配；没有下载或烧写硬件。
 
-首版是**一个活动 fabric RP**；任意多 RP、嵌套 RP、多时钟 HLS 或硬 IP 的全覆盖验收尚未完成。未验证类型不能据小型 LUT/FF 验收声称已支持。实际合法资源采用离散 site 清单；GP 连续坐标约束采用其包围盒，非矩形空洞由资源容量/候选与最终导出范围检查阻止非法落位。静态占用 site 整体保留，暂不与 RM 共享其中剩余 BEL。
+首版入口是**一个活动 fabric RP**；多区域并行扩展见本文末节。任意多 RP、嵌套 RP、多时钟 HLS 或硬 IP 的全覆盖验收尚未完成。未验证类型不能据小型 LUT/FF 验收声称已支持。实际合法资源采用离散 site 清单；GP 连续坐标约束采用其包围盒，非矩形空洞由资源容量/候选与最终导出范围检查阻止非法落位。静态占用 site 整体保留，暂不与 RM 共享其中剩余 BEL。
 
 接口与时序有三层处理：保留 RTL 端口及分区引脚信息；AMF 保留固定静态 fabric 的坐标/连通性参与原 STA；Vivado 在完整锁定静态上下文中进行最终 setup/hold 与跨接口路径分析。**尚未将锁定布线的精确 net delay 或逐 partition pin arrival/required budget 回注 AMF**，不能把 AMF 估计等同 Vivado 边界时序。非 fabric 静态数据驱动或接收端直接连接 RM 时当前显式拒绝，避免静默丢失数据路径；专用时钟保留在 Vivado 上下文中。
 
@@ -88,7 +88,7 @@ python3 scripts/amf3.py dfx-resume --run experiments/runs/<amf-completed-id> --o
 
 本轮使用完整上下文的标准 DFX shell，不声称使用 Abstract Shell。这样保留当前 AMF 所需的真实静态 fabric 连通性与端点；以后改用 Abstract Shell 时必须适配其裁减后的边界对象和时序预算，不能直接丢弃端点。此次没有更改 AMF 的 GP、匹配或延迟参数；复用已验收的单区域 C++ 二进制，由调度层提供相互隔离的区域输入。
 
-worker 输出额外的 `rm_routed.dcp`。装配器从共同基准移除全部待更新模块，锁定静态区，逐个导入已经布线的 RM；不调用全设计 place_design 或 route_design。检查静态 LOC/BEL、每个模块 LOC/BEL 和内部 net 的 node/PIP 与 worker 一致，核对 partition-pin 信息及区域归属，执行整体路由/DRC/时序、`pr_verify -full_check`，生成完整及每个 RP 的局部 bitstream。
+worker 输出额外的 `rm_routed.dcp`。装配器从共同基准移除全部待更新模块，锁定静态区，逐个导入已经布线的 RM；不调用全设计 place_design 或 route_design。检查静态 LOC/BEL、每个模块 LOC/BEL 和实际 DFX routing footprint 内的 node/PIP 与 worker 一致，核对 partition-pin 信息及区域归属，执行整体路由/DRC/时序、`pr_verify -full_check`，生成完整及每个 RP 的局部 bitstream。
 
 `write_checkpoint -cell` 不保留模块局部约束。通用配置必须在 `assembly_xdc_files` 提供使用完整实例路径的局部时钟/例外约束；本测试没有模块内部时钟或时序例外，故此列表为空。精确的 partition-pin arrival/required budget 回注 AMF 仍未实现，最后必须评估实际组合后的完整设计，不能将两个 worker 各自时序通过视为组合时序通过。
 
@@ -97,3 +97,20 @@ worker 输出额外的 `rm_routed.dcp`。装配器从共同基准移除全部待
 计时按用户约定：Vivado placement 单列作兼容处理开销，不计入主要增量耗时；保留实际总墙钟。并行 worker 的耗时不能直接相加当作总墙钟，扣除 placement 后的各 worker 耗时及装配时间需分别报告。DCP/bitstream 仅留服务器。
 
 参考：AMD UG909 2026.1 的 [独立 RP 实现及 routed DCP 装配](https://docs.amd.com/r/en-US/ug909-vivado-partial-reconfiguration/Implementing-Reconfigurable-Modules-in-Abstract-Shells) 与 [模块局部约束恢复](https://docs.amd.com/r/en-US/ug909-vivado-partial-reconfiguration/Implementation)。
+
+
+多区域入口示例（新输出目录不可复用）：
+
+```sh
+python3 scripts/amf3.py dfx-multi shell --config configs/experiments/dfx-u250-multi.json --output experiments/runs/<new-multi-shell>
+# 将配置 shell_run 指向上述目录，再运行：
+python3 scripts/amf3.py dfx-multi run --config configs/experiments/dfx-u250-multi.json --output experiments/runs/<new-multi-run> --binary builds/<frozen-build>/build/AMFPlacer
+```
+
+若两个 worker 已通过，但装配或报告失败，可以独立重试装配，不重复 AMF/布局/布线：
+
+```sh
+python3 scripts/amf3.py dfx-multi-resume --run experiments/runs/<multi-run> --output experiments/runs/<new-assembly>
+```
+
+装配路由核验的范围：Vivado 查询层次内的时钟/常量网会返回整条共享网络，包含其他 RP 的分支；替换另一个 RP 会正常改变这些分支。因而使用 `get_dfx_footprint -route` 返回的实际路由 footprint 比较本 RP 的 node/PIP，并检查 footprint 本身未变。全设计静态路由及配置兼容性由独立的 `pr_verify -full_check` 核验，全设计布线完整性及 DRC 另行检查。没有跳过常量网或时钟网，也没有降低 DRC 等级。此命令在 UltraScale+ 支持 `-route`，依据 [AMD UG835](https://docs.amd.com/r/en-US/ug835-vivado-tcl-commands/get_dfx_footprint)。
