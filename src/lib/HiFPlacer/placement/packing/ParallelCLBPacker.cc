@@ -5290,6 +5290,19 @@ void ParallelCLBPacker::dumpPlacementTcl(std::string dumpTclFile)
            "The path for placement Tcl dumping does not exist and please check your path settings");
     if (placementInfo->getIncrementalContext().enabled)
     {
+        const auto &dfx = placementInfo->getIncrementalContext();
+        for (const auto &entry : dfx.fixed)
+        {
+            auto cellName = entry.first;
+            auto cell = designInfo->getCell(cellName);
+            auto pu = placementInfo->getPlacementUnitByCell(cell);
+            auto siteName = entry.second.site;
+            auto site = deviceInfo->getSite(siteName);
+            if (!pu->isFixed() || !pu->isLocked() ||
+                std::fabs(pu->X() - site->X()) > 1e-5f || std::fabs(pu->Y() - site->Y()) > 1e-5f)
+                throw std::runtime_error("DFX static anchor moved inside AMF: " + entry.first);
+        }
+        print_info("DFX_STATIC_ANCHORS_VERIFIED count=" + std::to_string(dfx.fixed.size()));
         // Data-only export: the DFX adapter parses place_cell lists. Never source
         // this file on a locked shell or execute whole-design unplace commands.
         outfileTcl << "error {DFX placement data: use scripts/run_dfx.py, do not source this file}\n";

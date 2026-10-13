@@ -1,0 +1,20 @@
+{
+  "IncremenralCompilation": true,
+  "part": "xcu250-figd2104-2L-e",
+  "top": "static_top",
+  "pblock": "pblock_rm",
+  "pblock_ranges": [
+    "CLOCKREGION_X1Y4:CLOCKREGION_X1Y4"
+  ],
+  "clock_name": "dfx_clk",
+  "clock_period_ns": 10,
+  "rtl_sources": [
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-dfx-incremental/repo/tests/dfx/u250_small/static_top.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-dfx-incremental/repo/tests/dfx/u250_small/rm_a.v"
+  ],
+  "xdc_files": [
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-dfx-incremental/repo/tests/dfx/u250_small/clock.xdc"
+  ],
+  "vivado": "/Projects/Xilinx26/2026.1/Vivado/bin/vivado",
+  "vivado_threads": 4
+}

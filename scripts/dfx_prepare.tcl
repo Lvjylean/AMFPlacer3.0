@@ -34,6 +34,23 @@ proc main {} {
     dict for {c v} $before { if {[dict exists $modeled [lindex $v 1]]} {dict set blocked [lindex $v 1] 1} }
     set f [open $out/blocked_sites.txt w]; puts $f [join [lsort [dict keys $blocked]] \n]; close $f
 
+    # Fresh control metadata belongs to this linked design, never to the template case.
+    set f [open $out/srl_controls.tsv w]
+    puts $f "cell\ttype\tclk\tce\tclk_inverted\tloc_fixed\tbel_fixed\tq31_sinks"
+    foreach cell [lsort [get_cells -hier -filter {REF_NAME =~ SRL*}]] {
+        set clk {}; set ce {}; set sinks {}; set invert UNKNOWN
+        foreach pin [get_pins -of_objects $cell] {
+            set ref [get_property REF_PIN_NAME $pin]
+            set net [get_nets -quiet -top_net_of_hierarchical_group -of_objects $pin]
+            if {$ref eq "CLK"} {set clk $net}
+            if {$ref eq "CE"} {set ce $net}
+            if {$ref eq "Q31" && [llength $net]} {set sinks [get_pins -quiet -leaf -of_objects $net -filter {DIRECTION == IN}]}
+        }
+        if {[lsearch -exact [list_property $cell] IS_CLK_INVERTED] >= 0} {set invert [get_property IS_CLK_INVERTED $cell]}
+        puts $f [join [list $cell [get_property REF_NAME $cell] $clk $ce $invert [get_property IS_LOC_FIXED $cell] [get_property IS_BEL_FIXED $cell] $sinks] "\t"]
+    }
+    close $f
+
     set included [dict create]
     set activeCount 0
     set staticf [open $out/static_placement.tsv w]; puts $staticf "cell\tsite\tbel"

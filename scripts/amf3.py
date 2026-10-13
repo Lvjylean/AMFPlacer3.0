@@ -224,15 +224,25 @@ def dfx_run(args):
     print(run(args))
 
 
+def dfx_shell(args):
+    require_server()
+    from create_dfx_shell import run
+    print(run(args))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
+    p = sub.add_parser('dfx-shell', help='Create a DFX static shell from one RTL bblock instance')
+    p.add_argument('--config', required=True)
+    p.add_argument('--output', required=True)
+    p.set_defaults(action=dfx_shell)
     p = sub.add_parser('dfx-run', help='Place one active RP in a locked DFX shell and generate full/partial bitstreams')
     p.add_argument('--config', required=True)
     p.add_argument('--output', required=True)
     p.add_argument('--binary')
     p.add_argument('--prepare-only', action='store_true')
-    p.set_defaults(func=dfx_run)
+    p.set_defaults(action=dfx_run)
     p = sub.add_parser('prepare-clock-capacity', help='Export nominal target-device clock capacities before placement')
     p.add_argument('--part', required=True, help='Exact Vivado part, e.g. xcu250-figd2104-2L-e')
     p.add_argument('--device', required=True, type=Path, help='AMF device archive to bind to the capacity table')

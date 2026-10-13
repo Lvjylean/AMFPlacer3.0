@@ -4,8 +4,10 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT/'scripts'))
 spec = importlib.util.spec_from_file_location('run_dfx', ROOT/'scripts/run_dfx.py')
 dfx = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(dfx)

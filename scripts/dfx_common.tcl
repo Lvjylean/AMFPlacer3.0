@@ -1,4 +1,16 @@
 namespace eval amf_dfx {
+    proc timed {label script} {
+        global dfx
+        set start [clock milliseconds]
+        set code [catch {uplevel 1 $script} value options]
+        set seconds [expr {([clock milliseconds] - $start)/1000.0}]
+        set f [open $dfx(output)/stage_times.tsv a]
+        puts $f "$label\t$seconds\t$code"; close $f
+        puts "AMF_DFX_STAGE $label seconds=$seconds code=$code"
+        if {$code} {return -options $options $value}
+        return $value
+    }
+
     proc active {name} {
         global dfx
         return [expr {$name eq $dfx(active_partition) || [string first "$dfx(active_partition)/" $name] == 0}]
@@ -42,6 +54,8 @@ namespace eval amf_dfx {
         set rp [get_cells -quiet $dfx(active_partition)]
         if {[llength $rp] != 1 || ![get_property HD.RECONFIGURABLE $rp]} {error "RP is not HD.RECONFIGURABLE"}
         if {[llength [get_pblocks -quiet $dfx(pblock)]] != 1} {error "Missing Pblock"}
+        if {[lsearch -exact [get_pblocks -of_objects $rp] $dfx(pblock)] < 0} {error "Active RP is not assigned to the selected Pblock"}
+        if {[get_property IS_SOFT [get_pblocks $dfx(pblock)]]} {error "DFX requires a hard placement Pblock"}
         set clock [get_clocks -quiet $dfx(clock_name)]
         if {[llength $clock] != 1 || abs([get_property PERIOD $clock] - $dfx(clock_period_ns)) > 0.000001} {
             error "Explicit clock period does not agree with DCP constraints"
@@ -66,5 +80,9 @@ namespace eval amf_dfx {
         report_timing -through [get_pins -of_objects [get_cells $dfx(active_partition)]] \
             -max_paths 100 -path_type full_clock_expanded -file $out/${stage}_boundary_timing.rpt
         report_drc -file $out/${stage}_drc.rpt
+        set f [open $out/${stage}_drc_counts.tsv w]
+        puts $f "errors\t[llength [get_drc_violations -quiet -filter {SEVERITY == Error}]]"
+        puts $f "critical_warnings\t[llength [get_drc_violations -quiet -filter {SEVERITY == "Critical Warning"}]]"
+        close $f
     }
 }

@@ -35,7 +35,7 @@
   "VerifyMacroCandidateCosts": "false",
   "clock resource capacity file": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/clock-capacity-20261006-132230-779064/clock_capacity.tsv",
   "clock resource capacity part": "xcu250-figd2104-2L-e",
-  "BoundaryClusteringStrategy": "paper-hierarchical",
+  "BoundaryClusteringStrategy": "region-gain",
   "ProFFClustering": "true",
   "ProPrimitiveTiming": "false",
   "ProLegacyIOBoundary": "false",

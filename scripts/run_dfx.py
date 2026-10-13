@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import time
 import zipfile
+from summarize_dfx import summarize
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = Path(__file__).resolve().parent
@@ -63,7 +64,7 @@ def amf_configuration(job):
     path = Path(job['amf_config'])
     cfg = json.loads(path.read_text())
     # Do not carry GETRF-specific netlist/control/cluster caches into another RM.
-    forbidden = ('fixed units file', 'unpredictable macro file', 'designCluster file',
+    forbidden = ('fixed units file', 'unpredictable macro file', 'designCluster file', 'designCluster',
                  'DSP registered outputs file', 'SRL control metadata file')
     for key in forbidden:
         if cfg.get(key): raise ValueError('DFX requires a case-neutral AMF template; remove ' + key)
@@ -112,13 +113,15 @@ def run(args):
     out = Path(args.output).resolve()
     out.mkdir(parents=True, exist_ok=False)
     (out / 'logs').mkdir(); (out / 'placement').mkdir(); (out / 'inputs').mkdir()
+    (out / 'reports' / 'physical').mkdir(parents=True)
     started = time.monotonic()
     manifest = dict(schema='amf-dfx-run-v1', started=dt.datetime.now().astimezone().isoformat(),
                     job=job, stages=[], state='running', dcp_storage='server-only',
                     scope='one active fabric RP; static fabric timing context; static routing owned by Vivado',
                     source_commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
                     input_hashes={k: sha(job[k]) for k in ('static_checkpoint','reference_checkpoint','rm_checkpoint','amf_config')})
-    for name in ('dfx_prepare.tcl', 'dfx_backend.tcl', 'dfx_common.tcl', 'run_dfx.py'):
+    for name in ('dfx_prepare.tcl', 'dfx_backend.tcl', 'dfx_common.tcl', 'run_dfx.py', 'summarize_dfx.py',
+                 'summarize_full_flow.py', 'summarize_face_detect_flow.py'):
         shutil.copy2(SCRIPT / name, out / 'inputs' / name)
     manifest['script_hashes'] = {p.name: sha(p) for p in (out/'inputs').iterdir()}
     save(out / 'manifest.json', manifest)
@@ -153,14 +156,21 @@ def run(args):
         capability = json.loads(subprocess.check_output([str(binary), '--capabilities'], text=True))
         if capability.get('dfx_incremental_schema') != 1: raise ValueError('Binary does not implement DFX constraints')
         manifest['binary'] = str(binary); manifest['binary_sha256'] = sha(binary)
+        build_manifest = binary.parent.parent/'manifest.json'
+        if build_manifest.is_file():
+            manifest['build'] = json.loads(build_manifest.read_text())
+            if manifest['build'].get('binaries', {}).get('AMFPlacer') != manifest['binary_sha256']:
+                raise ValueError('Build manifest does not match executable')
+        manifest['model_input_hashes'] = {k:sha(v) for k,v in cfg.items() if ('file' in k or k=='mergedSharedCellType2sharedCellType') and Path(v).is_file()}
         with zipfile.ZipFile(out/'netlist.zip', 'w', zipfile.ZIP_DEFLATED) as z:
             z.write(out/'netlist.txt', 'netlist')
         cfg.update({'IncremenralCompilation':'true', 'DFX active partition':job['active_partition'],
                     'DFX allowed sites file':str(out/'allowed_sites.txt'), 'DFX blocked sites file':str(out/'blocked_sites.txt'),
                     'DFX static placement file':str(out/'static_placement.tsv'),
+                    'SRL control metadata file':str(out/'srl_controls.tsv'),
                     'vivado extracted design information file':str(out/'netlist.zip'), 'clock file':str(out/'clocks'),
                     'ClockPeriod':str(job['clock_period_ns']), 'dumpDirectory':str(out/'placement'),
-                    'DumpCLBPacking':'DumpCLBPacking'})
+                    'DumpCLBPacking':'DumpCLBPacking', 'BoundaryReportDirectory':str(out/'reports/physical')})
         save(out/'amf_config.json', cfg)
         environment = dict(os.environ, AMF_PROFILE_OUTPUT=str(out/'amf_profile.tsv'), AMF_GRID_UPDATE_MODE='batched')
         stage('amf', [str(binary), str(out/'amf_config.json')], cwd=out/'placement', env=environment)
@@ -176,6 +186,10 @@ def run(args):
         for name in required:
             if not (out/name).is_file() or (out/name).stat().st_size == 0: raise RuntimeError('Missing DFX artifact: '+name)
         manifest['outputs'] = {name: dict(path=str(out/name), sha256=sha(out/name), bytes=(out/name).stat().st_size) for name in required}
+        manifest['acceptance'] = summarize(out)
+        save(out/'acceptance.json', manifest['acceptance'])
+        if not manifest['acceptance']['implementation_verified']:
+            raise RuntimeError('DFX implementation acceptance failed; see acceptance.json')
         manifest['state'] = 'completed'
         return out
     except Exception as error:
