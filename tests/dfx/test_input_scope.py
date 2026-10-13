@@ -18,7 +18,7 @@ def lst(items):return ' '.join(word(x) for x in items)
 
 
 class ScopedInput(unittest.TestCase):
-    def run_graph(self, types, edges, active, dsp_preg=1, export=False):
+    def run_graph(self, types, edges, active, dsp_preg=1, dsp_critical=True):
         rows={c:[] for c in types}; nets={}
         for i,(src,dst) in enumerate(edges):
             n='n'+str(i);s=src.rsplit('/',1)[0];d=dst.rsplit('/',1)[0]
@@ -29,7 +29,7 @@ class ScopedInput(unittest.TestCase):
         for c,t in types.items():
             if t in ('FDRE','DSP48E2','SRL16E'):
                 rows[c].append([c+'/CLK','CLK','IN','global_clock',1])
-        script='source '+word(ROOT/'scripts/dfx_input_scope.tcl')+'\nset dfx(dsp_critical) 1\n'
+        script='source '+word(ROOT/'scripts/dfx_input_scope.tcl')+f'\nset dfx(dsp_critical) {int(dsp_critical)}\n'
         script+='namespace eval amf_dfx {proc active {c} {return [string match {top/rm/*} $c]}\nproc timed {label script} {uplevel 1 $script}}\n'
         script+='set ::testTypes [dict create '+lst([x for c,t in types.items() for x in (c,t)])+']\n'
         script+='set ::testRows [dict create '+lst([x for c,rs in rows.items() for x in (c,lst([lst(r) for r in rs]))])+']\n'
@@ -86,6 +86,26 @@ class ScopedInput(unittest.TestCase):
         types={'top/rm/a':'FDRE','dsp':'DSP48E2','launch':'FDRE'}
         got,_=self.run_graph(types,[('launch/Q','dsp/A[0]'),('dsp/ACOUT[0]','top/rm/a/D')],['top/rm/a'])
         self.assertEqual(got,set(types))
+
+    def test_dsp_critical_false_uses_same_cut_as_existing_amf(self):
+        types={'top/rm/a':'FDRE','dsp':'DSP48E2','launch':'FDRE'}
+        edges=[('launch/Q','dsp/A[0]'),('dsp/P[0]','top/rm/a/D')]
+        got,_=self.run_graph(types,edges,['top/rm/a'],dsp_preg=0,dsp_critical=False)
+        self.assertEqual(got,{'top/rm/a','dsp'})
+
+    def test_constants_never_query_global_driver_or_fanout_aliases(self):
+        script='source '+word(ROOT/'scripts/dfx_input_scope.tcl')+'\n'+r"""
+proc get_property {key object} {if {$key ne "TYPE"} {error "unexpected property"};return $object}
+rename amf_dfx_scope::canonical_pins amf_dfx_scope::real_canonical_pins
+proc amf_dfx_scope::canonical_pins {args} {error "constant aliases were expanded"}
+if {[amf_dfx_scope::net GROUND 1] ne {<const0> GND {}}} {error "bad zero"}
+if {[amf_dfx_scope::net POWER 1] ne {<const1> VCC {}}} {error "bad one"}
+if {[amf_dfx_scope::net GROUND] ne {<const0> GND {}}} {error "bad cached zero"}
+"""
+        with tempfile.TemporaryDirectory() as d:
+            f=Path(d)/'case.tcl';f.write_text(script)
+            result=subprocess.run(['tclsh',str(f)],text=True,capture_output=True)
+            self.assertEqual(result.returncode,0,result.stderr)
 
     def test_random_graph_retains_every_register_path_through_active_cells(self):
         # Independent path enumeration on the original graph, then on the cut graph.

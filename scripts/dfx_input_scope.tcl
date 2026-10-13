@@ -28,6 +28,14 @@ namespace eval amf_dfx_scope {
     proc net {name {withSinks 0}} {
         variable netCache
         if {![dict exists $netCache $name]} {
+            # Global constant aliases can span the entire design. TYPE is enough:
+            # never enumerate thousands of static GND/VCC drivers or sinks.
+            set category [get_property TYPE $name]
+            if {$category in {GROUND POWER}} {
+                if {$category eq "GROUND"} {set d <const0>;set t GND} else {set d <const1>;set t VCC}
+                dict set netCache $name [list $d $t {} 1]
+                return [list $d $t {}]
+            }
             set drivers [canonical_pins $name OUT]
             set kinds {}
             foreach p $drivers {lappend kinds [type [owner $p]]}
