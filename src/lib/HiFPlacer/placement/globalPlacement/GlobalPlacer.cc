@@ -118,7 +118,31 @@ GlobalPlacer::GlobalPlacer(PlacementInfo *placementInfo, std::map<std::string, s
 void GlobalPlacer::clusterPlacement()
 {
     AMF_PROFILE_FUNCTION("global_orchestration");
-    clusterPlacer->ClusterPlacement();
+    if (placementInfo->getIncrementalContext().enabled)
+    {
+        // Whole-device SA may select a CR outside this hard RP. Seed movable
+        // macro anchors deterministically inside its available fabric, then use
+        // the existing analytical GP, legalization and detailed packing stages.
+        std::vector<DeviceInfo::DeviceSite *> seeds;
+        for (auto site : placementInfo->getDeviceInfo()->getSites())
+            if (!site->isOccupied() && (site->getSiteType() == "SLICEL" || site->getSiteType() == "SLICEM"))
+                seeds.push_back(site);
+        if (seeds.empty()) throw std::runtime_error("DFX Pblock has no available SLICE sites");
+        std::sort(seeds.begin(), seeds.end(), [](auto a, auto b) { return a->getName() < b->getName(); });
+        size_t index = 0;
+        for (auto pu : placementInfo->getPlacementUnits())
+        {
+            if (pu->isFixed()) continue;
+            auto site = seeds[(index++ * 104729) % seeds.size()];
+            float x = site->X(), y = site->Y();
+            placementInfo->legalizeXYInArea(pu, x, y);
+            pu->setAnchorLocationAndForgetTheOriginalOne(x, y);
+        }
+        placementInfo->updateElementBinGrid();
+        print_info("DFX_INITIALIZATION movable_pus=" + std::to_string(index) + " hard_region_seed=true");
+    }
+    else
+        clusterPlacer->ClusterPlacement();
     print_info("ClusterPlacement Total HPWL = " + std::to_string(placementInfo->updateB2BAndGetTotalHPWL()));
 }
 

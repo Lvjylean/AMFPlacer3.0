@@ -1,7 +1,7 @@
 namespace eval amf_dfx {
     proc active {name} {
         global dfx
-        return [expr {[string first "$dfx(active_partition)/" $name] == 0}]
+        return [expr {$name eq $dfx(active_partition) || [string first "$dfx(active_partition)/" $name] == 0}]
     }
     proc primitive_cells {} { return [get_cells -hierarchical -filter {IS_PRIMITIVE == 1}] }
     proc constant {cell} { return [expr {[get_property REF_NAME $cell] in {GND VCC}}] }
