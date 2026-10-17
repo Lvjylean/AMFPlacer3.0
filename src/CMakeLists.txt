@@ -240,3 +240,6 @@ target_link_libraries(checkStageExperiment GlobalPlacer DesignInfo DeviceInfo Pl
 
 add_executable(checkSRLSharingInput EXCLUDE_FROM_ALL tests/check_srl_sharing_input.cc)
 target_link_libraries(checkSRLSharingInput Packing GlobalPlacer Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+# Independent SLL math, gradient, parallel and synthetic candidate checks.
+add_executable(checkSllQuantity EXCLUDE_FROM_ALL tests/check_sll_quantity.cc)
