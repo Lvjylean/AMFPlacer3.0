@@ -246,3 +246,12 @@ add_executable(checkGridUpdatePolicy EXCLUDE_FROM_ALL tests/check_grid_update_po
 # Native legacy SPFA with isolated connected components.
 add_executable(checkLegacyComponents EXCLUDE_FROM_ALL tests/check_legacy_components.cc)
 target_link_libraries(checkLegacyComponents Utils pthread)
+
+add_executable(checkNativeStaticCache EXCLUDE_FROM_ALL tests/check_native_static_cache.cc
+               lib/HiFPlacer/designInfo/native/StaticDesignCache.cc)
+target_link_libraries(checkNativeStaticCache ${ZLIB_LIBRARIES})
+add_executable(checkNativePlacementRepair EXCLUDE_FROM_ALL tests/check_native_placement_repair.cc)
+
+add_executable(checkBoundarySitePolicy EXCLUDE_FROM_ALL tests/check_boundary_site_policy.cc
+    lib/HiFPlacer/designInfo/native/StaticDesignCache.cc)
+target_link_libraries(checkBoundarySitePolicy ${ZLIB_LIBRARIES})

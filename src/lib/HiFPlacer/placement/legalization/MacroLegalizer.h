@@ -764,7 +764,13 @@ class MacroLegalizer
     bool legalSiteRange(PlacementInfo::PlacementUnit *pu,
                         const std::vector<DeviceInfo::DeviceSite *> &sites, int first, int count) const;
     void verifyAvailableCapacity();
-
+    bool canReceiveWholeMacro(int target, PlacementInfo::PlacementUnit *pu,
+                              const std::vector<int> &utilization, const std::vector<float> &budgets,
+                              std::vector<std::vector<DeviceInfo::DeviceSite *>> &sites,
+                              const std::vector<std::deque<PlacementInfo::PlacementUnit *>> &columns);
+    bool solveRegionColumn(std::vector<DeviceInfo::DeviceSite *> sites,
+                           std::deque<PlacementInfo::PlacementUnit *> pus, bool optimize,
+                           std::map<PlacementInfo::PlacementUnit *, std::vector<DeviceInfo::DeviceSite *>> *result);
 
     inline void swapPU(PlacementInfo::PlacementUnit **A, PlacementInfo::PlacementUnit **B)
     {

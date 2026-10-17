@@ -1,0 +1,304 @@
+{
+  "kind": "source-consolidation-regressions",
+  "fpga_experiment_launched": false,
+  "results": [
+    {
+      "name": "test_parallel_safety.py",
+      "command": [
+        "/usr/bin/python3",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/test_parallel_safety.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.3190977144986391,
+      "output": "....\n----------------------------------------------------------------------\nRan 4 tests in 0.276s\n\nOK\n"
+    },
+    {
+      "name": "test_optimized_rm_contract.py",
+      "command": [
+        "/usr/bin/python3",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/test_optimized_rm_contract.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.03565284237265587,
+      "output": ".\n----------------------------------------------------------------------\nRan 1 test in 0.001s\n\nOK\n"
+    },
+    {
+      "name": "test_background_reports.py",
+      "command": [
+        "/usr/bin/python3",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/test_background_reports.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.05006328318268061,
+      "output": "..\n----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nOK\n"
+    },
+    {
+      "name": "test_dfx_no_static_containment.py",
+      "command": [
+        "/usr/bin/python3",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/test_dfx_no_static_containment.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.03896464314311743,
+      "output": "PASS: disabled default, settings serialization, distinct identity, shell policy matching and configs\n"
+    },
+    {
+      "name": "test_native_cache_contract",
+      "command": [
+        "/usr/bin/python3",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/tests/test_native_cache_contract.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.04567340761423111,
+      "output": "........\n----------------------------------------------------------------------\nRan 8 tests in 0.007s\n\nOK\n"
+    },
+    {
+      "name": "ooc_clock_handoff",
+      "command": [
+        "tclsh",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/tests/incremental/test_ooc_handoff.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_ooc_clock_handoff.tcl",
+        "/tmp/amf-source-regression-n8ghdr5e"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002968977205455303,
+      "output": "ADDITIONAL_CONSTRAINT_REJECTED_BEFORE_RESET Additional OOC timing constraint requires explicit preservation: set_false_path -from [get_ports ap_rst_n]\nAMF_OOC_PRIMARY_REMOVED_FROM_HANDOFF\nSINGLE_PRIMARY_ONLY_REMOVED\n"
+    },
+    {
+      "name": "tcl_complete",
+      "command": [
+        "tclsh",
+        "/tmp/amf-source-regression-n8ghdr5e/check_tcl.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_prepare.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_full_backend.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_native_cert_probe.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_fixture.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_common.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_native_interface_buffers.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_ooc_clock_handoff.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_export_common_static.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_common_static_shell.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_full_audit.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_native_rm_import.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_verified_bitstream.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_native_certify.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/test_srl_metadata.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/validate_resource_placement.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_rm_synth.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_multi_assemble.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_refresh_srl.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_parallel_verify.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_multi_shell.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/vivado_baseline.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/test_dfx_full_audit.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/test_dfx_static_membership.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_joint_backend.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/export_clock_resources.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_full_input.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_full_prepare.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_full_input_batch.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/test_dfx_no_static_containment.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/audit_face_detect_placement.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_native_full_probe.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_static_membership.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/import_acceptance.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_joint_checks.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/test_dfx_static_clock_regions.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_rm_opt.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/export_fabric_device.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/validate_srl_packing.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_srl_metadata.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_static_containment.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_site_import.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_retag_ooc_clock.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_boundary_compatibility.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_initialize.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/full_backend.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/test_dfx_site_import.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_input_scope.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_clock_contract.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_native_rm_export.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_backend.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_native_export.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_auxiliary_reports.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_multi_common.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/dfx_import.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/export_clock_half_column_topology.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/diagnose_clk_fpga08_period_sensitivity.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_ispd_amf_inventory.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/profile_sa_ratio_queries.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/probe_amf2_case.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_amf2_core_inventory.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_amf2_core_inventory_v3.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/probe_carry_srl_repairs.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/extract_srl_controls.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/getrf_dfx_primitive_probe.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_minimap2_protected_aliases.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/getrf_dfx_rm_preflight.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/probe_ispd_constraints.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_sll_columns.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/classify_ispd_global_buffers.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/dfx_abstract_validation.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_sa_ratio_samples.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/probe_u250.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_minimap2_sync_constraints.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_u250_fixed_resource_sites.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/probe_getrf_checkpoint_version.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/probe_u250_clock_leaf_graph.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/probe_fixed_input_reimport.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/dfx_place_mode_probe_v2.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_native_logic_audit.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/dfx_probe_checks.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_amf2_core_inventory_v4.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/probe_sll_columns.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/report_dcp_fanout_20260928_011026_804170.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/inspect_final_netlist.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/verify_u250_half_column_clocks.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_external_clock_pins.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/probe_ispd_u250_retarget.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/probe_minimap2_export_names.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_amf2_core_inventory_v6.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_amf2_original_connectivity.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_minimap2_protected_primitives.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_amf2_core_inventory_v2.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/test_dfx_boundary_compatibility.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/audit_getrf_logic_constraints.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/inspect_external_floorplan_critical_paths.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/probe_minimap2_pin_access.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/inspect_r10_critical_route.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_amf2_core_inventory_v5.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/dfx_boundary_compatibility.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/correct_clk_fpga08_timing.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/replay_import_sites.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_leaf_identity.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/verify_getrf_dfx_canonical.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/dfx_place_mode_probe.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_minimap2_functional_netlist.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/prepare_minimap2_u250_board.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/report_r10_critical_route.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_minimap2_full_inventory.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/probe_u250_clock_policy.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/probe_ispd_dsp_timing.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/diagnose_dfx_b_constant.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/export_boundary_timing_samples.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/probe_u250_half_column.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/getrf_dfx_regions.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/probe_minimap2_protected_logic.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/prepare_ispd_u250_io.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/scripts/diagnostics/clock_guidance/probe.tcl"
+      ],
+      "exit_code": 0,
+      "seconds": 0.006354339420795441,
+      "output": ""
+    },
+    {
+      "name": "compile_check_region_column_dp",
+      "command": [
+        "c++",
+        "-std=c++17",
+        "-O2",
+        "-I/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/src/lib/HiFPlacer/placement/legalization",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/tests/incremental/carry/check_region_column_dp.cc",
+        "-o",
+        "/tmp/amf-source-regression-n8ghdr5e/check_region_column_dp"
+      ],
+      "exit_code": 0,
+      "seconds": 0.605081076733768,
+      "output": ""
+    },
+    {
+      "name": "check_region_column_dp",
+      "command": [
+        "/tmp/amf-source-regression-n8ghdr5e/check_region_column_dp"
+      ],
+      "exit_code": 0,
+      "seconds": 0.001493370160460472,
+      "output": "PASS: region-order conflict, gaps, regional shortage, empty input, 500 exhaustive cases, whole-macro ceiling/budget checks\n"
+    },
+    {
+      "name": "compile_replay_failed_column",
+      "command": [
+        "c++",
+        "-std=c++17",
+        "-O2",
+        "-I/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/src/lib/HiFPlacer/placement/legalization",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/tests/incremental/carry/replay_failed_column.cc",
+        "-o",
+        "/tmp/amf-source-regression-n8ghdr5e/replay_failed_column"
+      ],
+      "exit_code": 0,
+      "seconds": 0.44331981986761093,
+      "output": ""
+    },
+    {
+      "name": "replay_failed_column",
+      "command": [
+        "/tmp/amf-source-regression-n8ghdr5e/replay_failed_column"
+      ],
+      "exit_code": 0,
+      "seconds": 0.0013969624415040016,
+      "output": "9881\t0\t2\t0\n9877\t0\t2\t2\n9891\t0\t2\t4\n9894\t0\t2\t6\n106\t1\t2\t121\n94\t1\t3\t123\n92\t1\t2\t126\n9460\t0\t2\t8\n9463\t0\t2\t10\n9456\t0\t2\t12\n10052\t0\t1\t14\n10048\t0\t2\t15\n9320\t0\t1\t17\n9317\t0\t2\t18\n9869\t0\t2\t20\n11044\t0\t1\t22\n11046\t0\t1\t23\n11035\t0\t2\t24\n9677\t0\t2\t26\n9675\t0\t2\t28\n9680\t0\t1\t30\n9552\t0\t2\t31\n5854\t2\t3\t301\n9505\t0\t2\t33\n5850\t2\t2\t304\n3438\t0\t1\t35\n3210\t0\t2\t36\n3209\t0\t2\t38\n3285\t0\t2\t40\n3529\t0\t1\t42\n3530\t0\t1\t43\n3515\t0\t1\t44\n3114\t0\t2\t45\n4332\t0\t2\t47\n4188\t0\t3\t49\n827\t0\t1\t52\n815\t0\t1\t53\n1035\t0\t2\t54\n1036\t0\t2\t56\n2386\t0\t2\t58\n2943\t0\t1\t60\n1766\t0\t2\t61\n2792\t0\t2\t63\n6120\t0\t2\t65\n6133\t0\t2\t67\n5994\t0\t2\t69\n5992\t0\t2\t71\n8072\t0\t1\t73\n8073\t0\t1\t74\n7386\t0\t2\t75\n7211\t0\t2\t77\n7201\t0\t2\t79\n7203\t0\t3\t81\n7750\t0\t2\t84\n7754\t0\t2\t86\n7755\t0\t2\t88\n7756\t0\t2\t90\n7752\t0\t2\t92\n8217\t0\t2\t94\n8216\t0\t2\t96\n6204\t0\t2\t98\n7558\t0\t2\t100\n7582\t0\t2\t102\n6874\t0\t2\t104\n6693\t0\t2\t106\n6690\t0\t2\t108\n6821\t0\t2\t110\n6822\t0\t2\t112\n6280\t0\t2\t114\n6282\t0\t2\t116\n7183\t0\t2\t118\nPASS complete captured column: 71 macros / 132 rows, mixed order infeasible, grouped order legal, no overlap\n"
+    },
+    {
+      "name": "build_native_regressions",
+      "command": [
+        "cmake",
+        "--build",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/builds/build-20261017-104917-543032-b5322e1f/build",
+        "--parallel",
+        "4",
+        "--target",
+        "checkNativeStaticCache",
+        "checkNativePlacementRepair",
+        "checkBoundarySitePolicy",
+        "checkSRLSharingInput"
+      ],
+      "exit_code": 0,
+      "seconds": 0.039261333644390106,
+      "output": "ninja: no work to do.\n"
+    },
+    {
+      "name": "checkNativeStaticCache",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/builds/build-20261017-104917-543032-b5322e1f/build/checkNativeStaticCache"
+      ],
+      "exit_code": 0,
+      "seconds": 0.0028519509360194206,
+      "output": "native static cache: 45 checks passed; evidence=\"/tmp/amf-native-cache-test-2631736\"\n"
+    },
+    {
+      "name": "checkNativePlacementRepair",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/builds/build-20261017-104917-543032-b5322e1f/build/checkNativePlacementRepair"
+      ],
+      "exit_code": 0,
+      "seconds": 0.0012610601261258125,
+      "output": "native placement repair: 14 checks passed\n"
+    },
+    {
+      "name": "checkBoundarySitePolicy",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/builds/build-20261017-104917-543032-b5322e1f/build/checkBoundarySitePolicy"
+      ],
+      "exit_code": 0,
+      "seconds": 0.0044317832216620445,
+      "output": "boundary site policy: 25 checks passed\n"
+    },
+    {
+      "name": "capabilities",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/builds/build-20261017-104917-543032-b5322e1f/build/AMFPlacer",
+        "--capabilities"
+      ],
+      "exit_code": 0,
+      "seconds": 0.0014285091310739517,
+      "output": "{\"schema\":\"amf-capabilities-v1\",\"clock_resource_capacity_schema\":1,\"external_floorplan_initialization_schema\":1,\"paper_hierarchical_boundaries_schema\":2,\"global_placement_inspection_schema\":1,\"amf2pro_integration_schema\":1,\"dfx_incremental_schema\":1,\"dfx_full_hard_regions_schema\":1,\"native_static_cache_schema\":2,\"native_placement_repair_schema\":1,\"native_dfx_edge_policy_schema\":1}\n"
+    }
+  ],
+  "state": "passed",
+  "frozen_files_verified": 3598,
+  "python_syntax_files": 211,
+  "input_dependent_checks": {
+    "checkSRLSharingInput": "Compiled only; execution requires a design config and packing table. No FPGA experiment inputs are consumed by this source check."
+  }
+}

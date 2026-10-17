@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <cmath>
 
 // Version 1 handles one active RP. Vivado owns static routing and partition pins;
 // AMF retains only the real-cell timing cones crossing the RM interface.
@@ -17,6 +18,8 @@ struct IncrementalContext
     std::string partition;
     std::set<std::string> allowedSites, blockedSites;
     std::map<std::string, FixedCell> fixed;
+    struct InterfaceEndpoint { float x,y; std::string node; };
+    std::map<std::string,InterfaceEndpoint> endpoints;
     std::set<int> staticCellIds;
     float minX = 0, maxX = 0, minY = 0, maxY = 0;
 
@@ -50,6 +53,8 @@ struct IncrementalContext
         auto mode = cfg.find("IncremenralCompilation");
         if (mode == cfg.end() || mode->second == "false") return;
         if (mode->second != "true") throw std::runtime_error("IncremenralCompilation must be true or false");
+        auto placementMode = cfg.find("DFX placement mode");
+        if (placementMode != cfg.end() && placementMode->second == "full") return;
         enabled = true;
         partition = required(cfg, "DFX active partition");
         if (partition.back() == '/' || partition.find_first_of("\t\r\n ") != std::string::npos)
@@ -66,6 +71,17 @@ struct IncrementalContext
                 isActive(f[0]) || !fixed.emplace(f[0], FixedCell{f[1], f[2]}).second)
                 throw std::runtime_error("Invalid DFX static placement row: " + line);
             blockedSites.insert(f[1]);
+        }
+        if(cfg.count("Native interface endpoints file")) {
+            std::ifstream f(cfg.at("Native interface endpoints file"));
+            if(!std::getline(f,line)||line!="cell\tx\ty\tnode")throw std::runtime_error("Invalid native endpoint header");
+            while(std::getline(f,line)) {
+                auto r=fields(line);
+                if(r.size()!=4||r[0].compare(0,15,"@AMF_INTERFACE/")!=0||fixed.count(r[0]))throw std::runtime_error("Invalid native endpoint row");
+                float x=std::stof(r[1]),y=std::stof(r[2]);
+                if(!std::isfinite(x)||!std::isfinite(y)||r[3].empty()||!endpoints.emplace(r[0],InterfaceEndpoint{x,y,r[3]}).second)
+                    throw std::runtime_error("Invalid native endpoint coordinate");
+            }
         }
         const auto scope = cfg.find("DFX input scope");
         if (scope != cfg.end() && scope->second != "rm-boundary-cone-v1")

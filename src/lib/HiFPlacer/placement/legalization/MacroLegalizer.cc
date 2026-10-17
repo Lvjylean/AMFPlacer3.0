@@ -23,6 +23,7 @@
 #include <chrono>
 #include "HardResourceUtils.h"
 #include "ColumnOverflow.h"
+#include "RegionColumnDP.h"
 
 MacroLegalizer::MacroLegalizer(std::string legalizerName, PlacementInfo *placementInfo, DeviceInfo *deviceInfo,
                                std::vector<DesignInfo::DesignCellType> &macroTypesToLegalize,
@@ -292,6 +293,20 @@ float MacroLegalizer::DPForMinHPWL(int colNum, std::vector<std::vector<DeviceInf
 
         sortSitesBySiteY(curColSites);
 
+        if (placementInfo->hasHardRegions())
+        {
+            std::map<PlacementInfo::PlacementUnit *, std::vector<DeviceInfo::DeviceSite *>> regionSites;
+            if (!solveRegionColumn(curColSites, curColPU, true, &regionSites))
+            {
+                print_error("Hard-region column cannot be legalized after column assignment: " + std::to_string(c));
+                std::abort();
+            }
+            // PU2Sites keys were preallocated before the parallel loop. Each
+            // column owns a disjoint set of PUs; do not insert into the shared map.
+            for (auto pu : curColPU) PU2Sites.at(pu) = std::move(regionSites.at(pu));
+            continue;
+        }
+
         // initialize
 
         std::vector<std::vector<float>> f(numPUs, std::vector<float>(curColSites.size(), 1000000000.0));
@@ -461,6 +476,65 @@ float MacroLegalizer::DPForMinHPWL(int colNum, std::vector<std::vector<DeviceInf
     return tmpTotalDisplacement;
 }
 
+bool MacroLegalizer::solveRegionColumn(
+    std::vector<DeviceInfo::DeviceSite *> sites,
+    std::deque<PlacementInfo::PlacementUnit *> pus, bool optimize,
+    std::map<PlacementInfo::PlacementUnit *, std::vector<DeviceInfo::DeviceSite *>> *result)
+{
+    if (pus.empty()) return true;
+    sortSitesBySiteY(sites);
+    // Fit probes sort a local copy. Final DP receives the already sorted column
+    // from updatePUMatchingLocation; finalLegalizeBasedOnDP has cleared PU2Y by
+    // then, so never read/insert into that map in the parallel final-DP phase.
+    if (!optimize) sortPUsByPU2Y(pus);
+    std::vector<int> itemRegions, siteRegions(sites.size(), -1);
+    std::map<int, PlacementInfo::PlacementUnit *> representatives;
+    for (auto pu : pus)
+    {
+        const int region = placementInfo->hardRegionForPU(pu);
+        itemRegions.push_back(region);
+        representatives.emplace(region, pu);
+    }
+    for (int j = 0; j < static_cast<int>(sites.size()); ++j)
+        for (const auto &entry : representatives)
+            if (placementInfo->hardRegionAllows(entry.second, sites[j]))
+            {
+                if (siteRegions[j] != -1) throw std::logic_error("Overlapping hard-region site masks");
+                siteRegions[j] = entry.first;
+            }
+    std::map<PlacementInfo::PlacementUnit *, std::vector<DeviceInfo::DeviceSite *>> candidate;
+    for (const auto &entry : AMFRegionColumnDP::partition(itemRegions, siteRegions))
+    {
+        const auto &group = entry.second;
+        std::vector<DeviceInfo::DeviceSite *> regionSites;
+        std::vector<int> heights, bottoms;
+        for (int j : group.sites) regionSites.push_back(sites[j]);
+        for (int i : group.items) heights.push_back(getMarcroCellNum(pus[i]));
+        auto legal = [&](int i, int first, int height) {
+            auto pu = pus[group.items[i]];
+            if (!legalSiteRange(pu, regionSites, first, height)) return false;
+            // Fixed/locked PUs are never displacement candidates in this path.
+            if ((pu->isFixed() || pu->isLocked()) &&
+                (std::fabs(regionSites[first]->X() - pu->X()) > 0.001f ||
+                 std::fabs(regionSites[first]->Y() - pu->Y()) > 0.001f)) return false;
+            return true;
+        };
+        auto cost = [&](int i, int first) -> double {
+            return optimize ? getHPWLChange(pus[group.items[i]], regionSites[first]) : 0.0;
+        };
+        if (!AMFRegionColumnDP::solveOrdered(heights, regionSites.size(), legal, cost, bottoms)) return false;
+        if (result)
+            for (int i = 0; i < static_cast<int>(group.items.size()); ++i)
+            {
+                const int first = bottoms[i];
+                candidate.emplace(pus[group.items[i]], std::vector<DeviceInfo::DeviceSite *>(
+                    regionSites.begin() + first, regionSites.begin() + first + heights[i]));
+            }
+    }
+    if (result) *result = std::move(candidate);
+    return true;
+}
+
 bool MacroLegalizer::macroCanBeFitIn(int colId, std::vector<std::vector<DeviceInfo::DeviceSite *>> &Column2Sites,
                                      std::deque<PlacementInfo::PlacementUnit *> Column2PUs)
 {
@@ -470,6 +544,9 @@ bool MacroLegalizer::macroCanBeFitIn(int colId, std::vector<std::vector<DeviceIn
     int numPUs = Column2PUs.size();
     if (!numPUs)
         return true;
+
+    if (placementInfo->hasHardRegions())
+        return solveRegionColumn(Column2Sites[c], Column2PUs, false, nullptr);
 
     auto &curColSites = Column2Sites[c];
     auto &curColPU = Column2PUs;
@@ -928,6 +1005,7 @@ void MacroLegalizer::findPossibleLegalLocation(bool fixedColumn)
 
         for (auto curSite : *candidateSite)
         {
+            if(!placementInfo->hardRegionAllows(curCell,curSite))continue;
             float curDisp = getDisplacement(cellLoc[curCell->getCellId()], curSite);
             if ((!fixedColumn && curDisp < displacementThreshold) ||
                 (fixedColumn && curDisp < 2 * displacementThreshold))
@@ -1365,6 +1443,19 @@ void MacroLegalizer::updatePUMatchingLocation(bool isRoughLegalization, bool upd
     placementInfo->setPULegalXY(PU2X, PU2Y);
 }
 
+bool MacroLegalizer::canReceiveWholeMacro(
+    int target, PlacementInfo::PlacementUnit *pu, const std::vector<int> &utilization,
+    const std::vector<float> &budgets, std::vector<std::vector<DeviceInfo::DeviceSite *>> &sites,
+    const std::vector<std::deque<PlacementInfo::PlacementUnit *>> &columns)
+{
+    if (target < 0 || target >= static_cast<int>(columns.size()) || pu->isFixed() || pu->isLocked()) return false;
+    if (!AMFColumnOverflow::wholeMacroFitsBudget(utilization[target], getMarcroCellNum(pu),
+                                               sites[target].size(), budgets[target])) return false;
+    auto proposed = columns[target];
+    proposed.push_back(pu);
+    return solveRegionColumn(sites[target], proposed, false, nullptr);
+}
+
 void MacroLegalizer::spreadMacros(int columnNum, std::vector<int> &columnUntilization,
                                   std::vector<std::vector<DeviceInfo::DeviceSite *>> &column2Sites,
                                   std::vector<std::deque<PlacementInfo::PlacementUnit *>> &column2PUs,
@@ -1452,6 +1543,57 @@ void MacroLegalizer::spreadMacros(int columnNum, std::vector<int> &columnUntiliz
             assert(totalAvailableCapacity > 0);
             float toLeftRatio = std::max(0.0f, std::min(1.0f,
                 (float)(leftAvaliableCapacity - leftUtil) / totalAvailableCapacity));
+            if (placementInfo->hasHardRegions())
+            {
+                int movedRows = 0;
+                const int leftGoal = AMFColumnOverflow::directionalReliefCeil(overflowNum, toLeftRatio);
+                auto &source = column2PUs[overflowColId];
+                while (movedRows < overflowNum && !source.empty())
+                {
+                    const bool preferLeft = toLeft < leftGoal;
+                    bool moved = false;
+                    // A whole macro is transferred directly, not relayed through
+                    // intermediate columns. Distance has priority; the aggregate
+                    // side share breaks left/right ties only.
+                    for (int distance = 1; distance < columnNum && !moved; ++distance)
+                    {
+                        const int directions[2] = {preferLeft ? -1 : 1, preferLeft ? 1 : -1};
+                        for (int direction : directions)
+                        {
+                            const int target = overflowColId + direction * distance;
+                            if (target < 0 || target >= columnNum) continue;
+                            for (int k = 0; k < static_cast<int>(source.size()); ++k)
+                            {
+                                const int index = direction < 0 ? k : static_cast<int>(source.size()) - 1 - k;
+                                auto pu = source[index];
+                                if (!canReceiveWholeMacro(target, pu, columnUntilization, budgetRatios,
+                                                          column2Sites, column2PUs)) continue;
+                                const int height = getMarcroCellNum(pu);
+                                // Commit only after the full destination probe succeeds.
+                                column2PUs[target].push_back(pu);
+                                source.erase(source.begin() + index);
+                                columnUntilization[target] += height;
+                                columnUntilization[overflowColId] -= height;
+                                movedRows += height;
+                                if (direction < 0) toLeft += height;
+                                std::cout << "AMF_REGION_MACRO_MOVE pu=" << pu->getId()
+                                          << " rows=" << height << " from=" << overflowColId
+                                          << " to=" << target << " destination_fit=1\n";
+                                moved = true;
+                                break;
+                            }
+                            if (moved) break;
+                        }
+                    }
+                    if (!moved)
+                        throw std::runtime_error("No column can legally receive an unfixed whole macro from column " +
+                                                 std::to_string(overflowColId));
+                }
+                if (movedRows == 0)
+                    throw std::runtime_error("Hard-region column overflow made no progress: " +
+                                             std::to_string(overflowColId));
+                continue;
+            }
             int toLeftNum = int((overflowNum * toLeftRatio) + 0.4999);
 
             if (leftAvaliableCapacity - leftUtil > 0)
@@ -1483,6 +1625,7 @@ void MacroLegalizer::spreadMacros(int columnNum, std::vector<int> &columnUntiliz
                     column2PUs[overflowColId].pop_back();
                 }
             }
+
         }
     }
     cell2Column.clear();
@@ -1772,6 +1915,7 @@ bool MacroLegalizer::legalSiteRange(PlacementInfo::PlacementUnit *pu,
     const std::vector<DeviceInfo::DeviceSite *> &sites, int first, int count) const
 {
     if (!HardResourceUtils::contiguousWithinSLR(sites, first, count)) return false;
+    for(int i=first;i<first+count;++i)if(!placementInfo->hardRegionAllows(pu,sites[i]))return false;
     if (auto macro = dynamic_cast<PlacementInfo::PlacementMacro *>(pu))
     {
         if (macro->getMacroType() != PlacementInfo::PlacementMacro::PlacementMacroType_CARRY &&
@@ -1789,14 +1933,14 @@ void MacroLegalizer::verifyAvailableCapacity()
                          std::vector<std::vector<DeviceInfo::DeviceSite *>> &columns) {
         size_t capacity = 0, demand = 0;
         for (auto &column : columns) { sortSitesBySiteY(column); capacity += column.size(); }
-        std::set<std::pair<int, int>> checked;
+        std::set<std::tuple<int, int, int>> checked;
         for (auto pu : units)
         {
             int count = getMarcroCellNum(pu);
             demand += count;
             auto macro = dynamic_cast<PlacementInfo::PlacementMacro *>(pu);
             int kind = macro ? static_cast<int>(macro->getMacroType()) : -1;
-            if (!checked.insert({kind, count}).second) continue;
+            if (!checked.insert({kind, count, placementInfo->hardRegionForPU(pu)}).second) continue;
             bool fits = false;
             for (const auto &column : columns)
             {

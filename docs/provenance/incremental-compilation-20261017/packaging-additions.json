@@ -1,0 +1,6 @@
+{
+  "added_test_fixture": "configs/getrf-v0-072-20ns.json",
+  "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/full-amf-srl-corrected-14/configs/getrf-v0-072-20ns.json",
+  "sha256": "aa973d9366e62896744ac414fcc552f0922836ad34d69dc47a59d972bed10bb7",
+  "reason": "Preserve the existing static-containment regression configuration without modifying frozen implementation or test semantics"
+}

@@ -1,5 +1,6 @@
 source [lindex $argv 0]
 source [file join [file dirname [info script]] dfx_multi_common.tcl]
+source [file join [file dirname [info script]] dfx_boundary_compatibility.tcl]
 proc main {} {
     global dfx
     set out $dfx(output)
@@ -39,14 +40,14 @@ proc main {} {
     amf_multi::validate_regions
     amf_dfx::check_static_placement $out/static_snapshot.tcldata assembly multi
     set f [open $out/module_preservation.tsv w]
-    puts $f "id\tprimitive_count\thierarchical_net_count\tplacement_equal\tfootprint_routing_equal\tboundary_equal"
+    puts $f "id\tprimitive_count\thierarchical_net_count\tplacement_equal\tfootprint_routing_equal\tboundary_compatible"
     foreach row $dfx(rps) {
         lassign $row id rp pb
         set dfx(active_partition) $rp
         amf_dfx::assert_same [dict get $placements $id] [amf_multi::module_snapshot $rp] "Module placement $id"
         if {[dict get $footprints $id] ne [amf_multi::route_footprint $rp]} {error "Routing footprint changed for $id"}
         amf_dfx::assert_same [dict get $routes $id] [amf_multi::module_routing $rp] "Module routing $id"
-        amf_dfx::assert_same [dict get $boundaries $id] [amf_dfx::boundary_snapshot] "Partition boundary $id"
+        amf_dfx::save_dict $out/${id}_boundary_compatibility.tcldata [dfx_boundary::compare [dict get $boundaries $id] [amf_dfx::boundary_snapshot]]
         set allowed [get_sites -of_objects [get_pblocks $pb]]
         dict for {c value} [amf_multi::module_snapshot $rp] {
             if {[lsearch -exact $allowed [lindex $value 1]]<0} {error "Assembled cell outside Pblock: $c"}
@@ -61,6 +62,7 @@ proc main {} {
     set f [open $out/pr_verify_passed.txt w]; puts $f full_check_passed; close $f
     report_utilization -slr -file $out/utilization.rpt
     report_timing -max_paths 100 -path_type full_clock_expanded -file $out/critical_paths.rpt
+    if {[info exists dfx(scan_cross_slr_nets)] && $dfx(scan_cross_slr_nets)} {
     set f [open $out/cross_slr_nets.tsv w]; puts $f "net\tslrs"
     foreach n [get_nets -hierarchical] {
         set cells [get_cells -quiet -of_objects [get_pins -quiet -leaf -of_objects $n]]
@@ -69,6 +71,7 @@ proc main {} {
         if {[llength $slrs]>1} {puts $f "$n\t$slrs"}
     }
     close $f
+    }
     amf_dfx::timed full_bitstream {write_bitstream $out/full.bit}
     foreach row $dfx(rps) {
         lassign $row id rp pb

@@ -1,0 +1,33 @@
+{
+  "state": "completed",
+  "kind": "single_translation_unit_region_legalizer_rebuild",
+  "source_commit": "b5322e1fb5ff3b862c00a8b97bc963f84494ff70",
+  "source_commit_role": "base commit only; frozen dirty parent and 4-file overlay define this build",
+  "binaries": {
+    "AMFPlacer": "7ef1ef3199a9587d1267290fec36605da7130345b1720185b1fbbe831b815542",
+    "partitionHyperGraph": "6b0b1a2832e4065b78f32471a93ea439afda4e842aa902e4c30d505514147058"
+  },
+  "parent_runtime_manifest": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/builds/getrf-12ns-runtime-bundle-36/manifest.json",
+  "parent_runtime_manifest_sha256": "ac4b1dc9df6c274563b6acfc4c714eafb470ab24fa385ca4f5247f294c81e80f",
+  "build_evidence": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261016-carry-region-legalizer-38/build-02/build-manifest.json",
+  "build_evidence_sha256": "4d00f7fd80a9084fba3b4705bca6ec4380d3726d34226749cd8b8ba6d7d1ed9e",
+  "overlay_hashes": {
+    "ColumnOverflow.h": "a558d692c886a5e0afa03d7eb48590941d7a339ba18994a23fbc4ea78957b5eb",
+    "RegionColumnDP.h": "076f784b6fa25e6809f7abf244c9b019d0bdeed6035346b13a013f64bb73ef9d",
+    "MacroLegalizer.cc": "7f51652561ffd809a470e9fd1b487f48fc65e646fa42b9ebc1a921aa73709cf5",
+    "MacroLegalizer.h": "20066ef2907f2b6d2f47efa2a6a0af6e158093cbd7d86bfa7c3ad0f0c27bc667"
+  },
+  "capabilities": {
+    "schema": "amf-capabilities-v1",
+    "clock_resource_capacity_schema": 1,
+    "external_floorplan_initialization_schema": 1,
+    "paper_hierarchical_boundaries_schema": 2,
+    "global_placement_inspection_schema": 1,
+    "amf2pro_integration_schema": 1,
+    "dfx_incremental_schema": 1,
+    "dfx_full_hard_regions_schema": 1,
+    "native_static_cache_schema": 2,
+    "native_placement_repair_schema": 1,
+    "native_dfx_edge_policy_schema": 1
+  }
+}

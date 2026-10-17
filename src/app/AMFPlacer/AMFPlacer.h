@@ -58,7 +58,8 @@ class AMFPlacer
 
         assert(JSON.find("vivado extracted device information file") != JSON.end());
         // Special pin offsets are required only by designs using that hard IP.
-        assert(JSON.find("vivado extracted design information file") != JSON.end());
+        assert(JSON.find("vivado extracted design information file") != JSON.end() ||
+               amf_native::StaticDesignCache::reuseEnabled(JSON));
         if (JSON.find("dumpDirectory") != JSON.end())
         {
             if (!fileExists(JSON["dumpDirectory"]))

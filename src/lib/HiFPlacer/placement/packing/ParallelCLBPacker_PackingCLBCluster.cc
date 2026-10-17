@@ -625,6 +625,7 @@ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::incrementalUpdateScor
 
 bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::addPU(PlacementInfo::PlacementUnit *tmpPU, bool allowOverlap)
 {
+    if(!parentPackingCLB->getPlacementInfo()->hardRegionAllows(tmpPU,parentPackingCLB->getCLBSite()))return false;
     if (parentPackingCLB->checkIsLUTRAMSite())
         return false;
 

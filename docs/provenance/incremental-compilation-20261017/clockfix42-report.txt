@@ -1,0 +1,50 @@
+GETRF / U250 / 12 ns / rightmost 3 clock regions — clock ownership repair42
+
+结果：已完成实际联合布线、独立验收和 bitstream 生成；全量38作为已验收基准复用。
+
+问题与修正
+旧 OOC A/B DCP 带有同名 dfx_clk @ ap_clk，read_checkpoint -cell 回放时覆盖静态顶层 dfx_clk @ jtag/TCK。旧增量38的正 slack 只覆盖1733个端点，不能视为完整时序通过。
+OOC综合、优化、AMF仍使用12 ns。仅在模块交接时，对只有一个预期主时钟且没有额外时序例外的模块清除局部主时钟；写出后重新打开校验。未知额外时序约束会拒绝交接，不会静默删除。
+导入两模块后逐次核对顶层源jtag/TCK、12 ns、波形/类型和RP时钟继承；最终按全量报告核验无时钟及未约束端点数量。
+
+验收
+全量38：WNS +0.061 ns；WHS +0.009 ns；DRC Error/CriticalWarning 0/0。
+增量42：WNS +0.149 ns；WHS +0.008 ns；DRC Error/CriticalWarning 0/0。
+增量全布通：922926/922926；setup/hold分别覆盖613227/613227端点，失败端点均0。
+no_clock=1、unconstrained_internal_endpoints=1，与全量基准计数相同（不是宣称完全没有例外）。
+A/B各2956个动态cell，合计5912个LOC/BEL完整精确保留；RP、禁止站点、接口及footprint检查通过。
+pr_verify -full_check实际通过；完整full.bit与A/B partial bitstream存在，独立复核SHA与字节数。
+静态逐cell扫描按原配置跳过，不能称为扫描通过；静态一致性以本次实际full_check作为独立证据。
+AMF/OOC综合不重跑，Vivado place_design不执行，仅一次联合route_design。
+
+性能（秒）
+联合route：618.024 / 全量 1975.263 = 31.29%，70%目标通过。
+复用并行前端实际跨度：335.471920；分支最大值：335.471921。
+新联合后端进程：1541.871093；必要并行验收+bits：834.301656。
+复用前端+新联合后端+必要验收的阶段和：2711.644670（45.19分钟，不含单列修复前处理）。全量重构总和：8295.349409（138.26分钟）；比值32.69%。
+全量扣Vivado placement指标：7342.837409；增量与此比值36.93%。
+本次修复42实际墙钟：2419.000646，包含模块交接修复等，不含继承的旧前端执行。
+若连同本次修复前处理全部计入，再加继承前端跨度，总和为2754.472567秒；相对上面阶段和多出的42.827897秒列为预检、并行时钟交接修复和控制器开销。此合计仍不是一次cold run。
+上述重构总和均不是重新执行一次cold run得到的实际墙钟；全量继承准备3006.2378011160763秒，仍明确计入。全量38本次恢复实际墙钟5289.111607789993秒。利用率和100条详细关键路径在后台另行生成，不计增量主流程。
+详细阶段原始计时见joint/stage_times.tsv和acceptance各分支stage_times.tsv；并行检查按真实跨度统计，不相加伪装墙钟。
+
+历史开销与身份限制
+旧时钟覆盖无效的incremental38：wall 2796.588803，route 586.003，保留但不作为有效性能基准。
+诊断probe39：228.767317；失败修正39/40/41：{'39': 26.415287776035257, '40': 451.5794318160042, '41': 26.25462892104406}。旧失败全量AMF：8755.194126。这些都不删除、不归零。
+全量V1/增量38继承AMF使用同一修复38二进制；V0静态缓存由旧二进制生成，不能伪称同一二进制全链路。
+路由日志保留Route35-4475关于一个全局时钟placer guidance tree不完整的Critical Warning。它与DRC报告计数是不同口径；本次全布通、完整覆盖时序及full_check已实际通过。未为消除此提示解除静态时钟布线。
+
+服务器产物（不下载DCP/bitstream）
+/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-clockfix-42/joint/joint_routed.dcp
+/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-clockfix-42/acceptance/bitstreams/full.bit
+/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-clockfix-42/acceptance/bitstreams/full_pblock_a_partial.bit
+/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-clockfix-42/acceptance/bitstreams/full_pblock_b_partial.bit
+
+代码与追溯
+仅独立副本修正，正式代码及历史运行不改写。未来任务显式启用clock_handoff_mode=inherit_static_primary及clock_contract_enabled；默认其它流程不受影响。
+deployment-manifest.json、complete-source.patch、serialized-clock-proof.json、acceptance-review.json、performance.json包含源码、输入、输出与验收证据。
+原u250-10ns监控保持暂停。
+
+后台报告收尾快照：running；利用率及100条详细关键路径单独生成，不影响已通过的必要验收，也不计主流程。
+镜像操作说明：首次轻量同步曾回写选定文本到源099，随后已限制099只写独立证据目录；最终原始Vivado日志未被回写，验收另依独立报告和产物哈希。详见mirror-hygiene-note.json。
+用户约定的Pblock前端重构提醒已在本次完成回复交付，pblock提醒及原u250-10ns监控均为PAUSED。

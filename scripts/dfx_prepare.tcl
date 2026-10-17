@@ -25,7 +25,12 @@ proc main {} {
         amf_dfx::timed link_rm {read_checkpoint -cell $dfx(active_partition) $dfx(rm_checkpoint)}
         amf_dfx::assert_same $interface [amf_dfx::boundary_signature] "RM port names/directions"
         amf_dfx::check_static_placement $out/static_snapshot.tcldata rm_insertion
-        amf_dfx::timed active_opt {opt_design}
+        # The standalone RM was optimized before insertion. The other RP remains
+        # an empty placeholder; a whole-design opt here would fail INBB-3.
+        if {![info exists dfx(rm_optimization_validated)] || !$dfx(rm_optimization_validated)} {
+            error "Missing verified standalone RM optimization contract"
+        }
+        puts "AMF_DFX_PREOPTIMIZED_RM: standalone opt inherited; no whole-design opt"
         amf_dfx::assert_same $interface [amf_dfx::boundary_signature] "RM optimized port names/directions"
         amf_dfx::check_static_placement $out/static_snapshot.tcldata rm_opt
         amf_dfx::timed write_linked_dcp {write_checkpoint $out/linked.dcp}

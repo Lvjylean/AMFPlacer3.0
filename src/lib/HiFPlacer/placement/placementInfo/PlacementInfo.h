@@ -29,6 +29,7 @@
 #include "DesignInfo.h"
 #include "DeviceInfo.h"
 #include "IncrementalContext.h"
+#include "HardRegionConstraints.h"
 #include "Eigen/Core"
 #include "Eigen/SparseCore"
 #include "PlacementTimingInfo.h"
@@ -3559,10 +3560,53 @@ class PlacementInfo
      * @param fX output X of PlacementUnit that can ensure the cells in it are within the device area.
      * @param fY output Y of PlacementUnit that can ensure the cells in it are within the device area.
      */
+    bool hasHardRegions() const { return hardRegions.enabled; }
+    int hardRegionForCell(DesignInfo::DesignCell *cell) const {
+        return hardRegions.cellRegion(cell->getName());
+    }
+    int hardRegionForPU(PlacementUnit *pu) const {
+        if (!hardRegions.enabled) return 0;
+        if (auto single=dynamic_cast<PlacementUnpackedCell*>(pu)) return hardRegionForCell(single->getCell());
+        auto macro=dynamic_cast<PlacementMacro*>(pu);
+        int region=-1;
+        for (auto cell:macro->getCells()) if (!cell->isVirtualCell()) {
+            int id=hardRegionForCell(cell);
+            if(region>=0 && id!=region) throw std::runtime_error("Macro crosses hard DFX regions: "+pu->getName());
+            region=id;
+        }
+        if(region<0) throw std::runtime_error("Hard DFX PU has no real primitive: "+pu->getName());
+        return region;
+    }
+    bool sameHardRegion(DesignInfo::DesignCell *a,DesignInfo::DesignCell *b) const {
+        return !hardRegions.enabled || hardRegionForCell(a)==hardRegionForCell(b);
+    }
+    bool hardRegionAllows(PlacementUnit *pu,DeviceInfo::DeviceSite *site) const {
+        return !hardRegions.enabled || hardRegions.allows(hardRegionForPU(pu),site->getName());
+    }
+    bool hardRegionAllows(DesignInfo::DesignCell *cell,DeviceInfo::DeviceSite *site) const {
+        return hardRegionAllows(cellId2PlacementUnit.at(cell->getCellId()),site);
+    }
+    void projectHardRegion(PlacementUnit *pu,float &x,float &y) const {
+        float l=0,r=0,b=0,t=0;
+        if(auto macro=dynamic_cast<PlacementMacro*>(pu)) {
+            l=macro->getLeftOffset();r=macro->getRightOffset();
+            b=macro->getBottomOffset();t=macro->getTopOffset();
+        }
+        hardRegions.project(hardRegionForPU(pu),l,r,b,t,x,y);
+    }
+    bool hardRegionLocationLegal(PlacementUnit *pu,float x,float y) const {
+        float px=x,py=y;projectHardRegion(pu,px,py);
+        return std::fabs(px-x)+std::fabs(py-y)<0.0001f;
+    }
+
     const IncrementalContext &getIncrementalContext() const { return incremental; }
 
     inline void legalizeXYInArea(PlacementUnit *curPU, float &fX, float &fY)
     {
+        if (hardRegions.enabled) {
+            if(curPU->isFixed() || curPU->isLocked()){fX=curPU->X();fY=curPU->Y();return;}
+            projectHardRegion(curPU,fX,fY);return;
+        }
         if (incremental.enabled && curPU->isFixed()) { fX = curPU->X(); fY = curPU->Y(); return; }
         const float globalMinX = incremental.enabled ? incremental.minX : this->globalMinX;
         const float globalMaxX = incremental.enabled ? incremental.maxX : this->globalMaxX;
@@ -3606,6 +3650,15 @@ class PlacementInfo
      */
     inline void enforceLegalizeXYInArea(PlacementUnit *curPU, bool forget = true)
     {
+        if (hardRegions.enabled) {
+            if(curPU->isFixed() || curPU->isLocked())return;
+            float x=curPU->X(),y=curPU->Y();projectHardRegion(curPU,x,y);
+            if(x!=curPU->X() || y!=curPU->Y()) {
+                if(forget)curPU->setAnchorLocationAndForgetTheOriginalOne(x,y);
+                else curPU->setAnchorLocation(x,y,false);
+            }
+            return;
+        }
         if (incremental.enabled && curPU->isFixed()) { return; }
         const float globalMinX = incremental.enabled ? incremental.minX : this->globalMinX;
         const float globalMaxX = incremental.enabled ? incremental.maxX : this->globalMaxX;
@@ -3664,6 +3717,13 @@ class PlacementInfo
      */
     inline bool isLegalLocation(DesignInfo::DesignCell *curCell, float targetX, float targetY)
     {
+        if(hardRegions.enabled) {
+            auto pu=cellId2PlacementUnit.at(curCell->getCellId());
+            if(auto m=dynamic_cast<PlacementMacro*>(pu)) {
+                targetX-=m->getCellOffsetXInMacro(curCell);targetY-=m->getCellOffsetYInMacro(curCell);
+            }
+            return hardRegionLocationLegal(pu,targetX,targetY);
+        }
         const float globalMinX = incremental.enabled ? incremental.minX : this->globalMinX;
         const float globalMaxX = incremental.enabled ? incremental.maxX : this->globalMaxX;
         const float globalMinY = incremental.enabled ? incremental.minY : this->globalMinY;
@@ -3722,6 +3782,7 @@ class PlacementInfo
      */
     inline bool isLegalLocation(PlacementUnit *curPU, float targetX, float targetY)
     {
+        if(hardRegions.enabled)return hardRegionLocationLegal(curPU,targetX,targetY);
         if (curPU->getType() == PlacementUnitType_UnpackedCell)
         {
             float fX = targetX;
@@ -3763,6 +3824,13 @@ class PlacementInfo
     inline void getPULocationByCellLocation(DesignInfo::DesignCell *curCell, float targetX, float targetY, float &PUX,
                                             float &PUY)
     {
+        if(hardRegions.enabled) {
+            auto pu=cellId2PlacementUnit.at(curCell->getCellId());
+            if(auto m=dynamic_cast<PlacementMacro*>(pu)) {
+                targetX-=m->getCellOffsetXInMacro(curCell);targetY-=m->getCellOffsetYInMacro(curCell);
+            }
+            projectHardRegion(pu,targetX,targetY);PUX=targetX;PUY=targetY;return;
+        }
         auto curPU = cellId2PlacementUnit[curCell->getCellId()];
 
         if (curPU->getType() == PlacementUnitType_UnpackedCell)
@@ -4865,6 +4933,7 @@ class PlacementInfo
 
     std::map<std::string, std::string> &JSONCfg;
     IncrementalContext incremental;
+    HardRegionConstraints hardRegions;
     std::string cellType2fixedAmoFileName;
     std::string cellType2sharedCellTypeFileName;
     std::string sharedCellType2BELtypeFileName;

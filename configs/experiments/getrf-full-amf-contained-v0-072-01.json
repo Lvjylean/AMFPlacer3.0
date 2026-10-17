@@ -1,0 +1,96 @@
+{
+  "IncremenralCompilation": true,
+  "part": "xcu250-figd2104-2L-e",
+  "top": "getrf_dfx_top",
+  "clock_name": "dfx_clk",
+  "clock_period_ns": 10,
+  "vivado": "/Projects/Xilinx26/2026.1/Vivado/bin/vivado",
+  "vivado_threads": 4,
+  "max_parallel": 2,
+  "require_distinct_slrs": true,
+  "amf_config": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/configs/experiments/getrf-full-amf-template-01.json",
+  "assembly_xdc_files": [],
+  "shell_run": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-full-amf-contained-v0-072-01",
+  "partitions": [
+    {
+      "id": "a",
+      "active_partition": "kernel/grp_getrf_core_double_2_512_256_s_fu_1411/grp_subUpdate_double_2_512_s_fu_5268",
+      "pblock": "pblock_a",
+      "pblock_ranges": [
+        "CLOCKREGION_X2Y1:CLOCKREGION_X2Y1"
+      ],
+      "expected_slr": "SLR0",
+      "rm_checkpoint": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-rm-synth-01/v1/rm.dcp"
+    },
+    {
+      "id": "b",
+      "active_partition": "kernel/grp_getrf_core_double_2_512_256_s_fu_1411/grp_subUpdate_double_2_512_s_fu_6548",
+      "pblock": "pblock_b",
+      "pblock_ranges": [
+        "CLOCKREGION_X2Y5:CLOCKREGION_X2Y5"
+      ],
+      "expected_slr": "SLR1",
+      "rm_checkpoint": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-rm-synth-01/v1/rm.dcp"
+    }
+  ],
+  "rtl_sources": [
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/getrf_dfx_rm.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/getrf_dfx_top.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_control_s_axi.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_dcmp_64ns_64ns_1_2_no_dsp_1.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_ddiv_64ns_64ns_64_22_no_dsp_1.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_dmul_64ns_64ns_64_5_max_dsp_1.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_dsub_64ns_64ns_64_5_full_dsp_1.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_flow_control_loop_pipe_sequential_init.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_getrf_core_double_2_512_256_Pipeline_LoopDiv.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_getrf_core_double_2_512_256_Pipeline_LoopPivot.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_getrf_core_double_2_512_256_Pipeline_LoopRows.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_getrf_core_double_2_512_256_s.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_getrf_core_double_2_512_256_s_rows_RAM_2P_BRAM_1R1W.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_gmem0_m_axi.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_kernel_getrf_0_Pipeline_LoopRead_VITIS_LOOP_165_1.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_kernel_getrf_0_Pipeline_LoopWrite_VITIS_LOOP_181_3.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_kernel_getrf_0_Pipeline_VITIS_LOOP_172_2.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_kernel_getrf_0_Pipeline_VITIS_LOOP_187_4.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_matA_XPM_MEMORY_URAM_1R1W.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_mul_9ns_2ns_10_1_1.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_pivot_RAM_AUTO_1R1W.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_sparsemux_513_8_64_1_1.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_subUpdate_double_2_512_Pipeline_LoopMulSub.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_subUpdate_double_2_512_s.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_udiv_10ns_9ns_9_14_1.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_urem_10ns_9ns_9_14_1.v"
+  ],
+  "ip_scripts": [
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_dcmp_64ns_64ns_1_2_no_dsp_1_ip.tcl",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_ddiv_64ns_64ns_64_22_no_dsp_1_ip.tcl",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_dmul_64ns_64ns_64_5_max_dsp_1_ip.tcl",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/kernel_getrf_0_dsub_64ns_64ns_64_5_full_dsp_1_ip.tcl"
+  ],
+  "xdc_files": [
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/preflight/getrf-dfx-fixture-01/v0/clock.xdc"
+  ],
+  "prepare_worker_shells": true,
+  "resume_synthesis_checkpoint": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-getrf-dfx-large/repo/experiments/runs/getrf-dfx-v0-shell-01/base_synth.dcp",
+  "synthesis_sha256": "1cee5b501aca2e1f4656234afc9ac374b299799090cd02e0038ae5cbc2bd7716",
+  "source_provenance": {
+    "implementation": "full AMF hard-region extension, independent copy",
+    "frozen_build": "build-20261014-023517-806311-b5322e1f",
+    "comparison_correction": "Native Vivado full reference has been canceled and is excluded"
+  },
+  "performance_contract": {
+    "max_incremental_fraction": 0.7,
+    "full_engine": "AMF whole-design placement + full Vivado routing",
+    "incremental_engine": "AMF dynamic placement with fixed static context + dynamic Vivado routing with locked static routing",
+    "placement_primary": "AMF placement orchestration excluding export",
+    "routing_primary": "route_design",
+    "vivado_compatibility_place_separate": true,
+    "correctness_required": true,
+    "reference": "same V1 inputs, hard regions, AMF binary/model/settings and 10ns"
+  },
+  "static_placement_audit": "skip",
+  "static_containment_experiment": true,
+  "scan_cross_slr_nets": false,
+  "comparison_role": "v0_shell"
+}

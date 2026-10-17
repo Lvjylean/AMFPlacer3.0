@@ -12,7 +12,8 @@ from run_dfx import ROOT, save, sha
 
 def run(args):
     parent=Path(args.run).resolve(); old=json.loads((parent/'manifest.json').read_text())
-    job=old['job'];shell,shell_manifest=check_shell(job)
+    job=old['job'];job.setdefault('static_routing_containment', True)
+    shell,shell_manifest=check_shell(job)
     workers=parent/'workers';worker_hashes={}
     for r in job['partitions']:
         name=r['id'];w=workers/name;m=json.loads((w/'manifest.json').read_text())

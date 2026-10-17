@@ -1,0 +1,349 @@
+{
+  "schema": "independent-clockfix42-acceptance-review-v1",
+  "accepted": true,
+  "time": "2026-10-16T17:00:18.054691+08:00",
+  "full_reference": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-full-38",
+  "incremental_run": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-clockfix-42",
+  "incremental_clock_coverage": {
+    "passed": true,
+    "actual": {
+      "no_clock": 1,
+      "unconstrained_internal_endpoints": 1
+    },
+    "baseline": {
+      "no_clock": 1,
+      "unconstrained_internal_endpoints": 1
+    },
+    "reference": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-full-38/base_timing.rpt",
+    "reference_sha256": "b63aa7203ffc5f95cbe28d73e5266d9fc6f9fb39a2174889bf08c9b6df26efa2"
+  },
+  "incremental_acceptance": {
+    "routing_counts": {
+      "logical nets": 3254920,
+      "nets not needing routing": 2331994,
+      "internally routed nets": 2046293,
+      "nets with no loads": 285701,
+      "routable nets": 922926,
+      "nets with fixed routing": 916927,
+      "fully routed nets": 922926,
+      "nets with routing errors": 0
+    },
+    "routing_complete": true,
+    "drc": {
+      "errors": 0,
+      "critical_warnings": 0
+    },
+    "timing": {
+      "wns_ns": 0.149,
+      "tns_ns": 0.0,
+      "setup_failing_endpoints": 0,
+      "setup_total_endpoints": 613227,
+      "whs_ns": 0.008,
+      "ths_ns": 0.0,
+      "hold_failing_endpoints": 0,
+      "hold_total_endpoints": 613227,
+      "wpws_ns": 5.3,
+      "tpws_ns": 0.0,
+      "pulse_failing_endpoints": 0,
+      "pulse_total_endpoints": 406004
+    },
+    "implementation_verified": true,
+    "timing_met": true,
+    "timing_coverage": {
+      "passed": true,
+      "actual": {
+        "no_clock": 1,
+        "unconstrained_internal_endpoints": 1
+      },
+      "baseline": {
+        "no_clock": 1,
+        "unconstrained_internal_endpoints": 1
+      },
+      "reference": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-full-38/base_timing.rpt",
+      "reference_sha256": "b63aa7203ffc5f95cbe28d73e5266d9fc6f9fb39a2174889bf08c9b6df26efa2"
+    }
+  },
+  "full_acceptance": {
+    "routing_counts": {
+      "logical nets": 3254908,
+      "nets not needing routing": 2331921,
+      "internally routed nets": 2046220,
+      "nets with no loads": 285701,
+      "routable nets": 922987,
+      "fully routed nets": 922987,
+      "nets with routing errors": 0
+    },
+    "routing_complete": true,
+    "drc": {
+      "errors": 0,
+      "critical_warnings": 0
+    },
+    "timing": {
+      "wns_ns": 0.061,
+      "tns_ns": 0.0,
+      "setup_failing_endpoints": 0,
+      "setup_total_endpoints": 613227,
+      "whs_ns": 0.009,
+      "ths_ns": 0.0,
+      "hold_failing_endpoints": 0,
+      "hold_total_endpoints": 613227,
+      "wpws_ns": 5.3,
+      "tpws_ns": 0.0,
+      "pulse_failing_endpoints": 0,
+      "pulse_total_endpoints": 406004
+    },
+    "implementation_verified": true,
+    "timing_met": true
+  },
+  "cells_loc_bel_exact": 5912,
+  "clock_source": "jtag/TCK",
+  "clock_period_ns": 12,
+  "one_joint_route": true,
+  "vivado_place_design_executed": false,
+  "full_pr_verify_passed": true,
+  "input_hashes_unchanged": true,
+  "static_full_cell_scan": "skipped_by_existing_configuration; full pr_verify is separate actual evidence",
+  "static_cache_same_binary": false,
+  "dcp": {
+    "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-clockfix-42/joint/joint_routed.dcp",
+    "sha256": "55b57f79715b79726677fcb4edbd64bff8027148bfb31cffd105f4b83c351a1b",
+    "bytes": 415240191
+  },
+  "bitstreams": {
+    "full": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-clockfix-42/acceptance/bitstreams/full.bit",
+      "sha256": "138701b3ae9e216f749d2a53077f333b53df35ff562a3c2a58251be26d486091",
+      "bytes": 113318589
+    },
+    "partials": {
+      "a": {
+        "partition": "kernel/grp_getrf_core_double_2_512_256_s_fu_1411/grp_subUpdate_double_2_512_s_fu_5268",
+        "pblock": "pblock_a",
+        "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-clockfix-42/acceptance/bitstreams/full_pblock_a_partial.bit",
+        "sha256": "08831f80d8739d7271c00be7677367f79518b749409e362ac0f548b414caf783",
+        "bytes": 2970006
+      },
+      "b": {
+        "partition": "kernel/grp_getrf_core_double_2_512_256_s_fu_1411/grp_subUpdate_double_2_512_s_fu_6548",
+        "pblock": "pblock_b",
+        "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-clockfix-42/acceptance/bitstreams/full_pblock_b_partial.bit",
+        "sha256": "e6b3cbecf4a491c68a726c1e4910dfb5d340bd74c62d9958e4c65684d321f1b3",
+        "bytes": 2995274
+      }
+    }
+  },
+  "comparison": {
+    "schema": "clock-corrected-recovery-comparison-v1",
+    "accepted": true,
+    "full_reference": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-full-38",
+    "recovery_run": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-clockfix-42",
+    "same_full_v1_incremental_binary": true,
+    "binary_sha256": "7ef1ef3199a9587d1267290fec36605da7130345b1720185b1fbbe831b815542",
+    "static_cache_producer_same_binary": false,
+    "static_cache_producer_binary_sha256": "0d0c0ab8e16940b21f74b1f1fe6456fcc138542fefb34d6db9e2dd6cebd13036",
+    "full_acceptance": {
+      "routing_counts": {
+        "logical nets": 3254908,
+        "nets not needing routing": 2331921,
+        "internally routed nets": 2046220,
+        "nets with no loads": 285701,
+        "routable nets": 922987,
+        "fully routed nets": 922987,
+        "nets with routing errors": 0
+      },
+      "routing_complete": true,
+      "drc": {
+        "errors": 0,
+        "critical_warnings": 0
+      },
+      "timing": {
+        "wns_ns": 0.061,
+        "tns_ns": 0.0,
+        "setup_failing_endpoints": 0,
+        "setup_total_endpoints": 613227,
+        "whs_ns": 0.009,
+        "ths_ns": 0.0,
+        "hold_failing_endpoints": 0,
+        "hold_total_endpoints": 613227,
+        "wpws_ns": 5.3,
+        "tpws_ns": 0.0,
+        "pulse_failing_endpoints": 0,
+        "pulse_total_endpoints": 406004
+      },
+      "implementation_verified": true,
+      "timing_met": true
+    },
+    "incremental_acceptance": {
+      "routing_counts": {
+        "logical nets": 3254920,
+        "nets not needing routing": 2331994,
+        "internally routed nets": 2046293,
+        "nets with no loads": 285701,
+        "routable nets": 922926,
+        "nets with fixed routing": 916927,
+        "fully routed nets": 922926,
+        "nets with routing errors": 0
+      },
+      "routing_complete": true,
+      "drc": {
+        "errors": 0,
+        "critical_warnings": 0
+      },
+      "timing": {
+        "wns_ns": 0.149,
+        "tns_ns": 0.0,
+        "setup_failing_endpoints": 0,
+        "setup_total_endpoints": 613227,
+        "whs_ns": 0.008,
+        "ths_ns": 0.0,
+        "hold_failing_endpoints": 0,
+        "hold_total_endpoints": 613227,
+        "wpws_ns": 5.3,
+        "tpws_ns": 0.0,
+        "pulse_failing_endpoints": 0,
+        "pulse_total_endpoints": 406004
+      },
+      "implementation_verified": true,
+      "timing_met": true,
+      "timing_coverage": {
+        "passed": true,
+        "actual": {
+          "no_clock": 1,
+          "unconstrained_internal_endpoints": 1
+        },
+        "baseline": {
+          "no_clock": 1,
+          "unconstrained_internal_endpoints": 1
+        },
+        "reference": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-full-38/base_timing.rpt",
+        "reference_sha256": "b63aa7203ffc5f95cbe28d73e5266d9fc6f9fb39a2174889bf08c9b6df26efa2"
+      }
+    },
+    "pr_verify_full_check": true,
+    "full_route_seconds": 1975.263,
+    "corrected_joint_route_seconds": 618.024,
+    "route_ratio": 0.3128818795269288,
+    "route_70pct_pass": true,
+    "inherited_branch_span_seconds": 335.4719202518463,
+    "inherited_max_branch_seconds": 335.4719210789772,
+    "new_joint_process_seconds": 1541.8710932009853,
+    "new_acceptance_seconds": 834.3016561859986,
+    "reconstructed_incremental_seconds": 2711.6446696388302,
+    "reconstructed_full_seconds": 8295.34940890607,
+    "full_vivado_placement_seconds": 952.512,
+    "reconstructed_full_minus_vivado_placement_seconds": 7342.83740890607,
+    "timing_note": "Reconstructed stage sums combine measured inherited frontend and new corrected backend; not one observed cold-run wall. Retag/probe/recovery overhead and old invalid run are separate.",
+    "old_invalid_incremental_wall_seconds": 2796.588803062914,
+    "old_invalid_route_seconds": 586.003,
+    "historical_failed_full_amf_seconds": 8755.194126004004,
+    "clock_probe": {
+      "manifest": {
+        "state": "completed",
+        "runner_pid": 2289453,
+        "source": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-38/joint/joint_routed.dcp",
+        "source_sha256": "2b53a8062e93527517a2d30e4a7d28b33a301b9de3b504d9d4dac1ad37c4e7da",
+        "script_sha256": "78806d8c0b04a29916964de5b1a2399751c72578d968004c3002bb4df4835786",
+        "command": [
+          "/Orion/jinyang/amd/2026.1/Vivado/bin/vivado",
+          "-mode",
+          "batch",
+          "-source",
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261016-ooc-clock-ownership-39/dfx_clock_probe.tcl",
+          "-tclargs",
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-38/acceptance/qor/inputs/settings.tcl",
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261016-ooc-clock-ownership-39/probe-01",
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-38/frozen_scripts/dfx_common.tcl"
+        ],
+        "budget_seconds": 1800,
+        "started_epoch": 1792137431.1961114,
+        "placement_executed": false,
+        "routing_executed": false,
+        "pid": 2289454,
+        "process_group": 2289454,
+        "exit_code": 0,
+        "ended_epoch": 1792137659.963428,
+        "source_sha256_after": "2b53a8062e93527517a2d30e4a7d28b33a301b9de3b504d9d4dac1ad37c4e7da",
+        "source_unchanged": true,
+        "seconds": 228.76731657981873
+      },
+      "timing_coverage": {
+        "passed": true,
+        "actual": {
+          "no_clock": 1,
+          "unconstrained_internal_endpoints": 1
+        },
+        "baseline": {
+          "no_clock": 1,
+          "unconstrained_internal_endpoints": 1
+        },
+        "reference": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-full-38/base_timing.rpt",
+        "reference_sha256": "b63aa7203ffc5f95cbe28d73e5266d9fc6f9fb39a2174889bf08c9b6df26efa2"
+      }
+    },
+    "joint_stages": {
+      "open_common_static_shell": 124.866,
+      "verify_common_static_input": 2.038,
+      "import_amf_placed_a": 210.085,
+      "import_amf_placed_b": 203.925,
+      "audit_imported": 178.575,
+      "write_joint_imported": 50.342,
+      "vivado_route": 618.024,
+      "write_joint_routed": 47.359
+    },
+    "outputs": {
+      "full": {
+        "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-clockfix-42/acceptance/bitstreams/full.bit",
+        "sha256": "138701b3ae9e216f749d2a53077f333b53df35ff562a3c2a58251be26d486091",
+        "bytes": 113318589
+      },
+      "partials": {
+        "a": {
+          "partition": "kernel/grp_getrf_core_double_2_512_256_s_fu_1411/grp_subUpdate_double_2_512_s_fu_5268",
+          "pblock": "pblock_a",
+          "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-clockfix-42/acceptance/bitstreams/full_pblock_a_partial.bit",
+          "sha256": "08831f80d8739d7271c00be7677367f79518b749409e362ac0f548b414caf783",
+          "bytes": 2970006
+        },
+        "b": {
+          "partition": "kernel/grp_getrf_core_double_2_512_256_s_fu_1411/grp_subUpdate_double_2_512_s_fu_6548",
+          "pblock": "pblock_b",
+          "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-clockfix-42/acceptance/bitstreams/full_pblock_b_partial.bit",
+          "sha256": "e6b3cbecf4a491c68a726c1e4910dfb5d340bd74c62d9958e4c65684d321f1b3",
+          "bytes": 2995274
+        }
+      }
+    },
+    "dcp": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-clockfix-42/joint/joint_routed.dcp"
+  },
+  "main_recovery_wall_seconds": 2419.000646297005,
+  "acceptance_manifest_sha256": "601706429b5903f1bc2fa1ffee399eb6e0b2099db05892e53f165a29d9ef15f2",
+  "full_outputs_rehashed": {
+    "base_routed.dcp": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-full-38/base_routed.dcp",
+      "sha256": "bd4f62ab464d3cf6f4bf5543e752c7aaeba95e6bb85cc3ffff60d20b61107e51",
+      "bytes": 408218176
+    },
+    "base_full.bit": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-full-38/base_full.bit",
+      "sha256": "210d2c2fd90e6bb0d3afb7be374251206f1dee4843862d25c205e4a009ae427b",
+      "bytes": 113318589
+    },
+    "a_partial.bit": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-full-38/a_partial.bit",
+      "sha256": "978df39643adfa8c9277dbcaef1771fd1c0b6629175f0784b05ebefa9a9fdb0e",
+      "bytes": 2970006
+    },
+    "b_partial.bit": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-full-38/b_partial.bit",
+      "sha256": "b50fd65857a92c3ca39b7a82e61cfbeea95e081474cfbda53053b98cc5305ff9",
+      "bytes": 3023946
+    }
+  },
+  "route_critical_warning_lines": [
+    "CRITICAL WARNING: [Route 35-4475] 1 global clock net(s) has(have)  incomplete placer guidance tree. Run in verbose mode to see all nets(inst terms) which doesn't have complete placer guidance."
+  ],
+  "original_vivado_route_log": {
+    "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-clockfix-42/joint/exec/vivado.log",
+    "sha256": "06cfd5d050978fbf709168ee03c5827a9609ca26e2a5ee3c71e25c3c789d85f1"
+  }
+}

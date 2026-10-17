@@ -11,12 +11,13 @@ proc main {} {
     set f [open $out/clock.xdc w]
     puts $f [format {create_clock -name %s -period %.6f [get_ports %s]} $dfx(clock_name) $dfx(clock_period_ns) $dfx(rm_clock_port)]
     close $f
-    read_xdc $out/clock.xdc
+    # This primary is a standalone timing model; the assembled design inherits
+    # its clock from the static shell. Preserve the OOC-only marker in the DCP.
+    read_xdc -mode out_of_context $out/clock.xdc
     amf_dfx::timed rm_synthesis {synth_design -mode out_of_context -top $dfx(rm_top) -part $dfx(part) -flatten_hierarchy none}
     set clk [get_clocks $dfx(clock_name)]
     if {[llength $clk]!=1 || abs([get_property PERIOD $clk]-$dfx(clock_period_ns))>1e-6} {error "RM clock mismatch"}
     amf_dfx::timed write_rm_dcp {write_checkpoint $out/rm.dcp}
-    report_utilization -hierarchical -file $out/utilization.rpt
     set f [open $out/cells.tsv w];puts $f "name\tref\tinit"
     foreach c [lsort [get_cells -hierarchical -filter {IS_PRIMITIVE}]] {puts $f "$c\t[get_property REF_NAME $c]\t[get_property -quiet INIT $c]"}
     close $f
@@ -24,4 +25,3 @@ proc main {} {
 }
 if {[catch {main} msg opts]} {puts stderr $msg;puts stderr [dict get $opts -errorinfo];exit 2}
 exit 0
-

@@ -5,6 +5,5 @@ aux_source_directory(. curDirectory)
 
 include_directories(./ ../../utils/ ../deviceInfo/)
 
-add_library(DesignInfo ${curDirectory})
-
+add_library(DesignInfo ${curDirectory} native/StaticDesignCache.cc)
 

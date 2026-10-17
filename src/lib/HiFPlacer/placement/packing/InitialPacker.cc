@@ -34,6 +34,20 @@ void InitialPacker::pack(bool hardResourcesOnly)
         for (auto cell : designInfo->getCells())
         {
             if (!dfx.staticCellIds.count(cell->getCellId())) continue;
+            if(cell->isInterfaceEndpoint()) {
+                const auto &point=dfx.endpoints.at(cell->getName());
+                auto macro=new PlacementInfo::PlacementMacro(cell->getName(),placementUnits.size(),
+                    PlacementInfo::PlacementMacro::PlacementMacroType_DFXStatic);
+                macro->addCell(cell,cell->getCellType(),0,0);
+                // PU bookkeeping weight, not physical resource occupancy.
+                macro->setWeight(1);macro->setAnchorLocation(point.x,point.y);
+                macro->setFixed();macro->setPlaced();macro->setLocked();
+                placementUnits.push_back(macro);placementMacros.push_back(macro);
+                fixedPlacementUnits.push_back(macro);cellInMacros.insert(cell);
+                cellId2PlacementUnit[cell->getCellId()]=macro;
+                for(auto pin:cell->getPins()){pin->setFixed();if(pin->getNet())pin->getNet()->setContainFixedPins();}
+                continue;
+            }
             const auto &location = dfx.fixed.at(cell->getName());
             auto siteName = location.site;
             auto site = deviceInfo->getSite(siteName);
@@ -116,6 +130,8 @@ void InitialPacker::pack(bool hardResourcesOnly)
     print_info("#Cells In Macro = " + std::to_string(cellInMacros.size()));
 
     placementInfo->updateCells2PlacementUnits();
+    if(placementInfo->hasHardRegions())
+        for(auto pu:placementUnits) (void)placementInfo->hardRegionForPU(pu);
 
     // since new placement units might be generated, we need to update the net information
     print_status("InitialPacker Loading Nets");
@@ -1077,10 +1093,10 @@ void InitialPacker::findCARRYMacros()
                 {
                     if (DIPinCell[i].second && SPinCell[i].second)
                     {
-                        bool DICanBeInSlice = DIPinCell[i].second->isLUT() && !DIPinCell[i].second->isLUT6() &&
+                        bool DICanBeInSlice = DIPinCell[i].second->isLUT() && placementInfo->sameHardRegion(coreCell, DIPinCell[i].second) && !DIPinCell[i].second->isLUT6() &&
                                               DIPinCell[i].first->getNet()->getPinsBeDriven().size() == 1;
                         bool SCanBeInSlice =
-                            SPinCell[i].second->isLUT() && SPinCell[i].first->getNet()->getPinsBeDriven().size() == 1;
+                            SPinCell[i].second->isLUT() && placementInfo->sameHardRegion(coreCell, SPinCell[i].second) && SPinCell[i].first->getNet()->getPinsBeDriven().size() == 1;
                         if (DICanBeInSlice && SCanBeInSlice)
                         {
                             if (canLUTPacked(DIPinCell[i].second, SPinCell[i].second))
@@ -1109,7 +1125,7 @@ void InitialPacker::findCARRYMacros()
                     else if (SPinCell[i].second && !DIPinCell[i].first)
                     {
                         bool SCanBeInSlice =
-                            SPinCell[i].second->isLUT() && SPinCell[i].first->getNet()->getPinsBeDriven().size() == 1;
+                            SPinCell[i].second->isLUT() && placementInfo->sameHardRegion(coreCell, SPinCell[i].second) && SPinCell[i].first->getNet()->getPinsBeDriven().size() == 1;
                         if (SCanBeInSlice && !SPinCell[i].second->isLUT6())
                         {
                             curMacro->addCell(SPinCell[i].second, DesignInfo::CellType_LUT6, 0, coreOffset);
@@ -1128,10 +1144,10 @@ void InitialPacker::findCARRYMacros()
                 }
                 else if (DIPinCell[i].second && SPinCell[i].second)
                 {
-                    bool DICanBeInSlice = DIPinCell[i].second->isLUT() && !DIPinCell[i].second->isLUT6() &&
+                    bool DICanBeInSlice = DIPinCell[i].second->isLUT() && placementInfo->sameHardRegion(coreCell, DIPinCell[i].second) && !DIPinCell[i].second->isLUT6() &&
                                           DIPinCell[i].first->getNet()->getPinsBeDriven().size() == 1;
                     bool SCanBeInSlice =
-                        SPinCell[i].second->isLUT() && SPinCell[i].first->getNet()->getPinsBeDriven().size() == 1;
+                        SPinCell[i].second->isLUT() && placementInfo->sameHardRegion(coreCell, SPinCell[i].second) && SPinCell[i].first->getNet()->getPinsBeDriven().size() == 1;
                     if (DICanBeInSlice && SCanBeInSlice)
                     {
                         if (canLUTPacked(DIPinCell[i].second, SPinCell[i].second))
@@ -1156,7 +1172,7 @@ void InitialPacker::findCARRYMacros()
                 }
                 else if (DIPinCell[i].second && !SPinCell[i].first)
                 {
-                    bool DICanBeInSlice = DIPinCell[i].second->isLUT() && !DIPinCell[i].second->isLUT6() &&
+                    bool DICanBeInSlice = DIPinCell[i].second->isLUT() && placementInfo->sameHardRegion(coreCell, DIPinCell[i].second) && !DIPinCell[i].second->isLUT6() &&
                                           DIPinCell[i].first->getNet()->getPinsBeDriven().size() == 1;
                     if (DICanBeInSlice)
                     {
@@ -1166,7 +1182,7 @@ void InitialPacker::findCARRYMacros()
                 else if (SPinCell[i].second)
                 {
                     bool SCanBeInSlice =
-                        SPinCell[i].second->isLUT() && SPinCell[i].first->getNet()->getPinsBeDriven().size() == 1;
+                        SPinCell[i].second->isLUT() && placementInfo->sameHardRegion(coreCell, SPinCell[i].second) && SPinCell[i].first->getNet()->getPinsBeDriven().size() == 1;
                     if (SCanBeInSlice)
                     {
                         curMacro->addCell(SPinCell[i].second, DesignInfo::CellType_LUT6, 0, coreOffset);
@@ -1228,14 +1244,14 @@ void InitialPacker::findCARRYMacros()
                     DesignInfo::DesignCell *theFF = nullptr;
                     for (auto pinBeDriven : curOutputNet->getPinsBeDriven())
                     {
-                        if (pinBeDriven->getCell()->isFF())
+                        if (pinBeDriven->getCell()->isFF() && placementInfo->sameHardRegion(curCell, pinBeDriven->getCell()))
                         {
                             FFcnt++;
                             if (pinBeDriven->getRefPinName().find("D") != std::string::npos)
                                 theFF = pinBeDriven->getCell();
                         }
                     }
-                    if (FFcnt == 1 && theFF)
+                    if (FFcnt == 1 && theFF && placementInfo->sameHardRegion(coreCell, theFF))
                     {
                         char FFPinCellId = driverPin->getRefPinName()[driverPin->getRefPinName().find("[") + 1] - '0';
                         if (routeThroughHalf[FFPinCellId/4]) continue;
@@ -1284,7 +1300,7 @@ void InitialPacker::findCARRYMacros()
                     DesignInfo::DesignCell *theFF = nullptr;
                     for (auto pinBeDriven : curOutputNet->getPinsBeDriven())
                     {
-                        if (pinBeDriven->getCell()->isFF())
+                        if (pinBeDriven->getCell()->isFF() && placementInfo->sameHardRegion(curCell, pinBeDriven->getCell()))
                         {
                             FFcnt++;
                             if (pinBeDriven->getRefPinName().find("D") != std::string::npos)
@@ -1294,7 +1310,7 @@ void InitialPacker::findCARRYMacros()
                             }
                         }
                     }
-                    if (FFcnt == 1 && theFF)
+                    if (FFcnt == 1 && theFF && placementInfo->sameHardRegion(coreCell, theFF))
                     {
                         // char FFPinCellId = driverPin->getRefPinName()[driverPin->getRefPinName().find("[") + 1] -
                         // '0'; if (driverPin->getRefPinName().find("CO[") != std::string::npos)
@@ -1399,7 +1415,7 @@ void InitialPacker::findMuxMacros()
                 if (curOutputNet->getPinsBeDriven().size() != 1)
                     continue;
                 auto pinBeDriven = curOutputNet->getPinsBeDriven()[0];
-                if (pinBeDriven->getCell()->isFF())
+                if (pinBeDriven->getCell()->isFF() && placementInfo->sameHardRegion(curCell, pinBeDriven->getCell()))
                 {
                     if (pinBeDriven->getRefPinName().find("D") != std::string::npos)
                     {
@@ -1604,7 +1620,7 @@ void InitialPacker::findMuxMacros()
                 if (curOutputNet->getPinsBeDriven().size() != 1)
                     continue;
                 auto pinBeDriven = curOutputNet->getPinsBeDriven()[0];
-                if (pinBeDriven->getCell()->isFF())
+                if (pinBeDriven->getCell()->isFF() && placementInfo->sameHardRegion(curCell, pinBeDriven->getCell()))
                 {
                     if (pinBeDriven->getRefPinName().find("D") != std::string::npos)
                     {
@@ -1819,7 +1835,7 @@ void InitialPacker::LUTFFPairing()
                     auto pinBeDriven = curCell->getOutputPins()[0]->getNet()->getPinsBeDriven()[0];
                     assert(pinBeDriven->getCell());
                     auto FFBeDriven = pinBeDriven->getCell();
-                    if (FFBeDriven->isFF() && cellInMacros.find(FFBeDriven) == cellInMacros.end())
+                    if (FFBeDriven->isFF() && placementInfo->sameHardRegion(curCell, FFBeDriven) && cellInMacros.find(FFBeDriven) == cellInMacros.end())
                     {
                         LUTFFPairs.emplace_back(curCell, FFBeDriven);
 

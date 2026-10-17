@@ -189,8 +189,6 @@ namespace eval amf_dfx {
         assert_context
         check_static_placement $out/static_snapshot.tcldata $stage
         report_timing_summary -delay_type min_max -report_unconstrained -file $out/${stage}_timing.rpt
-        report_timing -through [get_pins -of_objects [get_cells $dfx(active_partition)]] \
-            -max_paths 100 -path_type full_clock_expanded -file $out/${stage}_boundary_timing.rpt
         report_drc -file $out/${stage}_drc.rpt
         set f [open $out/${stage}_drc_counts.tsv w]
         puts $f "errors\t[llength [get_drc_violations -quiet -filter {SEVERITY == Error}]]"

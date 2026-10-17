@@ -1,0 +1,48 @@
+{
+  "state": "passed",
+  "created_at": "2026-10-17T02:53:04.147403+00:00",
+  "source_frozen_files_verified": 3598,
+  "python_syntax_files": 211,
+  "clean_build": {
+    "manifest": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/builds/build-20261017-104917-543032-b5322e1f/manifest.json",
+    "source_snapshot": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-incremental-compilation-release-47/repository/builds/build-20261017-104917-543032-b5322e1f/src",
+    "binary_sha256": {
+      "AMFPlacer": "a3a0c3e40d07cd797d6501a75847ddd314c965e44b8de634f6e3b4fbe7f63b60",
+      "partitionHyperGraph": "fe96e8aab7efb1c9e1298f29e31feee11981ab29daa7084c67226c9e6dc1e275"
+    },
+    "capabilities": {
+      "schema": "amf-capabilities-v1",
+      "clock_resource_capacity_schema": 1,
+      "external_floorplan_initialization_schema": 1,
+      "paper_hierarchical_boundaries_schema": 2,
+      "global_placement_inspection_schema": 1,
+      "amf2pro_integration_schema": 1,
+      "dfx_incremental_schema": 1,
+      "dfx_full_hard_regions_schema": 1,
+      "native_static_cache_schema": 2,
+      "native_placement_repair_schema": 1,
+      "native_dfx_edge_policy_schema": 1
+    },
+    "tool_versions": {
+      "cmake": "cmake version 3.22.1\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).",
+      "cxx": "c++ (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0\nCopyright (C) 2021 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+      "ninja": "1.10.1"
+    }
+  },
+  "historical_accepted_binary": "7ef1ef3199a9587d1267290fec36605da7130345b1720185b1fbbe831b815542",
+  "binary_identity_note": "Fresh isolated build at a new path/toolchain; not claimed byte-identical to accepted historical executable. Complete source hashes match the frozen source.",
+  "fpga_experiments_rerun": false,
+  "packaging_attempts": [
+    {
+      "attempt": 1,
+      "issue": "Missing legacy 20ns test fixture",
+      "resolution": "Copied original fixture and recorded hash"
+    },
+    {
+      "attempt": 2,
+      "issue": "Input-dependent SRL tool invoked without required design config/packing table",
+      "resolution": "Compiled only, execution explicitly not claimed"
+    }
+  ],
+  "format_note": "Frozen inherited files have existing final blank lines. Whitespace checks retain all other checks; no byte changes to validated source are made for formatting."
+}

@@ -15,12 +15,22 @@ import shutil
 import subprocess
 import sys
 import time
-from run_dfx import ROOT, SCRIPT, save, sha, tcl_word, amf_configuration
+from run_dfx import ROOT, SCRIPT, save, sha, tcl_word, amf_configuration, source_provenance
 from summarize_face_detect_flow import timing, drc
 from summarize_full_flow import routing_complete
+from dfx_comparison import identity
+
+
+def static_containment_enabled(job, historical_default=False):
+    value = job.get('static_routing_containment', historical_default)
+    if isinstance(value, bool): return value
+    if value == 'true': return True
+    if value == 'false': return False
+    raise ValueError('static_routing_containment must be a boolean')
 
 
 def validate(job):
+    job['static_routing_containment'] = static_containment_enabled(job)
     if job.get('IncremenralCompilation') not in (True, 'true'):
         raise ValueError('Explicit IncremenralCompilation required')
     rps = job.get('partitions')
@@ -43,12 +53,14 @@ def validate(job):
     if int(job.get('max_parallel', 2)) < 1: raise ValueError('Invalid parallel budget')
     if job.get('static_placement_audit', 'full') not in ('full', 'skip'):
         raise ValueError('Invalid static_placement_audit mode')
+    if job.get('static_region_granularity', 'site') not in ('site', 'clock_region'):
+        raise ValueError('Invalid static_region_granularity')
     return job
 
 
 def load(path):
     path=Path(path).resolve(); job=validate(json.loads(path.read_text()))
-    for k in ('vivado', 'amf_config', 'shell_run', 'resume_synthesis_run'):
+    for k in ('vivado', 'amf_config', 'shell_run', 'resume_synthesis_run', 'resume_synthesis_checkpoint', 'comparison_v1_checkpoint'):
         if k in job: job[k]=str((path.parent/job[k]).resolve())
     for k in ('rtl_sources','ip_scripts','xdc_files','assembly_xdc_files'):
         if k in job: job[k]=[str((path.parent/v).resolve()) for v in job[k]]
@@ -64,7 +76,8 @@ def load(path):
 
 def settings(job, out, extra=None):
     values={k:v for k,v in job.items() if not isinstance(v,(list,dict))}
-    values.update(output=str(out), require_distinct_slrs=int(job['require_distinct_slrs']))
+    values.update(output=str(out), require_distinct_slrs=int(job['require_distinct_slrs']),
+                  static_routing_containment=int(static_containment_enabled(job)))
     for k in ('rtl_sources','ip_scripts','xdc_files','assembly_xdc_files'):
         values[k]=' '.join(tcl_word(v) for v in job.get(k,[]))
     rows=[]
@@ -80,8 +93,8 @@ def settings(job, out, extra=None):
 
 def snapshot(out):
     (out/'inputs').mkdir(); (out/'logs').mkdir()
-    names=('run_dfx_multi.py','resume_dfx_multi.py','dfx_multi_shell.tcl','dfx_rm_synth.tcl','dfx_multi_assemble.tcl','dfx_multi_common.tcl','dfx_common.tcl',
-           'run_dfx.py','dfx_prepare.tcl','dfx_input_scope.tcl','dfx_backend.tcl','dfx_import.tcl','summarize_dfx.py','summarize_full_flow.py','summarize_face_detect_flow.py')
+    names=('run_dfx_multi.py','resume_dfx_multi.py','dfx_multi_shell.tcl','dfx_rm_synth.tcl','dfx_multi_assemble.tcl','dfx_multi_common.tcl','dfx_common.tcl','dfx_boundary_compatibility.tcl',
+           'run_dfx.py','dfx_comparison.py','dfx_prepare.tcl','dfx_input_scope.tcl','dfx_srl_metadata.tcl','dfx_backend.tcl','dfx_import.tcl','dfx_site_import.tcl','summarize_dfx.py','summarize_full_flow.py','summarize_face_detect_flow.py')
     for n in names: shutil.copy2(SCRIPT/n,out/'inputs'/n)
     return {n:sha(out/'inputs'/n) for n in names}
 
@@ -109,8 +122,14 @@ def acceptance(out,prefix):
 def check_shell(job):
     shell=Path(job['shell_run']); m=json.loads((shell/'manifest.json').read_text())
     if m['state']!='completed' or m['schema']!='amf-dfx-multi-shell-v1': raise ValueError('Invalid multi-RP parent')
+    if static_containment_enabled(job) != static_containment_enabled(m['job'], historical_default=True):
+        raise ValueError('Parent static routing policy mismatch')
+    if static_containment_enabled(job) and job.get('static_region_granularity', 'site') != m['job'].get('static_region_granularity', 'site'):
+        raise ValueError('Parent static region granularity mismatch')
     for k in ('part','clock_name','clock_period_ns'):
         if job[k]!=m['job'][k]: raise ValueError('Parent mismatch: '+k)
+    if job.get('srl_control_metadata_semantics') != m['job'].get('srl_control_metadata_semantics'):
+        raise ValueError('Parent SRL metadata semantics mismatch')
     for k in ('id','active_partition','pblock','pblock_ranges','expected_slr'):
         if [r.get(k) for r in job['partitions']] != [r.get(k) for r in m['job']['partitions']]: raise ValueError('Parent partition mismatch: '+k)
     for n,h in m['outputs'].items():
@@ -161,12 +180,15 @@ def run(args):
                 for f in r['rm_rtl_sources']+r.get('rm_ip_scripts',[]):
                     if not Path(f).is_file(): raise ValueError('Missing RM source '+f)
             elif not Path(r['rm_checkpoint']).is_file(): raise ValueError('Missing RM DCP')
+            if r.get('expected_rm_sha256') and sha(r['rm_checkpoint'])!=r['expected_rm_sha256']:
+                raise ValueError('RM checkpoint hash mismatch: '+r['id'])
         if not binary.is_file(): raise ValueError('Missing AMF binary')
+    provenance=source_provenance(binary if args.mode=='run' else None)
     out.mkdir(parents=True,exist_ok=False); hashes=snapshot(out)
     t=time.monotonic()
     record=dict(schema='amf-dfx-multi-'+args.mode+'-v1',job=job,state='running',
                 started=dt.datetime.now().astimezone().isoformat(),started_epoch=time.time(),stages=[],
-                source_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
+                source_commit=provenance['source_commit'],source_provenance=provenance,
                 script_hashes=hashes,dcp_storage='server-only',shell_mode='full Vivado shell; scoped AMF interface context, one active RP per worker')
     record['input_hashes']={f:sha(f) for k in ('rtl_sources','ip_scripts','xdc_files','assembly_xdc_files') for f in job.get(k,[])}
     if recovery: record['synthesis_recovery']=recovery
@@ -186,12 +208,17 @@ def run(args):
         else:
             record['parent']=str(shell);record['parent_manifest_sha256']=sha(shell/'manifest.json')
             record['binary']=str(binary);record['binary_sha256']=sha(binary)
+            record['comparison_identity']=identity(job,record['binary_sha256'],amf_configuration(job))
+            record['amf_placement_scope']='dynamic_only_fixed_static_context'
+            if record['comparison_identity'] and parent.get('amf_placement_scope')!='whole_design':
+                raise ValueError('Performance comparison requires an AMF-placed V0 parent')
             record['rm_input_hashes']={r['id']:sha(r['rm_checkpoint']) for r in job['partitions'] if not r.get('rm_rtl_sources')}
             record['rm_source_hashes']={r['id']:{f:sha(f) for f in r.get('rm_rtl_sources',[])+r.get('rm_ip_scripts',[])} for r in job['partitions']}
             workers=out/'workers';workers.mkdir();record['workers']={}
             def worker(r):
                 name=r['id'];cfg={k:job[k] for k in ('IncremenralCompilation','part','clock_name','clock_period_ns','amf_config','vivado','vivado_threads')}
                 cfg['static_placement_audit']=job.get('static_placement_audit', 'full')
+                cfg['backend_place_mode']=job.get('backend_place_mode', 'default')
                 begin=time.time(); frontend_step=None
                 checkpoint=r.get('rm_checkpoint')
                 if r.get('rm_rtl_sources'):
@@ -223,7 +250,7 @@ def run(args):
                 if m['state']!='completed' or not m['acceptance']['implementation_verified']: raise RuntimeError('Worker not verified')
                 record['workers'][r['id']]['rm_sha256']=sha(workers/r['id']/'rm_routed.dcp')
             assembly=out/'assembly';assembly.mkdir();(assembly/'inputs').mkdir();(assembly/'logs').mkdir()
-            for n in ('dfx_multi_assemble.tcl','dfx_multi_common.tcl','dfx_common.tcl'):shutil.copy2(out/'inputs'/n,assembly/'inputs'/n)
+            for n in ('dfx_multi_assemble.tcl','dfx_multi_common.tcl','dfx_common.tcl','dfx_boundary_compatibility.tcl'):shutil.copy2(out/'inputs'/n,assembly/'inputs'/n)
             config=settings(job,assembly,dict(workers=str(workers),reference_checkpoint=str(shell/'base_routed.dcp')))
             update('assemble_routed_modules')
             step=vivado(job,assembly,'dfx_multi_assemble.tcl',config);record['stages'].append(step)
@@ -242,7 +269,4 @@ def run(args):
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('mode',choices=['shell','run']);p.add_argument('--config',required=True);p.add_argument('--output',required=True);p.add_argument('--binary')
-    args=p.parse_args()
-    if args.mode=='run' and not args.binary:p.error('--binary required')
-    print(run(args))
+    raise SystemExit('Legacy routed-RM assembly entry is disabled in deployment24. Use run_parallel_incremental.py for fresh A/B synthesis, AMF import-only workers and one joint route.')

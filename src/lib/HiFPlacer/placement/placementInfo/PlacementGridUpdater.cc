@@ -13,6 +13,7 @@ void PlacementInfo::updateElementBinGrid(bool full, bool bypass, const char *cal
 {
     AMF_PROFILE_FUNCTION("placement_bookkeeping");
     const auto started = Clock::now();
+    if(hardRegions.enabled) for(auto pu:placementUnits) enforceLegalizeXYInArea(pu,false);
     const auto mode = grid_update::mode();
     gridUpdateStats = {};
     ++gridUpdateCall;

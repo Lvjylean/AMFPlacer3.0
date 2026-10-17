@@ -1,0 +1,41 @@
+时钟 guidance 独立验证结果
+
+结论：在本次 GETRF/U250、12ns、A/B 增量 DCP 上，直接执行 update_clock_routing -verbose，再执行 route_design -verbose，可以消除 Route 35-4475，不需要 place_design，也没有显式 unroute 或解锁静态路由。
+
+直接日志证据：Place 30-933: Rebuilding out-of-date clock tree for clock net: clk。
+clk 由 clock_buffer/O 驱动，是 static driver boundary clock，时钟根保持 X3Y8。
+这说明物理时钟树 guidance 已过期；根据导入流程，替换 A/B 并导入新位置后需要刷新这一元数据。它不同于逻辑时钟周期/来源约束。
+
+对照组 Route 35-4475：1 条；更新组：0 条。
+update_clock_routing：55.610 秒。
+route_design：632.277 秒。
+更新后及路由后全部 910083 个 primitive cell 的 NAME/LOC/BEL 均精确一致；无缺失、无新增、无移动。
+A/B 各 2956 个 cell 的区域、原始 AMF 位置、接口、footprint 保持检查通过。
+固定时钟路由：更新后仅文本分支顺序变化，完整节点/父子边/根一致；路由结束后连原始序列化文本也逐字节一致。
+全布通：922926/922926；路由错误：0。
+DRC Error/Critical Warning：0/0。
+WNS/WHS：+0.149/+0.008 ns；setup/hold 失败端点均为 0。
+pr_verify -full_check：通过。实际比较 622 个 partition pins、868756 个静态 cells、16690354 个静态 routed nodes、15662722 个静态 routed PIP。
+既有 no_clock=1、unconstrained_internal_endpoints=1，均与父实验基线一致，没有将其称为零。
+输入 DCP、父设置和冻结 helper 源码前后 SHA256 均保持。
+
+本轮诊断进程实际墙钟：1727.001 秒（包含下面所有检查及 DCP 开销，不是增量编译总时间）。
+阶段秒数：
+  open_input: 137.593
+  snapshot_all_placement: 13.367
+  update_clock_routing: 55.610
+  verify_update_placement: 18.703
+  route_verbose: 632.277
+  verify_routed_placement: 16.593
+  audit_routed: 180.216
+  write_result: 59.242
+  pr_verify_full: 549.191
+
+第 43 轮诊断保留：对照路由已完成 720.799 秒且复现 1 条警告；时钟更新命令完成 65.037 秒，但额外逐 cell Tcl 字典对照过慢。核实进程身份后结束该诊断，新 44 使用完整批量属性向量加 Python 精确对照，所有检查保留。43 的实际进程耗时、SIGTERM 和输入不变证据见 result.json；不隐藏为成功验收，也不计入 55.610 秒的命令时间。
+
+建议后续插入位置：两模块的网表和 place_cell 全部导入完成、确认位置及约束正确后，先 update_clock_routing -verbose，再 route_design -verbose。
+本轮仅验证；没有改写冻结生产后端，没有重新生成 bitstream，没有恢复监控自动任务。
+
+服务器 DCP（未下载）：
+/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261017-clock-guidance-batched-44/update_preserve/result_routed.dcp
+SHA256: bbf342a8c957598a2d8ebdc85fdbe212917cf1d075328c0dc480df7ca91172c2

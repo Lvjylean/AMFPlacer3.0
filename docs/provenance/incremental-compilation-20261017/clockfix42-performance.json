@@ -1,0 +1,32 @@
+{
+  "full_v1_reconstructed_seconds": 8295.34940890607,
+  "full_v1_minus_vivado_place_seconds": 7342.83740890607,
+  "incremental_reconstructed_seconds": 2711.6446696388302,
+  "incremental_ratio": 0.32688733602077674,
+  "incremental_ratio_vs_full_minus_place": 0.3692911225774791,
+  "recovery42_actual_wall_seconds": 2419.000646297005,
+  "inherited_frontend_plus_complete_recovery_seconds": 2754.4725665488513,
+  "repair_preflight_handoff_and_controller_overhead_seconds": 42.82789691002108,
+  "inherited_parallel_frontend_span_seconds": 335.4719202518463,
+  "inherited_max_branch_seconds": 335.4719210789772,
+  "corrected_joint_process_seconds": 1541.8710932009853,
+  "parallel_acceptance_and_bitstreams_seconds": 834.3016561859986,
+  "actual_parallel_verification_span_seconds": 471.2351405620575,
+  "actual_parallel_verification_overlap_seconds": 327.4546103477478,
+  "route_seconds": 618.024,
+  "full_route_seconds": 1975.263,
+  "route_ratio": 0.3128818795269288,
+  "route_70pct_pass": true,
+  "same_binary_full_v1_incremental_amf": true,
+  "same_binary_v0_static_cache": false,
+  "historical_invalid_incremental_wall_seconds": 2796.588803062914,
+  "historical_invalid_incremental_route_seconds": 586.003,
+  "historical_failed_full_amf_seconds": 8755.194126004004,
+  "probe39_seconds": 228.76731657981873,
+  "failed_clock_repair_seconds": {
+    "39": 26.415287776035257,
+    "40": 451.5794318160042,
+    "41": 26.25462892104406
+  },
+  "note": "Reconstructed sums reuse measured frontend and full inherited preparation; not observed cold runs. Recovery, probe, failed attempts and obsolete invalid run remain separately charged. Background utilization and 100-path report are excluded from incremental main path."
+}

@@ -2465,6 +2465,37 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSl
         neighborOwners.emplace_back(p); return p;
     };
     print_status("ParallelCLBPacker: re-place some LUT-FF pairs since they are not connected via internal nets.");
+    // A retained static interface cell participates in STA but is not packed
+    // inside the active RM. Use its verified immutable physical site as an
+    // anchor; never invent a packing cluster or relax the fixed placement.
+    int staticNeighborAnchorLookups = 0;
+    auto packedOrStaticAnchor = [&](int anchorCellId) -> std::pair<float, float> {
+        auto packed = cellId2PackingSite[anchorCellId];
+        if (packed)
+            return {packed->getCLBSite()->X(), packed->getCLBSite()->Y()};
+        const auto &dfx = placementInfo->getIncrementalContext();
+        auto cell = designInfo->getCells()[anchorCellId];
+        auto fixed = dfx.fixed.find(cell->getName());
+        auto pu = placementInfo->getPlacementUnitByCellId(anchorCellId);
+        if(dfx.enabled&&cell->isInterfaceEndpoint()&&pu->isFixed()&&pu->isLocked()) {
+            const auto &p=dfx.endpoints.at(cell->getName());
+            if(std::fabs(pu->X()-p.x)<1e-5f&&std::fabs(pu->Y()-p.y)<1e-5f)return {p.x,p.y};
+            throw std::runtime_error("Native interface endpoint moved: "+cell->getName());
+        }
+        if (dfx.enabled && fixed != dfx.fixed.end() && pu->isFixed() && pu->isLocked())
+        {
+            auto siteName = fixed->second.site;
+            auto site = deviceInfo->getSite(siteName);
+            if (site && std::fabs(pu->X() - site->X()) <= 1e-5f &&
+                std::fabs(pu->Y() - site->Y()) <= 1e-5f)
+            {
+                ++staticNeighborAnchorLookups;
+                return {site->X(), site->Y()};
+            }
+        }
+        throw std::runtime_error("LUT-FF relocation has no packing site or verified DFX static anchor: " +
+                                 cell->getName());
+    };
     auto oriCellIdsInCriticalPaths = timingOptimizer->findCriticalPaths(0.9, false, 1000, 30, false);
 
     // auto &sortedTimingNodes = timingOptimizer->getSortedTimingNodes();
@@ -2575,15 +2606,16 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSl
 
             auto curSite = cellId2PackingSite[cellId];
             auto succSite = cellId2PackingSite[cellIdsInCriticalPath[orderI + 1]];
-            assert(curSite && succSite);
+            assert(curSite);
             int succSiteOrderId = orderI + 1;
             while (curSite == succSite && succSiteOrderId + 1 <= cellIdsInCriticalPath.size() - 1)
             {
                 succSiteOrderId++;
                 succSite = cellId2PackingSite[cellIdsInCriticalPath[succSiteOrderId]];
             }
-            v1x = v2x = succSite->getCLBSite()->X() - curSite->getCLBSite()->X();
-            v1y = v2y = succSite->getCLBSite()->Y() - curSite->getCLBSite()->Y();
+            const auto succAnchor = packedOrStaticAnchor(cellIdsInCriticalPath[succSiteOrderId]);
+            v1x = v2x = succAnchor.first - curSite->getCLBSite()->X();
+            v1y = v2y = succAnchor.second - curSite->getCLBSite()->Y();
 
             // if (std::fabs(v1x) + std::fabs(v1y) + std::fabs(v2x) + std::fabs(v2y) < 0.1)
             //     continue;
@@ -2699,15 +2731,15 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSl
 
         int predCell = cellIdsInCriticalPath[1];
         auto &curCandidates = cellId2CandidateSites[cellId];
-        auto predCandidate = cellId2PackingSite[predCell];
 
         for (int k = 0; k < curCandidates.size(); k++)
         {
             // std::cout << "considering " << curCandidates[k]->getCLBSite()->getName() << "\n";
             if (curCandidates[k] == srcSite)
                 continue;
+            const auto predAnchor = packedOrStaticAnchor(predCell);
             float delay = timingOptimizer->getDelayByModel(
-                predCandidate->getCLBSite()->X(), predCandidate->getCLBSite()->Y(), curCandidates[k]->getCLBSite()->X(),
+                predAnchor.first, predAnchor.second, curCandidates[k]->getCLBSite()->X(),
                 curCandidates[k]->getCLBSite()->Y());
 
             if (bestChoiceDelay > delay)
@@ -2747,6 +2779,8 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSl
 
     print_status("ParallelCLBPacker: conducted timing-driven detailed placement (LUT-FF pairs) and " +
                  std::to_string(replaceCnt) + " PlacementUnits are replaced.");
+    if (placementInfo->getIncrementalContext().enabled)
+        print_info("DFX_DETAIL_STATIC_NEIGHBOR_ANCHOR_LOOKUPS=" + std::to_string(staticNeighborAnchorLookups));
 
     return replaceCnt;
 }
@@ -5288,7 +5322,7 @@ void ParallelCLBPacker::dumpPlacementTcl(std::string dumpTclFile)
     std::ofstream outfileTcl(dumpTclFile);
     assert(outfileTcl.is_open() && outfileTcl.good() &&
            "The path for placement Tcl dumping does not exist and please check your path settings");
-    if (placementInfo->getIncrementalContext().enabled)
+    if (placementInfo->getIncrementalContext().enabled || placementInfo->hasHardRegions())
     {
         const auto &dfx = placementInfo->getIncrementalContext();
         for (const auto &entry : dfx.fixed)
@@ -5302,13 +5336,25 @@ void ParallelCLBPacker::dumpPlacementTcl(std::string dumpTclFile)
                 std::fabs(pu->X() - site->X()) > 1e-5f || std::fabs(pu->Y() - site->Y()) > 1e-5f)
                 throw std::runtime_error("DFX static anchor moved inside AMF: " + entry.first);
         }
-        print_info("DFX_STATIC_ANCHORS_VERIFIED count=" + std::to_string(dfx.fixed.size()));
+        for(const auto &entry:dfx.endpoints) {
+            auto name=entry.first;auto cell=designInfo->getCell(name);auto pu=placementInfo->getPlacementUnitByCell(cell);
+            if(!cell->isInterfaceEndpoint()||!pu->isFixed()||!pu->isLocked()||
+               std::fabs(pu->X()-entry.second.x)>1e-5f||std::fabs(pu->Y()-entry.second.y)>1e-5f)
+                throw std::runtime_error("Native interface endpoint moved: "+name);
+        }
+        if(dfx.enabled) print_info("DFX_STATIC_ANCHORS_VERIFIED count=" + std::to_string(dfx.fixed.size()));
+        else print_info("DFX_FULL_DESIGN_PLACEMENT_EXPORT");
         // Data-only export: the DFX adapter parses place_cell lists. Never source
         // this file on a locked shell or execute whole-design unplace commands.
         outfileTcl << "error {DFX placement data: use scripts/run_dfx.py, do not source this file}\n";
         dumpDSPBRAMPlacementTcl(outfileTcl);
         dumpCLBPlacementTcl(outfileTcl, true);
         dumpCLBPlacementTcl(outfileTcl, false);
+        outfileTcl.close();
+        if(designInfo->nativeStaticCache) {
+            AMF_PROFILE_SCOPE("export_native_cache", "persist final static fabric state");
+            designInfo->nativeStaticCache->savePlacement(dumpTclFile,JSONCfg);
+        }
         return;
     }
     outfileTcl << "set script_path [ file dirname [ file normalize [ info script ] ] ]\n";

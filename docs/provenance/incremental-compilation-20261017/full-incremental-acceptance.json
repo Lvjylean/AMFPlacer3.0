@@ -1,0 +1,101 @@
+{
+  "accepted": true,
+  "state": "real_full_and_incremental_accepted",
+  "full_run": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-full-38",
+  "chain": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/comparisons/getrf-12ns-right3-region-legalizer-38",
+  "unit_tests_passed": true,
+  "complete_failed_column_replay_passed": true,
+  "scope_note": "Unit/oracle and captured-column replay do not constitute full design or incremental acceptance",
+  "reminder_when": "After actual full and incremental acceptance",
+  "incremental_run": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-incremental-clockfix-42",
+  "incremental_parent_timing_invalid": "getrf-12ns-right3-099-v1-incremental-38",
+  "clock_corrected_incremental": true,
+  "acceptance_review_sha256": "df65793c569af980d0224acffb8e0548be5662462ae831bb8d73009c4d17c827",
+  "acceptance_review": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261016-ooc-clock-ownership-42/acceptance-review.json",
+  "full_acceptance": {
+    "routing_counts": {
+      "logical nets": 3254908,
+      "nets not needing routing": 2331921,
+      "internally routed nets": 2046220,
+      "nets with no loads": 285701,
+      "routable nets": 922987,
+      "fully routed nets": 922987,
+      "nets with routing errors": 0
+    },
+    "routing_complete": true,
+    "drc": {
+      "errors": 0,
+      "critical_warnings": 0
+    },
+    "timing": {
+      "wns_ns": 0.061,
+      "tns_ns": 0.0,
+      "setup_failing_endpoints": 0,
+      "setup_total_endpoints": 613227,
+      "whs_ns": 0.009,
+      "ths_ns": 0.0,
+      "hold_failing_endpoints": 0,
+      "hold_total_endpoints": 613227,
+      "wpws_ns": 5.3,
+      "tpws_ns": 0.0,
+      "pulse_failing_endpoints": 0,
+      "pulse_total_endpoints": 406004
+    },
+    "implementation_verified": true,
+    "timing_met": true
+  },
+  "incremental_acceptance": {
+    "routing_counts": {
+      "logical nets": 3254920,
+      "nets not needing routing": 2331994,
+      "internally routed nets": 2046293,
+      "nets with no loads": 285701,
+      "routable nets": 922926,
+      "nets with fixed routing": 916927,
+      "fully routed nets": 922926,
+      "nets with routing errors": 0
+    },
+    "routing_complete": true,
+    "drc": {
+      "errors": 0,
+      "critical_warnings": 0
+    },
+    "timing": {
+      "wns_ns": 0.149,
+      "tns_ns": 0.0,
+      "setup_failing_endpoints": 0,
+      "setup_total_endpoints": 613227,
+      "whs_ns": 0.008,
+      "ths_ns": 0.0,
+      "hold_failing_endpoints": 0,
+      "hold_total_endpoints": 613227,
+      "wpws_ns": 5.3,
+      "tpws_ns": 0.0,
+      "pulse_failing_endpoints": 0,
+      "pulse_total_endpoints": 406004
+    },
+    "implementation_verified": true,
+    "timing_met": true,
+    "timing_coverage": {
+      "passed": true,
+      "actual": {
+        "no_clock": 1,
+        "unconstrained_internal_endpoints": 1
+      },
+      "baseline": {
+        "no_clock": 1,
+        "unconstrained_internal_endpoints": 1
+      },
+      "reference": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v1-full-38/base_timing.rpt",
+      "reference_sha256": "b63aa7203ffc5f95cbe28d73e5266d9fc6f9fb39a2174889bf08c9b6df26efa2"
+    }
+  },
+  "pr_verify_full_check": true,
+  "bitstreams_verified": true,
+  "cell_locations_preserved": 5912,
+  "static_cache_same_binary": false,
+  "verified_at": "2026-10-16T17:02:13.630408+08:00",
+  "reminder_due": false,
+  "reminder_delivered_in_completion_turn": true,
+  "reminder_automation_status": "PAUSED"
+}

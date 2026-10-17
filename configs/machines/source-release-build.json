@@ -1,0 +1,8 @@
+{
+  "project_root": ".",
+  "build_jobs": 8,
+  "amf_jobs": 12,
+  "vivado_threads": 4,
+  "vivado": "vivado",
+  "purpose": "Portable isolated source build only; configure actual Vivado/input paths before FPGA runs"
+}

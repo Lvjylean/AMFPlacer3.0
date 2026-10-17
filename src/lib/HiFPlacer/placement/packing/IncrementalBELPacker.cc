@@ -60,7 +60,7 @@ void IncrementalBELPacker::LUTFFPairing(float disThreshold)
                     auto pinBeDriven = curCell->getOutputPins()[0]->getNet()->getPinsBeDriven()[0];
                     assert(pinBeDriven->getCell());
                     auto FFBeDriven = pinBeDriven->getCell();
-                    if (FFBeDriven->isFF() && cellInMacros.find(FFBeDriven) == cellInMacros.end())
+                    if (FFBeDriven->isFF() && placementInfo->sameHardRegion(curCell, FFBeDriven) && cellInMacros.find(FFBeDriven) == cellInMacros.end())
                     {
                         if (getCellDistance(cellLoc[FFBeDriven->getCellId()], cellLoc[curCell->getCellId()]) <
                             disThreshold)
@@ -114,7 +114,7 @@ void IncrementalBELPacker::LUTFFPairing(float disThreshold)
                     {
                         assert(pinBeDriven->getCell());
                         auto FFBeDriven = pinBeDriven->getCell();
-                        if (FFBeDriven->isFF() && cellInMacros.find(FFBeDriven) == cellInMacros.end())
+                        if (FFBeDriven->isFF() && placementInfo->sameHardRegion(curCell, FFBeDriven) && cellInMacros.find(FFBeDriven) == cellInMacros.end())
                         {
                             float curDis =
                                 getCellDistance(cellLoc[FFBeDriven->getCellId()], cellLoc[curCell->getCellId()]);
@@ -296,6 +296,7 @@ void IncrementalBELPacker::FFPairing(float disThreshold)
                         continue;
                     DesignInfo::DesignCell *FFCell0 = FF0->getCell();
                     DesignInfo::DesignCell *FFCell1 = FF1->getCell();
+                    if(!placementInfo->sameHardRegion(FFCell0,FFCell1))continue;
                     float dis = getCellDistance(cellLoc[FFCell0->getCellId()], cellLoc[FFCell1->getCellId()]);
                     if (dis < disThreshold)
                     {

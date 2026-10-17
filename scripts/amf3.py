@@ -218,6 +218,12 @@ def prepare_clock_capacity(args):
     prepare(ROOT, args)
 
 
+def dfx_full(args):
+    require_server()
+    from run_dfx_full import run
+    raise SystemExit(run(args))
+
+
 def dfx_run(args):
     require_server()
     from run_dfx import run
@@ -248,6 +254,9 @@ def dfx_multi(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
+    p = sub.add_parser('dfx-full', help='Whole-design AMF hard-region placement followed by full Vivado routing')
+    for key in ('config','output','binary'): p.add_argument('--'+key,required=True)
+    p.set_defaults(action=dfx_full)
     p = sub.add_parser('dfx-multi-resume', help='Assemble verified routed multi-RP workers without rerunning placement or routing')
     p.add_argument('--run', required=True)
     p.add_argument('--output', required=True)

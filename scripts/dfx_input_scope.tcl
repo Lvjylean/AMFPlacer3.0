@@ -1,3 +1,4 @@
+source [file join [file dirname [info script]] dfx_srl_metadata.tcl]
 # Incremental AMF input: active RM plus only fixed timing cones crossing its interface.
 # Static routes and partition pins remain in the Vivado DCP. No whole-design cell scan.
 namespace eval amf_dfx_scope {
@@ -227,8 +228,7 @@ namespace eval amf_dfx_scope {
             foreach c $activeCells {
                 if {[type $c] ni {SRL16E SRLC32E}} {continue}
                 incr srlCount
-                set invert [get_property -quiet IS_CLK_INVERTED [get_cells $c]]
-                if {$invert eq ""} {set invert UNKNOWN}
+                set invert [amf_dfx_srl::inversion [get_cells $c] [type $c]]
                 # CLK/CE/Q31 connectivity is already read from the actual AMF netlist.
                 puts $f [join [list $c [type $c] - - $invert [get_property IS_LOC_FIXED [get_cells $c]] [get_property IS_BEL_FIXED [get_cells $c]] -] "\t"]
             }
@@ -277,5 +277,131 @@ namespace eval amf_dfx_scope {
         puts $f "timing_model\tExisting AMF estimated delays on retained real-cell interface cones; not routed Vivado boundary budgets"
         close $f
         puts "AMF_DFX_PREPARED active=$activeCount fixed_interface=$fixedCount srl=$srlCount pins=$pinCount"
+    }
+}
+
+# Frozen cache overlays validated against complete A input; B validation follows.
+# Independent candidate only. Frozen production exporter is sourced first.
+# Cache logical data-net aliases and primitive owner eligibility; keep all
+# canonical driver/sink, constant, clock, DSP and export-order rules.
+namespace eval amf_dfx_scope {
+    variable logicalAliases; array set logicalAliases {}
+    variable logicalEntries; array set logicalEntries {}
+    variable logicalSegments; array set logicalSegments {}
+    variable primitiveOwner; array set primitiveOwner {}
+    variable cacheStats; array set cacheStats {net_calls 0 net_misses 0 alias_hits 0 sink_queries 0 canonical_calls 0 primitive_misses 0 primitive_hits 0}
+    proc canonical_segment_pins {segments dir} {
+        variable primitiveOwner; variable cacheStats
+        incr cacheStats(canonical_calls)
+        set result {}
+        for {set i 0} {$i<[llength $segments]} {incr i 128} {
+            foreach p [get_pins -quiet -of_objects [lrange $segments $i [expr {$i+127}]] -filter "DIRECTION == $dir"] {
+                set name [get_property NAME $p]
+                set owner [owner $name]
+                if {![info exists primitiveOwner($owner)]} {
+                    incr cacheStats(primitive_misses)
+                    set c [get_cells -quiet -of_objects $p]
+                    set primitiveOwner($owner) [expr {[llength $c]==1 && [get_property IS_PRIMITIVE $c] && [get_property PRIMITIVE_LEVEL $c] ne "INTERNAL"}]
+                } else {incr cacheStats(primitive_hits)}
+                if {$primitiveOwner($owner)} {lappend result $name}
+            }
+        }
+        return [lsort -unique $result]
+    }
+    proc canonical_pins {net dir} {
+        set segments [get_nets -quiet -segments $net]
+        if {![llength $segments]} {error "No segments for $net"}
+        return [canonical_segment_pins $segments $dir]
+    }
+    proc net {name {withSinks 0}} {
+        variable logicalAliases; variable logicalEntries; variable logicalSegments; variable cacheStats
+        incr cacheStats(net_calls)
+        if {[info exists logicalAliases($name)]} {
+            set key $logicalAliases($name); incr cacheStats(alias_hits)
+        } else {
+            incr cacheStats(net_misses)
+            set category [get_property TYPE $name]
+            if {$category in {GROUND POWER}} {
+                if {$category eq "GROUND"} {set d <const0>;set t GND} else {set d <const1>;set t VCC}
+                set key $name; set logicalAliases($name) $key
+                set logicalEntries($key) [list $d $t {} 1]
+                return [list $d $t {}]
+            }
+            set segments [get_nets -quiet -segments $name]
+            if {![llength $segments]} {error "No segments for $name"}
+            set aliases [lsort -unique [get_property NAME $segments]]
+            set key [lindex $aliases 0]
+            foreach alias $aliases {
+                if {[info exists logicalAliases($alias)]} {error "Overlapping uncached logical group: $name $alias"}
+            }
+            set drivers [canonical_segment_pins $segments OUT]
+            set kinds {}
+            foreach p $drivers {lappend kinds [type [owner $p]]}
+            set kinds [lsort -unique $kinds]
+            if {[llength $drivers]>1 && [llength $kinds]==1 && [lindex $kinds 0] in {GND VCC}} {set drivers [lrange $drivers 0 0]}
+            if {[llength $drivers]!=1} {error "Expected one canonical driver at $name: $drivers"}
+            set driver [lindex $drivers 0]; set t [type [owner $driver]]
+            set logicalEntries($key) [list $driver $t {} 0]
+            set logicalSegments($key) $segments
+            foreach alias $aliases {set logicalAliases($alias) $key}
+            set logicalAliases($name) $key
+        }
+        lassign $logicalEntries($key) driver t sinks haveSinks
+        if {$withSinks && !$haveSinks} {
+            incr cacheStats(sink_queries)
+            if {$t ni {GND VCC}} {set sinks [canonical_segment_pins $logicalSegments($key) IN]}
+            set logicalEntries($key) [list $driver $t $sinks 1]
+        }
+        return [lrange $logicalEntries($key) 0 2]
+    }
+}
+
+# Additional candidate cache storage: retain per-cell native pin rows intact.
+# Arrays avoid repeatedly updating a growing dictionary value. No query,
+# filtering, net naming, cell order or boundary semantics is changed.
+namespace eval amf_dfx_scope {
+    variable typeRows; array set typeRows {}
+    variable pinRows; array set pinRows {}
+    variable clockRows; array set clockRows {}
+    variable cacheStats
+    array set cacheStats {type_calls 0 type_misses 0 pin_calls 0 pin_misses 0 clock_calls 0 clock_misses 0}
+    proc type {cell} {
+        variable typeRows; variable cacheStats
+        incr cacheStats(type_calls)
+        if {![info exists typeRows($cell)]} {
+            incr cacheStats(type_misses)
+            set typeRows($cell) [get_property REF_NAME [get_cells $cell]]
+        }
+        return $typeRows($cell)
+    }
+    proc pins {cell} {
+        variable pinRows; variable cacheStats
+        incr cacheStats(pin_calls)
+        if {![info exists pinRows($cell)]} {
+            incr cacheStats(pin_misses)
+            set rows {}
+            foreach p [get_pins -of_objects [get_cells $cell]] {
+                set n [get_nets -quiet -top_net_of_hierarchical_group -of_objects $p]
+                if {[llength $n]>1} {error "Multiple nets at $p"}
+                set clk [get_property IS_CLOCK $p]
+                if {[llength $n] && [get_property TYPE $n] eq "GLOBAL_CLOCK"} {set clk 1}
+                lappend rows [list [get_property NAME $p] [get_property REF_PIN_NAME $p] [get_property DIRECTION $p] $n $clk]
+            }
+            set pinRows($cell) $rows
+        }
+        return $pinRows($cell)
+    }
+    proc clock_driver {name} {
+        variable clockRows; variable cacheStats
+        incr cacheStats(clock_calls)
+        if {![info exists clockRows($name)]} {
+            incr cacheStats(clock_misses)
+            set drivers [canonical_pins $name OUT]
+            if {[llength $drivers]!=1} {error "Expected one clock driver at $name: $drivers"}
+            set token @DFX_CLOCK/[lindex $drivers 0]
+            foreach alias [get_property NAME [get_nets -quiet -segments $name]] {set clockRows($alias) $token}
+            set clockRows($name) $token
+        }
+        return $clockRows($name)
     }
 }

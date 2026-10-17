@@ -25,7 +25,7 @@
 
 PlacementInfo::PlacementInfo(DesignInfo *designInfo, DeviceInfo *deviceInfo,
                              std::map<std::string, std::string> &JSONCfg)
-    : designInfo(designInfo), deviceInfo(deviceInfo), JSONCfg(JSONCfg), incremental(JSONCfg)
+    : designInfo(designInfo), deviceInfo(deviceInfo), JSONCfg(JSONCfg), incremental(JSONCfg), hardRegions(JSONCfg)
 {
     AMF_PROFILE_FUNCTION("placement_bookkeeping");
 
@@ -51,6 +51,18 @@ PlacementInfo::PlacementInfo(DesignInfo *designInfo, DeviceInfo *deviceInfo,
     globalMaxX = getMaxXFromSites(deviceInfo->getSites());
     globalMaxY = getMaxYFromSites(deviceInfo->getSites());
 
+    if (hardRegions.enabled) {
+        for(auto site:deviceInfo->getSites()) hardRegions.addModeledSite(site->getName(),site->X(),site->Y());
+        hardRegions.finishModel();
+        for(auto site:deviceInfo->getSites())
+            if(!hardRegions.siteOwners.count(site->getName())) site->setOccupied();
+        std::vector<size_t> counts(hardRegions.regions.size(),0);
+        for(auto cell:designInfo->getCells()) ++counts[hardRegionForCell(cell)];
+        for(size_t i=0;i<counts.size();++i) {
+            if(!counts[i])throw std::runtime_error("Empty full DFX region: "+hardRegions.regions[i].name);
+            print_info("AMF_HARD_REGION name="+hardRegions.regions[i].name+" cells="+std::to_string(counts[i])+" sites="+std::to_string(hardRegions.regions[i].modeledSites));
+        }
+    }
     if (incremental.enabled)
     {
         std::map<std::string, DeviceInfo::DeviceSite *> byName;
@@ -75,11 +87,14 @@ PlacementInfo::PlacementInfo(DesignInfo *designInfo, DeviceInfo *deviceInfo,
         for (auto cell : designInfo->getCells())
         {
             if (incremental.isActive(cell->getName())) { ++active; continue; }
-            if (!incremental.fixed.count(cell->getName()))
+            if(cell->isInterfaceEndpoint()) {
+                if(!incremental.endpoints.count(cell->getName()))throw std::runtime_error("Missing interface endpoint coordinates");
+            }
+            else if (!incremental.fixed.count(cell->getName()))
                 throw std::runtime_error("Missing fixed DFX static primitive: " + cell->getName());
             incremental.staticCellIds.insert(cell->getCellId());
         }
-        if (!active || incremental.staticCellIds.size() != incremental.fixed.size())
+        if (!active || incremental.staticCellIds.size() != incremental.fixed.size()+incremental.endpoints.size())
             throw std::runtime_error("DFX netlist/static placement coverage mismatch");
         print_info("DFX_CONTEXT active=" + std::to_string(active) + " static=" +
                    std::to_string(incremental.fixed.size()) + " available_sites=" + std::to_string(activeSites.size()));

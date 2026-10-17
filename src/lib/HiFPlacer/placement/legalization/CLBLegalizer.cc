@@ -326,6 +326,7 @@ float CLBLegalizer::DPForMinHPWL(int colNum, std::vector<std::vector<DeviceInfo:
         for (unsigned int j = heightPURow - 1; j < curColSites.size(); j++)
         {
             float curHPWLChange = getHPWLChange(curColPU[0], curColSites[j - heightPURow + 1]);
+                if(!placementInfo->hardRegionAllows(curColPU[0],curColSites[j-heightPURow+1]))curHPWLChange=1100000000.0;
             if (curColSites[j]->getSiteY() - curColSites[j - heightPURow + 1]->getSiteY() != heightPURow - 1)
             {
                 // we need to ensure that there is no occpupied sites in this range
@@ -353,6 +354,7 @@ float CLBLegalizer::DPForMinHPWL(int colNum, std::vector<std::vector<DeviceInfo:
                  j++) // j start from heightPURow because PU0 must occupy 1+ site(s)
             {
                 float curHPWLChange = getHPWLChange(curColPU[i], curColSites[j - heightPURow + 1]);
+                if(!placementInfo->hardRegionAllows(curColPU[i],curColSites[j-heightPURow+1]))curHPWLChange=1100000000.0;
                 if (curColSites[j]->getSiteY() - curColSites[j - heightPURow + 1]->getSiteY() != heightPURow - 1)
                 {
                     // we need to ensure that there is no occpupied sites in this range
@@ -629,6 +631,7 @@ void CLBLegalizer::findPossibleLegalLocation(bool fixedColumn)
 
         for (auto curSite : *candidateSite)
         {
+            if(!placementInfo->hardRegionAllows(curPU,curSite))continue;
             float curDisp = getDisplacement(curPU, curSite);
             if ((!fixedColumn && curDisp < displacementThreshold) ||
                 (fixedColumn && curDisp < 2 * displacementThreshold))
@@ -1230,7 +1233,7 @@ void CLBLegalizer::buildSRLSharingGroups()
         int region=-1;
         auto pref=placementInfo->getRegionPreferences().find(pu);
         if(pref!=placementInfo->getRegionPreferences().end()) region=pref->second.region;
-        const auto key=descriptor.controls+"\t"+std::to_string(crX)+":"+std::to_string(crY)+":"+std::to_string(region);
+        const auto key=descriptor.controls+"\t"+std::to_string(placementInfo->hardRegionForPU(pu))+":"+std::to_string(crX)+":"+std::to_string(crY)+":"+std::to_string(region);
         size_t best=groups.size();float bestDistance=std::numeric_limits<float>::max();
         srl_site_sharing::Layout bestLayout;
         for(size_t index:buckets[key]) {

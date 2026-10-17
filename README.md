@@ -1,3 +1,7 @@
+# incremental_compilation snapshot
+
+Full and incremental compilation, native static cache, joint routing, DFX boundary policy, CARRY and clock repairs: see [current workflow, build and validation scope](docs/incremental-compilation.md).
+
 # AMFplacer3.0
 
 基于 AMFPlacer 2.0 的 FPGA 增量编译器项目，目标对应《课题三final.pdf》子课题 3.2。当前版本为 **3.0.0-dev**：已有可追溯的全量基线，U250 GETRF 完整布局布线已验证；跨版本增量编译待开发。

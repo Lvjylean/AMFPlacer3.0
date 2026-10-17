@@ -1,7 +1,11 @@
 source [lindex $argv 0]
 source [file join [file dirname [info script]] dfx_multi_common.tcl]
+source [file join [file dirname [info script]] dfx_static_containment.tcl]
 proc main {} {
     global dfx
+    if {![info exists dfx(preflight_only)] || !$dfx(preflight_only)} {
+        error "This containment entry point is preflight-only. Whole-design AMF placement is required before Vivado full routing; native place_design is not a valid full AMF reference."
+    }
     set out $dfx(output)
     set_param general.maxThreads $dfx(vivado_threads)
     if {[info exists dfx(resume_synthesis_checkpoint)]} {
@@ -43,6 +47,8 @@ proc main {} {
     }
     amf_multi::validate_regions
     }
+    amf_dfx::timed static_containment_preflight {amf_static::configure_validate}
+    if {[info exists dfx(preflight_only)] && $dfx(preflight_only)} {return}
     amf_dfx::timed opt {opt_design}
     amf_dfx::timed write_opt_dcp {write_checkpoint $out/base_opt.dcp}
     amf_dfx::timed vivado_place {place_design}
@@ -52,7 +58,10 @@ proc main {} {
     amf_dfx::timed write_routed_dcp {write_checkpoint $out/base_routed.dcp}
     amf_dfx::timed reports {amf_multi::reports $out/base}
     report_utilization -file $out/base_utilization.rpt
-    amf_dfx::save_dict $out/static_snapshot.tcldata [amf_multi::static_snapshot]
+    amf_dfx::timed static_route_footprint_audit {amf_static::routed_audit}
+    if {[amf_dfx::static_audit_enabled]} {
+        amf_dfx::timed static_placement_snapshot {amf_dfx::save_dict $out/static_snapshot.tcldata [amf_multi::static_snapshot]}
+    }
     foreach row $dfx(rps) {
         lassign $row id rp pb
         set dfx(active_partition) $rp

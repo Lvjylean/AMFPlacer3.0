@@ -1,0 +1,46 @@
+{
+  "IncremenralCompilation": true,
+  "part": "xcu250-figd2104-2L-e",
+  "top": "static_top",
+  "clock_name": "dfx_clk",
+  "clock_period_ns": 10,
+  "vivado": "/Projects/Xilinx26/2026.1/Vivado/bin/vivado",
+  "vivado_threads": 4,
+  "max_parallel": 2,
+  "require_distinct_slrs": true,
+  "rtl_sources": [
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/tests/dfx/u250_multi/static_top.v",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/tests/dfx/u250_small/rm_a.v"
+  ],
+  "xdc_files": [
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/tests/dfx/u250_multi/clock.xdc"
+  ],
+  "assembly_xdc_files": [],
+  "amf_config": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/configs/experiments/dfx-u250-template.json",
+  "shell_run": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/dfx-full-hard-regions-small-04",
+  "partitions": [
+    {
+      "id": "a",
+      "active_partition": "rp_a",
+      "pblock": "pblock_a",
+      "pblock_ranges": [
+        "CLOCKREGION_X1Y1:CLOCKREGION_X1Y1"
+      ],
+      "expected_slr": "SLR0",
+      "rm_checkpoint": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-dfx-incremental/repo/experiments/runs/dfx-u250-fixture-02/rm_b.dcp"
+    },
+    {
+      "id": "b",
+      "active_partition": "rp_b",
+      "pblock": "pblock_b",
+      "pblock_ranges": [
+        "CLOCKREGION_X1Y5:CLOCKREGION_X1Y5"
+      ],
+      "expected_slr": "SLR1",
+      "rm_checkpoint": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261013-dfx-incremental/repo/experiments/runs/dfx-u250-fixture-02/rm_b.dcp"
+    }
+  ],
+  "prepare_worker_shells": true,
+  "static_placement_audit": "full",
+  "backend_place_mode": "route-only"
+}

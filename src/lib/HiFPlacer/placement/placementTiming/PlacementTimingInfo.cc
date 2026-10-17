@@ -120,6 +120,7 @@ void PlacementTimingInfo::buildSimpleTimingGraph()
                 }
             }
         }
+        if(curCell->isInterfaceEndpoint())newNode->setInnerDelay(0);
         simpleTimingGraph->insertTimingNode(newNode);
     }
 

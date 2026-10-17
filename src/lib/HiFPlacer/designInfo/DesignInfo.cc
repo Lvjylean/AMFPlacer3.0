@@ -28,6 +28,7 @@ void DesignInfo::DesignPin::updateParentCellNetInfo()
 
 DesignInfo::DesignPinType DesignInfo::DesignPin::checkPinType(DesignCell *cell, std::string &_refpinName, bool isInput)
 {
+    if(cell->isInterfaceEndpoint())return PinType_Others;
     if (cell->isLUT())
     {
         if (isInput)
@@ -134,6 +135,15 @@ void DesignInfo::addPinToNet(DesignPin *curPin)
 DesignInfo::DesignInfo(std::map<std::string, std::string> &JSONCfg, DeviceInfo *deviceInfo) : JSONCfg(JSONCfg)
 {
     AMF_PROFILE_FUNCTION("input_netlist");
+    std::unique_ptr<amf_native::PreparedInput> nativeInput;
+    if (amf_native::StaticDesignCache::reuseEnabled(JSONCfg)) {
+        AMF_PROFILE_SCOPE("input_native_cache", "load static cache and reconnect OOC module");
+        nativeInput.reset(new amf_native::PreparedInput(amf_native::StaticDesignCache::prepare(JSONCfg)));
+        print_info("AMF_NATIVE_INPUT dynamic="+std::to_string(nativeInput->dynamicCells)+
+                   " fixed="+std::to_string(nativeInput->fixedCells)+" static_dcp_opened=0");
+    }
+    if (amf_native::StaticDesignCache::captureEnabled(JSONCfg))
+        nativeStaticCache.reset(new amf_native::StaticDesignCache(JSONCfg));
 
     // curCell=>
     // design_1_i/axis_clock_converter_0/inst/gen_async_conv.axisc_async_clock_converter_0/xpm_fifo_async_inst/gnuram_async_fifo.xpm_fifo_base_inst/FSM_sequential_gen_fwft.curr_fwft_state[0]_i_1
@@ -167,9 +177,15 @@ DesignInfo::DesignInfo(std::map<std::string, std::string> &JSONCfg, DeviceInfo *
 
     print_status("Design Information Loading.");
 
-    std::string unzipCmnd = "unzip -p " + designArchievedTextFileName;
-    FILEbuf sbuf(popen(unzipCmnd.c_str(), "r"));
-    std::istream infile(&sbuf);
+    std::string quotedArchive="'";
+    for(char ch:designArchievedTextFileName)quotedArchive+=(ch=='\''?"'\\''":std::string(1,ch));
+    quotedArchive+="'";
+    std::string unzipCmnd = "unzip -p " + quotedArchive;
+    std::unique_ptr<FILE, int(*)(FILE*)> pipe(nativeInput ? nullptr : popen(unzipCmnd.c_str(), "r"),pclose);
+    if(!nativeInput&&!pipe)throw std::runtime_error("Cannot open netlist archive");
+    FILEbuf sbuf(pipe.get());
+    std::istringstream nativeStream(nativeInput?nativeInput->netlist:"");
+    std::istream infile(nativeInput ? nativeStream.rdbuf() : static_cast<std::streambuf*>(&sbuf));
     // std::ifstream infile(designTextFileName.c_str());
 
     std::string line;
@@ -179,8 +195,16 @@ DesignInfo::DesignInfo(std::map<std::string, std::string> &JSONCfg, DeviceInfo *
     std::istringstream iss(line);
     iss >> fill0 >> cellName >> fill1 >> cellType;
 
-    DesignCell *curCell = new DesignCell(cellName, fromStringToCellType(cellName, cellType), getNumCells());
+    auto newInputCell=[&](std::string name,std::string type) {
+        if(type!="AMF_INTERFACE")return new DesignCell(name,fromStringToCellType(name,type),getNumCells());
+        if(!nativeInput)throw std::runtime_error("Interface endpoints require native cache input");
+        // LUT1 is only the existing internal type-table storage slot; the
+        // explicit endpoint flag excludes LUT packing/resource semantics.
+        auto cell=new DesignCell(name,CellType_LUT1,getNumCells());cell->markInterfaceEndpoint();return cell;
+    };
+    DesignCell *curCell = newInputCell(cellName,cellType);
     curCell = addCell(curCell);
+    if(nativeStaticCache)nativeStaticCache->observeCell(cellName,cellType);
 
     const std::regex GNDpattern(".*/<const0>");
     const std::regex VCCpattern(".*/<const1>");
@@ -192,6 +216,8 @@ DesignInfo::DesignInfo(std::map<std::string, std::string> &JSONCfg, DeviceInfo *
         if (strContains(fill0, "pin=>"))
         {
             iss >> fill3 >> refpinname >> fill0 >> dir >> fill1 >> netName >> fill2 >> drivepinName;
+            if(nativeStaticCache)nativeStaticCache->observePin({targetName,refpinname,dir,
+                netName=="drivepin=>"?"":netName,drivepinName});
             DesignPin *curPin = new DesignPin(targetName, refpinname,
                                               DesignPin::checkPinType(curCell, refpinname, dir == std::string("IN")),
                                               dir == std::string("IN"), curCell, pins.size());
@@ -240,12 +266,15 @@ DesignInfo::DesignInfo(std::map<std::string, std::string> &JSONCfg, DeviceInfo *
         else if (strContains(fill0, "curCell=>"))
         {
             iss >> fill1 >> cellType;
-            curCell = new DesignCell(targetName, fromStringToCellType(targetName, cellType), getNumCells());
+            curCell = newInputCell(targetName,cellType);
             curCell = addCell(curCell);
+            if(nativeStaticCache)nativeStaticCache->observeCell(targetName,cellType);
         }
         else
             assert(false && "Parser Error");
     }
+
+    if(nativeStaticCache)nativeStaticCache->finishCapture();
 
     for (DesignNet *curNet : netlist)
     {

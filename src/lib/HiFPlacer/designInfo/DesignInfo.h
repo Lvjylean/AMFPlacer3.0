@@ -14,6 +14,7 @@
 #define _DESIGNINFO
 
 #include "DeviceInfo.h"
+#include "native/StaticDesignCache.h"
 #include <assert.h>
 #include <fstream>
 #include <iostream>
@@ -38,6 +39,8 @@
  */
 class DesignInfo
 {
+  public:
+    std::unique_ptr<amf_native::StaticDesignCache> nativeStaticCache;
   public:
     /**
      * @brief types of the elements in a design
@@ -934,6 +937,7 @@ class DesignInfo
         }
         inline bool isLUT()
         {
+            if(interfaceEndpoint)return false;
             return cellType == CellType_LUT6_2 || cellType == CellType_LUT6 || cellType == CellType_LUT5 ||
                    cellType == CellType_LUT4 || cellType == CellType_LUT3 || cellType == CellType_LUT2 ||
                    cellType == CellType_LUT1;
@@ -1033,7 +1037,7 @@ class DesignInfo
          */
         inline bool isTimingEndPoint()
         {
-            return (isFF() || isLUTRAM() || originallyIsLUTRAM() || isBRAM() || isURAM() || isDSP() || isIO() || isClockBuffer() ||
+            return (interfaceEndpoint || isFF() || isLUTRAM() || originallyIsLUTRAM() || isBRAM() || isURAM() || isDSP() || isIO() || isClockBuffer() ||
                     isShifter());
         }
 
@@ -1062,6 +1066,10 @@ class DesignInfo
         {
             return isVirtual;
         }
+        // Nonphysical RP terminal: participates in STA/HPWL at a fixed partition
+        // pin, has zero intrinsic delay and never reserves a site or BEL.
+        bool isInterfaceEndpoint() const { return interfaceEndpoint; }
+        void markInterfaceEndpoint() { interfaceEndpoint=true; }
 
         /**
          * @brief Get the Control Set Info object of this cell
@@ -1168,6 +1176,7 @@ class DesignInfo
         DesignCellType cellType;
         DesignCellType oriCellType;
         bool isVirtual = false;
+        bool interfaceEndpoint = false;
         bool hasDSPReg = false;
         ControlSetInfo *controlSetInfo = nullptr;
         int timingLength = 0;
