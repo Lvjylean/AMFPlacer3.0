@@ -78,6 +78,20 @@ int main() {
     double parallelError = 0;
     for (unsigned i=0; i<128; ++i) parallelError=std::max(parallelError,std::abs(serial.gradient[i]-parallel.gradient[i]));
     require(parallelError < 1e-10, "shared-PU parallel reductions"); ++tests;
+    // Equality, not a tolerance: jobs must not change SLL arithmetic order.
+    for (int workers : {1, 2, 8, 12, 16, 12, 16}) {
+        const auto other = large.evaluate(ly, lm, workers, true);
+        require(other.smooth == serial.smooth && other.gradient == serial.gradient &&
+                other.discrete == serial.discrete && other.seams == serial.seams &&
+                other.discreteOptimized == serial.discreteOptimized &&
+                other.validNets == serial.validNets && other.invalidNets == serial.invalidNets,
+                "worker count changed SLL objective or gradient");
+        require(large.evaluate(ly, lm, workers, false).smooth == serial.smooth,
+                "cost-only evaluation changed SLL objective");
+        ++tests;
+    }
+    auto empty = base(1); empty.validate();
+    require(empty.evaluate({50}, {1}, 16, true).smooth == 0, "empty net list"); ++tests;
     // Local QP signs and expansion point are independently checked by differentiation.
     std::vector<double> diag = {2, 3}, linear = {-10, -20}, yy = {4, 5}, gg = {-0.4, 0.7};
     addLocalModel(yy, gg, {1, 0}, 2, 0.5, diag, linear);
