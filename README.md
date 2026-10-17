@@ -4,7 +4,17 @@
 
 正式工作区位于 eda072：`/Projects/jinyang/workspace/AMFplacer3.0`。源码、构建、大型输入及最终 DCP 保存在服务器；本地保留轻量管理镜像、报告与日志。
 
-## 当前分支：AMF3Pro / SRL 兼容共享 site
+## 当前分支：SLL 数量建模与优化
+
+本分支整理了纵向四 SLR 的离散需求计数、SoftFloor + WASLL 平滑目标、解析梯度及按 net 并行计算，并接入现有 QP 的局部目标和候选检查。普通 Pro 默认行为保留，显式 `ProPrimitiveTiming=false`，SLL 数量目标需要显式开启。
+
+- [代码结构、参数、独立实验用法及 A/C/D 结果](docs/research/sll-quantity-release-20261017.md)
+- [实现细节](docs/research/sll-quantity-qp-implementation-20261013.md) · [GP 验证](docs/research/sll-quantity-qp-validation-20261013.md)
+- [源码与脚本来源清单](docs/provenance/sll-quantity-release-20261017.json) · [后端原始指标](docs/provenance/sll-quantity-20261013/backend-results.json)
+
+当前数量组相对同区域策略对照减少了 SLL，但仍未优于普通 Pro；空间需求、热点优化及约束 Vivado SLL 位置尚未实现。新检出仓库使用 `python3 scripts/verify_sll_release.py` 核验。本分支不支持把历史 `variants/merged` 覆盖到 SLL 源码上；旧版本说明按其日期和父分支理解。
+
+## 继承基线：2026-10-12 AMF3Pro / SRL 兼容共享 site
 
 本分支的根目录主源码采用 **独立 SLR 阶段，每次 cluster 最多两轮**。
 默认 GETRF 配置开启 BoundaryWeakAttraction，每个 SLICEM 最多容纳 4 个兼容 SRL，保留独立 PU，关闭 Pro 器件延迟特例。

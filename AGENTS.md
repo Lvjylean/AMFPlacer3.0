@@ -35,3 +35,6 @@
 - 2026-10-08 发布范围更新：本分支已接入 initialization-only 外部 floorplan，并包含单向分阶段 SLR/HPIO 聚拢与时钟容量表修复；覆盖前文历史阶段的“暂不接入 floorplan”限制。外部区域不永久锁定，未实现 SLL 容量优化和完整时钟布线分配。详见 docs/research/version-diff-20261008.md。历史报告按原日期理解，不改写历史结果。
 
 - 2026-10-12 SRL 兼容发布：根目录算法源码为独立 SLR 最多两轮版，主配置 configs/experiments/getrf-amf3pro-srl-share4-10ns.json，弱牵引开、ProPrimitiveTiming=false、SRLMaxPerSLICEM=4、无外部 floorplan。合并代码保存在 variants/merged/src/，按版本说明在独立副本覆盖构建；不能仅换 JSON 复用主二进制。MCLB 已恢复与 CARRY 耦合重算，历史 own-distance 配置不作为当前入口。此条覆盖历史默认配置推荐；原结果按各自日期解读。两个源码快照及输入哈希见 docs/provenance/amf3pro-srl-compatible-20261012.json。多核并行改造尚未实施。
+
+- 2026-10-17 SLL 发布分支更新：`sll优化` 基于普通 Pro 两轮 SRL 兼容版，加入数量诊断、SoftFloor/WASLL 解析梯度及按 net 并行计算、QP 局部目标和候选检查。默认数量目标关闭、`SllRegionPolicy=preserve`、`ProPrimitiveTiming=false`；不改变原阶段预算或距离系数。`release-single` 属于实验对照策略，不作为默认。源码核验使用 scripts/verify_sll_release.py；历史 merged 覆盖文件不能用于本分支 SLL。配置用法与结果见 docs/research/sll-quantity-release-20261017.md。空间需求、热点和固定 SLL 位置尚未实现。
+- 2026-10-13 后续 DFX 计时约定：主要指标排除 Vivado place_design，单列为后端兼容处理时间；仍实际执行并保留各阶段原始时间和实测总墙钟。排除后的指标明确标注“扣除 Vivado placement”，不称实测总墙钟；历史数据不改写。
