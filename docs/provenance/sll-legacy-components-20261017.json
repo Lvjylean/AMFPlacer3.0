@@ -1,0 +1,41 @@
+{
+  "schema": "sll-legacy-components-integration-v1",
+  "base_commit": "0461efeb59fc0e1af6a6e0175e8a177b64b3b36e",
+  "upstream_component_commit": "4dcfefded476cb9571e43e3edb4ff0d7830b8ed2",
+  "base_manifest_sha256": "66dff8345a3d1d5f55acd7574425e8859d472074e9d64aa15d3ce9a164e2c0fd",
+  "source_changes": {
+    "src/CMakeLists.txt": {
+      "before_sha256": "4def7c3b0a766e8e797a5bb772debc96d6fd66e65274a441227ed89c74942c7a",
+      "after_sha256": "2f14013e836cc40952c9232bb9d8a79a5e711951f1eda95f2eb9f2d84e7185bb"
+    },
+    "src/lib/HiFPlacer/placement/globalPlacement/SllQuantityModel.h": {
+      "before_sha256": "d61389c46b7ac483a3b21e87f2ca445be91e6ddb5271e896dba1f7478fe711db",
+      "after_sha256": "5283015112abac38a227f8e592e1ded729d72b0e0dbbe09a6e587641568b458f"
+    },
+    "src/lib/HiFPlacer/problemSolvers/LegacyComponentMatching.h": {
+      "before_sha256": null,
+      "after_sha256": "efa0070b8dadae50582069490b94628a08c40868606dc859673c45afb6db00d0"
+    },
+    "src/lib/HiFPlacer/problemSolvers/MinCostBipartiteMatcher.cc": {
+      "before_sha256": "cd1026ab75a27e97d35125d1c72ed003f42ed4581f3893392e9fdb01d933b7d5",
+      "after_sha256": "ccd062a548918be63a7bf5cb43b2c6b56a63a1633ecf6980ad70b662bc2c68ce"
+    },
+    "src/lib/HiFPlacer/problemSolvers/MinCostBipartiteMatcher.h": {
+      "before_sha256": "b5ec5cf4608b45a907b5e2e27940592d0b473696dd55b285d7a5f86c5bd47748",
+      "after_sha256": "86a7363ab54f65523580b7c01500b6774a697051948deaebe553c37bcc908de5"
+    },
+    "src/tests/check_legacy_components.cc": {
+      "before_sha256": null,
+      "after_sha256": "34abce8bcca941264ef852f314265cc5792fac2ebca0d1935efea3e7f3baa6ad"
+    },
+    "src/tests/check_sll_quantity.cc": {
+      "before_sha256": "d747e4960220546bcb06999f3d31b4c58f1a280e0a7fa6032236164164620198",
+      "after_sha256": "5a221a468b751a625642c4d69a08aa9fc49f78f41ad320f4dcea6ad62bd5f488"
+    }
+  },
+  "notes": [
+    "Native MinCostFlow unchanged; historical legacy option retained.",
+    "SLL uses 16 fixed logical chunks and ordered collection, independent of worker count.",
+    "No grid acceleration changes imported."
+  ]
+}
