@@ -42,9 +42,9 @@ class MinCostBipartiteMatcher
         if (numLeftNodes < 0 || numRightNodes < 0 || numExpectedMatches < 0 || numExpectedMatches > numLeftNodes ||
             maxThreadNum < 1 || adjList.size() != static_cast<std::size_t>(numLeftNodes))
             throw std::invalid_argument("Invalid bipartite matcher dimensions or thread count");
-        if (backend != "legacy" && backend != "component_ssp" && backend != "component_spfa" && backend != "component_assignment")
-            throw std::invalid_argument("BipartiteMatchingBackend must be legacy, component_ssp, component_spfa, or component_assignment");
-        if (!std::isfinite(forwardBias) || forwardBias < 0 || (backend == "legacy" && forwardBias != 0))
+        if (backend != "legacy" && backend != "legacy_components" && backend != "component_ssp" && backend != "component_spfa" && backend != "component_assignment")
+            throw std::invalid_argument("BipartiteMatchingBackend must be legacy, legacy_components, component_ssp, component_spfa, or component_assignment");
+        if (!std::isfinite(forwardBias) || forwardBias < 0 || ((backend == "legacy" || backend == "legacy_components") && forwardBias != 0))
             throw std::invalid_argument("Forward bias must be finite/nonnegative and is only configurable for new backends; legacy retains its built-in 0.01");
         left2right.assign(numLeftNodes, -1);
         right2left.assign(numRightNodes, -1);

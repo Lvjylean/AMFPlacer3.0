@@ -13,6 +13,7 @@
 
 #include "MinCostBipartiteMatcher.h"
 #include "SparseMinCostMatching.h"
+#include "LegacyComponentMatching.h"
 #include <atomic>
 #include <cstdlib>
 #include <iomanip>
@@ -44,6 +45,34 @@ void MinCostBipartiteMatcher::solve()
         }
     }
     const auto started = amf_matching::Clock::now();
+    if (backend == "legacy_components")
+    {
+        auto result = amf_legacy_components::solve(adjList, numRightNodes, numExpectedMatches, maxThreadNum);
+        left2right = std::move(result.leftToRight);
+        std::fill(right2left.begin(), right2left.end(), -1);
+        for (int left = 0; left < numLeftNodes; ++left)
+            if (left2right[left] >= 0) right2left[left2right[left]] = left;
+        unsigned long long visits = 0, relax = 0, spfa = 0, augment = 0;
+        for (const auto &stats : result.searches)
+        {
+            visits += stats.visits; relax += stats.relax;
+            spfa += stats.spfa; augment += stats.augment;
+        }
+        std::ostringstream summary;
+        summary << "AMF_MATCHER backend=legacy_components left=" << numLeftNodes << " right=" << numRightNodes
+                << " edges=" << result.edges << " components=" << result.components
+                << " largest_left=" << result.largestLeft << " largest_edges=" << result.largestEdges
+                << " matched=" << result.cardinality << " threads=" << maxThreadNum
+                << " native_forward_bias=0.01 native_eps=0.00001"
+                << " cost=" << std::setprecision(12) << result.cost
+                << " graph_hash=" << result.graphHash << " assignment_hash=" << result.assignmentHash
+                << " search_counters_hash=" << result.searchCountersHash
+                << " visits=" << visits << " relax=" << relax << " spfa=" << spfa << " augment=" << augment
+                << " prepare_s=" << result.preparationSeconds << " kernel_s=" << result.kernelSeconds
+                << " longest_task_s=" << result.longestTaskSeconds << " solve_s=" << amf_matching::seconds(started);
+        print_info(summary.str());
+        return;
+    }
     if (backend != "legacy")
     {
         auto result = amf_matching::solve(adjList, numRightNodes, numExpectedMatches, maxThreadNum,
