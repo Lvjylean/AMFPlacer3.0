@@ -215,6 +215,7 @@ void GlobalPlacer::GlobalPlacement_CLBPhase(int iterNum, bool continuePreviousIt
 
         auto diagnosticSnapshot = [&](const char *step) {
             macro_mechanism::snapshot(placementInfo, CARRYMacroLegalizer, phase, i, step);
+            WLOptimizer->recordSllStage(phase, i, step);
         };
         diagnosticSnapshot("begin");
         float displacementLimit = -10;
@@ -417,6 +418,7 @@ void GlobalPlacer::GlobalPlacement_CLBPhase(int iterNum, bool continuePreviousIt
                " rounds=" + std::to_string(completedIterations) + " reason=" + stopReason +
                " seconds=" + std::to_string(phaseSeconds) +
                " pseudoNetWeight=" + std::to_string(oriPseudoNetWeight));
+    WLOptimizer->endSllPhase();
     // macroSpreader->spreadPlacementUnits();
 }
 

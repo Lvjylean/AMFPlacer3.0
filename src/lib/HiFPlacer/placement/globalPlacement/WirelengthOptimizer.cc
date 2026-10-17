@@ -60,6 +60,18 @@ WirelengthOptimizer::WirelengthOptimizer(PlacementInfo *placementInfo, std::map<
     }
     if (qpStabilityGuard && !useUnconstrainedCG)
         throw std::invalid_argument("QPStabilityGuard currently requires useUnconstrainedCG=true");
+    bool sllRequested = false;
+    for (const auto &key : {"SllQuantityEnable", "SllQuantityDiagnostics"}) {
+        auto it = JSONCfg.find(key);
+        if (it != JSONCfg.end()) {
+            if (it->second != "true" && it->second != "false")
+                throw std::invalid_argument(std::string(key) + " must be true/false");
+            sllRequested |= it->second == "true";
+        }
+    }
+    if (JSONCfg.count("SllRegionPolicy") && JSONCfg.at("SllRegionPolicy") != "preserve")
+        sllRequested = true;
+    if (sllRequested) sllQuantity.reset(new SllQuantityOptimizer(placementInfo, JSONCfg));
     float leftBound = placementInfo->getGlobalMinX() - 0.5;
     float rightBound = placementInfo->getGlobalMaxX() + 0.5;
     float bottomBound = placementInfo->getGlobalMinY() - 0.5;
@@ -112,6 +124,7 @@ void WirelengthOptimizer::reloadPlacementInfo()
         targetCellId = placementInfo->getDesignInfo()->getCell(targetCellName)->getCellId();
     else
         targetCellId = -1;
+    if (sllQuantity) sllQuantity->reload();
 }
 
 void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool firstIteration,
@@ -141,6 +154,7 @@ void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool fir
 
     xSolver->solverSettings.solutionForward = forwardSolutionToNextIteration;
     ySolver->solverSettings.solutionForward = forwardSolutionToNextIteration;
+    const bool sllCandidate = sllQuantity && sllQuantity->prepare(*xSolver, *ySolver);
 
     if (verbose)
         print_status("Solver Running.");
@@ -165,7 +179,8 @@ void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool fir
         print_status("Solver Done.");
 
     // solverLoadFixedData();
-    solverWriteBackData(displacementLimit);
+    if (sllCandidate) sllQuantity->accept(*xSolver, *ySolver, displacementLimit);
+    else solverWriteBackData(displacementLimit);
 
     if (verbose)
         print_status("A QP Iteration Started.");

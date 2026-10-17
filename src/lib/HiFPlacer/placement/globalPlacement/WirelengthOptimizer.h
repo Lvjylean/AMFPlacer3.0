@@ -21,6 +21,8 @@
 #include "PlacementInfo.h"
 #include "PlacementTimingOptimizer.h"
 #include "QPSolverWrapper.h"
+#include "SllQuantityOptimizer.h"
+#include <memory>
 #include <assert.h>
 #include <fstream>
 #include <iostream>
@@ -134,6 +136,11 @@ class WirelengthOptimizer
      *
      */
     void reloadPlacementInfo();
+    void recordSllStage(const char *phase, int iteration, const char *step) {
+        if (sllQuantity) sllQuantity->record(phase, iteration, step);
+    }
+    void endSllPhase() { if (sllQuantity) sllQuantity->endPhase(); }
+
 
     /**
      * @brief Set the macro legalization parameters
@@ -186,6 +193,7 @@ class WirelengthOptimizer
     }
 
   private:
+    std::unique_ptr<SllQuantityOptimizer> sllQuantity;
     /**
      * @brief call the cooresponding solver to solve the QP problem defined in the given QPSolverWrapper
      *
