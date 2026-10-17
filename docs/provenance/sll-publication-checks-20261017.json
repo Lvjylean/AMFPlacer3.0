@@ -1,0 +1,65 @@
+{
+  "schema": "sll-publication-checks-v1",
+  "checked_at": "2026-10-17T11:48:25.867449+08:00",
+  "build_id": "build-20261017-114212-777851-c17c6247",
+  "build_state": "completed",
+  "build_source_commit": "c17c6247b22f294cdd75a925dd171b9192e8c46f",
+  "build_from_working_tree": true,
+  "final_source_matches_build_snapshot": true,
+  "source_files": 3437,
+  "runtime_profiling": true,
+  "binaries_sha256": {
+    "AMFPlacer": "562ca3df6494dbcf2333312f334bba7a54262c032dcc05f4fdb19cdece755022",
+    "partitionHyperGraph": "c207b3447fd9c7c75064ea047b3770f6962960b6ef04fee69c4bd4491d27df38"
+  },
+  "tool_versions": {
+    "cmake": "cmake version 3.22.1\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).",
+    "cxx": "c++ (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0\nCopyright (C) 2021 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+    "ninja": "1.10.1"
+  },
+  "python_tests": {
+    "result": "PASS",
+    "tests": 169
+  },
+  "native_tests": {
+    "checkSllQuantity": {
+      "result": "PASS",
+      "tests": 86,
+      "finite_difference_max_abs_error": 1.1524906029514e-11,
+      "parallel_max_abs_error": 5.7731597280508e-15,
+      "synthetic_discrete_before": 1,
+      "synthetic_discrete_after": 0,
+      "synthetic_source_y": 130.57676201621
+    },
+    "checkQPStability": "PASS bounded timing weights, legacy equivalence, float anchor repair, worker error, rollback",
+    "checkHierarchicalBoundaryPolicy": "PASS majority, stretch, 100 original-formula and 330 rotated-branch cases",
+    "check_srl_sharing_policy": "PASS SRL sharing policy, exhaustive pairs=128 and capacity/control/cascade/MUX checks"
+  },
+  "compiled_only": [
+    "checkSRLSharingInput",
+    "checkStageExperiment"
+  ],
+  "documentation_config_smoke_tests": {
+    "A": {
+      "config_sha256": "e301b3f40ea914f877a48ed4e8df3deae8b88216af52f3f144efbf99431f48c8",
+      "non_sll_config_unchanged": true
+    },
+    "C": {
+      "config_sha256": "4a865762767d1f243e4ce013c4078743ed578f37a06782401413fcac7445aa6b",
+      "non_sll_config_unchanged": true
+    },
+    "D": {
+      "config_sha256": "9ce3d108f8aa58f1e2f72f056115889a5b467e942e9332a8deec9377ea51341e",
+      "non_sll_config_unchanged": true
+    }
+  },
+  "source_verification": {
+    "result": "passed",
+    "source_files": 3437,
+    "inputs_verified": 0,
+    "implementation_commit": "c543fe540cdf145f63d2c896ab0afa44763fb6fc"
+  },
+  "full_getrf_rerun": false,
+  "input_hashes_rechecked_for_publication": false,
+  "note": "Algorithm source unchanged from validated SLL snapshot except published baseline test fix and CMake target. Historical GP/backend results are separate dated evidence; no new routed QoR claim."
+}

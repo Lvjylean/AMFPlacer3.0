@@ -1,0 +1,58 @@
+{
+  "schema": "sll-quantity-publication-v1",
+  "date": "2026-10-17",
+  "branch": "sll优化",
+  "published_base_commit": "c17c6247b22f294cdd75a925dd171b9192e8c46f",
+  "implementation_commit": "c543fe540cdf145f63d2c896ab0afa44763fb6fc",
+  "validation_commit": "0cc1e504b5b618a8785858aefefbb5575812241b",
+  "source_repository": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/repo",
+  "base_manifest": "docs/provenance/amf3pro-srl-compatible-20261012.json",
+  "base_manifest_sha256": "816f80d14a1cf923b4283cbcb0426c8b382be219a43828b580344c0c3a97783d",
+  "source_overrides_sha256": {
+    "src/CMakeLists.txt": "4def7c3b0a766e8e797a5bb772debc96d6fd66e65274a441227ed89c74942c7a",
+    "src/tests/check_sll_quantity.cc": "d747e4960220546bcb06999f3d31b4c58f1a280e0a7fa6032236164164620198",
+    "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc": "d1214e2e8c34da70338b215f17f704f1de1c374f648ecc594ef40d49fe521a2b",
+    "src/lib/HiFPlacer/placement/placementInfo/SllClipTrace.h": "036406d4909d4d9a2a91a7ce6ea07b4d7ec6e51a5b5d872a77278f27b0d6f186",
+    "src/lib/HiFPlacer/placement/globalPlacement/SllQuantityOptimizer.cc": "8e29705a7803bb458f8973861f43113ee74955b2586bfede36f7161a9fbd14b4",
+    "src/lib/HiFPlacer/placement/globalPlacement/SllQuantityOptimizer.h": "4adcb5b1c1d87df8e6371d8af3db29c74e25e88e536520275c55f27eeb042855",
+    "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc": "350ad408773093831b8341e35d194f13874166c7f2227fc37860fb95a72eb6e9",
+    "src/lib/HiFPlacer/placement/globalPlacement/SllQuantityModel.h": "d61389c46b7ac483a3b21e87f2ca445be91e6ddb5271e896dba1f7478fe711db",
+    "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.h": "0886fe0ca3302229d94d239658bfa8661292a710053bcccd523694424fadd935",
+    "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc": "2dffe2dc1f3cd8c1d0c3843dd4ac7d3269c4931991e75b2b06a57e64f3bb8465"
+  },
+  "unchanged_imports_sha256": {
+    "docs/research/sll-quantity-qp-implementation-20261013.md": "caa1bf5d2968fe66e3e41247cc226e7d0b24fa89df14b6b2f7034d2fc89e90be",
+    "docs/research/sll-quantity-qp-validation-20261013.md": "57c0a99b96b8de3a555dd198173e6b65954650bdddf6898b303827267a7be3f0",
+    "configs/experiments/sll-release-control-final.json": "0784a6574d45a4b8bc590cb795ffed9fc952411de726b0ecd84e0751cd1ce683",
+    "configs/experiments/sll-quantity-100-final.json": "fdad0ac9a0c86446e5c22cd66a9f12fc6ab15f8febcd3499762db052d281989a",
+    "configs/experiments/sll-disabled-final.json": "1322d917b44efa14dbd8908a3c5ec206e82bfb0d1520b199b6e7fed5b828c238",
+    "configs/experiments/sll-quantity-baseline.json": "d873e6bc94762a57692d7c534491a2e25919ad4b3755758c636b25b097b879a6",
+    "scripts/diagnostics/sll_quantity/analyze_results.py": "0904086d4ca64ad561f5fadd6df2d19bad626dd3eaa741fd9a99c914cffec7b5",
+    "scripts/diagnostics/sll_quantity/prepare_experiment.py": "051f2cf6e15876fba66d32e281c12e072d8ae5e97b5e42fae3e824e65cff2996",
+    "scripts/diagnostics/sll_quantity/integrate_qp.py": "dd058e190ae079d2e4379445adee00251a87010f44f7d659a8246d7da8582bf2",
+    "scripts/diagnostics/sll_quantity/run_case.py": "bab9ae5c65524c8153344fc7388e6bc3916ab451d273cf1c1224ae861fb69259",
+    "scripts/diagnostics/sll_quantity/launch_validation.py": "855a8da33074b6f7829c5137515bb17f63b99e2dbfda47e2205fbe9214734728",
+    "scripts/diagnostics/sll_quantity/package_evidence.py": "9eb919a137dac3d28208f25a691db448ecf97301219bd5c54b1565f279cc39a2",
+    "scripts/diagnostics/sll_quantity/finalize_hooks.py": "845b50f056a63d6102568b2e92591248695e583c5f3783cf842c7159a6940dea",
+    "src/tests/check_sll_quantity.cc": "d747e4960220546bcb06999f3d31b4c58f1a280e0a7fa6032236164164620198",
+    "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc": "d1214e2e8c34da70338b215f17f704f1de1c374f648ecc594ef40d49fe521a2b",
+    "src/lib/HiFPlacer/placement/placementInfo/SllClipTrace.h": "036406d4909d4d9a2a91a7ce6ea07b4d7ec6e51a5b5d872a77278f27b0d6f186",
+    "src/lib/HiFPlacer/placement/globalPlacement/SllQuantityOptimizer.cc": "8e29705a7803bb458f8973861f43113ee74955b2586bfede36f7161a9fbd14b4",
+    "src/lib/HiFPlacer/placement/globalPlacement/SllQuantityOptimizer.h": "4adcb5b1c1d87df8e6371d8af3db29c74e25e88e536520275c55f27eeb042855",
+    "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc": "350ad408773093831b8341e35d194f13874166c7f2227fc37860fb95a72eb6e9",
+    "src/lib/HiFPlacer/placement/globalPlacement/SllQuantityModel.h": "d61389c46b7ac483a3b21e87f2ca445be91e6ddb5271e896dba1f7478fe711db",
+    "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.h": "0886fe0ca3302229d94d239658bfa8661292a710053bcccd523694424fadd935",
+    "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc": "2dffe2dc1f3cd8c1d0c3843dd4ac7d3269c4931991e75b2b06a57e64f3bb8465"
+  },
+  "working_tree_addition": {
+    "path": "scripts/diagnostics/sll_quantity/launch_backend_comparison.py",
+    "sha256": "500e5c4f88c16c1c7489f1f1ce23020887a75c15f96fff270ba5c5addee1e393"
+  },
+  "notes": [
+    "Nine SLL source files copied byte-for-byte from validation commit; CMake adds checkSllQuantity target.",
+    "Retain published hierarchical-boundary test fix; all other baseline source files unchanged.",
+    "Historical absolute-path experiment configs and scripts are provenance, not the portable run entry.",
+    "No new DCP, runtime input, binary, build tree, cache, license or execution log included.",
+    "The legacy merged overlay is not an SLL implementation."
+  ]
+}
