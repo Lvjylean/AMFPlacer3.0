@@ -39,6 +39,7 @@ ClusterPlacer::ClusterPlacer(PlacementInfo *placementInfo, std::map<std::string,
         jobs = 1;
     }
 
+    dfxPartitionFloorplan=placementInfo->getHardRegions().partitionFloorplan;
     clockRegionXNum = std::stoi(JSONCfg["clockRegionXNum"]);
     clockRegionYNum = std::stoi(JSONCfg["clockRegionYNum"]);
 
@@ -56,6 +57,8 @@ void ClusterPlacer::ClusterPlacement()
 {
     AMF_PROFILE_FUNCTION("clustering");
     print_status("Cluster Placement Start.");
+    if(dfxPartitionFloorplan && (randomInitialPlacement||ExternalFloorplan::enabled(JSONCfg)))
+        throw std::runtime_error("DFX partition floorplan cannot be bypassed by random/external initialization");
 
     if (ExternalFloorplan::enabled(JSONCfg))
     {
@@ -134,10 +137,18 @@ void ClusterPlacer::hypergraphPartitioning()
         eachClusterBRAMNum = std::stoi(JSONCfg["clockRegionBRAMNum"]);
     }
 
+    if(dfxPartitionFloorplan) {
+        size_t staticCells=0;
+        for(auto cell:placementInfo->getCells())
+            if(!cell->isVirtualCell()&&placementInfo->hardRegionForCell(cell)==0)++staticCells;
+        minClusterCellNum=std::max(1,std::min(int(staticCells*.25),avgClusterSizeRequirement));
+    }
     // FFPartitioning();
 
     clockBasedPartitioning(minClusterCellNum, eachClusterDSPNum, eachClusterBRAMNum);
-    if (isClustersToLarges() && clusters.size() < 0.6 * gridW * gridH)
+    const size_t partitionedCount=dfxPartitionFloorplan?
+        std::count(clusterRegions.begin(),clusterRegions.end(),0):clusters.size();
+    if (isClustersToLarges() && partitionedCount < 0.6 * gridW * gridH)
     {
         maxMinCutRate = 0.1;
         clockBasedPartitioning(minClusterCellNum, eachClusterDSPNum, eachClusterBRAMNum);
@@ -510,8 +521,14 @@ void ClusterPlacer::userDefinedClusterBasedPartitioning(int minClusterCellNum, i
 void ClusterPlacer::clockBasedPartitioning(int minClusterCellNum, int eachClusterDSPNum, int eachClusterBRAMNum)
 {
     AMF_PROFILE_FUNCTION("clustering");
+    if(dfxPartitionFloorplan) {
+        for(auto n:clusterNets)delete n;
+        for(auto u:clusterUnits)delete u;
+    }
     resetClusterInfo();
 
+    if(dfxPartitionFloorplan)createProtectedRegionClusterUnits();
+    const int protectedCount=dfxPartitionFloorplan?placementInfo->getHardRegions().regions.size()-1:0;
     createClockBasedClusterUnits();
     print_info("ClusterPlacer: There are " +
                std::to_string(placementInfo->getDesignInfo()->getClocksInDesign().size()) +
@@ -534,8 +551,15 @@ void ClusterPlacer::clockBasedPartitioning(int minClusterCellNum, int eachCluste
         new GraphPartitioner<std::vector<PlacementInfo::ClusterUnit *>, std::vector<PlacementInfo::ClusterNet *>>(
             clusterUnits, clusterNets, minClusterCellNum, jobs, verbose);
     clockBasedGraphPartitioner->setMaxCutRate(maxMinCutRate);
-    clockBasedGraphPartitioner->solve(eachClusterDSPNum, eachClusterBRAMNum);
+    if(dfxPartitionFloorplan) {
+        std::vector<int> staticNodes;
+        for(size_t i=protectedCount;i<clusterUnits.size();++i)
+            if(!clusterUnits[i]->getUnits().empty())staticNodes.push_back(i);
+        clockBasedGraphPartitioner->solveSubset(staticNodes,eachClusterDSPNum,eachClusterBRAMNum);
+    }else clockBasedGraphPartitioner->solve(eachClusterDSPNum, eachClusterBRAMNum);
     clusters = clockBasedGraphPartitioner->getClustersPUIdSets();
+    clusterRegions.assign(clusters.size(),0);
+    for(int i=0;i<protectedCount;++i){clusters.push_back({i});clusterRegions.push_back(i+1);}
     delete clockBasedGraphPartitioner;
 
     placementUnit2ClusterId.clear();
@@ -562,6 +586,8 @@ void ClusterPlacer::clockBasedPartitioning(int minClusterCellNum, int eachCluste
         newClusters.push_back(curCluster);
         clusterId++;
     }
+    if(dfxPartitionFloorplan && PUCnt!=placementUnit2ClusterId.size())
+        throw std::runtime_error("DFX partition lost placement-unit coverage");
     assert(PUCnt == placementUnit2ClusterId.size());
     clusters = newClusters;
 
@@ -787,6 +813,14 @@ bool ClusterPlacer::isClustersToLarges()
 
     print_info(infoStr);
 
+    if(dfxPartitionFloorplan) {
+        size_t staticWeight=0,staticClusters=0;
+        for(size_t c=0;c<clusters.size();++c)if(clusterRegions[c]==0) {
+            ++staticClusters;
+            for(int id:clusters[c])staticWeight+=PUs[id]->getWeight();
+        }
+        return staticClusters&&double(staticWeight)/staticClusters>0.75*avgClusterSizeRequirement;
+    }
     if ((totalCellsinCluster / clusters.size()) > 0.75 * avgClusterSizeRequirement)
     {
         print_warning("Average cluster size is too large = " + std::to_string((totalCellsinCluster / clusters.size())));
@@ -955,6 +989,13 @@ void ClusterPlacer::placeClusters()
     const float saY2xRatio = SAPlacer::configuredY2XRatio(JSONCfg, y2xRatio);
     print_status("SA effective y2xRatio = " + std::to_string(saY2xRatio) +
                  (JSONCfg.count("Simulated Annealing y2xRatio") ? " (explicit)" : " (legacy y2xRatio * 0.8)"));
+    if(dfxPartitionFloorplan) {
+        placeDFXClusters(gridH,gridW,SAIterNum,restartNum,saY2xRatio);
+        placementInfo->updateElementBinGrid();
+        writeDFXPartitionAudit();
+        print_status("DFX partition/floorplan completed; RP representatives fixed, internal cells remain movable.");
+        return;
+    }
     saPlacer = new SAPlacer("ClusterSA", clusterAdjMat, enhancedClusterCluster, clusterCLBCellWeights, cluster2FixedUnitMat, fixedX, fixedY,
                             gridH, gridW, deviceH, deviceW, connectionToFixedFactor, saY2xRatio, SAIterNum, jobs,
                             restartNum, verbose);
@@ -1086,4 +1127,97 @@ void ClusterPlacer::drawClusters()
             }
         }
     // paintClusterNodeLine(cluster2FP_XY, lines, cluster2FixedUnitMat, fixedX, fixedY);
+}
+
+void ClusterPlacer::createProtectedRegionClusterUnits()
+{
+    const auto &regions=placementInfo->getHardRegions().regions;
+    for(size_t r=1;r<regions.size();++r)
+        clusterUnits.push_back(new PlacementInfo::ClusterUnit(clusterUnits.size()));
+    for(auto pu:placementInfo->getPlacementUnits()) {
+        int r=placementInfo->hardRegionForPU(pu);
+        if(r==0)continue;
+        clusterUnits.at(r-1)->addPlacementUnit(pu);
+        placementUnitId2ClusterUnitId.at(pu->getId())=r-1;
+    }
+    for(size_t r=1;r<regions.size();++r)
+        if(clusterUnits[r-1]->getUnits().empty())
+            throw std::runtime_error("Empty protected RP: "+regions[r].name);
+}
+
+void ClusterPlacer::placeDFXClusters(int gridH,int gridW,int iterations,int restarts,float ratio)
+{
+    const auto &hard=placementInfo->getHardRegions();
+    const float x0=placementInfo->getGlobalMinX(),y0=placementInfo->getGlobalMinY();
+    const float w=placementInfo->getGlobalMaxX()-x0,h=placementInfo->getGlobalMaxY()-y0;
+    if(gridH<=0||gridW<=0||iterations<=0||restarts<=0||jobs<=0||
+       !std::isfinite(connectionToFixedFactor)||connectionToFixedFactor<=0)
+        throw std::runtime_error("Invalid DFX floorplan SA configuration");
+    std::vector<int> movable,pinned;
+    cluster2FP_XY.resize(clusters.size());cluster2XY.resize(clusters.size());
+    for(size_t i=0;i<clusters.size();++i) {
+        if(clusterRegions.at(i)==0)movable.push_back(i);
+        else {
+            pinned.push_back(i);
+            const auto &b=hard.regions.at(clusterRegions[i]).box;
+            cluster2FP_XY[i]={(b.lx+b.hx)/2,(b.ly+b.hy)/2};
+            cluster2XY[i]={std::min(gridW-1,std::max(0,int((cluster2FP_XY[i].first-x0)*gridW/w))),
+                           std::min(gridH-1,std::max(0,int((cluster2FP_XY[i].second-y0)*gridH/h)))};
+        }
+    }
+    // Retain RP-to-static adjacency as fixed-terminal costs of equal weight.
+    // RP-to-RP cost is constant and does not affect the static SA optimum.
+    std::vector<std::vector<float>> adj(movable.size(),std::vector<float>(movable.size()));
+    std::vector<std::vector<float>> terminals;std::vector<float> weights,tx=fixedX,ty=fixedY;
+    for(int rp:pinned){tx.push_back(cluster2FP_XY[rp].first);ty.push_back(cluster2FP_XY[rp].second);}
+    for(size_t i=0;i<movable.size();++i) {
+        int original=movable[i];weights.push_back(clusterCLBCellWeights[original]);
+        terminals.push_back(cluster2FixedUnitMat[original]);
+        for(int rp:pinned)terminals.back().push_back(clusterAdjMat[original][rp]/connectionToFixedFactor);
+        for(size_t j=0;j<movable.size();++j)adj[i][j]=clusterAdjMat[original][movable[j]];
+    }
+    std::vector<std::pair<float,float>> points;std::vector<bool> allowed;
+    for(int gy=0;gy<gridH;++gy)for(int gx=0;gx<gridW;++gx) {
+        float x=x0+(gx+.5f)*w/gridW,y=y0+(gy+.5f)*h/gridH,px=x,py=y;
+        hard.project(0,0,0,0,0,px,py);
+        points.emplace_back(x,y);allowed.push_back(std::fabs(px-x)<1e-5f&&std::fabs(py-y)<1e-5f);
+    }
+    if(!movable.empty()) {
+        std::vector<std::vector<int>> enhanced;
+        SAPlacer placer("DFXStaticClusterSA",adj,enhanced,weights,terminals,tx,ty,
+                        gridH,gridW,h,w,connectionToFixedFactor,ratio,iterations,jobs,restarts,verbose);
+        placer.setPhysicalGrid(points,allowed);
+        placer.solve();
+        const auto &xy=placer.getCluster2XY();
+        for(size_t i=0;i<movable.size();++i) {
+            cluster2XY[movable[i]]=xy[i];
+            cluster2FP_XY[movable[i]]=points.at(xy[i].second*gridW+xy[i].first);
+        }
+    }
+    for(auto pu:placementInfo->getPlacementUnits())if(!pu->isFixed()) {
+        auto xy=cluster2FP_XY.at(placementUnit2ClusterId.at(pu->getId()));
+        placementInfo->legalizeXYInArea(pu,xy.first,xy.second);
+        pu->setAnchorLocation(xy.first,xy.second);
+    }
+}
+
+void ClusterPlacer::writeDFXPartitionAudit()
+{
+    const auto &hard=placementInfo->getHardRegions();
+    std::vector<size_t> rpClusters(hard.regions.size(),0);
+    std::ofstream out(JSONCfg.at("DFX partition audit file"));
+    out<<"cluster\tregion\tinstance\tplacement_units\trepresentative_x\trepresentative_y\texternal_weight\n";
+    for(size_t c=0;c<clusters.size();++c) {
+        int r=clusterRegions.at(c);++rpClusters.at(r);
+        for(int id:clusters[c])
+            if(placementInfo->hardRegionForPU(placementInfo->getPlacementUnits().at(id))!=r)
+                throw std::runtime_error("DFX partition mixed regions");
+        float external=0;
+        for(size_t j=0;j<clusters.size();++j)if(j!=c)external+=clusterAdjMat[c][j];
+        out<<c<<'\t'<<hard.regions[r].name<<'\t'<<hard.regions[r].prefix<<'\t'<<clusters[c].size()
+           <<'\t'<<cluster2FP_XY[c].first<<'\t'<<cluster2FP_XY[c].second<<'\t'<<external<<'\n';
+    }
+    for(size_t r=1;r<rpClusters.size();++r)
+        if(rpClusters[r]!=1)throw std::runtime_error("Protected RP was split or lost");
+    out.close();if(!out)throw std::runtime_error("Cannot write DFX partition audit");
 }

@@ -55,6 +55,11 @@ def verify_cache(native, job, cfg):
         raise ValueError('Unknown native DFX edge policy')
     if policy != 'off' and c.get('resource_policy', {}).get('version') != policy:
         raise ValueError('Edge policy requires a resource-certified child cache')
+    pin_policy=job.get('native_pin_access_policy','off')
+    if pin_policy not in ('off','fixed-static-ff-q-v1'):
+        raise ValueError('Unknown native pin-access policy')
+    if pin_policy!='off' and c.get('pin_access_policy',{}).get('version')!=pin_policy:
+        raise ValueError('Pin filtering requires certified access cache')
     return c
 
 

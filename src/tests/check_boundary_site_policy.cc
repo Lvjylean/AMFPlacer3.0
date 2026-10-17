@@ -70,5 +70,24 @@ int main(){try {
  cfg=inc;cfg["Native workspace"]=(p/"off").string();cache.compose("a",dynamic,ports,cfg);IncrementalContext off(cfg);
  ck(off.siteAllowed("SLICE_X1Y0")&&off.siteAllowed("DSP48E2_X0Y3"),"certified cache margin defaults off");
  ck(!off.siteAllowed("SLICE_X0Y0"),"actual prohibition remains a hard legality constraint");
+ // Immutable complete-access extension, shell binding, feature-off and corruption.
+ Config pc{{"identity","fixture"},{"device","U250"},{"clock_period","20"},
+ {"static_shell_sha256",std::string(64,'3')},{"policy","fixed-static-ff-q-v1"}};
+ for(const auto &key:{"bel_pin_access","site_pin_access","external_access","coverage","provenance"}) {
+   text(p/key,std::string("complete fixture ")+key);
+   pc[std::string(key)+"_file"]=(p/key).string();pc[std::string(key)+"_sha256"]=std::string(64,'6');
+ }
+ text(p/"ff-mask","module\tsite\tbel\na\tSLICE_X1Y2\tCFF2\n");pc["ff_q_mask_file"]=(p/"ff-mask").string();
+ auto badpc=pc;badpc["static_shell_sha256"]=std::string(64,'8');reject([&]{auto x=cache;x.certifyPinAccess(badpc);});
+ auto oldChild=read(p/"child.bin");cache.certifyPinAccess(pc);cache.write((p/"pin.bin").string());
+ cache=StaticDesignCache::load((p/"pin.bin").string());
+ ck(read(p/"child.bin")==oldChild,"pin extension does not mutate parent");
+ ck(read(p/"pin.bin").substr(0,11)=="AMFSTATIC4\n","unaware old consumer rejects pin cache");
+ ck(cache.identity().at("pin_archive/bel_pin_access")==read(p/"bel_pin_access"),"complete classification retained byte-exact");
+ cfg=inc;cfg["Native workspace"]=(p/"pin-off").string();cache.compose("a",dynamic,ports,cfg);
+ ck(!cfg.count("DFX cached FF Q mask"),"pin policy off keeps legacy path");
+ cfg=inc;cfg["Native pin access policy"]="fixed-static-ff-q-v1";cfg["Native workspace"]=(p/"pin-on").string();
+ cache.compose("a",dynamic,ports,cfg);ck(cfg.at("DFX cached FF Q mask")=="SLICE_X1Y2\tCFF2\n","new module receives geometry-based mask");
+ reject([&]{cache.certifyPinAccess(pc);});
  std::cout<<"boundary site policy: "<<checks<<" checks passed\n";return 0;
 }catch(const std::exception&e){std::cerr<<e.what()<<'\n';return 1;}}

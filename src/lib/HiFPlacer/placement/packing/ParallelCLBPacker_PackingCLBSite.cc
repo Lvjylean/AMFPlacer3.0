@@ -574,7 +574,7 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCarrySite(int FFContro
                                {2, 0, 1, 3}, {2, 0, 3, 1}, {2, 1, 0, 3}, {2, 1, 3, 0}, {2, 3, 0, 1}, {2, 3, 1, 0},
                                {3, 0, 1, 2}, {3, 0, 2, 1}, {3, 1, 0, 2}, {3, 1, 2, 0}, {3, 2, 0, 1}, {3, 2, 1, 0}};
 
-    slotMapping = SiteBELMapping();
+    slotMapping = SiteBELMapping(ffQBlockedMask);
     mappedCells.clear();
     mappedLUTs.clear();
     mappedFFs.clear();
@@ -1183,6 +1183,8 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCarrySite(int FFContro
         }
     }
 
+    if(ffQBlockedMask && !assignAccessibleFFSlots())return;
+
     auto &timingNodes = placementInfo->getTimingInfo()->getSimplePlacementTimingInfo();
     float clockPeriod = placementInfo->getTimingInfo()->getSimplePlacementTimingGraph()->getClockPeriod();
     float directConnectCnt = 0;
@@ -1225,7 +1227,7 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int 
                                {2, 0, 1, 3}, {2, 0, 3, 1}, {2, 1, 0, 3}, {2, 1, 3, 0}, {2, 3, 0, 1}, {2, 3, 1, 0},
                                {3, 0, 1, 2}, {3, 0, 2, 1}, {3, 1, 0, 2}, {3, 1, 2, 0}, {3, 2, 0, 1}, {3, 2, 1, 0}};
 
-    slotMapping = SiteBELMapping();
+    slotMapping = SiteBELMapping(ffQBlockedMask);
     mappedCells.clear();
     mappedLUTs.clear();
     mappedFFs.clear();
@@ -2053,6 +2055,8 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int 
         }
     }
 
+    if(ffQBlockedMask && !assignAccessibleFFSlots())return;
+
     auto &timingNodes = placementInfo->getTimingInfo()->getSimplePlacementTimingInfo();
     float clockPeriod = placementInfo->getTimingInfo()->getSimplePlacementTimingGraph()->getClockPeriod();
     float directConnectCnt = 0;
@@ -2405,7 +2409,7 @@ void ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite(int FFC
                                {2, 0, 1, 3}, {2, 0, 3, 1}, {2, 1, 0, 3}, {2, 1, 3, 0}, {2, 3, 0, 1}, {2, 3, 1, 0},
                                {3, 0, 1, 2}, {3, 0, 2, 1}, {3, 1, 0, 2}, {3, 1, 2, 0}, {3, 2, 0, 1}, {3, 2, 1, 0}};
 
-    slotMapping = SiteBELMapping();
+    slotMapping = SiteBELMapping(ffQBlockedMask);
     mappedCells.clear();
     mappedLUTs.clear();
     mappedFFs.clear();
@@ -3182,6 +3186,8 @@ void ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite(int FFC
         }
     }
 
+    if(ffQBlockedMask && !assignAccessibleFFSlots())return;
+
     auto &timingNodes = placementInfo->getTimingInfo()->getSimplePlacementTimingInfo();
     float clockPeriod = placementInfo->getTimingInfo()->getSimplePlacementTimingGraph()->getClockPeriod();
     float directConnectCnt = 0;
@@ -3481,4 +3487,32 @@ void ParallelCLBPacker::PackingCLBSite::mapCarryRelatedCellsToSlots(PlacementInf
                 }
             }
         }
+}
+// Sparse masks affect only certified sites. Ordinary packing takes its original
+// path. Keep each FF in its physical clock/reset/CE bank; do not alter macros.
+bool ParallelCLBPacker::PackingCLBSite::assignAccessibleFFSlots()
+{
+    AMF_PROFILE_SCOPE("native_pin_packing_assignment", "choose accessible FF BELs before candidate commit");
+    auto candidate=slotMapping;
+    for(int i=0;i<2;++i)for(int j=0;j<2;++j)for(int k=0;k<4;++k) {
+        auto ff=candidate.FFs[i][j][k];
+        if(!ff||ff->isVirtualCell()||!(ffQBlockedMask&FfQPinMask::bit(i,j,k)))continue;
+        if(isCarryMacro(ff)||isMuxMacro(ff))return false;
+        int target=-1;
+        for(int q=0;q<4;++q)
+            if(!candidate.FFs[i][j][q] && !(ffQBlockedMask&FfQPinMask::bit(i,j,q))) {target=q;break;}
+        if(target<0)return false;
+        candidate.FFs[i][j][target]=ff;candidate.FFs[i][j][k]=nullptr;
+    }
+    slotMapping=candidate;
+    return true;
+}
+void ParallelCLBPacker::PackingCLBSite::verifyFfQAccess() const
+{
+    if(!ffQBlockedMask)return;
+    for(int i=0;i<2;++i)for(int j=0;j<2;++j)for(int k=0;k<4;++k) {
+        auto ff=slotMapping.FFs[i][j][k];
+        if(ff&&!ff->isVirtualCell()&&(ffQBlockedMask&FfQPinMask::bit(i,j,k)))
+            throw std::runtime_error("FF Q access rejected at packing commit: "+CLBSite->getName()+"/"+ff->getName());
+    }
 }

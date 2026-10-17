@@ -73,6 +73,9 @@ class SAPlacer
     {
     }
 
+    // Optional physical coordinates and legal bins. Ordinary callers retain
+    // their exact historical objective, initialization and move generator.
+    void setPhysicalGrid(const std::vector<std::pair<float,float>> &points,const std::vector<bool> &allowed);
     void solve();
 
     inline std::vector<std::pair<int, int>> &getCluster2XY()
@@ -91,6 +94,10 @@ class SAPlacer
                                                const std::vector<std::pair<int, int>> &cluster2XY);
 
   private:
+    std::vector<std::pair<float,float>> physicalGrid;
+    std::vector<int> allowedBins;
+    double evaluatePhysicalGrid(const std::vector<std::vector<std::vector<int>>> &grid,
+                                const std::vector<std::pair<int,int>> &xy) const;
     std::string placerName;
 
     std::vector<std::vector<float>> &clusterAdjMat;

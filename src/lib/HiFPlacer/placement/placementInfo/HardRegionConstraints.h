@@ -1,6 +1,7 @@
 #ifndef AMF_HARD_REGION_CONSTRAINTS_H
 #define AMF_HARD_REGION_CONSTRAINTS_H
 #include "IncrementalContext.h"
+#include "../../designInfo/native/BoundarySitePolicy.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -17,12 +18,20 @@ class HardRegionConstraints
         void add(float x,float y) {lx=std::min(lx,x);hx=std::max(hx,x);ly=std::min(ly,y);hy=std::max(hy,y);}
     };
     struct Region {std::string name, prefix; Box box; size_t modeledSites=0;};
-    bool enabled=false;
+    bool enabled=false, partitionFloorplan=false;
+    std::set<std::string> boundaryBlocked;
+    std::map<std::string,std::set<std::string>> regionClockRegions;
     std::vector<Region> regions;
     std::unordered_map<std::string,int> siteOwners;
 
     explicit HardRegionConstraints(const std::map<std::string,std::string> &cfg) {
+        auto feature=cfg.find("DFX partition floorplan");
+        if(feature!=cfg.end() && feature->second!="true" && feature->second!="false")
+            throw std::runtime_error("DFX partition floorplan must be true or false");
+        partitionFloorplan=feature!=cfg.end()&&feature->second=="true";
         auto mode=cfg.find("DFX placement mode");
+        if(partitionFloorplan && (mode==cfg.end()||mode->second!="full"))
+            throw std::runtime_error("DFX partition floorplan requires full hard-region mode");
         if(mode==cfg.end()) return;
         if(mode->second!="full" && mode->second!="incremental") throw std::runtime_error("Unknown DFX placement mode");
         if(mode->second!="full") return;
@@ -49,6 +58,26 @@ class HardRegionConstraints
             if(f.size()!=2||!ids.count(f[0])||f[1].empty()||!siteOwners.emplace(f[1],ids.at(f[0])).second)
                 throw std::runtime_error("Unknown region or duplicate/overlapping site in DFX mask: "+line);
         }
+        if(partitionFloorplan) {
+            std::map<std::string,std::set<std::string>> allowed;
+            for(size_t i=1;i<regions.size();++i)allowed[regions[i].name];
+            for(const auto &entry:siteOwners)if(entry.second>0)allowed[regions[entry.second].name].insert(entry.first);
+            const auto geometry=IncrementalContext::required(cfg,"DFX resource geometry file");
+            const auto policy=amf_native::BoundarySitePolicy::derive(
+                IncrementalContext::required(cfg,"DFX resource inventory file"),geometry,allowed,"interior-prohibit");
+            regionClockRegions=amf_native::BoundarySitePolicy::clockRegions(geometry,allowed);
+            for(const auto &group:policy.prohibited)boundaryBlocked.insert(group.second.begin(),group.second.end());
+            for(const auto &group:policy.margin)boundaryBlocked.insert(group.second.begin(),group.second.end());
+            std::ofstream audit(IncrementalContext::required(cfg,"DFX boundary audit file"));
+            audit<<policy.audit;audit.close();
+            if(!audit)throw std::runtime_error("Cannot write full DFX boundary audit");
+            std::ofstream mask(IncrementalContext::required(cfg,"DFX effective sites file"));
+            mask<<"region\tsite\n";
+            std::map<std::string,int> ordered(siteOwners.begin(),siteOwners.end());
+            for(const auto &entry:ordered)if(!boundaryBlocked.count(entry.first))
+                mask<<regions[entry.second].name<<'\t'<<entry.first<<'\n';
+            mask.close();if(!mask)throw std::runtime_error("Cannot write effective DFX placement mask");
+        }
     }
     static bool under(const std::string &name,const std::string &prefix) {
         return name==prefix || name.compare(0,prefix.size()+1,prefix+"/")==0;
@@ -60,7 +89,7 @@ class HardRegionConstraints
     }
     bool allows(int region,const std::string &site) const {
         if(!enabled)return true;
-        auto it=siteOwners.find(site);return it!=siteOwners.end()&&it->second==region;
+        auto it=siteOwners.find(site);return it!=siteOwners.end()&&it->second==region&&!boundaryBlocked.count(site);
     }
     void addModeledSite(const std::string &name,float x,float y) {
         auto it=siteOwners.find(name);if(it==siteOwners.end())return;

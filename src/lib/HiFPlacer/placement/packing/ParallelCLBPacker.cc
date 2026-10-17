@@ -5253,6 +5253,9 @@ void ParallelCLBPacker::dumpCLBPlacementTcl(std::ofstream &outfileTcl, bool pack
                     {
                         if (slotMapping.FFs[i][j][k])
                         {
+                            if(!slotMapping.FFs[i][j][k]->isVirtualCell() &&
+                               (placementInfo->getFfQBlockedMask(CLBSite->getName()) & FfQPinMask::bit(i,j,k)))
+                                throw std::runtime_error("FF Q access violation at export: "+CLBSite->getName());
                             if (slotMapping.FFs[i][j][k]->isVirtualCell())
                                 continue;
                             assert(slotMapping.FFs[i][j][k]->isFF());

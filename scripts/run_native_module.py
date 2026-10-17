@@ -19,12 +19,17 @@ def _run(config,output,binary,started_epoch):
         capability=json.loads(subprocess.check_output([str(binary),'--capabilities'],text=True))
         if capability.get('native_dfx_edge_policy_schema')!=1:
             raise ValueError('Binary cannot enforce the requested native edge policy')
+    if job.get('native_pin_access_policy','off')!='off':
+        capability=json.loads(subprocess.check_output([str(binary),'--capabilities'],text=True))
+        if capability.get('native_pin_cache_packing_schema')!=1:
+            raise ValueError('Binary cannot enforce cached pin-access masks')
     optimization=verify_optimized(job['rm_optimization_manifest'],job)
     if Path(optimization['output']).resolve()!=Path(job['rm_checkpoint']).resolve():raise ValueError('RM checkpoint is not the certified OOC opt output')
     cfg.update({'ClockPeriod':str(job['clock_period_ns']),
         'Native static cache read':str(cache),'Native static identity':c['identity'],
         'Native static shell sha256':c['static_shell_sha256'],'Native active module':job['module_id'],
         'Native DFX edge policy':job.get('native_dfx_edge_policy','off'),
+        'Native pin access policy':job.get('native_pin_access_policy','off'),
         'Native module netlist':str(out/'ooc/netlist.txt'),'Native module ports file':str(out/'ooc/ports.tsv'),
         'Native workspace':str(out/'native'),'SRL control metadata file':str(out/'ooc/srl_controls.tsv'),
         'DSP registered outputs file':str(out/'ooc/dsp_registered_outputs.txt'),

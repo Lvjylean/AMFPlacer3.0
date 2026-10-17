@@ -40,7 +40,8 @@ struct OutputBuffer {
 // Native database: only static fabric cells are persisted. RP ownership is
 // assigned during the ordinary full-input parse, before placement. Interfaces
 // are named port bits, never cross-version array indices or old RM cell names.
-// Vivado owns physical routes; this cache contains connectivity and placement.
+// Vivado owns physical routes. Optional immutable pin-access evidence is
+// bound to the sealed static shell; only certified FF Q masks drive packing.
 class StaticDesignCache {
 public:
     explicit StaticDesignCache(const Config &cfg);
@@ -67,6 +68,7 @@ public:
     // Adds final resource legality to a NEW sealed cache. Never reseal positions
     // or edit a cache on disk; caller must publish an immutable child artifact.
     void certifyResources(const Config &contract);
+    void certifyPinAccess(const Config &contract);
     PreparedInput compose(const std::string &module, std::vector<Cell> dynamic,
                           const std::vector<Port> &ports, Config &cfg) const;
     const std::vector<Cell> &staticCells() const { return cells; }

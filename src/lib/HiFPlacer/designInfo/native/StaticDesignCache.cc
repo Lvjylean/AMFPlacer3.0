@@ -1,5 +1,6 @@
 #include "StaticDesignCache.h"
 #include "BoundarySitePolicy.h"
+#include "../../../utils/RuntimeProfiler.h"
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -229,9 +230,39 @@ void StaticDesignCache::write(const std::string &file) const {
     for(auto &c:cells){str(p,c.name);str(p,c.type);str(p,c.site);str(p,c.bel);str(p,c.srlMetadata);number(p,c.registeredDSP);number(p,c.pins.size());
         for(auto &q:c.pins){str(p,q.name);str(p,q.ref);str(p,q.direction);str(p,q.alias);str(p,q.driver);}}
     auto data=p.str();need(data.size()<32ULL*1024*1024*1024,"database too large");
-    std::ostringstream out(std::ios::out|std::ios::binary);out.write(metadata.count("dfx_resource_policy")?"AMFSTATIC3\n":"AMFSTATIC2\n",11);number(out,data.size());
+    std::ostringstream out(std::ios::out|std::ios::binary);out.write(metadata.count("pin_access_policy")?"AMFSTATIC4\n":(metadata.count("dfx_resource_policy")?"AMFSTATIC3\n":"AMFSTATIC2\n"),11);number(out,data.size());
     number(out,checksum(data));out<<data;
     checkedText(file,out.str());
+}
+void StaticDesignCache::certifyPinAccess(const Config &contract) {
+    AMF_PROFILE_SCOPE("native_pin_cache_certify", "store complete access evidence and sparse FF Q masks");
+    need(sealed&&metadata.count("dfx_resource_policy"),"pin access requires resource-certified sealed cache");
+    need(!metadata.count("pin_access_policy"),"pin access already certified; immutable child required");
+    for(const auto &k:{"identity","device","clock_period","static_shell_sha256"})
+        need(required(contract,k)==required(metadata,k),std::string("pin access mismatch ")+k);
+    need(required(contract,"policy")=="fixed-static-ff-q-v1","unknown pin-access policy");
+    Config extra;
+    for(const auto &key:{"bel_pin_access","site_pin_access","external_access","coverage","provenance"}) {
+        auto file=required(contract,std::string(key)+"_file");
+        auto hash=required(contract,std::string(key)+"_sha256");
+        need(std::regex_match(hash,std::regex("[0-9a-f]{64}")),"invalid pin evidence SHA256");
+        need(std::filesystem::file_size(file)<=64*1024*1024,"pin evidence exceeds bounded record size");
+        std::ifstream f(file,std::ios::binary);need(bool(f),"missing pin evidence "+file);
+        std::string bytes{std::istreambuf_iterator<char>(f),{}};
+        need(!bytes.empty(),"empty pin evidence");
+        extra[std::string("pin_archive/")+key]=std::move(bytes);
+        extra[std::string("pin_archive_sha256/")+key]=hash;
+    }
+    for(const auto &m:modules)extra["ff_q_mask/"+m.first]="";
+    std::set<std::string> seen;
+    for(const auto &row:table(required(contract,"ff_q_mask_file"),"module\tsite\tbel")) {
+        need(row.size()==3&&modules.count(row[0])&&modules.at(row[0]).sites.count(row[1]),"FF Q mask outside RP");
+        need(std::regex_match(row[2],std::regex("[A-H]FF2?")),"FF Q mask invalid BEL");
+        need(seen.insert(row[1]+"/"+row[2]).second,"duplicate FF Q mask");
+        extra["ff_q_mask/"+row[0]]+=row[1]+"\t"+row[2]+"\n";
+    }
+    extra["pin_access_policy"]=contract.at("policy");
+    metadata.insert(extra.begin(),extra.end());
 }
 void StaticDesignCache::writeContextAuditSpec(const std::string &file) const {
     std::unordered_map<std::string,std::size_t> pins;
@@ -265,11 +296,17 @@ void StaticDesignCache::writeContextAuditSpec(const std::string &file) const {
 StaticDesignCache StaticDesignCache::load(const std::string &file) {
     std::ifstream f(file,std::ios::binary);need(bool(f),"cannot open database");char magic[11];f.read(magic,11);
     const std::string version(magic,11);
-    need(f&&(version=="AMFSTATIC2\n"||version=="AMFSTATIC3\n"),"database version mismatch");auto n=number(f),crc=number(f);
+    need(f&&(version=="AMFSTATIC2\n"||version=="AMFSTATIC3\n"||version=="AMFSTATIC4\n"),"database version mismatch");auto n=number(f),crc=number(f);
     need(n<32ULL*1024*1024*1024&&std::filesystem::file_size(file)==n+27,"invalid database length");
     std::string data(n,'\0');f.read(&data[0],n);need(bool(f)&&crc==checksum(data),"database checksum mismatch");
     std::istringstream p(data,std::ios::in|std::ios::binary);StaticDesignCache db;auto state=number(p);need(state<=1,"cache seal state");db.sealed=state;
-    auto k=count(p);while(k--){auto key=str(p),value=str(p);need(db.metadata.emplace(key,value).second,"duplicate metadata");}
+    auto k=count(p);while(k--){auto key=str(p);std::string value;
+        if(starts(key,"pin_archive/")) {
+            AMF_PROFILE_SCOPE("native_pin_archive_decode", "load embedded complete classification bytes");
+            value=str(p);
+        }else value=str(p);
+        need(db.metadata.emplace(key,std::move(value)).second,"duplicate metadata");
+    }
     k=count(p);while(k--){Module m;m.id=str(p);m.instance=str(p);m.sites=loadSet(p);auto j=count(p);
         while(j--){Port q;q.module=m.id;q.name=str(p);q.direction=str(p);q.driver=str(p);auto clk=number(p);need(clk<=1,"clock boolean");q.clock=clk;
             q.partitionNode=str(p);q.x=std::stod(str(p));q.y=std::stod(str(p));need(std::isfinite(q.x)&&std::isfinite(q.y),"invalid endpoint coordinate");m.ports.push_back(q);}
@@ -277,7 +314,8 @@ StaticDesignCache StaticDesignCache::load(const std::string &file) {
     db.baselineBlocked=loadSet(p);k=count(p);while(k--){Cell c;c.name=str(p);c.type=str(p);c.site=str(p);c.bel=str(p);c.srlMetadata=str(p);auto reg=number(p);need(reg<=1,"DSP boolean");c.registeredDSP=reg;
         auto j=count(p);while(j--){Pin q;q.name=str(p);q.ref=str(p);q.direction=str(p);q.alias=str(p);q.driver=str(p);c.pins.push_back(std::move(q));}db.cells.push_back(std::move(c));}
     need(p.peek()==EOF,"trailing database data");
-    need((version=="AMFSTATIC3\n")==bool(db.metadata.count("dfx_resource_policy")),"resource policy/database version mismatch");
+    need((version!="AMFSTATIC2\n")==bool(db.metadata.count("dfx_resource_policy")),"resource policy/database version mismatch");
+    need((version=="AMFSTATIC4\n")==bool(db.metadata.count("pin_access_policy")),"pin-access/database version mismatch");
     db.captured=true;db.indexAndValidate();return db;
 }
 void StaticDesignCache::seal(const std::string &positions,const Config &contract,bool allowCorrection) {
@@ -388,6 +426,15 @@ PreparedInput StaticDesignCache::compose(const std::string &id,std::vector<Cell>
             need(modules.at(id).sites.count(name)&&edgeBlocked.insert(name).second,"invalid cached edge site");
         }
     }
+    const auto pinPolicy=cfg.count("Native pin access policy")?cfg.at("Native pin access policy"):"off";
+    need(pinPolicy=="off"||pinPolicy=="fixed-static-ff-q-v1","unknown Native pin access policy");
+    need(!cfg.count("DFX cached FF Q mask"),"FF Q masks must come from sealed cache");
+    if(pinPolicy!="off") {
+        AMF_PROFILE_SCOPE("native_pin_cache_load", "activate certified module FF Q mask");
+        need(metadata.count("pin_access_policy")&&metadata.at("pin_access_policy")==pinPolicy,
+             "pin filtering requires certified child cache");
+        cfg["DFX cached FF Q mask"]=metadata.at("ff_q_mask/"+id);
+    }
     auto newPorts=inputPorts;
     const auto outputBuffers=normalizeOutputInterfaces(id,dynamic,newPorts);
     const auto &m=modules.at(id);std::map<std::string,Port> np;
@@ -481,6 +528,7 @@ PreparedInput StaticDesignCache::compose(const std::string &id,std::vector<Cell>
         scope<<"dfx_edge_policy\t"<<policy<<"\nedge_blocked_sites\t"<<edgeBlocked.size()<<'\n';
         checkedText(out/"edge_policy_audit.tsv",metadata.at("dfx_resource_audit"));
     }
+    scope<<"pin_access_policy\t"<<pinPolicy<<'\n';
     scope<<"interface_output_buffers\t"<<outputBuffers.size()<<'\n';
     checkedText(out/"interface_buffers.tsv",buffers.str());
     checkedText(out/"static_placement.tsv",stat.str());checkedText(out/"cells.tsv",cellTable.str());

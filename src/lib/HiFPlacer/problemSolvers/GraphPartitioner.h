@@ -68,6 +68,7 @@ template <class NodeList, class NetList> class GraphPartitioner
      * @param eachClusterBRAMNum a constraint to limit the maximum of the BRAM in a cluster
      */
     void solve(int eachClusterDSPNum, int eachClusterBRAMNum);
+    void solveSubset(const std::vector<int> &nodeIds, int eachClusterDSPNum, int eachClusterBRAMNum);
 
     /**
      * @brief Get the clusters after partitioning (each is a vector containing ids for nodes inside the clusters)

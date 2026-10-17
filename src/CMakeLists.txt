@@ -249,9 +249,15 @@ target_link_libraries(checkLegacyComponents Utils pthread)
 
 add_executable(checkNativeStaticCache EXCLUDE_FROM_ALL tests/check_native_static_cache.cc
                lib/HiFPlacer/designInfo/native/StaticDesignCache.cc)
-target_link_libraries(checkNativeStaticCache ${ZLIB_LIBRARIES})
+target_link_libraries(checkNativeStaticCache Utils pthread ${ZLIB_LIBRARIES})
 add_executable(checkNativePlacementRepair EXCLUDE_FROM_ALL tests/check_native_placement_repair.cc)
 
 add_executable(checkBoundarySitePolicy EXCLUDE_FROM_ALL tests/check_boundary_site_policy.cc
     lib/HiFPlacer/designInfo/native/StaticDesignCache.cc)
-target_link_libraries(checkBoundarySitePolicy ${ZLIB_LIBRARIES})
+target_link_libraries(checkBoundarySitePolicy Utils pthread ${ZLIB_LIBRARIES})
+
+add_executable(checkDFXPartitionFloorplan EXCLUDE_FROM_ALL tests/check_dfx_partition_floorplan.cc)
+target_link_libraries(checkDFXPartitionFloorplan ProblemSolvers PlacementInfo DesignInfo DeviceInfo PlacementTiming Utils
+    ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkNativeFfPinRepair EXCLUDE_FROM_ALL tests/check_native_ff_pin_repair.cc)

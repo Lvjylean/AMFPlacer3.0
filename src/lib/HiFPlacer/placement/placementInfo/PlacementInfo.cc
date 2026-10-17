@@ -1,3 +1,4 @@
+#include "../packing/FfQPinMask.h"
 #include "../../../utils/RuntimeProfiler.h"
 #include <unordered_set>
 /**
@@ -54,8 +55,25 @@ PlacementInfo::PlacementInfo(DesignInfo *designInfo, DeviceInfo *deviceInfo,
     if (hardRegions.enabled) {
         for(auto site:deviceInfo->getSites()) hardRegions.addModeledSite(site->getName(),site->X(),site->Y());
         hardRegions.finishModel();
+        if(hardRegions.partitionFloorplan) {
+            // Geometric Pblock centers use complete clock regions, before any
+            // placement-only margin. Never shrink the routing footprint.
+            for(size_t i=1;i<hardRegions.regions.size();++i) {
+                auto &region=hardRegions.regions[i];HardRegionConstraints::Box box;
+                for(const auto &name:hardRegions.regionClockRegions.at(region.name)) {
+                    int x=-1,y=-1;
+                    if(sscanf(name.c_str(),"CLOCKREGION_X%dY%d",&x,&y)!=2||x<0||y<0||
+                       y>=deviceInfo->getClockRegionNumY()||x>=deviceInfo->getClockRegionNumX())
+                        throw std::runtime_error("Pblock clock region absent from device: "+name);
+                    auto cr=deviceInfo->getClockRegions().at(y).at(x);
+                    if(!cr)throw std::runtime_error("Missing modeled clock region: "+name);
+                    box.add(cr->getLeft(),cr->getBottom());box.add(cr->getRight(),cr->getTop());
+                }
+                region.box=box;
+            }
+        }
         for(auto site:deviceInfo->getSites())
-            if(!hardRegions.siteOwners.count(site->getName())) site->setOccupied();
+            if(!hardRegions.siteOwners.count(site->getName())||hardRegions.boundaryBlocked.count(site->getName())) site->setOccupied();
         std::vector<size_t> counts(hardRegions.regions.size(),0);
         for(auto cell:designInfo->getCells()) ++counts[hardRegionForCell(cell)];
         for(size_t i=0;i<counts.size();++i) {
@@ -77,6 +95,24 @@ PlacementInfo::PlacementInfo(DesignInfo *designInfo, DeviceInfo *deviceInfo,
             if (!byName.count(entry.second.site))
                 throw std::runtime_error("DFX static site absent from device model: " + entry.second.site);
         if (activeSites.empty()) throw std::runtime_error("DFX Pblock has no available modeled sites");
+        if(JSONCfg.count("DFX cached FF Q mask")) {
+            AMF_PROFILE_SCOPE("native_pin_mask_index", "index sparse FF Q masks by site");
+            if(JSONCfg.at("Native pin access policy")!="fixed-static-ff-q-v1")
+                throw std::runtime_error("Uncertified FF Q mask");
+            std::istringstream rows(JSONCfg.at("DFX cached FF Q mask"));std::string row;
+            unsigned bels=0;
+            while(std::getline(rows,row)) {
+                auto tab=row.find('\t');
+                if(tab==std::string::npos)throw std::runtime_error("Malformed cached FF Q mask");
+                auto site=row.substr(0,tab),bel=row.substr(tab+1);
+                if(!byName.count(site)||!incremental.allowedSites.count(site))
+                    throw std::runtime_error("FF Q mask site outside device/RP: "+site);
+                auto bit=FfQPinMask::belBit(bel);
+                if(ffQBlockedMasks[site]&bit)throw std::runtime_error("Duplicate cached FF Q BEL");
+                ffQBlockedMasks[site]|=bit;++bels;
+            }
+            print_info("AMF_PIN_ACCESS policy=fixed-static-ff-q-v1 sites="+std::to_string(ffQBlockedMasks.size())+" blocked_ff_bels="+std::to_string(bels));
+        }
         incremental.minX = getMinXFromSites(activeSites) - 0.001f;
         incremental.maxX = getMaxXFromSites(activeSites) + 0.001f;
         incremental.minY = getMinYFromSites(activeSites) - 0.001f;

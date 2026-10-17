@@ -27,6 +27,8 @@ def run(args):
     if sha(helper)!=job['runtime_helper_sha256'] or not os.access(helper,os.X_OK):raise ValueError('Graph partition helper absent/changed/not executable')
     capability=json.loads(subprocess.check_output([str(binary),'--capabilities'],text=True))
     if capability.get('dfx_full_hard_regions_schema')!=1:raise ValueError('Binary lacks whole-design hard DFX regions')
+    from dfx_partition_floorplan import configure, bind_outputs
+    partition_floorplan=configure(job,cfg,capability)
     from native_cache_contract import validate_full_capture
     validate_full_capture(job,capability,cfg)
     if job.get('resume_synthesis_checkpoint'):
@@ -125,7 +127,7 @@ def run(args):
             m['srl_metadata_refresh'] = verify_srl_refresh(out)
         else:
             stage('prepare',[job['vivado'],'-mode','batch','-source',str(out/'inputs/dfx_full_prepare.tcl'),'-tclargs',str(settings_path)])
-        if job.get('full_edge_policy') and not job.get('recover_exact_preparation'):
+        if job.get('full_edge_policy') and not job.get('recover_exact_preparation') and not partition_floorplan:
             stage('full_edge_policy', [job['boundary_policy_tool'], str(out/'resources.tsv'),
                   str(out/'resource_regions.tsv'), str(out/'hard_region_sites.tsv'),
                   str(out/'hard_region_sites.policy.tsv'), str(out/'full_edge_policy_audit.tsv')])
@@ -156,6 +158,7 @@ def run(args):
                     'vivado extracted design information file':str(out/'netlist.zip'),'clock file':str(out/'clocks'),
                     'ClockPeriod':str(job['clock_period_ns']),'dumpDirectory':str(out/'placement'),
                     'DumpCLBPacking':'DumpCLBPacking','BoundaryReportDirectory':str(out/'reports/physical')})
+        if partition_floorplan:bind_outputs(cfg,out)
         save(out/'amf_config.json',cfg)
         if job.get('native_cache_capture'):
             (out/'native_cache').mkdir()
@@ -184,7 +187,13 @@ def run(args):
             if not any(row.get('eligible_srl_pus', 0)>0 and row.get('sites_saved', 0)>0 for row in sharing):
                 raise RuntimeError('SRL share4 configured but no actual shared sites observed; backend not launched')
         with (out/'cells.tsv').open() as f:cells={row['cell']:row['region'] for row in csv.DictReader(f,delimiter='\t')}
-        with (out/'hard_region_sites.tsv').open() as f:owners={row['site']:row['region'] for row in csv.DictReader(f,delimiter='\t')}
+        placement_mask=out/('hard_region_sites.effective.tsv' if partition_floorplan else 'hard_region_sites.tsv')
+        if partition_floorplan:
+            m['dfx_partition_floorplan']=dict(schema=1,representative='pblock-geometric-center',
+                raw_mask_sha256=sha(out/'hard_region_sites.tsv'),effective_mask_sha256=sha(placement_mask),
+                audit_sha256=sha(out/'dfx_partition_floorplan.tsv'),
+                boundary_audit_sha256=sha(out/'full_edge_policy_audit.tsv'))
+        with placement_mask.open() as f:owners={row['site']:row['region'] for row in csv.DictReader(f,delimiter='\t')}
         rows=placement_rows(out/'placement/DumpCLBPacking-first-0.tcl',set(cells),set(owners),set())
         for cell,target in rows.items():
             if owners[target.split('/')[0]]!=cells[cell]:raise ValueError('Full AMF region violation: '+cell)

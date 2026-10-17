@@ -17,11 +17,13 @@
 #include <cstdlib>
 #include <ctime>
 #include <iostream>
+#include <limits>
 
 double SAPlacer::evaluateClusterPlacement(const std::vector<std::vector<std::vector<int>>> &grid2clusters,
                                           const std::vector<std::pair<int, int>> &cluster2XY)
 {
     AMF_PROFILE_FUNCTION("sa");
+    if(!physicalGrid.empty())return evaluatePhysicalGrid(grid2clusters,cluster2XY);
 
     float regionW = deviceW / gridW;
     float regionH = deviceH / gridH;
@@ -111,6 +113,7 @@ double SAPlacer::incrementalEvaluateClusterPlacement(const std::vector<std::vect
                                                      const std::vector<std::pair<int, int>> &cluster2XY)
 {
     AMF_PROFILE_FUNCTION("sa");
+    if(!physicalGrid.empty())return evaluatePhysicalGrid(grid2clusters,cluster2XY);
     std::vector<bool> placed;
     placed.clear();
     float regionW = deviceW / gridW;
@@ -224,6 +227,28 @@ void SAPlacer::randomSwapInWideRange(const std::vector<std::vector<std::vector<i
                                      boost::mt19937 &rng)
 {
     AMF_PROFILE_FUNCTION("sa");
+    if(!physicalGrid.empty()) {
+        new_grid2clusters=grid2clusters;new_cluster2XY=cluster2XY;
+        if(cluster2XY.empty()||allowedBins.size()==1)return;
+        // Pick an occupied source directly: no retry loop for sparse/one-bin designs.
+        int id=rng()%cluster2XY.size();
+        const auto src=cluster2XY[id];
+        int dst=allowedBins[rng()%allowedBins.size()],dx=dst%gridW,dy=dst/gridW;
+        if(dx==src.first&&dy==src.second)return;
+        auto &from=new_grid2clusters[src.second][src.first];
+        auto &to=new_grid2clusters[dy][dx];
+        if(!to.empty() && rng()%2) {
+            int other=to[rng()%to.size()];
+            std::replace(to.begin(),to.end(),other,id);
+            std::replace(from.begin(),from.end(),id,other);
+            new_cluster2XY[other]=src;
+        }else {
+            from.erase(std::find(from.begin(),from.end(),id));to.push_back(id);
+        }
+        new_cluster2XY[id]={dx,dy};
+        std::sort(from.begin(),from.end());std::sort(to.begin(),to.end());return;
+    }
+
     int gridY0 = rng() % (gridH * gridW) / gridW;
     int gridX0 = rng() % (gridH * gridW) % gridW;
 
@@ -545,6 +570,18 @@ void SAPlacer::greedyPlaceACluster(const std::vector<std::pair<int, int>> &init_
                                    std::vector<std::vector<std::vector<int>>> &res_grid2clusters, int clusterIdToPlace)
 {
     AMF_PROFILE_FUNCTION("sa");
+    if(!physicalGrid.empty()) {
+        double best=std::numeric_limits<double>::infinity();
+        for(int bin:allowedBins) {
+            auto xy=init_cluster2XY;auto grid=init_grid2clusters;
+            xy[clusterIdToPlace]={bin%gridW,bin/gridW};
+            grid[bin/gridW][bin%gridW].push_back(clusterIdToPlace);
+            double cost=evaluatePhysicalGrid(grid,xy);
+            if(cost<best){best=cost;res_cluster2XY=xy;res_grid2clusters=grid;}
+        }
+        return;
+    }
+
     std::vector<bool> placed;
     placed.clear();
 
@@ -867,4 +904,43 @@ void SAPlacer::solve()
         outfile0.close();
     print_info("SAPlace handle " + std::to_string(init_cluster2XY.size()) +
                " cluster(s) and the final placement cost is " + std::to_string(resE));
+}
+
+
+void SAPlacer::setPhysicalGrid(const std::vector<std::pair<float,float>> &points,
+                               const std::vector<bool> &allowed)
+{
+    if(gridH<=0||gridW<=0||points.size()!=size_t(gridH*gridW)||allowed.size()!=points.size())
+        throw std::runtime_error("Invalid physical SA grid");
+    allowedBins.clear();
+    for(size_t i=0;i<points.size();++i) {
+        if(!std::isfinite(points[i].first)||!std::isfinite(points[i].second))
+            throw std::runtime_error("Nonfinite SA grid coordinate");
+        if(allowed[i])allowedBins.push_back(i);
+    }
+    if(allowedBins.empty())throw std::runtime_error("No static coarse bin outside hard Pblocks");
+    physicalGrid=points;
+}
+
+double SAPlacer::evaluatePhysicalGrid(const std::vector<std::vector<std::vector<int>>> &grid,
+                                      const std::vector<std::pair<int,int>> &xy) const
+{
+    double cost=0;
+    auto placed=[&](size_t i){return xy[i].first>=0&&xy[i].second>=0;};
+    auto point=[&](size_t i){return physicalGrid.at(xy[i].second*gridW+xy[i].first);};
+    for(size_t a=0;a<xy.size();++a)if(placed(a)) {
+        auto pa=point(a);
+        for(size_t b=0;b<a;++b)if(placed(b)) {
+            auto pb=point(b);
+            cost+=clusterAdjMat[a][b]*(std::fabs(pa.first-pb.first)+y2xRatio*std::fabs(pa.second-pb.second));
+        }
+        for(size_t f=0;f<fixedX.size();++f)
+            cost+=connectionToFixedFactor*cluster2FixedUnitMat[a][f]*
+                  (std::fabs(pa.first-fixedX[f])+y2xRatio*std::fabs(pa.second-fixedY[f]));
+    }
+    for(const auto &row:grid)for(const auto &bin:row)
+        for(size_t i=0;i<bin.size();++i)for(size_t j=0;j<i;++j)
+            cost+=5000*std::pow(std::min(1.1,(clusterWeights[bin[i]]+clusterWeights[bin[j]])/20000.0),2)*
+                  (deviceW/gridW+y2xRatio*deviceH/gridH);
+    return cost;
 }

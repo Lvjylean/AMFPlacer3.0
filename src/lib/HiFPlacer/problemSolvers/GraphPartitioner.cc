@@ -32,6 +32,23 @@ void GraphPartitioner<NodeList, NetList>::solve(int eachClusterDSPNum, int eachC
     sortClustersBySize();
 }
 
+template <class NodeList, class NetList>
+void GraphPartitioner<NodeList, NetList>::solveSubset(const std::vector<int> &nodeIds,
+                                                     int eachClusterDSPNum,int eachClusterBRAMNum)
+{
+    AMF_PROFILE_FUNCTION("partition");
+    clusters.clear();
+    std::vector<bool> seen(nodeList.size(),false);
+    for(int id:nodeIds) {
+        if(id<0||static_cast<size_t>(id)>=nodeList.size()||seen[id])
+            throw std::runtime_error("Invalid partition subset");
+        seen[id]=true;
+    }
+    auto inputCluster=nodeIds;
+    if(!inputCluster.empty())recursiveMinCutPartition(inputCluster,this,eachClusterDSPNum,eachClusterBRAMNum);
+    sortClustersBySize();
+}
+
 template <class NodeList, class NetList> void GraphPartitioner<NodeList, NetList>::sortClustersBySize()
 {
     AMF_PROFILE_FUNCTION("partition");

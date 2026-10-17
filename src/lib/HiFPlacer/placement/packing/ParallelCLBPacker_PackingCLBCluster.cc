@@ -1,3 +1,4 @@
+#include "RuntimeProfiler.h"
 /**
  * @file ParallelCLBPacker_PackingCLBCluster.cc
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -168,6 +169,7 @@ bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::addLUT(DesignInfo::De
 
 bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::addToFFSet(DesignInfo::DesignCell *curFF, int halfCLB)
 {
+    if(parentPackingCLB->getFfQBlockedMask() && !pinAccessCapacityAllows({curFF},halfCLB))return false;
     int i = halfCLB;
     if (FFControlSets[i].getSize() < MaxNum_FFinControlSet)
     {
@@ -337,7 +339,8 @@ bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::addFFGroup(std::vecto
             for (int i = 0; i < (int)FFControlSets.size(); i += 2)
             {
                 int anotherSetId = i - 1 + ((i % 2 == 0) ? 2 : 0);
-                if (FFControlSets[i].getFFs().size() + curFFs.size() <= 4 && FFControlSets[i].compatibleWith(CSId))
+                if (FFControlSets[i].getFFs().size() + curFFs.size() <= 4 && FFControlSets[i].compatibleWith(CSId) &&
+                    (!parentPackingCLB->getFfQBlockedMask() || pinAccessCapacityAllows(curFFs,i,true)))
                 {
                     if (compatibleInOneHalfCLB(CSPtr, anotherSetId))
                     {
@@ -356,7 +359,8 @@ bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::addFFGroup(std::vecto
             for (int i = 0; i < (int)FFControlSets.size(); i++)
             {
                 int anotherSetId = i - 1 + ((i % 2 == 0) ? 2 : 0);
-                if (FFControlSets[i].getFFs().size() + curFFs.size() <= 4 && FFControlSets[i].compatibleWith(CSId))
+                if (FFControlSets[i].getFFs().size() + curFFs.size() <= 4 && FFControlSets[i].compatibleWith(CSId) &&
+                    (!parentPackingCLB->getFfQBlockedMask() || pinAccessCapacityAllows(curFFs,i)))
                 {
                     if (compatibleInOneHalfCLB(CSPtr, anotherSetId))
                     {
@@ -374,7 +378,8 @@ bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::addFFGroup(std::vecto
     {
         int anotherSetId = enforceHalfCLB - enforceHalfCLB + ((enforceHalfCLB % 2 == 0) ? 2 : 0);
         if (FFControlSets[enforceHalfCLB].getFFs().size() + curFFs.size() <= 4 &&
-            FFControlSets[enforceHalfCLB].compatibleWith(CSId))
+            FFControlSets[enforceHalfCLB].compatibleWith(CSId) &&
+            (!parentPackingCLB->getFfQBlockedMask() || pinAccessCapacityAllows(curFFs,enforceHalfCLB)))
         {
             if (compatibleInOneHalfCLB(CSPtr, anotherSetId))
             {
@@ -730,6 +735,11 @@ bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::addPU(PlacementInfo::
         }
         if (!succ)
         {
+            // An otherwise empty site may legitimately have no accessible FF
+            // capacity. Reject this candidate instead of asserting that every
+            // first PU must fit an unconstrained site.
+            if (parentPackingCLB->getFfQBlockedMask() && curCell->isFF())
+                return false;
             if (!(PUs.size() > 0 || parentPackingCLB->checkIsPrePackedSite()))
             {
                 printMyself();
@@ -1112,4 +1122,39 @@ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::printMyself()
         }
     }
     std::cout << "===============================================\n";
+}
+
+
+bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::pinAccessCapacityAllows(const std::vector<DesignInfo::DesignCell *> &extra,int group,bool mustMain)
+{
+    AMF_PROFILE_SCOPE("native_pin_packing_capacity", "affected-site control-bank capacity");
+    std::array<int,4> sizes;
+    for(int i=0;i<4;++i)sizes[i]=FFControlSets[i].getFFs().size()+(i==group?extra.size():0);
+    // Test the prospective control sets, including the first real FF added to
+    // an empty (or virtual-only) group. Existing-group compatibility alone can
+    // accept a bank permutation that becomes illegal after insertion.
+    std::array<DesignInfo::ControlSetInfo *,4> controls{{nullptr,nullptr,nullptr,nullptr}};
+    for(int i=0;i<4;++i)for(auto ff:FFControlSets[i].getFFs())
+        if(!ff->isVirtualCell()) {controls[i]=ff->getControlSetInfo();break;}
+    for(auto ff:extra)if(!ff->isVirtualCell()) {
+        auto cs=ff->getControlSetInfo();
+        if(!cs || (controls[group] && controls[group]->getId()!=cs->getId()))return false;
+        controls[group]=cs;
+    }
+    return FfQPinMask::fits(parentPackingCLB->getFfQBlockedMask(),sizes,[&](const std::array<int,4>&order) {
+        for(int bank=0;bank<4;++bank) {
+            auto &set=FFControlSets[order[bank]];
+            if(bank%2 && (set.isMustMainSlots() || (order[bank]==group && mustMain)))return false;
+            auto a=controls[order[bank]],b=controls[order[bank^1]];
+            if(a && b && (a->getCLK()!=b->getCLK() || a->getSR()!=b->getSR() ||
+                !DesignInfo::FFSRCompatible(a->getFFType(),b->getFFType())))return false;
+            if(bank!=order[bank]) {
+                for(auto ff:set.getFFs())
+                    if(parentPackingCLB->isCarryMacro(ff)||parentPackingCLB->isMuxMacro(ff))return false;
+                if(order[bank]==group)for(auto ff:extra)
+                    if(parentPackingCLB->isCarryMacro(ff)||parentPackingCLB->isMuxMacro(ff))return false;
+            }
+        }
+        return true;
+    });
 }

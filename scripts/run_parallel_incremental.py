@@ -166,7 +166,8 @@ def run(config, output, workers_only=False):
                 worker_script='run_dfx.py'
                 if job.get('native_static_cache'):
                     cfg.update(native_static_cache=job['native_static_cache'],module_id=part['id'],
-                               native_dfx_edge_policy=job.get('native_dfx_edge_policy','off'))
+                               native_dfx_edge_policy=job.get('native_dfx_edge_policy','off'),
+                               native_pin_access_policy=job.get('native_pin_access_policy','off'))
                     if job.get('clock_handoff_mode') == 'inherit_static_primary':
                         cfg.update(clock_handoff_mode=job['clock_handoff_mode'],rm_clock_port=part['rm_clock_port'])
                     if part.get('reuse_native_export'):cfg['reuse_native_export']=part['reuse_native_export']

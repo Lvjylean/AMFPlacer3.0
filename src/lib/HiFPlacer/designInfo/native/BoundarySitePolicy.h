@@ -33,10 +33,8 @@ struct BoundarySitePolicy {
         std::vector<std::vector<std::string>> out;
         while(std::getline(f,s)){require(!s.empty(),"blank row");out.push_back(fields(s));}return out;
     }
-    static Result derive(const std::string &inventory,const std::string &geometry,
-                         const std::map<std::string,std::set<std::string>> &allowed,
-                         const std::string &sidePolicy) {
-        require(sidePolicy=="any-prohibit"||sidePolicy=="interior-prohibit","unknown side policy");
+    static std::map<std::string,std::set<std::string>> clockRegions(
+        const std::string &geometry,const std::map<std::string,std::set<std::string>> &allowed) {
         std::map<std::string,std::set<std::string>> crs;
         const std::regex range("CLOCKREGION_X([0-9]+)Y([0-9]+)(:CLOCKREGION_X([0-9]+)Y([0-9]+))?");
         for(const auto &r:rows(geometry,"region\tclock_regions")) {
@@ -55,6 +53,13 @@ struct BoundarySitePolicy {
             for(auto p:points)crs[r[0]].insert("CLOCKREGION_X"+std::to_string(p.first)+"Y"+std::to_string(p.second));
         }
         require(crs.size()==allowed.size(),"incomplete region geometry");
+        return crs;
+    }
+    static Result derive(const std::string &inventory,const std::string &geometry,
+                         const std::map<std::string,std::set<std::string>> &allowed,
+                         const std::string &sidePolicy) {
+        require(sidePolicy=="any-prohibit"||sidePolicy=="interior-prohibit","unknown side policy");
+        auto crs=clockRegions(geometry,allowed);
         std::map<std::string,std::vector<Site>> sites;std::map<std::string,std::set<std::string>> seen;
         Result out;
         const std::regex xy("(SLICE|DSP48E2)_X([0-9]+)Y([0-9]+)");

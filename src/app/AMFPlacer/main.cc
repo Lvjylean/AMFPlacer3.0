@@ -13,16 +13,24 @@
 #include "AMFPlacer.h"
 #include "../../lib/utils/RuntimeProfiler.h"
 #include "../../lib/HiFPlacer/designInfo/native/PlacementRepair.h"
+#include "../../lib/HiFPlacer/designInfo/native/FfPinAccessRepair.h"
 
 int main(int argc, const char **argv)
 {
     if (argc == 2 && std::string(argv[1]) == "--capabilities")
     {
-        std::cout << "{\"schema\":\"amf-capabilities-v1\",\"clock_resource_capacity_schema\":1,\"external_floorplan_initialization_schema\":1,\"paper_hierarchical_boundaries_schema\":2,\"global_placement_inspection_schema\":1,\"amf2pro_integration_schema\":1,\"dfx_incremental_schema\":1,\"dfx_full_hard_regions_schema\":1,\"native_static_cache_schema\":2,\"native_placement_repair_schema\":1,\"native_dfx_edge_policy_schema\":1}\n";
+        std::cout << "{\"schema\":\"amf-capabilities-v1\",\"clock_resource_capacity_schema\":1,\"external_floorplan_initialization_schema\":1,\"paper_hierarchical_boundaries_schema\":2,\"global_placement_inspection_schema\":1,\"amf2pro_integration_schema\":1,\"dfx_incremental_schema\":1,\"dfx_full_hard_regions_schema\":1,\"dfx_partition_floorplan_schema\":1,\"native_static_cache_schema\":2,\"native_placement_repair_schema\":1,\"native_ff_pin_access_repair_schema\":1,\"native_pin_cache_packing_schema\":1,\"native_dfx_edge_policy_schema\":1}\n";
         return 0;
     }
     amf_profile::Session profileSession;
     AMF_PROFILE_FUNCTION("process_control");
+    if(argc==3&&std::string(argv[1])=="--native-ff-pin-repair") {
+        try {
+            AMF_PROFILE_SCOPE("native_ff_pin_repair", "data-driven same-site FF recovery");
+            amf_native::FfPinAccessRepair::run(parseJSONFile(argv[2]));
+            std::cout<<"AMF_NATIVE_FF_PIN_REPAIR_COMPLETED\n";return 0;
+        }catch(const std::exception &e){std::cerr<<"AMF_ERROR: "<<e.what()<<"\n";return 2;}
+    }
     if(argc==3&&std::string(argv[1])=="--native-placement-repair") {
         try {
             AMF_PROFILE_SCOPE("native_placement_repair", "certified one-DSP recovery");
@@ -46,6 +54,10 @@ int main(int argc, const char **argv)
                     cache.observeCell(c.name,c.type);for(const auto &p:c.pins)cache.observePin(p);
                 }
                 cache.finishCapture();cache.savePlacement(cfg.at("Native historical placement Tcl"),cfg);
+            }else if(action=="certify-pin-access") {
+                auto cache=amf_native::StaticDesignCache::load(cfg.at("Native static cache proposal"));
+                cache.certifyPinAccess(cfg);
+                cache.write(cfg.at("Native static cache sealed output"));
             }else if(action=="audit-spec") {
                 auto cache=amf_native::StaticDesignCache::load(cfg.at("Native static cache proposal"));
                 cache.writeContextAuditSpec(cfg.at("Native context audit specification"));

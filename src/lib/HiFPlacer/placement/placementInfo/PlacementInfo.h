@@ -3561,6 +3561,7 @@ class PlacementInfo
      * @param fY output Y of PlacementUnit that can ensure the cells in it are within the device area.
      */
     bool hasHardRegions() const { return hardRegions.enabled; }
+    const HardRegionConstraints &getHardRegions() const { return hardRegions; }
     int hardRegionForCell(DesignInfo::DesignCell *cell) const {
         return hardRegions.cellRegion(cell->getName());
     }
@@ -3600,6 +3601,10 @@ class PlacementInfo
     }
 
     const IncrementalContext &getIncrementalContext() const { return incremental; }
+    unsigned getFfQBlockedMask(const std::string &site) const {
+        if(ffQBlockedMasks.empty()) return 0;
+        auto it=ffQBlockedMasks.find(site);return it==ffQBlockedMasks.end()?0:it->second;
+    }
 
     inline void legalizeXYInArea(PlacementUnit *curPU, float &fX, float &fY)
     {
@@ -4933,6 +4938,7 @@ class PlacementInfo
 
     std::map<std::string, std::string> &JSONCfg;
     IncrementalContext incremental;
+    std::map<std::string,unsigned> ffQBlockedMasks;
     HardRegionConstraints hardRegions;
     std::string cellType2fixedAmoFileName;
     std::string cellType2sharedCellTypeFileName;

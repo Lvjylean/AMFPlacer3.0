@@ -1,3 +1,4 @@
+#include "FfQPinMask.h"
 /**
  * @file ParallelCLBPacker.h
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -405,6 +406,8 @@ class ParallelCLBPacker
               numNeighbor(numNeighbor), deltaD(deltaD), curD(curD), maxD(maxD), PQSize(PQSize), y2xRatio(y2xRatio),
               HPWLWeight(HPWLWeight), PUId2PackingCLBSite(PUId2PackingCLBSite), determinedClusterInSite(nullptr)
         {
+            ffQBlockedMask=placementInfo->getFfQBlockedMask(CLBSite->getName());
+            slotMapping.blockedFFMask=ffQBlockedMask;
             neighborPUs.clear();
             seedClusters.clear();
             seedClusters.clear();
@@ -435,7 +438,8 @@ class ParallelCLBPacker
         class SiteBELMapping
         {
           public:
-            SiteBELMapping()
+            unsigned blockedFFMask=0;
+            explicit SiteBELMapping(unsigned mask=0) : blockedFFMask(mask)
             {
                 Carry = nullptr;
                 for (int i = 0; i < 2; i++)
@@ -454,6 +458,7 @@ class ParallelCLBPacker
             }
             SiteBELMapping &operator=(const SiteBELMapping &anotherMapping)
             {
+                blockedFFMask = anotherMapping.blockedFFMask;
                 Carry = anotherMapping.Carry;
                 for (int i = 0; i < 2; i++)
                 {
@@ -507,7 +512,7 @@ class ParallelCLBPacker
                     {
                         if ((lut->isLUT6() && j == 1) || !CLBSiteLegality::canPlaceFF(*this, ff, i, j)) continue;
                         for (int k = 0; k < 4; ++k)
-                            if (!LUTs[i][j][k] && !FFs[i][j][k] &&
+                            if (!(blockedFFMask & FfQPinMask::bit(i,j,k)) && !LUTs[i][j][k] && !FFs[i][j][k] &&
                                 CLBSiteLegality::lutPairCompatible(lut, LUTs[i][1-j][k]))
                             {
                                 half=i; lane=j; row=k;
@@ -739,6 +744,7 @@ class ParallelCLBPacker
              * @return true if this attempt is successful
              * @return false if this attempt FAILED.
              */
+            bool pinAccessCapacityAllows(const std::vector<DesignInfo::DesignCell *> &extra, int group, bool mustMain = false);
             bool addToFFSet(DesignInfo::DesignCell *curFF, int halfCLB);
 
             /**
@@ -2469,6 +2475,12 @@ class ParallelCLBPacker
             return false;
         }
 
+        unsigned getFfQBlockedMask() const {return ffQBlockedMask;}
+        // Resolve FF slot choices inside the current packing candidate before
+        // scoring/committing it. Physical control banks and macro slots stay fixed.
+        bool assignAccessibleFFSlots();
+        void verifyFfQAccess() const;
+        unsigned ffQBlockedMask=0;
         void moveLUTToLUT6Slot();
 
         /**
@@ -2481,7 +2493,7 @@ class ParallelCLBPacker
             {
                 best_DirectConnect = -100000000;
 
-                slotMapping = SiteBELMapping();
+                slotMapping = SiteBELMapping(ffQBlockedMask);
                 mappedCells.clear();
                 mappedLUTs.clear();
                 mappedFFs.clear();
@@ -2536,6 +2548,7 @@ class ParallelCLBPacker
                         }
                         assert(FFCnt == mappedFFs.size());
                     }
+                    verifyFfQAccess();
                     determinedClusterInSite->setControlSet(slotMapping);
                 }
             }

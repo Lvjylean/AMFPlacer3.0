@@ -54,6 +54,15 @@ static void selfTest()
     require(dense.canDirectConnectInSlot(&same,&x),"post-map relocation rejected compatible LUT pair");
     dense.addLUTFFPair(&same,&x);
     require(dense.LUTs[0][1][0]==&same && dense.FFs[0][1][0]==&x,"slot selection/commit differed");
+    Mapping forbidden=dense;forbidden.removeLUTFFPair(&same,&x);
+    forbidden.blockedFFMask=FfQPinMask::belBit("AFF2");
+    require(!forbidden.canDirectConnectInSlot(&same,&x),"detailed placement reused blocked Q BEL");
+    Mapping copied;copied=forbidden;require(copied.blockedFFMask==forbidden.blockedFFMask,"copied mapping lost mask");
+    auto accept=[](const std::array<int,4>&){return true;};
+    require(FfQPinMask::fits(0,{{4,4,4,4}},accept),"ordinary capacity changed");
+    require(!FfQPinMask::fits(FfQPinMask::belBit("CFF2"),{{4,4,4,4}},accept),"16 FFs accepted into 15 BELs");
+    require(FfQPinMask::fits(FfQPinMask::belBit("CFF2"),{{4,4,3,4}},accept),"logical groups cannot permute to available bank");
+    require(!FfQPinMask::fits(FfQPinMask::belBit("CFF2"),{{4,4,3,4}},[](const std::array<int,4>&o){return o==std::array<int,4>{{0,1,2,3}};}),"fixed bank restriction ignored");
     std::cout<<"PASS CLB controls, shared LUT inputs, and detailed-placement slot commit\n";
 }
 

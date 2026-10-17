@@ -112,6 +112,11 @@ class ClusterPlacer
      * @brief the requirement of the average size of clusters (the number of cells)
      *
      */
+    bool dfxPartitionFloorplan=false;
+    std::vector<int> clusterRegions;
+    void createProtectedRegionClusterUnits();
+    void placeDFXClusters(int gridH,int gridW,int iterations,int restarts,float ratio);
+    void writeDFXPartitionAudit();
     int avgClusterSizeRequirement = 40000;
 
     /**
