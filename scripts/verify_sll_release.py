@@ -17,6 +17,14 @@ def verify(root, check_inputs=False):
     base = json.loads(base_path.read_text())
     expected = dict(base['max2_publication_source_sha256'])
     expected.update(release['source_overrides_sha256'])
+    # Keep the original release manifest immutable; layer this integration on it.
+    extension = json.loads((root / 'docs/provenance/sll-legacy-components-20261017.json').read_text())
+    if digest(root / 'docs/provenance/sll-quantity-release-20261017.json') != extension['base_manifest_sha256']:
+        raise ValueError('Original SLL publication manifest changed')
+    for path, record in extension['source_changes'].items():
+        if expected.get(path) != record['before_sha256']:
+            raise ValueError('Invalid component integration base: ' + path)
+        expected[path] = record['after_sha256']
     actual = {str(p.relative_to(root)): digest(p)
               for p in (root / 'src').rglob('*') if p.is_file()}
     differences = sorted(k for k in actual.keys() | expected.keys()
@@ -30,7 +38,9 @@ def verify(root, check_inputs=False):
                 raise ValueError('Input hash mismatch: ' + key)
             checked += 1
     return dict(result='passed', source_files=len(actual), inputs_verified=checked,
-                implementation_commit=release['implementation_commit'])
+                implementation_commit=release['implementation_commit'],
+                component_origin_commit=extension['upstream_component_commit'],
+                integrated_source_files=len(extension['source_changes']))
 
 
 def main():
