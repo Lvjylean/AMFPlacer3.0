@@ -243,3 +243,7 @@ target_link_libraries(checkSRLSharingInput Packing GlobalPlacer Legalization Des
 
 # Independent SLL math, gradient, parallel and synthetic candidate checks.
 add_executable(checkSllQuantity EXCLUDE_FROM_ALL tests/check_sll_quantity.cc)
+
+# Native legacy matching with thread-independent connected components.
+add_executable(checkLegacyComponents EXCLUDE_FROM_ALL tests/check_legacy_components.cc)
+target_link_libraries(checkLegacyComponents Utils pthread)
