@@ -82,26 +82,24 @@ struct Model {
 #ifndef _OPENMP
         threads = 1;
 #endif
-        threads = std::min(threads, int(std::max(std::size_t(1), nets.size())));
-        std::vector<Result> partial(threads);
+        // Fixed logical chunks keep both summation order and gradient storage
+        // independent of the number of OpenMP workers (including serial runs).
+        const int chunks = int(std::min(std::size_t(16), std::max(std::size_t(1), nets.size())));
+        threads = std::min(threads, chunks);
+        std::vector<Result> partial(chunks);
         for (auto &r : partial) {
             r.seams.assign(boundaries.size(), 0);
             if (needGradient) r.gradient.assign(units, 0);
         }
 #ifdef _OPENMP
-#pragma omp parallel num_threads(threads)
+#pragma omp parallel for schedule(static) num_threads(threads)
 #endif
-        {
-            int tid = 0;
-#ifdef _OPENMP
-            tid = omp_get_thread_num();
-#endif
-            auto &out = partial[tid];
+        for (int chunk = 0; chunk < chunks; ++chunk) {
+            auto &out = partial[chunk];
             std::vector<double> z, dz, plus, minus;
-#ifdef _OPENMP
-#pragma omp for schedule(static)
-#endif
-            for (std::int64_t ni = 0; ni < std::int64_t(nets.size()); ++ni) {
+            const std::size_t begin = nets.size() * chunk / chunks;
+            const std::size_t end = nets.size() * (chunk + 1) / chunks;
+            for (std::size_t ni = begin; ni < end; ++ni) {
                 const auto &net = nets[ni];
                 const auto count = net.end - net.begin;
                 if (!count) continue;
@@ -161,7 +159,7 @@ struct Model {
         Result result;
         result.seams.assign(boundaries.size(), 0);
         if (needGradient) result.gradient.assign(units, 0);
-        // Fixed reduction order for a given thread count. No floating atomics.
+        // Fixed chunk order for every worker count. No floating atomics.
         for (const auto &r : partial) {
             result.discrete += r.discrete; result.discreteOptimized += r.discreteOptimized;
             result.validNets += r.validNets; result.invalidNets += r.invalidNets;
