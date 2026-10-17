@@ -38,3 +38,5 @@
 
 - 2026-10-17 SLL 发布分支更新：`sll优化` 基于普通 Pro 两轮 SRL 兼容版，加入数量诊断、SoftFloor/WASLL 解析梯度及按 net 并行计算、QP 局部目标和候选检查。默认数量目标关闭、`SllRegionPolicy=preserve`、`ProPrimitiveTiming=false`；不改变原阶段预算或距离系数。`release-single` 属于实验对照策略，不作为默认。源码核验使用 scripts/verify_sll_release.py；历史 merged 覆盖文件不能用于本分支 SLL。配置用法与结果见 docs/research/sll-quantity-release-20261017.md。空间需求、热点和固定 SLL 位置尚未实现。
 - 2026-10-13 后续 DFX 计时约定：主要指标排除 Vivado place_design，单列为后端兼容处理时间；仍实际执行并保留各阶段原始时间和实测总墙钟。排除后的指标明确标注“扣除 Vivado placement”，不称实测总墙钟；历史数据不改写。
+
+- 2026-10-17 用户要求将历史 `legacy_components` 子图隔离合入 `sll优化` 并验证 12/16 线程结果一致。新配置 `configs/experiments/getrf-sll-legacy-components.json` 显式选择该模式，旧 `legacy` 行为及历史配置保留。SLL 使用固定 16 个逻辑分块和固定顺序汇总，工作线程数量不改变加法次序；该值不是额外的用户参数。原生 MinCostFlow 内核、两轮 SLR 预算、普通 Pro 和距离系数不变。当前验证范围及结果见 `docs/research/sll-legacy-components-20261017.md`，不能将同一输入的线程一致性解释为与旧 legacy 布局完全相同或后端 QoR 改善。

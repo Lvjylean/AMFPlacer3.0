@@ -12,6 +12,8 @@
 - [实现细节](docs/research/sll-quantity-qp-implementation-20261013.md) · [GP 验证](docs/research/sll-quantity-qp-validation-20261013.md)
 - [源码与脚本来源清单](docs/provenance/sll-quantity-release-20261017.json) · [后端原始指标](docs/provenance/sll-quantity-20261013/backend-results.json)
 
+需要在 12/16 线程间切换时，使用新增的 [getrf-sll-legacy-components.json](configs/experiments/getrf-sll-legacy-components.json)，其中 `BipartiteMatchingBackend=legacy_components`；随后只需修改 `jobs`。该模式为每个连通子图独立建立原生求解器，并固定 SLL 浮点汇总顺序。原 `legacy` 配置保留用于历史复现，其求解器分组仍随线程数变化。[实现、运行方式与本轮验证](docs/research/sll-legacy-components-20261017.md)。
+
 当前数量组相对同区域策略对照减少了 SLL，但仍未优于普通 Pro；空间需求、热点优化及约束 Vivado SLL 位置尚未实现。新检出仓库使用 `python3 scripts/verify_sll_release.py` 核验。本分支不支持把历史 `variants/merged` 覆盖到 SLL 源码上；旧版本说明按其日期和父分支理解。
 
 ## 继承基线：2026-10-12 AMF3Pro / SRL 兼容共享 site
