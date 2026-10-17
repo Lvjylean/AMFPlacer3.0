@@ -1,0 +1,69 @@
+{
+  "schema": "sll-acd-backend-results-v1",
+  "finished": "2026-10-13T15:49:58.986227+08:00",
+  "cases": [
+    {
+      "case": "A",
+      "run": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/repo/experiments/runs/getrf-sll-a-backend-01-full-20261013-122814-534633",
+      "wns_ns": 0.16,
+      "tns_ns": 0.0,
+      "actual_sll_used": 11656,
+      "amf_seconds": 1100.1837062120321,
+      "vivado_place_seconds": 265.994,
+      "vivado_route_seconds": 1421.36,
+      "total_wall_seconds": 4131.622173172014,
+      "routing_complete": true,
+      "setup_failing_endpoints": 0,
+      "hold_failing_endpoints": 0,
+      "drc_errors": 0,
+      "drc_critical_warnings": 0,
+      "exact_loc_bel_retention": 1.0,
+      "output_dcp_sha256": "07b3dbb60ba1a8679d03ccfb78e5d72b96c5d156484621e7fb84f8b0afe6e972",
+      "dcp_downloaded": false
+    },
+    {
+      "case": "C",
+      "run": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/repo/experiments/runs/getrf-sll-c-backend-01-full-20261013-133706-776545",
+      "wns_ns": 0.022,
+      "tns_ns": 0.0,
+      "actual_sll_used": 14926,
+      "amf_seconds": 1143.3164197530132,
+      "vivado_place_seconds": 258.617,
+      "vivado_route_seconds": 1210.892,
+      "total_wall_seconds": 3891.3975948749576,
+      "routing_complete": true,
+      "setup_failing_endpoints": 0,
+      "hold_failing_endpoints": 0,
+      "drc_errors": 0,
+      "drc_critical_warnings": 0,
+      "exact_loc_bel_retention": 1.0,
+      "output_dcp_sha256": "13a8770a7f97bac00392d42ca86bddd1e45925136d4204794a9899c3f7e78722",
+      "dcp_downloaded": false
+    },
+    {
+      "case": "D",
+      "run": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/repo/experiments/runs/getrf-sll-d-backend-01-full-20261013-144158-836796",
+      "wns_ns": 0.122,
+      "tns_ns": 0.0,
+      "actual_sll_used": 13036,
+      "amf_seconds": 1264.2706617189688,
+      "vivado_place_seconds": 241.548,
+      "vivado_route_seconds": 1377.504,
+      "total_wall_seconds": 4080.53789473098,
+      "routing_complete": true,
+      "setup_failing_endpoints": 0,
+      "hold_failing_endpoints": 0,
+      "drc_errors": 0,
+      "drc_critical_warnings": 0,
+      "exact_loc_bel_retention": 1.0,
+      "output_dcp_sha256": "fb867b264fa814939a7816bfd66f373a2cd30a32af145c366fdb3ae149c11cc9",
+      "dcp_downloaded": false
+    }
+  ],
+  "caveats": [
+    "AMF and Vivado stage times are distinct; total includes import, adaptation, audit, reports and checkpoint IO.",
+    "One serial run per case on a shared server; external load was not controlled.",
+    "D has 40 GP iterations; A and C have 37 under the same phase budgets and stopping policy.",
+    "Actual SLL use is Vivado Total SLLs Used; it is distinct from GP estimated crossing demand S."
+  ]
+}

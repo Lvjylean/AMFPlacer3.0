@@ -1,0 +1,72 @@
+{
+  "schema": "sll-quantity-study-v1",
+  "created": "2026-10-13T10:15:12.925036+08:00",
+  "source": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261011-srl-share4/repo",
+  "source_commit": "e7f6ac93b76c0c798d126ee1d66eb326929f1447",
+  "repo": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/repo",
+  "baseline_config": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/repo/configs/experiments/sll-quantity-baseline.json",
+  "baseline_binary": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261011-srl-share4/repo/builds/build-20261011-234425-034806-e7f6ac93/build/AMFPlacer",
+  "baseline_binary_sha256": "1b5afde487b98a3ed37cbf5284102dfe0dc88d2fb6341500e0159ee7f36adaa1",
+  "config_sha256": "d873e6bc94762a57692d7c534491a2e25919ad4b3755758c636b25b097b879a6",
+  "inputs": {
+    "vivado extracted device information file": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/5cc26c1cc8b7-exportSiteLocation.zip",
+      "sha256": "5cc26c1cc8b74ca1f32945c77d48058b8a04d2c9fdc40fcf5e82fe6c552f6a25",
+      "bytes": 25537274
+    },
+    "vivado extracted design information file": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/43f9519fc3df-netlist.zip",
+      "sha256": "43f9519fc3dfdbc6fe899c0bdfdbcff12d3e077d74f6acf456262c0859d50a4b",
+      "bytes": 68237832
+    },
+    "clock file": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/07a841cee796-clocks",
+      "sha256": "07a841cee796403bb14a3659b2c4a5c09a79047f0bdf6662b2c64c8bb9801a27",
+      "bytes": 13
+    },
+    "cellType2fixedAmo file": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/f3e4d2bbe26b-cellType2fixedAmo",
+      "sha256": "f3e4d2bbe26b45c0eb562b7fb8249524dc7f01c0be9595ffeb722cc572ed4e33",
+      "bytes": 317
+    },
+    "cellType2sharedCellType file": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/f2f1832e4776-cellType2sharedCellType",
+      "sha256": "f2f1832e477624e1b1f563c85415405c8fbe85b93809509e5eac5cf73d73d553",
+      "bytes": 424
+    },
+    "sharedCellType2BELtype file": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/ff49d19d6fac-sharedCellType2BELtype",
+      "sha256": "ff49d19d6fac348d39e23ceb1fcd5b678e01f7ff32f60e9d13448bed30d64781",
+      "bytes": 779
+    },
+    "mergedSharedCellType2sharedCellType": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/164948971004-mergedSharedCellType2sharedCellType",
+      "sha256": "1649489710040b2425f5f508c241101e37bbf62eae60f8eb4fd736ff1079c982",
+      "bytes": 143
+    },
+    "physical boundary model file": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/d1116390e6bc-physical_structure.tsv",
+      "sha256": "d1116390e6bce6e879fb40ee50c9f3cef80645e77d7d6b0bc94b271bd8a645fa",
+      "bytes": 10640664
+    },
+    "clock resource capacity file": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/39e34938d3ed-clock_capacity.tsv",
+      "sha256": "39e34938d3edb29f928b1e35e805fe5738a1c44a895cffff57b6a511067d27d4",
+      "bytes": 4163
+    },
+    "post_opt.dcp": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/post_opt.dcp",
+      "sha256": "6283aa4874b42d939a2b00e53cce77574fa03a26f45914364ab9ca632b42c031",
+      "bytes": 314541880
+    }
+  },
+  "deps": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/deps",
+  "vivado": "/Orion/jinyang/amd/2026.1/Vivado/bin/vivado",
+  "host": "eda099",
+  "stage_policy": "independent SLR max2 + unchanged HPIO budgets",
+  "ProPrimitiveTiming": false,
+  "target_clock_ns": 10,
+  "amf_threads": 8,
+  "seed_policy": "unchanged baseline",
+  "scope": "steps 1-5: quantity, gradient, QP, movement diagnostics; no spatial SLL optimization"
+}

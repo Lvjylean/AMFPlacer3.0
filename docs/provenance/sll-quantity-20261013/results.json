@@ -1,0 +1,1274 @@
+{
+  "schema": "sll-quantity-validation-v1",
+  "cases": {
+    "original": {
+      "status": {
+        "name": "original",
+        "state": "completed",
+        "command": [
+          "/usr/bin/python3",
+          "scripts/amf3.py",
+          "full-run",
+          "--profile",
+          "--allow-import-repair",
+          "--config",
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/repo/configs/experiments/sll-quantity-baseline.json",
+          "--binary",
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261011-srl-share4/repo/builds/build-20261011-234425-034806-e7f6ac93/build/AMFPlacer",
+          "--dcp",
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/post_opt.dcp",
+          "--vivado",
+          "/Orion/jinyang/amd/2026.1/Vivado/bin/vivado",
+          "--run-prefix",
+          "getrf-sll-original",
+          "--global-only"
+        ],
+        "host": "eda099",
+        "started": "2026-10-13T10:16:34.934712+08:00",
+        "binary_sha256": "1b5afde487b98a3ed37cbf5284102dfe0dc88d2fb6341500e0159ee7f36adaa1",
+        "config_sha256": "d873e6bc94762a57692d7c534491a2e25919ad4b3755758c636b25b097b879a6",
+        "environment": {
+          "AMF_MACRO_STUDY_MODE": "control",
+          "AMF_MACRO_STUDY_START": "1",
+          "AMF_MACRO_STUDY_OUTPUT": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/cases/original/diagnostics",
+          "AMF_LEGALIZATION_TRACE": "1",
+          "AMF_MATCHER_WORKER_TRACE": "1"
+        },
+        "pid": 900686,
+        "exit_code": 0,
+        "elapsed_seconds": 749.2968351760064,
+        "finished": "2026-10-13T10:29:04.417256+08:00",
+        "runs": [
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/repo/experiments/runs/getrf-sll-original-global-20261013-101635-145491"
+        ]
+      },
+      "global_report": {
+        "schema": "amf-global-placement-inspection-v1",
+        "real_cells": 856998,
+        "placement_units": 448019,
+        "hpwl": 3928446.57172,
+        "global_placement_executed": true,
+        "full_placement_executed": false,
+        "final_packing_executed": false,
+        "routing_executed": false
+      },
+      "independent_count": {
+        "S": 11085,
+        "S_optimized": 11083,
+        "seams": [
+          9639,
+          1446,
+          0
+        ],
+        "nets": 1178774,
+        "invalid_nets": 0,
+        "missing_cells": 0,
+        "power_nets": 2,
+        "global_marked_nets": 1,
+        "optimization_excluded": 302,
+        "unconnected_pins": 0,
+        "pcie_cells": 0,
+        "network_classes": {
+          "single_driver": 1178650,
+          "driverless": 124,
+          "single_pin": 184
+        },
+        "convention": "Original driver-pin net identity; cell positions already contain macro offsets; non-PCIE pin offsets are zero"
+      },
+      "phase_budgets": [
+        [
+          "slr",
+          "2",
+          "true"
+        ],
+        [
+          "hpio",
+          "10",
+          "true"
+        ],
+        [
+          "slr",
+          "2",
+          "true"
+        ],
+        [
+          "hpio",
+          "6",
+          "true"
+        ],
+        [
+          "slr",
+          "2",
+          "true"
+        ],
+        [
+          "hpio",
+          "6",
+          "true"
+        ],
+        [
+          "hpio",
+          "6",
+          "true"
+        ],
+        [
+          "hpio",
+          "15",
+          "false"
+        ]
+      ],
+      "phase_completions": [
+        [
+          "slr",
+          "2",
+          "budget"
+        ],
+        [
+          "hpio",
+          "10",
+          "budget"
+        ],
+        [
+          "slr",
+          "2",
+          "budget"
+        ],
+        [
+          "hpio",
+          "6",
+          "budget"
+        ],
+        [
+          "slr",
+          "2",
+          "budget"
+        ],
+        [
+          "hpio",
+          "6",
+          "budget"
+        ],
+        [
+          "hpio",
+          "6",
+          "budget"
+        ],
+        [
+          "hpio",
+          "3",
+          "macro_fixed"
+        ]
+      ]
+    },
+    "disabled-final": {
+      "status": {
+        "name": "disabled-final",
+        "state": "completed",
+        "command": [
+          "/usr/bin/python3",
+          "scripts/amf3.py",
+          "full-run",
+          "--profile",
+          "--allow-import-repair",
+          "--config",
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/repo/configs/experiments/sll-disabled-final.json",
+          "--binary",
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/repo/builds/build-20261013-105501-020605-e7f6ac93/build/AMFPlacer",
+          "--dcp",
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/post_opt.dcp",
+          "--vivado",
+          "/Orion/jinyang/amd/2026.1/Vivado/bin/vivado",
+          "--run-prefix",
+          "getrf-sll-disabled-final",
+          "--global-only"
+        ],
+        "host": "eda099",
+        "started": "2026-10-13T10:57:54.301289+08:00",
+        "binary_sha256": "705733bfb2f335628356f2967e228ac2835fee3dceaef0db495597f03d204e7d",
+        "config_sha256": "1322d917b44efa14dbd8908a3c5ec206e82bfb0d1520b199b6e7fed5b828c238",
+        "environment": {
+          "AMF_MACRO_STUDY_MODE": "control",
+          "AMF_MACRO_STUDY_START": "1",
+          "AMF_MACRO_STUDY_OUTPUT": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/cases/disabled-final/diagnostics",
+          "AMF_LEGALIZATION_TRACE": "1",
+          "AMF_MATCHER_WORKER_TRACE": "1"
+        },
+        "pid": 979413,
+        "exit_code": 0,
+        "elapsed_seconds": 1955.34122251597,
+        "finished": "2026-10-13T11:30:29.741777+08:00",
+        "runs": [
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/repo/experiments/runs/getrf-sll-disabled-final-global-20261013-105754-429533"
+        ]
+      },
+      "global_report": {
+        "schema": "amf-global-placement-inspection-v1",
+        "real_cells": 856998,
+        "placement_units": 448019,
+        "hpwl": 3928446.57172,
+        "global_placement_executed": true,
+        "full_placement_executed": false,
+        "final_packing_executed": false,
+        "routing_executed": false
+      },
+      "independent_count": {
+        "S": 11085,
+        "S_optimized": 11083,
+        "seams": [
+          9639,
+          1446,
+          0
+        ],
+        "nets": 1178774,
+        "invalid_nets": 0,
+        "missing_cells": 0,
+        "power_nets": 2,
+        "global_marked_nets": 1,
+        "optimization_excluded": 302,
+        "unconnected_pins": 0,
+        "pcie_cells": 0,
+        "network_classes": {
+          "single_driver": 1178650,
+          "driverless": 124,
+          "single_pin": 184
+        },
+        "convention": "Original driver-pin net identity; cell positions already contain macro offsets; non-PCIE pin offsets are zero"
+      },
+      "trace": {
+        "first": {
+          "seq": "1",
+          "phase": "slr",
+          "iteration": "0",
+          "step": "begin",
+          "S": "6870",
+          "S_optimized": "6868",
+          "smooth": "4632.9383642312341",
+          "invalid_nets": "0",
+          "valid_nets": "1178774",
+          "seam0": "6375",
+          "seam1": "495",
+          "seam2": "0",
+          "pu_slr_moves": "0",
+          "released_preferences": "0",
+          "x_projections": "0",
+          "y_projections": "0"
+        },
+        "last": {
+          "seq": "259",
+          "phase": "hpio",
+          "iteration": "2",
+          "step": "after_legalization",
+          "S": "11085",
+          "S_optimized": "11083",
+          "smooth": "4340.7065980181087",
+          "invalid_nets": "0",
+          "valid_nets": "1178774",
+          "seam0": "9639",
+          "seam1": "1446",
+          "seam2": "0",
+          "pu_slr_moves": "0",
+          "released_preferences": "0",
+          "x_projections": "0",
+          "y_projections": "0"
+        },
+        "records": 259,
+        "effects": {
+          "after_timing": {
+            "delta_S": -47,
+            "events": 37,
+            "pu_slr_moves": 89,
+            "x_projections": 0,
+            "y_projections": 0
+          },
+          "after_qp1": {
+            "delta_S": -138682,
+            "events": 37,
+            "pu_slr_moves": 69933,
+            "x_projections": 0,
+            "y_projections": 0
+          },
+          "after_qp2": {
+            "delta_S": -41664,
+            "events": 37,
+            "pu_slr_moves": 78546,
+            "x_projections": 0,
+            "y_projections": 0
+          },
+          "after_spreading": {
+            "delta_S": 183480,
+            "events": 37,
+            "pu_slr_moves": 107517,
+            "x_projections": 85665,
+            "y_projections": 207650
+          },
+          "after_clip": {
+            "delta_S": 184,
+            "events": 37,
+            "pu_slr_moves": 356,
+            "x_projections": 0,
+            "y_projections": 399
+          },
+          "after_legalization": {
+            "delta_S": 940,
+            "events": 37,
+            "pu_slr_moves": 81,
+            "x_projections": 0,
+            "y_projections": 0
+          },
+          "between_iterations_or_phases": {
+            "delta_S": 4,
+            "events": 36,
+            "pu_slr_moves": 0,
+            "x_projections": 0,
+            "y_projections": 0
+          }
+        },
+        "mapping": [
+          {
+            "reload": "0",
+            "units": "582009",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "360881"
+          },
+          {
+            "reload": "0",
+            "units": "582009",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "360881"
+          },
+          {
+            "reload": "14",
+            "units": "582009",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "360881"
+          },
+          {
+            "reload": "84",
+            "units": "582009",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "360881"
+          },
+          {
+            "reload": "98",
+            "units": "582009",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "360881"
+          },
+          {
+            "reload": "140",
+            "units": "448019",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "362313"
+          },
+          {
+            "reload": "154",
+            "units": "448019",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "362313"
+          },
+          {
+            "reload": "196",
+            "units": "448019",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "362313"
+          },
+          {
+            "reload": "238",
+            "units": "448019",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "362313"
+          }
+        ]
+      },
+      "qp": {
+        "calls": 0,
+        "accepted": 0,
+        "rollback": 0,
+        "backtracked": 0,
+        "delta_S": 0,
+        "smooth_delta": 0,
+        "writeback_count_consistent": true,
+        "largest_combined_increase": 0
+      },
+      "phase_budgets": [
+        [
+          "slr",
+          "2",
+          "true"
+        ],
+        [
+          "hpio",
+          "10",
+          "true"
+        ],
+        [
+          "slr",
+          "2",
+          "true"
+        ],
+        [
+          "hpio",
+          "6",
+          "true"
+        ],
+        [
+          "slr",
+          "2",
+          "true"
+        ],
+        [
+          "hpio",
+          "6",
+          "true"
+        ],
+        [
+          "hpio",
+          "6",
+          "true"
+        ],
+        [
+          "hpio",
+          "15",
+          "false"
+        ]
+      ],
+      "phase_completions": [
+        [
+          "slr",
+          "2",
+          "budget"
+        ],
+        [
+          "hpio",
+          "10",
+          "budget"
+        ],
+        [
+          "slr",
+          "2",
+          "budget"
+        ],
+        [
+          "hpio",
+          "6",
+          "budget"
+        ],
+        [
+          "slr",
+          "2",
+          "budget"
+        ],
+        [
+          "hpio",
+          "6",
+          "budget"
+        ],
+        [
+          "hpio",
+          "6",
+          "budget"
+        ],
+        [
+          "hpio",
+          "3",
+          "macro_fixed"
+        ]
+      ]
+    },
+    "release-control-final": {
+      "status": {
+        "name": "release-control-final",
+        "state": "completed",
+        "command": [
+          "/usr/bin/python3",
+          "scripts/amf3.py",
+          "full-run",
+          "--profile",
+          "--allow-import-repair",
+          "--config",
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/repo/configs/experiments/sll-release-control-final.json",
+          "--binary",
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/repo/builds/build-20261013-105501-020605-e7f6ac93/build/AMFPlacer",
+          "--dcp",
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/post_opt.dcp",
+          "--vivado",
+          "/Orion/jinyang/amd/2026.1/Vivado/bin/vivado",
+          "--run-prefix",
+          "getrf-sll-release-control-final",
+          "--global-only"
+        ],
+        "host": "eda099",
+        "started": "2026-10-13T10:57:54.304089+08:00",
+        "binary_sha256": "705733bfb2f335628356f2967e228ac2835fee3dceaef0db495597f03d204e7d",
+        "config_sha256": "0784a6574d45a4b8bc590cb795ffed9fc952411de726b0ecd84e0751cd1ce683",
+        "environment": {
+          "AMF_MACRO_STUDY_MODE": "control",
+          "AMF_MACRO_STUDY_START": "1",
+          "AMF_MACRO_STUDY_OUTPUT": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/cases/release-control-final/diagnostics",
+          "AMF_LEGALIZATION_TRACE": "1",
+          "AMF_MATCHER_WORKER_TRACE": "1"
+        },
+        "pid": 979415,
+        "exit_code": 0,
+        "elapsed_seconds": 1918.0249172910117,
+        "finished": "2026-10-13T11:29:52.431769+08:00",
+        "runs": [
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/repo/experiments/runs/getrf-sll-release-control-final-global-20261013-105754-434544"
+        ]
+      },
+      "global_report": {
+        "schema": "amf-global-placement-inspection-v1",
+        "real_cells": 856998,
+        "placement_units": 448117,
+        "hpwl": 3512651.35413,
+        "global_placement_executed": true,
+        "full_placement_executed": false,
+        "final_packing_executed": false,
+        "routing_executed": false
+      },
+      "independent_count": {
+        "S": 14372,
+        "S_optimized": 14370,
+        "seams": [
+          12994,
+          1378,
+          0
+        ],
+        "nets": 1178774,
+        "invalid_nets": 0,
+        "missing_cells": 0,
+        "power_nets": 2,
+        "global_marked_nets": 1,
+        "optimization_excluded": 302,
+        "unconnected_pins": 0,
+        "pcie_cells": 0,
+        "network_classes": {
+          "single_driver": 1178650,
+          "driverless": 124,
+          "single_pin": 184
+        },
+        "convention": "Original driver-pin net identity; cell positions already contain macro offsets; non-PCIE pin offsets are zero"
+      },
+      "trace": {
+        "first": {
+          "seq": "1",
+          "phase": "slr",
+          "iteration": "0",
+          "step": "begin",
+          "S": "6870",
+          "S_optimized": "6868",
+          "smooth": "4632.9383642312341",
+          "invalid_nets": "0",
+          "valid_nets": "1178774",
+          "seam0": "6375",
+          "seam1": "495",
+          "seam2": "0",
+          "pu_slr_moves": "0",
+          "released_preferences": "57141",
+          "x_projections": "0",
+          "y_projections": "0"
+        },
+        "last": {
+          "seq": "259",
+          "phase": "hpio",
+          "iteration": "2",
+          "step": "after_legalization",
+          "S": "14372",
+          "S_optimized": "14370",
+          "smooth": "4422.8597521957381",
+          "invalid_nets": "0",
+          "valid_nets": "1178774",
+          "seam0": "12994",
+          "seam1": "1378",
+          "seam2": "0",
+          "pu_slr_moves": "0",
+          "released_preferences": "171423",
+          "x_projections": "0",
+          "y_projections": "0"
+        },
+        "records": 259,
+        "effects": {
+          "after_timing": {
+            "delta_S": -1660,
+            "events": 37,
+            "pu_slr_moves": 543,
+            "x_projections": 0,
+            "y_projections": 0
+          },
+          "after_qp1": {
+            "delta_S": -188423,
+            "events": 37,
+            "pu_slr_moves": 74697,
+            "x_projections": 0,
+            "y_projections": 0
+          },
+          "after_qp2": {
+            "delta_S": -36755,
+            "events": 37,
+            "pu_slr_moves": 67986,
+            "x_projections": 0,
+            "y_projections": 0
+          },
+          "after_spreading": {
+            "delta_S": 233551,
+            "events": 37,
+            "pu_slr_moves": 116509,
+            "x_projections": 43206,
+            "y_projections": 83256
+          },
+          "after_clip": {
+            "delta_S": 51,
+            "events": 37,
+            "pu_slr_moves": 2,
+            "x_projections": 0,
+            "y_projections": 2
+          },
+          "after_legalization": {
+            "delta_S": 734,
+            "events": 37,
+            "pu_slr_moves": 67,
+            "x_projections": 0,
+            "y_projections": 0
+          },
+          "between_iterations_or_phases": {
+            "delta_S": 4,
+            "events": 36,
+            "pu_slr_moves": 0,
+            "x_projections": 0,
+            "y_projections": 0
+          }
+        },
+        "mapping": [
+          {
+            "reload": "0",
+            "units": "582009",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "360881"
+          },
+          {
+            "reload": "0",
+            "units": "582009",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "360881"
+          },
+          {
+            "reload": "14",
+            "units": "582009",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "360881"
+          },
+          {
+            "reload": "84",
+            "units": "582009",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "360881"
+          },
+          {
+            "reload": "98",
+            "units": "582009",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "360881"
+          },
+          {
+            "reload": "140",
+            "units": "448117",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "362350"
+          },
+          {
+            "reload": "154",
+            "units": "448117",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "362350"
+          },
+          {
+            "reload": "196",
+            "units": "448117",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "362350"
+          },
+          {
+            "reload": "238",
+            "units": "448117",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "362350"
+          }
+        ]
+      },
+      "qp": {
+        "calls": 0,
+        "accepted": 0,
+        "rollback": 0,
+        "backtracked": 0,
+        "delta_S": 0,
+        "smooth_delta": 0,
+        "writeback_count_consistent": true,
+        "largest_combined_increase": 0
+      },
+      "phase_budgets": [
+        [
+          "slr",
+          "2",
+          "true"
+        ],
+        [
+          "hpio",
+          "10",
+          "true"
+        ],
+        [
+          "slr",
+          "2",
+          "true"
+        ],
+        [
+          "hpio",
+          "6",
+          "true"
+        ],
+        [
+          "slr",
+          "2",
+          "true"
+        ],
+        [
+          "hpio",
+          "6",
+          "true"
+        ],
+        [
+          "hpio",
+          "6",
+          "true"
+        ],
+        [
+          "hpio",
+          "15",
+          "false"
+        ]
+      ],
+      "phase_completions": [
+        [
+          "slr",
+          "2",
+          "budget"
+        ],
+        [
+          "hpio",
+          "10",
+          "budget"
+        ],
+        [
+          "slr",
+          "2",
+          "budget"
+        ],
+        [
+          "hpio",
+          "6",
+          "budget"
+        ],
+        [
+          "slr",
+          "2",
+          "budget"
+        ],
+        [
+          "hpio",
+          "6",
+          "budget"
+        ],
+        [
+          "hpio",
+          "6",
+          "budget"
+        ],
+        [
+          "hpio",
+          "3",
+          "macro_fixed"
+        ]
+      ]
+    },
+    "quantity-100-final": {
+      "status": {
+        "name": "quantity-100-final",
+        "state": "completed",
+        "command": [
+          "/usr/bin/python3",
+          "scripts/amf3.py",
+          "full-run",
+          "--profile",
+          "--allow-import-repair",
+          "--config",
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/repo/configs/experiments/sll-quantity-100-final.json",
+          "--binary",
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/repo/builds/build-20261013-105501-020605-e7f6ac93/build/AMFPlacer",
+          "--dcp",
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/post_opt.dcp",
+          "--vivado",
+          "/Orion/jinyang/amd/2026.1/Vivado/bin/vivado",
+          "--run-prefix",
+          "getrf-sll-quantity-100-final",
+          "--global-only"
+        ],
+        "host": "eda099",
+        "started": "2026-10-13T10:57:54.302457+08:00",
+        "binary_sha256": "705733bfb2f335628356f2967e228ac2835fee3dceaef0db495597f03d204e7d",
+        "config_sha256": "fdad0ac9a0c86446e5c22cd66a9f12fc6ab15f8febcd3499762db052d281989a",
+        "environment": {
+          "AMF_MACRO_STUDY_MODE": "control",
+          "AMF_MACRO_STUDY_START": "1",
+          "AMF_MACRO_STUDY_OUTPUT": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/cases/quantity-100-final/diagnostics",
+          "AMF_LEGALIZATION_TRACE": "1",
+          "AMF_MATCHER_WORKER_TRACE": "1"
+        },
+        "pid": 979414,
+        "exit_code": 0,
+        "elapsed_seconds": 2057.3340921140043,
+        "finished": "2026-10-13T11:32:11.737720+08:00",
+        "runs": [
+          "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261013-sll-quantity-01/repo/experiments/runs/getrf-sll-quantity-100-final-global-20261013-105754-431080"
+        ]
+      },
+      "global_report": {
+        "schema": "amf-global-placement-inspection-v1",
+        "real_cells": 856998,
+        "placement_units": 448209,
+        "hpwl": 3418626.88827,
+        "global_placement_executed": true,
+        "full_placement_executed": false,
+        "final_packing_executed": false,
+        "routing_executed": false
+      },
+      "independent_count": {
+        "S": 12396,
+        "S_optimized": 12394,
+        "seams": [
+          10424,
+          1972,
+          0
+        ],
+        "nets": 1178774,
+        "invalid_nets": 0,
+        "missing_cells": 0,
+        "power_nets": 2,
+        "global_marked_nets": 1,
+        "optimization_excluded": 302,
+        "unconnected_pins": 0,
+        "pcie_cells": 0,
+        "network_classes": {
+          "single_driver": 1178650,
+          "driverless": 124,
+          "single_pin": 184
+        },
+        "convention": "Original driver-pin net identity; cell positions already contain macro offsets; non-PCIE pin offsets are zero"
+      },
+      "trace": {
+        "first": {
+          "seq": "1",
+          "phase": "slr",
+          "iteration": "0",
+          "step": "begin",
+          "S": "6870",
+          "S_optimized": "6868",
+          "smooth": "4632.9383642312341",
+          "invalid_nets": "0",
+          "valid_nets": "1178774",
+          "seam0": "6375",
+          "seam1": "495",
+          "seam2": "0",
+          "pu_slr_moves": "0",
+          "released_preferences": "57141",
+          "x_projections": "0",
+          "y_projections": "0"
+        },
+        "last": {
+          "seq": "280",
+          "phase": "hpio",
+          "iteration": "5",
+          "step": "after_legalization",
+          "S": "12396",
+          "S_optimized": "12394",
+          "smooth": "3350.2783071395638",
+          "invalid_nets": "0",
+          "valid_nets": "1178774",
+          "seam0": "10424",
+          "seam1": "1972",
+          "seam2": "0",
+          "pu_slr_moves": "0",
+          "released_preferences": "171423",
+          "x_projections": "0",
+          "y_projections": "0"
+        },
+        "records": 280,
+        "effects": {
+          "after_timing": {
+            "delta_S": -601,
+            "events": 40,
+            "pu_slr_moves": 353,
+            "x_projections": 0,
+            "y_projections": 0
+          },
+          "after_qp1": {
+            "delta_S": -97188,
+            "events": 40,
+            "pu_slr_moves": 46596,
+            "x_projections": 0,
+            "y_projections": 0
+          },
+          "after_qp2": {
+            "delta_S": -37936,
+            "events": 40,
+            "pu_slr_moves": 31760,
+            "x_projections": 0,
+            "y_projections": 0
+          },
+          "after_spreading": {
+            "delta_S": 139978,
+            "events": 40,
+            "pu_slr_moves": 86494,
+            "x_projections": 32069,
+            "y_projections": 22656
+          },
+          "after_clip": {
+            "delta_S": 292,
+            "events": 40,
+            "pu_slr_moves": 121,
+            "x_projections": 187,
+            "y_projections": 121
+          },
+          "after_legalization": {
+            "delta_S": 968,
+            "events": 40,
+            "pu_slr_moves": 50,
+            "x_projections": 0,
+            "y_projections": 0
+          },
+          "between_iterations_or_phases": {
+            "delta_S": 13,
+            "events": 39,
+            "pu_slr_moves": 0,
+            "x_projections": 0,
+            "y_projections": 0
+          }
+        },
+        "mapping": [
+          {
+            "reload": "0",
+            "units": "582009",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "360881"
+          },
+          {
+            "reload": "0",
+            "units": "582009",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "360881"
+          },
+          {
+            "reload": "14",
+            "units": "582009",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "360881"
+          },
+          {
+            "reload": "84",
+            "units": "582009",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "360881"
+          },
+          {
+            "reload": "98",
+            "units": "582009",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "360881"
+          },
+          {
+            "reload": "140",
+            "units": "448209",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "362212"
+          },
+          {
+            "reload": "154",
+            "units": "448209",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "362212"
+          },
+          {
+            "reload": "196",
+            "units": "448209",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "362212"
+          },
+          {
+            "reload": "238",
+            "units": "448209",
+            "nets": "1178774",
+            "pins": "3852283",
+            "global_marked_excluded": "1",
+            "power_excluded": "2",
+            "incomplete_nets": "0",
+            "optimization_excluded": "302",
+            "internal_pu_nets": "362212"
+          }
+        ]
+      },
+      "qp": {
+        "calls": 80,
+        "accepted": 80,
+        "rollback": 0,
+        "backtracked": 0,
+        "delta_S": -135124,
+        "smooth_delta": -28000.848313790557,
+        "writeback_count_consistent": true,
+        "largest_combined_increase": 0
+      },
+      "phase_budgets": [
+        [
+          "slr",
+          "2",
+          "true"
+        ],
+        [
+          "hpio",
+          "10",
+          "true"
+        ],
+        [
+          "slr",
+          "2",
+          "true"
+        ],
+        [
+          "hpio",
+          "6",
+          "true"
+        ],
+        [
+          "slr",
+          "2",
+          "true"
+        ],
+        [
+          "hpio",
+          "6",
+          "true"
+        ],
+        [
+          "hpio",
+          "6",
+          "true"
+        ],
+        [
+          "hpio",
+          "15",
+          "false"
+        ]
+      ],
+      "phase_completions": [
+        [
+          "slr",
+          "2",
+          "budget"
+        ],
+        [
+          "hpio",
+          "10",
+          "budget"
+        ],
+        [
+          "slr",
+          "2",
+          "budget"
+        ],
+        [
+          "hpio",
+          "6",
+          "budget"
+        ],
+        [
+          "slr",
+          "2",
+          "budget"
+        ],
+        [
+          "hpio",
+          "6",
+          "budget"
+        ],
+        [
+          "hpio",
+          "6",
+          "budget"
+        ],
+        [
+          "hpio",
+          "6",
+          "macro_fixed"
+        ]
+      ]
+    }
+  },
+  "checks": {
+    "disabled_coordinate_reproduction": {
+      "cells": 856998,
+      "changed_cells": 0,
+      "pu_id_changes": 0,
+      "max_abs_dx": 0.0,
+      "max_abs_dy": 0.0,
+      "exact": true
+    },
+    "same_inputs_and_ordinary_pro": true,
+    "same_phase_budgets": true,
+    "quantity_vs_matching_control": {
+      "control": 14372,
+      "quantity": 12396,
+      "delta": -1976,
+      "relative_percent": -13.748956303924297
+    },
+    "quantity_vs_ordinary_pro": {
+      "ordinary_pro": 11085,
+      "quantity": 12396,
+      "delta": 1311
+    },
+    "common_gp_prefix": {
+      "seq": 259,
+      "phase": "hpio",
+      "iteration": 2,
+      "control_S": 14372,
+      "quantity_S": 11771
+    }
+  }
+}
