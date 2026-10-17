@@ -1,3 +1,4 @@
+#include "SllClipTrace.h"
 #include "../../../utils/RuntimeProfiler.h"
 #include <unordered_set>
 /**
@@ -2383,6 +2384,7 @@ bool PlacementInfo::clipPaperRegionLocation(PlacementUnit *pu)
     if (pref.guideY) y = std::max(bottom, std::min(top, y));
     // Projection to the nearest interior point, never to the target center.
     if (x == pu->X() && y == pu->Y()) return false;
+    sll_clip_trace::note(pu->X(), pu->Y(), x, y);
     pu->setAnchorLocationAndForgetTheOriginalOne(x, y);
     return true;
 }
