@@ -1025,6 +1025,10 @@ void ClusterPlacer::placeUnitBaseOnClusterPlacement(const std::vector<std::pair<
     {
         float fX = intXY.first * regionW + regionW / 2;
         float fY = intXY.second * regionH + regionH / 2;
+        if(placementInfo->sparseResourcePlacementEnabled()) {
+            fX+=placementInfo->getGlobalMinX();
+            fY+=placementInfo->getGlobalMinY();
+        }
         cluster2FP_XY.push_back(std::pair<float, float>(fX, fY));
     }
 

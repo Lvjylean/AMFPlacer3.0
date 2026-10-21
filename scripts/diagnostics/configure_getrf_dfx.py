@@ -13,7 +13,7 @@ def main():
     template={k:(v.replace(previous,str(ROOT)) if isinstance(v,str) else v) for k,v in template.items()}
     template.update(jobs='12',ProPrimitiveTiming='false',BipartiteMatchingBackend='legacy_components')
     save(configs/'getrf-dfx-amf-template.json',template)
-    common=dict(IncremenralCompilation=True,part='xcu250-figd2104-2L-e',top='getrf_dfx_top',
+    common=dict(IncrementalCompilation=True,part='xcu250-figd2104-2L-e',top='getrf_dfx_top',
       clock_name='dfx_clk',clock_period_ns=10,vivado='/Projects/Xilinx26/2026.1/Vivado/bin/vivado',
       vivado_threads=4,max_parallel=2,require_distinct_slrs=True,
       amf_config='getrf-dfx-amf-template.json',assembly_xdc_files=[],

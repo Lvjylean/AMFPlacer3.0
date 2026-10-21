@@ -1,3 +1,10 @@
+# 当前整合版本（2026-10-21）
+
+- 本分支按用户明确授权发布 072 配置、算法及多器件查看器。历史段落中的“暂不提交”不约束此次授权发布。
+- 配置入口为 configs/placement/placer.json，生成器默认 combined；hosts.json 保留历史冻结二进制登记，不能冒称本分支构建。
+- VU095/U250 器件策略与 VHK158 受保护的单时钟 LUT/FF 稀疏模型共存；可视化调度仍只选 099。
+- 验证与范围见 docs/research/combined-config-algorithms-viewer-release.md。此发布只构建和回归，不重跑实验。
+
 # AMFplacer3.0 开发约定
 
 - 项目处于 `3.0.0-dev`：保存经过验证的 AMFPlacer 2.0 基础，并逐步实现课题三的 FPGA 增量编译器。未实现的模块必须明确标注计划状态。

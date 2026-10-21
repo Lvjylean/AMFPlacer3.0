@@ -43,6 +43,10 @@ def preflight(config):
         from native_cache_contract import verify_cache
         verify_cache(job['native_static_cache'],dict(job,static_checkpoint=str(common/'common_static_locked.dcp')),amf_configuration(job))
     cfg=amf_configuration(job)
+    from incremental_config import validate_incremental_binary
+    validate_incremental_binary(job,binary)
+    from paper_boundary_config import validate_paper_boundary_binary
+    validate_paper_boundary_binary(cfg,binary)
     if str(cfg['jobs'])!='12': raise ValueError('AMF thread count changed')
     hashes={str(common/'common_static_locked.dcp'):sha(common/'common_static_locked.dcp'),
             str(common/'common_static_shell.json'):sha(common/'common_static_shell.json'),
@@ -89,9 +93,17 @@ def preflight(config):
         hashes[optimized['output']]=optimized['output_sha256']
         hashes[part['reuse_optimization_manifest']]=sha(part['reuse_optimization_manifest'])
     if recoveries and len(recoveries)!=2:raise ValueError('Recovery must explicitly identify both completed module producers')
+    completed_modules={}
+    for part in job['partitions']:
+        if part.get('reuse_completed_module'):
+            if part['id'] not in recoveries:raise ValueError('Completed module requires verified frontend provenance')
+            from completed_module_recovery import verify_completed_module
+            inherited=verify_completed_module(job,part,recoveries[part['id']],SCRIPTS)
+            completed_modules[part['id']]=inherited
+            hashes.update(inherited['hashes'])
     return job,dict(common_static=contract,source_provenance=provenance,input_hashes=hashes,
                     synthesis_reused=bool(recoveries),optimization_reused=bool(recoveries),recoveries=recoveries,
-                    amf_reused=False,static_shell_reused=True)
+                    amf_reused=bool(completed_modules),completed_modules=completed_modules,static_shell_reused=True)
 
 
 def run(config, output, workers_only=False):
@@ -104,6 +116,7 @@ def run(config, output, workers_only=False):
                endpoint='placed_modules_only' if workers_only else 'verified_full_and_partial_bitstreams',
                vivado_placement_executed=False,monitoring_restarted=False)
     save(out/'manifest.json',state)
+    retained=None
     try:
         state['resource_preflight']=require_memory(60)
         frozen=out/'frozen_scripts';frozen.mkdir()
@@ -112,6 +125,17 @@ def run(config, output, workers_only=False):
         state['script_hashes']={p.name:sha(p) for p in frozen.iterdir()}
         environment=dict(os.environ)
         environment['LD_LIBRARY_PATH']=job['amf_runtime_lib']+(':'+environment['LD_LIBRARY_PATH'] if environment.get('LD_LIBRARY_PATH') else '')
+        if job.get('same_session_cache'):
+            if workers_only:raise ValueError('Retained static session requires complete joint acceptance')
+            from retained_joint_session import RetainedJointSession
+            state['state']='same_session_cache_generation';save(out/'manifest.json',state)
+            retained=RetainedJointSession(job,out,frozen,environment)
+            job,certificate=retained.start_and_certify()
+            state.update(job=job,retained_session=certificate)
+            proof['local_cache_generation']=certificate
+            proof['input_hashes'].update({job['native_static_cache']['path']:job['native_static_cache']['sha256'],
+                job['native_static_cache']['contract']:job['native_static_cache']['contract_sha256']})
+            state['resources_after_static_open']=require_memory(80)
         state['state']='parallel_module_branches';save(out/'manifest.json',state)
 
         def worker(part):
@@ -120,6 +144,15 @@ def run(config, output, workers_only=False):
             rec=dict(state='synthesis',started_epoch=started,id=k)
             save(branch/'manifest.json',rec)
             try:
+                if k in proof['completed_modules']:
+                    inherited=proof['completed_modules'][k]
+                    verify_hashes(inherited['hashes'])
+                    rec.update(state='completed',amf_reused=True,coordinate_import_reused=True,
+                               inherited_completed_module=inherited,inherited_frontend=proof['recoveries'][k],
+                               synthesis_reused=True,optimization_reused=True)
+                    for key in ('module','module_manifest_sha256','module_dcp_sha256','cells','binary_sha256'):
+                        rec[key]=inherited[key]
+                    return rec
                 if k in proof['recoveries']:
                     inherited=proof['recoveries'][k]
                     checkpoint=Path(inherited['optimization']['output'])
@@ -128,7 +161,8 @@ def run(config, output, workers_only=False):
                                rm_synth_sha256=inherited['optimization']['input_sha256'])
                 else:
                     front=branch/'synthesis';(front/'inputs').mkdir(parents=True)
-                    for p in frozen.iterdir():shutil.copy2(p,front/'inputs'/p.name)
+                    for p in frozen.iterdir():
+                        if p.is_file() and p.suffix in ('.py','.tcl'):shutil.copy2(p,front/'inputs'/p.name)
                     sources=front/'sources';sources.mkdir(); mapping={}
                     for name in part['rm_rtl_sources']+part.get('rm_ip_scripts',[]):
                         source=Path(name);dest=sources/source.name
@@ -158,7 +192,7 @@ def run(config, output, workers_only=False):
                     rec.update(rm_synth_sha256=optimization['input_sha256'],optimization=optimization)
                 rec.update(state='prepare_amf_import',rm_optimized_sha256=sha(checkpoint))
                 save(branch/'manifest.json',rec)
-                cfg={key:job[key] for key in ('IncremenralCompilation','part','clock_name','clock_period_ns','amf_config','vivado','vivado_threads','static_placement_audit')}
+                cfg={key:job[key] for key in ('IncrementalCompilation','part','clock_name','clock_period_ns','amf_config','vivado','vivado_threads','static_placement_audit')}
                 cfg.update(active_partition=part['active_partition'],pblock=part['pblock'],
                            static_checkpoint=str(Path(job['common_static_shell_run'])/'common_static_locked.dcp'),
                            reference_checkpoint=str(Path(job['shell_run'])/'base_routed.dcp'),
@@ -167,7 +201,8 @@ def run(config, output, workers_only=False):
                 if job.get('native_static_cache'):
                     cfg.update(native_static_cache=job['native_static_cache'],module_id=part['id'],
                                native_dfx_edge_policy=job.get('native_dfx_edge_policy','off'),
-                               native_pin_access_policy=job.get('native_pin_access_policy','off'))
+                               native_pin_access_policy=job.get('native_pin_access_policy','off'),
+                               native_local_pin_access_policy=job.get('native_local_pin_access_policy','off'))
                     if job.get('clock_handoff_mode') == 'inherit_static_primary':
                         cfg.update(clock_handoff_mode=job['clock_handoff_mode'],rm_clock_port=part['rm_clock_port'])
                     if part.get('reuse_native_export'):cfg['reuse_native_export']=part['reuse_native_export']
@@ -185,7 +220,8 @@ def run(config, output, workers_only=False):
                            module_dcp_sha256=m['outputs']['rm_amf_placed.dcp']['sha256'],
                            cells=m['amf_import_acceptance']['cells'])
             except Exception as error:
-                rec.update(state='failed',error=repr(error));raise
+                import traceback
+                rec.update(state='failed',error=repr(error),error_traceback=traceback.format_exc());raise
             finally:
                 rec.update(ended_epoch=time.time(),seconds=time.monotonic()-begin)
                 save(branch/'manifest.json',rec)
@@ -201,27 +237,36 @@ def run(config, output, workers_only=False):
             return out
 
         state['state']='joint_route';save(out/'manifest.json',state)
-        joint=out/'joint';(joint/'inputs').mkdir(parents=True)
-        for p in frozen.glob('*.tcl'):shutil.copy2(p,joint/'inputs'/p.name)
-        metadata=joint/'inputs/common_static';metadata.mkdir()
+        joint=out/'joint'
+        if retained is None:
+            (joint/'inputs').mkdir(parents=True)
+            for p in frozen.glob('*.tcl'):shutil.copy2(p,joint/'inputs'/p.name)
+        metadata=joint/'inputs/common_static'
+        if retained is None:metadata.mkdir()
         common=Path(job['common_static_shell_run'])
         for p in job['partitions']:
-            k=p['id'];shutil.copy2(common/(k+'_common_static_boundary.tcldata'),metadata/(k+'_common_static_boundary.tcldata'))
+            k=p['id']
+            if retained is None:shutil.copy2(common/(k+'_common_static_boundary.tcldata'),metadata/(k+'_common_static_boundary.tcldata'))
         extra=dict(common_static_checkpoint=str(common/'common_static_locked.dcp'),common_static_metadata=str(metadata),
                    reference_checkpoint=str(Path(job['shell_run'])/'base_routed.dcp'))
         native_job=copy.deepcopy(job)
         native_job['joint_backend_source_workers']={k:w['module'] for k,w in workers.items()}
         for k,w in workers.items():
             dest=joint/'inputs'/('worker_'+k);dest.mkdir()
-            for name in ('placement.tsv','blocked_sites.txt'):shutil.copy2(Path(w['module'])/name,dest/name)
+            names=['placement.tsv','blocked_sites.txt']
+            if job.get('native_local_pin_access_policy','off')!='off':names.append('lut_pin_assignments.tsv')
+            for name in names:shutil.copy2(Path(w['module'])/name,dest/name)
             extra.update({ 'worker_'+k:str(dest),'rm_'+k+'_checkpoint':str(Path(w['module'])/'rm_amf_placed.dcp'),
                           'expected_cells_'+k:w['cells']})
-        settings=flow.settings(native_job,joint,extra)
-        jm=dict(state='running',job=native_job,started_epoch=time.time(),source_workers=workers,outputs={})
+        settings=retained.settings if retained is not None else flow.settings(native_job,joint,extra)
+        jm=dict(state='running',job=native_job,started_epoch=retained.started_epoch if retained else time.time(),source_workers=workers,outputs={})
         save(joint/'manifest.json',jm)
         try:
-            jm['process']=command([job['vivado'],'-mode','batch','-source',str(joint/'inputs/dfx_joint_backend.tcl'),
-                                   '-tclargs',str(settings)],joint/'exec',env=environment)
+            if retained is not None:
+                jm['process']=retained.finish(workers)
+            else:
+                jm['process']=command([job['vivado'],'-mode','batch','-source',str(joint/'inputs/dfx_joint_backend.tcl'),
+                                       '-tclargs',str(settings)],joint/'exec',env=environment)
             for name in ('joint_amf_placed.dcp','joint_routed.dcp'):
                 p=joint/name;jm['outputs'][name]=dict(path=str(p),sha256=sha(p),bytes=p.stat().st_size)
             times=[line.split('\t') for line in (joint/'stage_times.tsv').read_text().splitlines()]
@@ -236,6 +281,7 @@ def run(config, output, workers_only=False):
         verify_hashes(proof['input_hashes'])
         state.update(state='completed',acceptance_manifest_sha256=sha(out/'acceptance/manifest.json'))
     except Exception as error:
+        if retained is not None:retained.abort(repr(error))
         state.update(state='failed',error=repr(error));raise
     finally:
         state.update(ended_epoch=time.time(),wall_seconds=time.monotonic()-began)

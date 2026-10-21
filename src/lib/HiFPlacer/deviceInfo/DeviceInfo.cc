@@ -99,7 +99,7 @@ DeviceInfo::DeviceInfo(std::map<std::string, std::string> &JSONCfg, std::string 
     {
         loadBELType2FalseBELType(JSONCfg["mergedSharedCellType2sharedCellType"]);
     }
-    deviceName = _deviceName;
+    deviceName = amf_device::canonicalDeviceName(_deviceName);
 
     std::string unzipCmnd = "unzip -p " + deviceArchievedTextFileName;
     FILEbuf sbuf(popen(unzipCmnd.c_str(), "r"));
@@ -232,8 +232,8 @@ DeviceInfo::DeviceInfo(std::map<std::string, std::string> &JSONCfg, std::string 
     print_info("There are " + std::to_string(clockRegionNumY) + "x" + std::to_string(clockRegionNumX) +
                "(YxX) clock regions on the device");
 
-    loadClockResourceCapacities();
-    mapClockRegionToArray();
+    if (JSONCfg.count("clock region geometry file")) initializeSparseClockGeometry();
+    else { loadClockResourceCapacities(); mapClockRegionToArray(); }
     for (const auto &key : {"PhysicalBoundaryMode", "PhysicalBoundaryAudit", "BoundaryAwareClustering"})
         if (JSONCfg.count(key) && JSONCfg[key] != "true" && JSONCfg[key] != "false")
             throw std::runtime_error(std::string(key) + " must be true or false");
@@ -307,7 +307,7 @@ void DeviceInfo::writeClockResourceCapacityJson(std::ostream &out) const
         }
         out << '"';
     };
-    out << "{\"mode\":\"" << (clockResourceCapacityTable ? "device_table" : "legacy_24_12")
+    out << "{\"mode\":\"" << (sparseClockGeometry ? "single_clock_pilot_not_architectural_capacity" : (clockResourceCapacityTable ? "device_table" : "legacy_24_12"))
         << "\",\"resource_state\":\"nominal\",\"archive_hash_validation_in_cpp\":false"
         << ",\"geometry_validation\":" << (clockResourceCapacityTable ? "true" : "false")
         << ",\"source_file\":";
@@ -341,6 +341,44 @@ void DeviceInfo::writeClockResourceCapacityJson(std::ostream &out) const
             << ",\"bbox_clock_limit\":" << capacity.bboxClockLimit << '}';
     }
     out << "]}";
+}
+
+void DeviceInfo::initializeSparseClockGeometry()
+{
+    if (JSONCfg["device"]!="VHK158" || JSONCfg["VHK158LutFfPilot"]!="true" ||
+        JSONCfg["noBlockAware"]!="true" || JSONCfg["BoundaryAwareClustering"]=="true" ||
+        JSONCfg["PhysicalBoundaryMode"]=="true" || JSONCfg["ClockRegionColumnStretch"]=="true" ||
+        JSONCfg["IncrementalCompilation"]=="true")
+        throw std::runtime_error("Sparse VHK158 LUT/FF pilot requires legacy/boundary clustering, stretch, physical timing and DFX off");
+    sparseClockGeometry.reset(new SparseClockGeometry(JSONCfg["clock region geometry file"],JSONCfg["physical device part"]));
+    clockRegionNumX=sparseClockGeometry->nx; clockRegionNumY=sparseClockGeometry->ny;
+    for(const auto &e:sparseClockGeometry->regions) {
+        if(!coord2ClockRegion.count(e.first)) coord2ClockRegion[e.first]=new ClockRegion(e.first.first,e.first.second,e.second.bounds);
+        auto r=coord2ClockRegion.at(e.first); const auto &b=e.second.bounds;
+        r->setLeft(b[0]);r->setRight(b[1]);r->setBottom(b[2]);r->setTop(b[3]);
+        ClockRegionCapacity cap;cap.slr=e.second.slr;cap.halfColumnLimit=1;cap.bboxClockLimit=1;
+        r->setClockResourceCapacity(cap);r->initializeSingleClockPilot();
+    }
+    for(auto site:sites) {
+        SparseClockGeometry::Key k;
+        if(!sparseClockGeometry->exact(site->X(),site->Y(),k) ||
+           k!=std::make_pair(site->getClockRegionX(),site->getClockRegionY()) ||
+           sparseClockGeometry->regions.at(k).slr!=site->getSLRId())
+            throw std::runtime_error("Site/CR/SLR physical membership mismatch: "+site->getName());
+    }
+    clockRegions.assign(clockRegionNumY,std::vector<ClockRegion*>(clockRegionNumX,nullptr));clockColumns.clear();
+    std::vector<int> slrs(clockRegionNumY,-1);
+    for(const auto &e:sparseClockGeometry->regions) {
+        auto r=coord2ClockRegion.at(e.first);clockRegions[e.first.second][e.first.first]=r;
+        auto &slr=slrs[e.first.second];
+        if(slr!=-1 && slr!=e.second.slr) throw std::runtime_error("Mixed SLR row unsupported by timing heuristic");
+        slr=e.second.slr;
+        auto c=r->getClockColumns()[0][0];c->setId(clockColumns.size());clockColumns.push_back(c);
+    }
+    clockRegionYSLRBoundaryCounts.assign(clockRegionNumY,0);
+    for(int y=1;y<clockRegionNumY;++y) clockRegionYSLRBoundaryCounts[y]=clockRegionYSLRBoundaryCounts[y-1]+(slrs[y]!=slrs[y-1]);
+    print_info("Explicit sparse CR geometry: "+std::to_string(sparseClockGeometry->regions.size())+
+        " actual regions, "+std::to_string(sites.size())+" verified sites; single-clock pilot, no inferred CRs.");
 }
 
 void DeviceInfo::mapClockRegionToArray()

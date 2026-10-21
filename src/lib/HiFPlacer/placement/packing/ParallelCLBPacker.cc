@@ -1,3 +1,4 @@
+#include "VisualizationTrace.h"
 #include "../../../utils/RuntimeProfiler.h"
 /**
  * @file ParallelCLBPacker.cc
@@ -708,6 +709,7 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
             }
         }
         setPULocationToPackedSite();
+        dumpVisualizationSnapshot("packing", iterCnt, "after_pack_iteration");
         int numFixed = 0;
         for (auto PU : placementInfo->getPlacementUnits())
             if (PU->isFixed())
@@ -724,6 +726,7 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
             WLOptimizer->GlobalPlacementQPSolve(placementInfo->getPseudoNetWeight() * 2 * (1 + fixedRatio), true, true,
                                                 true, true, false, 1, timingOptimizer);
             dumpAllCellsCoordinate();
+            dumpVisualizationSnapshot("packing", iterCnt, "after_unfixed_qp");
         }
 
         print_status("ParallelCLBPacker: current HPWL=" + std::to_string(placementInfo->updateB2BAndGetTotalHPWL()));
@@ -1109,6 +1112,25 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
     updatePUCell2PackingSite();
     setPULocationToPackedSite();
     placementInfo->updateElementBinGrid();
+    if (placementInfo->hasHardRegions())
+    {
+        size_t checkedDspSites = 0;
+        for (const auto &entry : placementInfo->getPULegalSite())
+        {
+            if (!entry.first->checkHasDSP())
+                continue;
+            for (auto site : entry.second)
+            {
+                if (!placementInfo->hardRegionAllows(entry.first, site))
+                    throw std::runtime_error("Post-packing DSP hard-region violation: " +
+                                             entry.first->getName() + " -> " + site->getName());
+                ++checkedDspSites;
+            }
+        }
+        print_info("DSP hard-region packing audit: checked_sites=" + std::to_string(checkedDspSites) +
+                   " rejected_candidates=" + std::to_string(hardRegionRejectedDspCandidates) +
+                   " rejected_swaps=" + std::to_string(hardRegionRejectedDspSwaps));
+    }
     dumpFinalPacking();
 }
 
@@ -1612,6 +1634,13 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
                             if (candidatePackingSite->getNonCLBCell())
                                 continue;
 
+                            // DSP candidates bypass PackingCLBCluster::checkAddPU.
+                            // Keep exact DFX ownership and boundary masks authoritative.
+                            if (!placementInfo->hardRegionAllows(curPU, curDeviceSite))
+                            {
+                                ++hardRegionRejectedDspCandidates;
+                                continue;
+                            }
                             if (sitesCandidates.find(candidatePackingSite) == sitesCandidates.end())
                                 cellId2CandidateSites[cellId].push_back(candidatePackingSite);
                             sitesCandidates.insert(candidatePackingSite);
@@ -1706,6 +1735,9 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
 
                 if (curPU->getDSPNum() == 1)
                 {
+                    if (!placementInfo->hardRegionAllows(curPU, targetPackingSite->getCLBSite()))
+                        throw std::runtime_error("DSP detailed-placement commit violates hard region: " +
+                                                 curPU->getName());
                     cellId2CandidateSites[curCellId][0]->clearNonCLBCell();
                     assert(bestEndChoice < cellId2CandidateSites[curCellId].size());
                     assert(!targetPackingSite->getNonCLBCell());
@@ -1883,6 +1915,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
 
     print_status("ParallelCLBPacker: conducted timing-driven detailed placement (shortest path) and " +
                  std::to_string(replaceCnt) + " PlacementUnits are replaced.");
+    dumpVisualizationSnapshot("detailed", -1, "shortest_path");
     outfileTcl.close();
     return replaceCnt;
 }
@@ -2316,6 +2349,13 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
                             if (candidatePackingSite->getNonCLBCell())
                                 continue;
 
+                            // DSP candidates bypass PackingCLBCluster::checkAddPU.
+                            // Keep exact DFX ownership and boundary masks authoritative.
+                            if (!placementInfo->hardRegionAllows(curPU, curDeviceSite))
+                            {
+                                ++hardRegionRejectedDspCandidates;
+                                continue;
+                            }
                             if (sitesCandidates.find(candidatePackingSite) == sitesCandidates.end())
                                 cellId2CandidateSites[cellId].push_back(candidatePackingSite);
                             sitesCandidates.insert(candidatePackingSite);
@@ -2406,6 +2446,9 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
 
                 if (curPU->getDSPNum() == 1)
                 {
+                    if (!placementInfo->hardRegionAllows(curPU, targetPackingSite->getCLBSite()))
+                        throw std::runtime_error("DSP detailed-placement commit violates hard region: " +
+                                                 curPU->getName());
                     cellId2CandidateSites[curCellId][0]->clearNonCLBCell();
                     assert(bestEndChoice < cellId2CandidateSites[curCellId].size());
                     assert(!targetPackingSite->getNonCLBCell());
@@ -2453,6 +2496,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
 
     print_status("ParallelCLBPacker: conducted timing-driven detailed placement (shortest path) and " +
                  std::to_string(replaceCnt) + " PlacementUnits are replaced.");
+    dumpVisualizationSnapshot("detailed", -1, "shortest_path");
     outfileTcl.close();
     return replaceCnt;
 }
@@ -2779,6 +2823,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSl
 
     print_status("ParallelCLBPacker: conducted timing-driven detailed placement (LUT-FF pairs) and " +
                  std::to_string(replaceCnt) + " PlacementUnits are replaced.");
+    dumpVisualizationSnapshot("detailed", -1, "LUT-FF_pairs");
     if (placementInfo->getIncrementalContext().enabled)
         print_info("DFX_DETAIL_STATIC_NEIGHBOR_ANCHOR_LOOKUPS=" + std::to_string(staticNeighborAnchorLookups));
 
@@ -3391,6 +3436,12 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(float disOffset, int i
                         auto curTargetPU = placementInfo->getPlacementUnitByCell(curTargeDSPCell);
                         if (PUsDontTouch.find(curTargetPU) != PUsDontTouch.end() || curTargetPU->getDSPNum() != 1)
                             continue;
+                        if (!placementInfo->hardRegionAllows(curPU, candidatePackingSite->getCLBSite()) ||
+                            !placementInfo->hardRegionAllows(curTargetPU, curSite->getCLBSite()))
+                        {
+                            ++hardRegionRejectedDspSwaps;
+                            continue;
+                        }
                         if (curPU->getDSPNum() == 1)
                         {
 
@@ -3652,6 +3703,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(float disOffset, int i
 
     print_status("ParallelCLBPacker: conducted timing-driven detailed placement (swaping) and " +
                  std::to_string(replaceCnt) + " PlacementUnits are replaced.");
+    dumpVisualizationSnapshot("detailed", -1, "swaping");
     return replaceCnt;
 }
 
@@ -3971,6 +4023,7 @@ void ParallelCLBPacker::exceptionHandling(bool verbose)
         timingOptimizer->conductStaticTimingAnalysis();
     }
 
+    dumpVisualizationSnapshot("packing", -1, "after_exception_handling");
     if (verbose)
     {
         print_status("ParallelCLBPacker::exceptionHandling done!");
@@ -5354,6 +5407,26 @@ void ParallelCLBPacker::dumpPlacementTcl(std::string dumpTclFile)
         dumpCLBPlacementTcl(outfileTcl, true);
         dumpCLBPlacementTcl(outfileTcl, false);
         outfileTcl.close();
+        if(placementInfo->localPinAccess.enabled) {
+            AMF_PROFILE_SCOPE("native_lut_pin_export", "export AMF-selected LUT physical inputs");
+            std::ofstream pins(JSONCfg.at("Native workspace")+"/lut_pin_assignments.tsv");
+            pins<<"cell\tsite\tbel\tlogical_pin\tphysical_pin\n";
+            for(auto ps:packingSites)if(ps->getDeterminedClusterInSite()) {
+                amf_native::LutPinAssignment::Result chosen;
+                if(!ps->chooseLocalPinMapping(&chosen))throw std::runtime_error("Export local pin access violation");
+                auto slots=ps->getSlotMapping();std::set<unsigned> seen;
+                for(int h=0;h<2;++h)for(int lane=0;lane<2;++lane)for(int k=0;k<4;++k) {
+                    auto c=slots.LUTs[h][lane][k];
+                    if(!c||c->isVirtualCell()||!seen.insert(c->getCellId()).second)continue;
+                    if(!amf_native::LocalPlacementAccess::logicLut(c))continue;
+                    if(!chosen.lockPins.count(c->getCellId()))throw std::runtime_error("LUT missing physical input plan");
+                    for(const auto &pin:chosen.lockPins.at(c->getCellId()))
+                        pins<<c->getName()<<'\t'<<ps->getCLBSite()->getName()<<'\t'
+                            <<char('A'+h*4+k)<<(lane?"5LUT":"6LUT")<<'\t'<<pin.first<<"\tA"<<pin.second<<'\n';
+                }
+            }
+            if(!pins.good())throw std::runtime_error("LUT pin plan write failed");
+        }
         if(designInfo->nativeStaticCache) {
             AMF_PROFILE_SCOPE("export_native_cache", "persist final static fabric state");
             designInfo->nativeStaticCache->savePlacement(dumpTclFile,JSONCfg);
@@ -5599,6 +5672,7 @@ void ParallelCLBPacker::dumpFinalPacking()
 
 void ParallelCLBPacker::dumpAllCellsCoordinate()
 {
+    if (visualization_trace::enabled(JSONCfg)) return;
     AMF_PROFILE_FUNCTION("diagnostic_output");
     if (JSONCfg.find("DumpAllCoordTrace") != JSONCfg.end())
     {
@@ -5639,4 +5713,18 @@ void ParallelCLBPacker::dumpAllCellsCoordinate()
             print_status("GlobalPlacer: dumped coordinate archieve to: " + dumpFile);
         }
     }
+}
+
+void ParallelCLBPacker::dumpVisualizationSnapshot(const char* phase, int iteration, const char* step) {
+ if(!visualization_trace::enabled(JSONCfg)) return;
+ std::map<int,std::pair<float,float>> anchors;
+ for(auto site:packingSites) if(site) {
+  if(auto cluster=site->getDeterminedClusterInSite()) {
+   for(auto pu:cluster->getPUs()) anchors[pu->getId()]={site->getCLBSite()->X(),site->getCLBSite()->Y()};
+  } else if(site->checkIsNonCLBSite() && site->getNonCLBCell()) {
+   auto pu=placementInfo->getPlacementUnitByCellId(site->getNonCLBCell()->getCellId());
+   if(!pu->isLocked()) anchors[pu->getId()]={site->getCLBSite()->X(),site->getCLBSite()->Y()};
+  }
+ }
+ visualization_trace::snapshot(placementInfo,JSONCfg,phase,-1,iteration,step,anchors);
 }

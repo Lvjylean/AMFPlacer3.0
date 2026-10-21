@@ -14,6 +14,7 @@
  */
 
 #include "GlobalPlacer.h"
+#include "VisualizationTrace.h"
 #include "MacroMechanismTrace.h"
 #include "MacroStudyControl.h"
 
@@ -155,7 +156,14 @@ void GlobalPlacer::GlobalPlacement_CLBElements(int iterNum, bool continuePreviou
     // Only a newly built multi-SLR cluster generation starts an SLR phase.
     // Give it a separate, bounded copy of this call's ordinary GP budget.
     // A normal early exit ends that phase, not the following HPIO phase.
-    if (iterNum > 0 && timingOptimizer && placementInfo->paperBoundaryClusteringEnabled() &&
+    if (iterNum > 0 && timingOptimizer && placementInfo->paperBoundaryMergedStages())
+    {
+        // Historical merged mode prepares both regions without an extra GP
+        // phase. The original ordinary budget/convergence rules remain intact.
+        if (placementInfo->paperSLRStage()) timingOptimizer->spreadPaperBoundarySLR();
+        continuePreviousIteration = true;
+    }
+    else if (iterNum > 0 && timingOptimizer && placementInfo->paperBoundaryClusteringEnabled() &&
         placementInfo->paperSLRStage())
     {
         {
@@ -172,7 +180,7 @@ void GlobalPlacer::GlobalPlacement_CLBElements(int iterNum, bool continuePreviou
     }
     const char *phase = placementInfo->paperBoundaryClusteringEnabled() &&
                                 !placementInfo->getRegionPreferences().empty()
-                            ? (placementInfo->paperSLRStage() ? "slr" : "hpio")
+                            ? placementInfo->paperBoundaryPhaseName()
                             : "ordinary";
     GlobalPlacement_CLBPhase(iterNum, continuePreviousIteration, lowerBoundIterNum,
                              enableMacroPseudoNet2Site, stopStrictly, spreadRegionBinNumLimit,
@@ -239,6 +247,7 @@ void GlobalPlacer::GlobalPlacement_CLBPhase(int iterNum, bool continuePreviousIt
 
         auto diagnosticSnapshot = [&](const char *step) {
             macro_mechanism::snapshot(placementInfo, CARRYMacroLegalizer, phase, i, step);
+            visualization_trace::snapshot(placementInfo, JSONCfg, phase, diagnosticRound, i, step);
         };
         diagnosticSnapshot("begin");
         float displacementLimit = -10;
@@ -451,6 +460,7 @@ void GlobalPlacer::GlobalPlacement_fixedCLB(int iterNum, float pseudoNetWeight)
     WLOptimizer->reloadPlacementInfo();
 
     dumpCoord();
+    visualization_trace::snapshot(placementInfo, JSONCfg, "initial", 0, -1, "before_qp");
     int lowerBoundIterNum = 6;
     for (auto curCell : placementInfo->getCells())
     {
@@ -466,8 +476,10 @@ void GlobalPlacer::GlobalPlacement_fixedCLB(int iterNum, float pseudoNetWeight)
     }
     for (int i = 0; i < iterNum; i++)
     {
-        for (int j = 0; j < lowerBoundIterNum; j++)
+        for (int j = 0; j < lowerBoundIterNum; j++) {
             WLOptimizer->GlobalPlacementQPSolve(pseudoNetWeight, j == 0, false);
+            visualization_trace::snapshot(placementInfo, JSONCfg, "initial", i, j, "after_qp");
+        }
         if (dumpOptTrace)
         {
             dumpCoord();
@@ -988,6 +1000,7 @@ void GlobalPlacer::dumpFFCoordinate()
 
 void GlobalPlacer::dumpAllCellsCoordinate()
 {
+    if (visualization_trace::enabled(JSONCfg)) return;
     AMF_PROFILE_FUNCTION("diagnostic_output");
     if (JSONCfg.find("DumpAllCoordTrace") != JSONCfg.end())
     {

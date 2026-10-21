@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """OOC export -> native cache/placement -> pure coordinate import; no static query."""
 import argparse,csv,json,os,shutil,time,subprocess
+from incremental_config import normalize_incremental_config
 from pathlib import Path
 from parallel_runtime import command,verify_hashes
 from run_dfx import amf_configuration,save,sha,source_provenance,tcl_word,placement_rows
@@ -8,13 +9,17 @@ from optimized_rm_contract import verify_optimized
 from native_cache_contract import verify_cache, verify_export_scripts, MODEL_KEYS
 
 def _run(config,output,binary,started_epoch):
-    job=json.loads(Path(config).read_text());out=Path(output).resolve();out.mkdir(parents=True,exist_ok=False)
+    job=normalize_incremental_config(json.loads(Path(config).read_text()));out=Path(output).resolve();out.mkdir(parents=True,exist_ok=False)
     frozen=out/'inputs';frozen.mkdir();placement=out/'placement';placement.mkdir()
     (out/'reports/physical').mkdir(parents=True)
     for p in Path(__file__).parent.glob('*.tcl'):shutil.copy2(p,frozen/p.name)
     native=job['native_static_cache'];cache=Path(native['path']);contract=Path(native['contract'])
     expected={str(cache):native['sha256'],str(contract):native['contract_sha256']}
     cfg=amf_configuration(job);c=verify_cache(native,job,cfg)
+    from incremental_config import validate_incremental_binary
+    validate_incremental_binary(dict(job, IncrementalCompilation=True),binary)
+    from paper_boundary_config import validate_paper_boundary_binary
+    validate_paper_boundary_binary(cfg,binary)
     if job.get('native_dfx_edge_policy','off')!='off':
         capability=json.loads(subprocess.check_output([str(binary),'--capabilities'],text=True))
         if capability.get('native_dfx_edge_policy_schema')!=1:
@@ -23,6 +28,11 @@ def _run(config,output,binary,started_epoch):
         capability=json.loads(subprocess.check_output([str(binary),'--capabilities'],text=True))
         if capability.get('native_pin_cache_packing_schema')!=1:
             raise ValueError('Binary cannot enforce cached pin-access masks')
+    local_policy=job.get('native_local_pin_access_policy','off')
+    if local_policy!='off':
+        capability=json.loads(subprocess.check_output([str(binary),'--capabilities'],text=True))
+        if local_policy!='fixed-static-local-entrance-v2' or capability.get('native_local_pin_access_schema')!=2:
+            raise ValueError('Binary cannot enforce local entrance constraints')
     optimization=verify_optimized(job['rm_optimization_manifest'],job)
     if Path(optimization['output']).resolve()!=Path(job['rm_checkpoint']).resolve():raise ValueError('RM checkpoint is not the certified OOC opt output')
     cfg.update({'ClockPeriod':str(job['clock_period_ns']),
@@ -30,10 +40,11 @@ def _run(config,output,binary,started_epoch):
         'Native static shell sha256':c['static_shell_sha256'],'Native active module':job['module_id'],
         'Native DFX edge policy':job.get('native_dfx_edge_policy','off'),
         'Native pin access policy':job.get('native_pin_access_policy','off'),
+        'Native local pin access policy':local_policy,
         'Native module netlist':str(out/'ooc/netlist.txt'),'Native module ports file':str(out/'ooc/ports.tsv'),
         'Native workspace':str(out/'native'),'SRL control metadata file':str(out/'ooc/srl_controls.tsv'),
         'DSP registered outputs file':str(out/'ooc/dsp_registered_outputs.txt'),
-        'IncremenralCompilation':'true','dumpDirectory':str(placement),'DumpCLBPacking':'DumpCLBPacking',
+        'IncrementalCompilation':'true','dumpDirectory':str(placement),'DumpCLBPacking':'DumpCLBPacking',
         'BoundaryReportDirectory':str(out/'reports/physical')})
     if cfg['device']!=c['device']:raise ValueError('Native device mismatch')
     m=dict(schema='amf-native-module-v1',state='running',started_epoch=started_epoch,job=job,stages=[],outputs={},
@@ -90,6 +101,10 @@ def _run(config,output,binary,started_epoch):
         rows=placement_rows(placement/'DumpCLBPacking-first-0.tcl',active,set((out/'allowed_sites.txt').read_text().splitlines()),set((out/'blocked_sites.txt').read_text().splitlines()))
         (out/'placement.tsv').write_text(''.join(n+'\t'+v+'\n' for n,v in sorted(rows.items())))
         settings.update(output=str(out),active_partition=job['active_partition'])
+        if local_policy!='off':
+            shutil.copy2(out/'native/lut_pin_assignments.tsv',out/'lut_pin_assignments.tsv')
+            settings['native_local_pin_policy']=1
+            m['lut_pin_plan_sha256']=sha(out/'lut_pin_assignments.tsv')
         if job.get('clock_handoff_mode') == 'inherit_static_primary':
             settings.update(clock_handoff_mode=job['clock_handoff_mode'],rm_clock_port=job['rm_clock_port'])
         stage('coordinate_import','dfx_native_rm_import.tcl',settings)

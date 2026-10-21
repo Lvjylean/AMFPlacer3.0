@@ -2,6 +2,7 @@
 """Create a first DFX configuration and locked shell from an RTL bblock marker."""
 import argparse
 import datetime as dt
+from incremental_config import normalize_incremental_config
 import json
 import re
 from pathlib import Path
@@ -13,8 +14,8 @@ from run_dfx import save, sha, tcl_word, SCRIPT
 
 def run(args):
     path = Path(args.config).resolve()
-    job = json.loads(path.read_text())
-    if job.get('IncremenralCompilation') not in (True,'true'): raise ValueError('Explicit DFX enable required')
+    job = normalize_incremental_config(json.loads(path.read_text()))
+    if job.get('IncrementalCompilation') not in (True,'true'): raise ValueError('Explicit DFX enable required')
     for key in ('rtl_sources','xdc_files','part','top','pblock','pblock_ranges','clock_name','clock_period_ns','vivado'):
         if key not in job: raise ValueError('Missing shell key: '+key)
     hashes = {}

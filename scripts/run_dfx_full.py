@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import subprocess
 import time
 import zipfile
@@ -23,6 +24,10 @@ def run(args):
     setup_begin=time.monotonic()
     job=load(args.config);cfg=amf_configuration(job)
     binary=Path(args.binary).resolve()
+    from incremental_config import validate_incremental_binary
+    validate_incremental_binary(job,binary)
+    from paper_boundary_config import validate_paper_boundary_binary
+    validate_paper_boundary_binary(cfg,binary)
     helper=binary.parent/'partitionHyperGraph'
     if sha(helper)!=job['runtime_helper_sha256'] or not os.access(helper,os.X_OK):raise ValueError('Graph partition helper absent/changed/not executable')
     capability=json.loads(subprocess.check_output([str(binary),'--capabilities'],text=True))
@@ -74,8 +79,24 @@ def run(args):
     def stage(name,cmd,env=None):
         update(name);started=time.time();begin=time.monotonic()
         with (out/'logs'/(name+'.log')).open('w') as log:
-            p=subprocess.Popen(cmd,cwd=out,stdout=log,stderr=subprocess.STDOUT,env=env)
-            m['child_pid']=p.pid;update(name);rc=p.wait()
+            from native_pin_cache_auto import enabled, check_budget
+            bounded = enabled(job)
+            p=subprocess.Popen(cmd,cwd=out,stdout=log,stderr=subprocess.STDOUT,env=env,start_new_session=bounded)
+            m['child_pid']=p.pid;update(name)
+            try:
+                if bounded:
+                    while p.poll() is None:
+                        check_budget(out);time.sleep(.1)
+                    rc=p.returncode;check_budget(out)
+                else: rc=p.wait()
+            except BaseException:
+                if p.poll() is None:
+                    os.killpg(p.pid,signal.SIGTERM)
+                    try:p.wait(timeout=5)
+                    except subprocess.TimeoutExpired:os.killpg(p.pid,signal.SIGKILL);p.wait()
+                m['stages'].append(dict(name=name,command=cmd,exit_code=p.returncode,
+                    seconds=time.monotonic()-begin,started_epoch=started,ended_epoch=time.time(),budget_exceeded=True))
+                update(name);raise
         m['stages'].append(dict(name=name,command=cmd,exit_code=rc,seconds=time.monotonic()-begin,started_epoch=started,ended_epoch=time.time()))
         update(name)
         if rc:raise RuntimeError(name+' failed; preserve this run')
@@ -115,6 +136,8 @@ def run(args):
             if job.get('reuse_prepared_input_run'):raise ValueError('Native capture requires ports from the matching ordinary full export; use explicit historical migration for old runs')
             extra['native_cache_capture']=1
             extra['native_resource_inventory']=int(job.get('native_dfx_edge_policy','off')!='off')
+        from native_pin_cache_auto import prepare as prepare_pin_topology
+        extra.update(prepare_pin_topology(job,out))
         settings_path=settings(job,out,extra)
         save(out/'inputs/job.json',job)
         if job.get('recover_exact_preparation'):
@@ -152,7 +175,7 @@ def run(args):
             measured('netlist_compression_seconds',compress_netlist)
         else:
             m['preparation_timings']['netlist_compression_reused'] = True
-        cfg.update({'IncremenralCompilation':'true','DFX placement mode':'full',
+        cfg.update({'IncrementalCompilation':'true','DFX placement mode':'full',
                     'DFX regions file':str(out/'hard_regions.tsv'),'DFX region sites file':str(out/'hard_region_sites.tsv'),
                     'SRL control metadata file':str(out/'srl_controls.tsv'),'DSP registered outputs file':str(out/'dsp_registered_outputs.txt'),
                     'vivado extracted design information file':str(out/'netlist.zip'),'clock file':str(out/'clocks'),

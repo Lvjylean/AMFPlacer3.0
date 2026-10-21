@@ -4,19 +4,15 @@ source [file join [file dirname [info script]] dfx_multi_common.tcl]
 source [file join [file dirname [info script]] dfx_boundary_compatibility.tcl]
 source [file join [file dirname [info script]] dfx_common_static_shell.tcl]
 source [file join [file dirname [info script]] dfx_joint_checks.tcl]
+source [file join [file dirname [info script]] dfx_clock_guidance.tcl]
+source [file join [file dirname [info script]] dfx_pin_owner_overlay.tcl]
+source [file join [file dirname [info script]] dfx_same_session.tcl]
 proc main {} {
  global dfx
  set out $dfx(output)
  set_param general.maxThreads $dfx(vivado_threads)
  if {$dfx(vivado_threads)!=4 || $dfx(clock_period_ns)!=$dfx(experiment_clock_period_ns) || $dfx(static_routing_containment)} {error "Unexpected joint backend conditions"}
  if {![info exists dfx(backend_place_mode)] || $dfx(backend_place_mode) ne "route-only"} {error "Explicit route-only backend contract required"}
- set requests {}
- # Module inputs already carry the optimized netlist and exact AMF coordinates.
- # They are created at AMF import completion, before any Vivado placer/router.
- foreach row $dfx(rps) {
-  lassign $row id rp pb
-  dict set requests $id [joint::requested $id $rp]
- }
  # The producer already removed every old RM and locked static routing.
  # Reject an implemented-RM input instead of silently blackboxing it here.
  amf_dfx::timed open_common_static_shell {open_checkpoint $dfx(common_static_checkpoint)}
@@ -28,6 +24,15 @@ proc main {} {
  amf_dfx::timed verify_common_static_input {amf_common_static::assert_empty consumer $boundaries}
  dfx_clock_contract::assert_top common_static
  set original_clocks [dfx_clock_contract::signature]
+ amf_same_session::enrich_and_wait
+ set requests {}
+ # Module inputs already carry the optimized netlist and exact AMF coordinates.
+ # They are created at AMF import completion, before any Vivado placer/router.
+ foreach row $dfx(rps) {
+  lassign $row id rp pb
+  dict set requests $id [joint::requested $id $rp]
+ }
+
  if {[amf_dfx::static_audit_enabled]} {amf_dfx::save_dict $out/static_snapshot.tcldata [amf_multi::static_snapshot]}
  report_route_status -file $out/locked_static_route_status.rpt
  foreach row $dfx(rps) {
@@ -46,6 +51,7 @@ proc main {} {
  set f [open $out/vivado_placement_not_executed.txt w]
  puts $f {User route-only contract: AMF provides complete placement; no Vivado placement executed}
  close $f
+ dfx_clock_guidance::apply
  # The only route_design in this workflow routes both new RMs together.
  amf_dfx::timed vivado_route {route_design}
  amf_dfx::timed write_joint_routed {write_checkpoint $out/joint_routed.dcp}

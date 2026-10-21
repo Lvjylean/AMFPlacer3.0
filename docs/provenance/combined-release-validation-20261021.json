@@ -1,0 +1,370 @@
+{
+  "state": "passed",
+  "build_manifest": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/builds/build-20261021-210212-598435-e222992a/manifest.json",
+  "build_state": "completed",
+  "binaries": {
+    "AMFPlacer": "d562621f5f0da9c7ee4016f28a96d394c9c9693ca2688acbc48cefe79627678e",
+    "partitionHyperGraph": "450974d6c00eb97a3581f3284761ff91ae15d3ceb2fd5fe42f91445c6a5c5e43"
+  },
+  "capabilities": {
+    "schema": "amf-capabilities-v1",
+    "visualization_config_schema": 1,
+    "device_placement_policy_schema": 1,
+    "clock_region_column_stretch_schema": 1,
+    "vhk158_sparse_lutff_schema": 1,
+    "clock_resource_capacity_schema": 1,
+    "external_floorplan_initialization_schema": 1,
+    "paper_hierarchical_boundaries_schema": 2,
+    "boundary_clustering_strategy_schema": 1,
+    "cr_slr_hierarchical_schema": 1,
+    "boundary_clustering_strategy_default": "slr-hierarchical",
+    "paper_region_clipping_toggle_schema": 1,
+    "paper_boundary_stage_mode_schema": 1,
+    "global_placement_inspection_schema": 1,
+    "amf2pro_integration_schema": 1,
+    "dfx_incremental_schema": 1,
+    "incremental_compilation_key_schema": 1,
+    "dfx_full_hard_regions_schema": 1,
+    "dfx_partition_floorplan_schema": 1,
+    "native_static_cache_schema": 2,
+    "native_placement_repair_schema": 1,
+    "native_ff_pin_access_repair_schema": 1,
+    "native_pin_cache_packing_schema": 1,
+    "native_inline_pin_cache_schema": 1,
+    "native_local_pin_access_schema": 2,
+    "native_dfx_edge_policy_schema": 1
+  },
+  "checks": [
+    {
+      "name": "python",
+      "argv": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "scripts",
+        "-p",
+        "test_*.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "seconds": 0.5468113804236054
+    },
+    {
+      "name": "python-syntax",
+      "argv": [
+        "python3",
+        "-m",
+        "compileall",
+        "-q",
+        "scripts",
+        "tools/placement_viewer"
+      ],
+      "exit_code": 0,
+      "seconds": 0.13685342762619257
+    },
+    {
+      "name": "cpp-build",
+      "argv": [
+        "cmake",
+        "--build",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/builds/build-20261021-210212-598435-e222992a/build",
+        "--parallel",
+        "6",
+        "--target",
+        "checkHierarchicalBoundaryPolicy",
+        "checkLegacyComponents",
+        "checkNativeStaticCache",
+        "checkNativePlacementRepair",
+        "checkNativeFfPinRepair",
+        "checkIncrementalConfig",
+        "checkDevicePolicyStretch"
+      ],
+      "exit_code": 0,
+      "seconds": 11.2601921511814
+    },
+    {
+      "name": "checkHierarchicalBoundaryPolicy",
+      "argv": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/builds/build-20261021-210212-598435-e222992a/build/checkHierarchicalBoundaryPolicy"
+      ],
+      "exit_code": 0,
+      "seconds": 0.001331704668700695
+    },
+    {
+      "name": "checkLegacyComponents",
+      "argv": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/builds/build-20261021-210212-598435-e222992a/build/checkLegacyComponents"
+      ],
+      "exit_code": 0,
+      "seconds": 0.010122323408722878
+    },
+    {
+      "name": "checkNativeStaticCache",
+      "argv": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/builds/build-20261021-210212-598435-e222992a/build/checkNativeStaticCache"
+      ],
+      "exit_code": 0,
+      "seconds": 0.009569461457431316
+    },
+    {
+      "name": "checkNativePlacementRepair",
+      "argv": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/builds/build-20261021-210212-598435-e222992a/build/checkNativePlacementRepair"
+      ],
+      "exit_code": 0,
+      "seconds": 0.001435781829059124
+    },
+    {
+      "name": "checkNativeFfPinRepair",
+      "argv": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/builds/build-20261021-210212-598435-e222992a/build/checkNativeFfPinRepair"
+      ],
+      "exit_code": 0,
+      "seconds": 0.006962421350181103
+    },
+    {
+      "name": "checkIncrementalConfig",
+      "argv": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/builds/build-20261021-210212-598435-e222992a/build/checkIncrementalConfig"
+      ],
+      "exit_code": 0,
+      "seconds": 0.001540319062769413
+    },
+    {
+      "name": "check_device_placement_policy-build",
+      "argv": [
+        "g++",
+        "-std=c++17",
+        "-O2",
+        "-I",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/src/lib/HiFPlacer/deviceInfo",
+        "-I",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/src/lib/HiFPlacer/designInfo/native",
+        "-I",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/src/lib/HiFPlacer/placement/placementInfo",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/src/tests/check_device_placement_policy.cc",
+        "-o",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/unit-validation/check_device_placement_policy"
+      ],
+      "exit_code": 0,
+      "seconds": 0.4459291296079755
+    },
+    {
+      "name": "check_device_placement_policy",
+      "argv": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/unit-validation/check_device_placement_policy"
+      ],
+      "exit_code": 0,
+      "seconds": 0.001369193196296692
+    },
+    {
+      "name": "test_visualization_config-build",
+      "argv": [
+        "g++",
+        "-std=c++17",
+        "-O2",
+        "-I",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/src/lib/HiFPlacer/deviceInfo",
+        "-I",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/src/lib/HiFPlacer/designInfo/native",
+        "-I",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/src/lib/HiFPlacer/placement/placementInfo",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/src/tests/test_visualization_config.cc",
+        "-o",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/unit-validation/test_visualization_config"
+      ],
+      "exit_code": 0,
+      "seconds": 0.49295129533857107
+    },
+    {
+      "name": "test_visualization_config",
+      "argv": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/unit-validation/test_visualization_config",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/unit-validation/visual-output"
+      ],
+      "exit_code": 0,
+      "seconds": 0.0015819277614355087
+    },
+    {
+      "name": "local_pin_access_test-build",
+      "argv": [
+        "g++",
+        "-std=c++17",
+        "-O2",
+        "-I",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/src/lib/HiFPlacer/deviceInfo",
+        "-I",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/src/lib/HiFPlacer/designInfo/native",
+        "-I",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/src/lib/HiFPlacer/placement/placementInfo",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/scripts/tests/local_pin_access_test.cc",
+        "-o",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/unit-validation/local_pin_access_test"
+      ],
+      "exit_code": 0,
+      "seconds": 1.2104826532304287
+    },
+    {
+      "name": "local_pin_access_test",
+      "argv": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/unit-validation/local_pin_access_test"
+      ],
+      "exit_code": 0,
+      "seconds": 0.0013676807284355164
+    },
+    {
+      "name": "lut_pin_assignment_test-build",
+      "argv": [
+        "g++",
+        "-std=c++17",
+        "-O2",
+        "-I",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/src/lib/HiFPlacer/deviceInfo",
+        "-I",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/src/lib/HiFPlacer/designInfo/native",
+        "-I",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/src/lib/HiFPlacer/placement/placementInfo",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/scripts/tests/lut_pin_assignment_test.cc",
+        "-o",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/unit-validation/lut_pin_assignment_test"
+      ],
+      "exit_code": 0,
+      "seconds": 1.7089845091104507
+    },
+    {
+      "name": "lut_pin_assignment_test",
+      "argv": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/unit-validation/lut_pin_assignment_test"
+      ],
+      "exit_code": 0,
+      "seconds": 0.00148877315223217
+    },
+    {
+      "name": "local_access_database_test-build",
+      "argv": [
+        "g++",
+        "-std=c++17",
+        "-O2",
+        "-I",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/src/lib/HiFPlacer/deviceInfo",
+        "-I",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/src/lib/HiFPlacer/designInfo/native",
+        "-I",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/src/lib/HiFPlacer/placement/placementInfo",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/scripts/tests/local_access_database_test.cc",
+        "-o",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/unit-validation/local_access_database_test"
+      ],
+      "exit_code": 0,
+      "seconds": 1.4250044533982873
+    },
+    {
+      "name": "local_access_database_test",
+      "argv": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/unit-validation/local_access_database_test"
+      ],
+      "exit_code": 0,
+      "seconds": 0.001360008493065834
+    },
+    {
+      "name": "clock_guidance_test.tcl",
+      "argv": [
+        "tclsh",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/scripts/tests/clock_guidance_test.tcl"
+      ],
+      "exit_code": 0,
+      "seconds": 0.05343116261065006
+    },
+    {
+      "name": "lut_pin_import_test.tcl",
+      "argv": [
+        "tclsh",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-amf-config-algorithms-viewer-release/repo/scripts/tests/lut_pin_import_test.tcl"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002951851114630699
+    },
+    {
+      "name": "viewer",
+      "argv": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/placement_viewer",
+        "-p",
+        "test*.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "seconds": 0.5438337866216898
+    }
+  ],
+  "experiments_started": false,
+  "limitations": [
+    "No new full or incremental placement/routing acceptance."
+  ],
+  "device_regression": {
+    "state": "passed",
+    "checks": [
+      {
+        "name": "vu095-default",
+        "exit_code": 0,
+        "seconds": 8.003634066320956
+      },
+      {
+        "name": "vcu108-default",
+        "exit_code": 0,
+        "seconds": 8.10770942363888
+      },
+      {
+        "name": "vu095-off",
+        "exit_code": 0,
+        "seconds": 8.123312155716121
+      },
+      {
+        "name": "u250-default",
+        "exit_code": 0,
+        "seconds": 8.162055594846606
+      },
+      {
+        "name": "u250-off",
+        "exit_code": 0,
+        "seconds": 8.11215895600617
+      },
+      {
+        "name": "u250-on",
+        "exit_code": 0,
+        "seconds": 8.031220857053995
+      },
+      {
+        "name": "vu095-no-block",
+        "exit_code": 0,
+        "seconds": 8.025088981725276
+      },
+      {
+        "name": "u250-no-block",
+        "exit_code": 0,
+        "seconds": 8.022145258262753
+      },
+      {
+        "name": "hierarchical",
+        "exit_code": 0,
+        "seconds": 8.054329385980964
+      },
+      {
+        "name": "VHK_sparse_resource_grid",
+        "exit_code": 0
+      }
+    ],
+    "coordinate_equivalence": true,
+    "full_experiments_started": false
+  },
+  "production_source_matches_build_snapshot": true,
+  "python_test_count": 61,
+  "viewer_test_count": 34,
+  "build_source_note": "Built from e222992a plus the recorded working-tree overlay; test-only source additions were compiled separately. No new placement/routing run."
+}

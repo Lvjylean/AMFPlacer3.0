@@ -29,7 +29,9 @@
 #include "DesignInfo.h"
 #include "DeviceInfo.h"
 #include "IncrementalContext.h"
+#include "../../designInfo/native/LocalPlacementAccess.h"
 #include "HardRegionConstraints.h"
+#include "SparseResourceGrid.h"
 #include "Eigen/Core"
 #include "Eigen/SparseCore"
 #include "PlacementTimingInfo.h"
@@ -3601,9 +3603,22 @@ class PlacementInfo
     }
 
     const IncrementalContext &getIncrementalContext() const { return incremental; }
+    amf_native::LocalPlacementAccess localPinAccess;
     unsigned getFfQBlockedMask(const std::string &site) const {
         if(ffQBlockedMasks.empty()) return 0;
         auto it=ffQBlockedMasks.find(site);return it==ffQBlockedMasks.end()?0:it->second;
+    }
+
+    // Only the explicitly guarded VHK158 LUT/FF sparse-geometry path uses
+    // this support mask. Legacy U250/VU095 numerical paths stay unchanged.
+    bool sparseResourcePlacementEnabled() const { return deviceInfo->hasSparseClockGeometry(); }
+    void projectSparseResourceLocation(PlacementUnit *pu,float &x,float &y) const {
+        if(pu->isFixed() || pu->isLocked()) { x=pu->X();y=pu->Y();return; }
+        float l=0,r=0,b=0,t=0;
+        if(auto m=dynamic_cast<PlacementMacro*>(pu)) {
+            l=m->getLeftOffset();r=m->getRightOffset();b=m->getBottomOffset();t=m->getTopOffset();
+        }
+        sparseResourceGrid.project(x,y,l,r,b,t);
     }
 
     inline void legalizeXYInArea(PlacementUnit *curPU, float &fX, float &fY)
@@ -3646,6 +3661,7 @@ class PlacementInfo
         {
             assert(false && "wrong placement unit type");
         }
+        if(sparseResourcePlacementEnabled())projectSparseResourceLocation(curPU,fX,fY);
     }
 
     /**
@@ -3700,6 +3716,7 @@ class PlacementInfo
         {
             assert(false && "wrong placement unit type");
         }
+        if(sparseResourcePlacementEnabled())projectSparseResourceLocation(curPU,fX,fY);
         if (fX != curPU->X() || fY != curPU->Y())
         {
             if (forget)
@@ -4671,9 +4688,24 @@ class PlacementInfo
         // X: fixed HPIO-side direction. Y: -1 bottom SLR, +1 top SLR,
         // 0 middle SLR (two-sided attraction); guideX/guideY enable each axis.
         int pullX = 0, pullY = 0;
+        // Raw device-CR anchor shared by the cluster until it is rebuilt.
+        // Effective solver coordinates still obey whole-PU hard-region bounds.
+        bool crEdgeAnchor = false;
+        float crAnchorX = 0, crAnchorY = 0;
+        int crAnchorColumn = -1, crAnchorRow = -1;
+        double clusterMeanY = 0;
     };
     bool boundaryClusteringEnabled() const;
     bool paperBoundaryClusteringEnabled() const;
+    bool crBoundaryClusteringEnabled() const;
+    bool initializeCRBoundaryAnchor(RegionPreference &preference, double clusterMeanY);
+    // A stage selector only; it never enables clustering on its own.
+    bool paperBoundaryMergedStages() const { return paperBoundaryClusteringEnabled() && boundaryMergedStages; }
+    const char *paperBoundaryPhaseName() const
+    {
+        if (paperBoundaryMergedStages()) return paperSLRStageActive ? "slr_initialization" : "merged";
+        return paperSLRStageActive ? "slr" : "hpio";
+    }
     bool paperSLRStage() const { return paperSLRStageActive; }
     void setPaperSLRStage(bool active) { paperSLRStageActive = active; }
     bool paperRegionBounds(PlacementUnit *pu, const RegionPreference &preference, bool includeSide,
@@ -4781,6 +4813,7 @@ class PlacementInfo
     }
 
   private:
+    SparseResourceGrid sparseResourceGrid;
     CompatiblePlacementTable *compatiblePlacementTable = nullptr;
     std::vector<PlacementUnit *> placementUnits;
     std::vector<PlacementUnpackedCell *> placementUnpackedCells;
@@ -4886,6 +4919,8 @@ class PlacementInfo
 
     std::map<PlacementUnit *, std::pair<float, float>> PU2ClockRegionCenters;
     std::map<PlacementUnit *, int> PU2ClockRegionColumn;
+    bool boundaryRegionClipping = true; // Preserve historical behavior when omitted.
+    bool boundaryMergedStages = false; // BoundaryStageMode=independent-max2 by default.
     std::map<PlacementUnit *, RegionPreference> regionPreferences;
     bool paperSLRStageActive = false;
     std::map<DeviceInfo::ClockColumn *, std::set<DesignInfo::DesignNet *>> clockCol2ClockNets;

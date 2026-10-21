@@ -1,5 +1,6 @@
 #ifndef AMF_INCREMENTAL_CONTEXT_H
 #define AMF_INCREMENTAL_CONTEXT_H
+#include "../../../utils/IncrementalCompilationConfig.h"
 #include <fstream>
 #include <map>
 #include <set>
@@ -50,9 +51,7 @@ struct IncrementalContext
     }
     explicit IncrementalContext(const std::map<std::string, std::string> &cfg)
     {
-        auto mode = cfg.find("IncremenralCompilation");
-        if (mode == cfg.end() || mode->second == "false") return;
-        if (mode->second != "true") throw std::runtime_error("IncremenralCompilation must be true or false");
+        if (!amf_config::incrementalEnabled(cfg)) return;
         auto placementMode = cfg.find("DFX placement mode");
         if (placementMode != cfg.end() && placementMode->second == "full") return;
         enabled = true;

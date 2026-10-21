@@ -35,8 +35,8 @@ class HardRegionConstraints
         if(mode==cfg.end()) return;
         if(mode->second!="full" && mode->second!="incremental") throw std::runtime_error("Unknown DFX placement mode");
         if(mode->second!="full") return;
-        if(IncrementalContext::required(cfg,"IncremenralCompilation")!="true")
-            throw std::runtime_error("Full DFX requires IncremenralCompilation=true");
+        if(!amf_config::incrementalEnabled(cfg))
+            throw std::runtime_error("Full DFX requires IncrementalCompilation=true");
         enabled=true;
         std::ifstream in(IncrementalContext::required(cfg,"DFX regions file"));std::string line;
         if(!std::getline(in,line)||line!="region\tinstance")throw std::runtime_error("Invalid DFX region header");

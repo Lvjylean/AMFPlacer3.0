@@ -20,7 +20,7 @@ int main(){try {
  write(dir/"sites",mask);write(dir/"inventory",inventory);
  write(dir/"geometry","region\tclock_regions\na\tCLOCKREGION_X0Y0\nb\tCLOCKREGION_X1Y0\n");
  std::map<std::string,std::string> cfg{
-   {"IncremenralCompilation","true"},{"DFX placement mode","full"},
+   {"IncrementalCompilation","true"},{"DFX placement mode","full"},
    {"DFX regions file",(dir/"regions").string()},{"DFX region sites file",(dir/"sites").string()}};
  HardRegionConstraints old(cfg);check(old.allows(1,"SLICE_X0Y0"),"default full mode unchanged");
  check(old.cellRegion("top/a/lut")==1&&old.cellRegion("top/aa/lut")==0&&old.cellRegion("top/b/carry")==2,"hierarchy-boundary ownership");

@@ -107,6 +107,7 @@ void ExternalFloorplan::initialize(PlacementInfo *p, const std::map<std::string,
         for (size_t x = 0; x < device->getClockRegions()[y].size(); ++x)
         {
             auto cr = device->getClockRegions()[y][x];
+            if(!cr) continue;
             std::string name = "X" + std::to_string(x) + "Y" + std::to_string(y);
             regionId[name] = regions.size();
             Region region; region.name = name;

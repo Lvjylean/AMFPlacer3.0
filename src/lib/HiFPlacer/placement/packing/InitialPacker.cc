@@ -283,6 +283,9 @@ std::vector<DesignInfo::DesignCell *> InitialPacker::BFSExpandViaSpecifiedPorts(
 void InitialPacker::findDSPMacros()
 {
     AMF_PROFILE_FUNCTION("initial_packing");
+    bool hasDSP=false;
+    for(auto cell:designInfo->getCells()) if(cell->isDSP()) { hasDSP=true; break; }
+    if(!hasDSP) return; // Do not require architecture data for an unused resource.
     float DSPHeight = 2 * HardResourceUtils::resourcePitch(deviceInfo, "DSP48E2");
     std::vector<PlacementInfo::PlacementMacro *> res;
     res.clear();

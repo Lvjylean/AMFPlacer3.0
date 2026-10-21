@@ -1,6 +1,7 @@
 """Recorded input inspection or partial hard-resource legalization; no full placement or routing."""
 import datetime as dt
 import hashlib
+from incremental_config import normalize_incremental_config
 import json
 import shutil
 import subprocess
@@ -20,7 +21,7 @@ def inspect(root, args, resources=False, initial=False):
     from amf3 import save, stamp, git
     root = Path(root)
     config_path = (root / args.config).resolve()
-    config = json.loads(config_path.read_text())
+    config = normalize_incremental_config(json.loads(config_path.read_text()))
     binary = (root / args.binary).resolve()
     if not binary.is_file():
         raise ValueError('Missing AMF binary: ' + str(binary))
@@ -35,6 +36,8 @@ def inspect(root, args, resources=False, initial=False):
             p = (root / config[key]).resolve()
             inputs[key] = {'path': str(p), 'sha256': digest(p)}
             config[key] = str(p)
+    from incremental_config import validate_incremental_binary
+    validate_incremental_binary(config,binary)
     from paper_boundary_config import validate_paper_boundary_binary
     validate_paper_boundary_binary(config, binary)
     from import_external_floorplan import validate_external_inputs

@@ -1,0 +1,18 @@
+{
+  "device": "U250",
+  "ClockPeriod": "10",
+  "jobs": "12",
+  "visualization": "true",
+  "ProFFClustering": "true",
+  "ProPrimitiveTiming": "false",
+  "ProLegacyIOBoundary": "false",
+  "BoundaryAwareClustering": "true",
+  "noBlockAware": "false",
+  "BoundaryClusteringStrategy": "cr-slr-hierarchical",
+  "BoundaryStageMode": "independent-max2",
+  "BoundaryRegionClipping": "true",
+  "BoundaryWeakAttraction": "true",
+  "BoundaryAnchorStopOnRegionEntry": "false",
+  "ClockRegionColumnStretch": "false",
+  "IncrementalCompilation": "false"
+}

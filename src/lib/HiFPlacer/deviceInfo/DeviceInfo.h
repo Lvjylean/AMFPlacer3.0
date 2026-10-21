@@ -25,6 +25,8 @@
 #include <memory>
 #include "PhysicalBoundaryModel.h"
 #include "ClockResourceCapacity.h"
+#include "SparseClockGeometry.h"
+#include "DevicePlacementPolicy.h"
 
 /**
  * @brief Information class related to FPGA device, including the details of BEL/Site/Tile/ClockRegion.
@@ -651,6 +653,16 @@ class DeviceInfo
          *
          * @param curSite a site in the clock region for some variables' initialization
          */
+        ClockRegion(int x,int y,const SparseClockGeometry::Rect &b) : gridX(x), gridY(y),
+            leftX(b[0]),rightX(b[1]),topY(b[3]),bottomY(b[2]) {}
+        // A single-clock bookkeeping bucket, not a claimed Versal half-column model.
+        void initializeSingleClockPilot() {
+            clockColumns={{new ClockColumn(1)}};
+            auto c=clockColumns[0][0];
+            for(auto site:sites) { c->addSite(site); site->setClockHalfColumn(c); }
+            c->setBoundary(leftX,rightX,topY,bottomY);
+            colWidth=rightX-leftX; colHeight=topY-bottomY; singleClockPilot=true;
+        }
         ClockRegion(DeviceSite *curSite)
         {
             assert(curSite);
@@ -797,6 +809,7 @@ class DeviceInfo
          */
         inline void addClockAndCell(int clockNetId, int cellId, float x, float y)
         {
+            if(singleClockPilot) { clockColumns[0][0]->addClockNetId(clockNetId,cellId); return; }
             float offsetXInRegion = x - leftX;
             float offsetYInRegion = y - bottomY;
 
@@ -879,6 +892,7 @@ class DeviceInfo
         void setClockResourceCapacity(const ClockRegionCapacity &capacity) { clockResourceCapacity = capacity; }
 
       private:
+        bool singleClockPilot=false;
         ClockRegionCapacity clockResourceCapacity;
         std::vector<DeviceSite *> sites;
         std::set<DeviceTile *> tiles;
@@ -912,6 +926,12 @@ class DeviceInfo
      */
     // clang-format on
     DeviceInfo(std::map<std::string, std::string> &JSONCfg, std::string _deviceName);
+    bool hasSparseClockGeometry() const { return bool(sparseClockGeometry); }
+    bool clockRegionExists(int x,int y) const { return x>=0 && y>=0 && y<int(clockRegions.size()) &&
+        x<int(clockRegions[y].size()) && clockRegions[y][x]; }
+    bool clockRegionIntersects(int x,int y,float l,float r,float b,float t) const {
+        return sparseClockGeometry && clockRegionExists(x,y) && sparseClockGeometry->intersects({x,y},l,r,b,t);
+    }
     bool isPhysicalBoundaryTimingEnabled() const { return physicalBoundaryTiming; }
     PhysicalBoundaryModel *getPhysicalBoundaryModel() const { return physicalBoundaryModel.get(); }
     bool hasClockResourceCapacityTable() const { return static_cast<bool>(clockResourceCapacityTable); }
@@ -982,6 +1002,11 @@ class DeviceInfo
     }
     void addTile(std::string &tileName, std::string &tileType);
 
+    amf_device::PlacementPolicy getPlacementPolicy() const
+    {
+        return amf_device::resolve(JSONCfg, deviceName);
+    }
+
     inline std::string &getDeviceName()
     {
         return deviceName;
@@ -1051,6 +1076,7 @@ class DeviceInfo
      */
     inline std::vector<DeviceSite *> &getSitesInType(std::string &siteType)
     {
+        if(sparseClockGeometry && !siteType2Sites.count(siteType)) return absentPilotSites;
         assert(siteType2Sites.find(siteType) != siteType2Sites.end());
         return siteType2Sites[siteType];
     }
@@ -1198,6 +1224,9 @@ class DeviceInfo
      */
     inline void getClockRegionByLocation(float locX, float locY, int &clockRegionX, int &clockRegionY)
     {
+        if (sparseClockGeometry) {
+            auto k=sparseClockGeometry->nearest(locX,locY); clockRegionX=k.first; clockRegionY=k.second; return;
+        }
         int resX = 0, resY = 0;
         for (int j = 0; j < clockRegionNumX; j++)
         {
@@ -1285,6 +1314,9 @@ class DeviceInfo
     }
 
   private:
+    std::vector<DeviceSite *> absentPilotSites;
+    std::unique_ptr<SparseClockGeometry> sparseClockGeometry;
+    void initializeSparseClockGeometry();
     std::string deviceName;
     std::set<std::string> BELTypes;
     std::map<std::string, std::vector<DeviceBEL *>> BELType2BELs;

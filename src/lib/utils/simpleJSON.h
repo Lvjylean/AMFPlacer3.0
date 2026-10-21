@@ -14,6 +14,7 @@
 #define _SIMPLEJSON
 
 #include "strPrint.h"
+#include "IncrementalCompilationConfig.h"
 #include "stringCheck.h"
 #include <algorithm>
 #include <assert.h>
@@ -75,6 +76,8 @@ std::map<std::string, std::string> parseJSONFile(std::string JSONFileName)
         res[jsonBlock.substr(quote1Loc + 1, quote2Loc - quote1Loc - 1)] =
             jsonBlock.substr(quote3Loc + 1, quote4Loc - quote3Loc - 1);
     }
+
+    amf_config::normalizeIncrementalCompilation(res);
 
     if (res.find("dumpDirectory") == res.end())
     {

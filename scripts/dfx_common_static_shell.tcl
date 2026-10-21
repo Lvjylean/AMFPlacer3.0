@@ -56,6 +56,10 @@ namespace eval amf_common_static {
         # A writer success alone does not certify the artifact that consumers open.
         amf_dfx::timed common_static_reopen {open_checkpoint $out/common_static_locked.dcp}
         amf_dfx::timed common_static_validate_reopened {assert_empty reopened $before}
+        if {[info exists dfx(native_pin_access_automatic)] && $dfx(native_pin_access_automatic)} {
+            source [file join [file dirname [info script]] dfx_native_pin_access.tcl]
+            amf_dfx::timed native_pin_access_collection {amf_pin_access::collect}
+        }
         close_design
     }
 }

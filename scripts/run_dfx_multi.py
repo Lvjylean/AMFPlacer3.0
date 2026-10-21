@@ -8,6 +8,7 @@ Vivado retains the full shell; this does not claim Abstract Shell support or exa
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import datetime as dt
+from incremental_config import normalize_incremental_config
 import json
 from pathlib import Path
 import re
@@ -30,9 +31,16 @@ def static_containment_enabled(job, historical_default=False):
 
 
 def validate(job):
+    normalize_incremental_config(job)
     job['static_routing_containment'] = static_containment_enabled(job)
-    if job.get('IncremenralCompilation') not in (True, 'true'):
-        raise ValueError('Explicit IncremenralCompilation required')
+    guidance = job.get('clock_guidance_mode', 'off')
+    if guidance not in ('off', 'update-preserve'):
+        raise ValueError('Unknown clock_guidance_mode')
+    if guidance == 'update-preserve' and (job.get('backend_place_mode') != 'route-only'
+            or not job.get('clock_contract_enabled') or job['static_routing_containment']):
+        raise ValueError('Clock guidance update requires route-only, explicit clock contract and uncontained static routing')
+    if job.get('IncrementalCompilation') not in (True, 'true'):
+        raise ValueError('Explicit IncrementalCompilation required')
     rps = job.get('partitions')
     if not isinstance(rps, list) or len(rps) < 2:
         raise ValueError('At least two partitions required')
@@ -87,6 +95,9 @@ def settings(job, out, extra=None):
     values['rps']=' '.join(rows)
     if extra: values.update(extra)
     dest=out/'inputs/settings.tcl'
+    if job.get('clock_guidance_mode', 'off') == 'update-preserve':
+        shutil.copy2(SCRIPT/'dfx_compare_placement.py',out/'inputs/dfx_compare_placement.py')
+        shutil.copy2(SCRIPT/'dfx_compare_clock_route.py',out/'inputs/dfx_compare_clock_route.py')
     dest.write_text('\n'.join('set dfx('+k+') '+tcl_word(v) for k,v in values.items())+'\n')
     return dest
 
@@ -216,7 +227,7 @@ def run(args):
             record['rm_source_hashes']={r['id']:{f:sha(f) for f in r.get('rm_rtl_sources',[])+r.get('rm_ip_scripts',[])} for r in job['partitions']}
             workers=out/'workers';workers.mkdir();record['workers']={}
             def worker(r):
-                name=r['id'];cfg={k:job[k] for k in ('IncremenralCompilation','part','clock_name','clock_period_ns','amf_config','vivado','vivado_threads')}
+                name=r['id'];cfg={k:job[k] for k in ('IncrementalCompilation','part','clock_name','clock_period_ns','amf_config','vivado','vivado_threads')}
                 cfg['static_placement_audit']=job.get('static_placement_audit', 'full')
                 cfg['backend_place_mode']=job.get('backend_place_mode', 'default')
                 begin=time.time(); frontend_step=None

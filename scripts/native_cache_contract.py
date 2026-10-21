@@ -17,6 +17,8 @@ POLICY_KEYS = ('device', 'ProPrimitiveTiming', 'DSPCritical', 'SRLMaxPerSLICEM',
 
 def validate_full_capture(job, capability, cfg):
     """Reject an unusable full-cache request before synthesis or placement."""
+    from native_pin_cache_auto import validate_request
+    validate_request(job, capability)
     if not job.get('native_cache_capture'):
         return
     if capability.get('native_static_cache_schema') != 2:
@@ -60,6 +62,11 @@ def verify_cache(native, job, cfg):
         raise ValueError('Unknown native pin-access policy')
     if pin_policy!='off' and c.get('pin_access_policy',{}).get('version')!=pin_policy:
         raise ValueError('Pin filtering requires certified access cache')
+    local_policy=job.get('native_local_pin_access_policy','off')
+    if local_policy not in ('off','fixed-static-local-entrance-v2'):
+        raise ValueError('Unknown local pin-access policy')
+    if local_policy!='off' and c.get('local_pin_access_policy',{}).get('version')!=local_policy:
+        raise ValueError('Local entrance constraints require a certified child cache')
     return c
 
 
@@ -197,6 +204,12 @@ def seal_full(job, out, binary, cfg, stage, acceptance, common):
                                inventory_sha256=sha(resources), geometry_sha256=sha(regions))
     elif job.get('native_dfx_edge_policy', 'off') != 'off':
         raise ValueError('Requested edge policy lacks final resource inventory')
+    from native_pin_cache_auto import enabled, certificate, finish
+    pin_policy = None
+    full_sha = sha(out/'base_routed.dcp')
+    if enabled(job):
+        config['Native pin access certificate'], pin_policy = certificate(
+            job, out, config['Native static shell sha256'], full_sha, cfg, stage)
     save(native/'seal.json', config)
     stage('native_cache_seal', [str(binary), '--native-cache', str(native/'seal.json')])
     proof = [native/'context-spec.tsv', positions, native/'partition_pins.tsv', cert/'verification.tsv',
@@ -204,7 +217,7 @@ def seal_full(job, out, binary, cfg, stage, acceptance, common):
     contract = dict(schema='amf-native-static-contract-v2', state='sealed', identity=config['Native static identity'],
                     device=cfg['device'], clock_period_ns=job['clock_period_ns'],
                     cache_sha256=sha(native/'sealed.bin'), static_shell_sha256=config['Native static shell sha256'],
-                    full_reference_sha256=sha(out/'base_routed.dcp'), producer_binary_sha256=sha(binary),
+                    full_reference_sha256=full_sha, producer_binary_sha256=sha(binary),
                     proposal_sha256=sha(native/'proposed.bin'), model_identity=model_identity(cfg),
                     geometry=geometry, endpoints=endpoints, verification=verified,
                     evidence_hashes={str(p): sha(p) for p in proof},
@@ -214,5 +227,9 @@ def seal_full(job, out, binary, cfg, stage, acceptance, common):
     if resource_policy:
         contract['resource_policy'] = resource_policy
         contract['evidence_hashes'].update({str(resources): sha(resources), str(regions): sha(regions)})
+    if pin_policy:
+        contract['pin_access_policy'] = pin_policy
+        contract['scope'] = 'static connectivity/placement/site occupancy plus complete SLICE/DSP first-hop classifications; hard FF Q filtering'
+        contract['pin_access_generation'] = finish(out, pin_policy)
     save(native/'contract.json', contract)
     return contract

@@ -458,7 +458,8 @@ void GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocations(
     // in the worker after blending, within its transient selected region.
     // The next QP/STA refresh rechecks capacity and benefit.
     // VCU108 Optimization is retained only by the legacy clustering mode.
-    if (enableClockRegionAware && !placementInfo->boundaryClusteringEnabled())
+    if (placementInfo->getDeviceInfo()->getPlacementPolicy().legacySideConstraint(
+                enableClockRegionAware, placementInfo->boundaryClusteringEnabled()))
     {
         auto &PU2ClockRegionColumn = placementInfo->getPU2ClockRegionColumn();
         auto &clockRegions = placementInfo->getDeviceInfo()->getClockRegions();
@@ -874,8 +875,18 @@ void GeneralSpreader::SpreadRegion::SubBox::spreadCellsH(SubBox **boxA, SubBox *
     }
     if (boxBRight <= boxALeft)
     {
+        if(placementInfo->sparseResourcePlacementEnabled() && boxBRight == boxALeft && totalCapacity>0) {
+            // A single supported column/row still has to receive the cells.
+            // Returning without moving this axis leaves cells inside a hole.
+            auto bin=binGrid[bottomBinY][boxALeft];
+            auto &loc=placementInfo->getCellId2location();
+            float oldLo=loc[cellIds.front()].X,oldHi=loc[cellIds.back()].X;
+            float inset=(bin->right()-bin->left())/(cellIds.size()+1.0f);
+            float newLo=bin->left()+inset,newHi=bin->right()-inset;
+            for(auto id:cellIds)loc[id].X=oldHi-oldLo>1e-5f ?
+                newLo+(loc[id].X-oldLo)*(newHi-newLo)/(oldHi-oldLo) : (newLo+newHi)/2;
+        }
         return;
-        assert(false && "should not happen");
     }
 
     //      |        @  @         |
@@ -1116,8 +1127,18 @@ void GeneralSpreader::SpreadRegion::SubBox::spreadCellsV(SubBox **boxA, SubBox *
     }
     if (boxBTop <= boxABottom)
     {
+        if(placementInfo->sparseResourcePlacementEnabled() && boxBTop == boxABottom && totalCapacity>0) {
+            // A single supported column/row still has to receive the cells.
+            // Returning without moving this axis leaves cells inside a hole.
+            auto bin=binGrid[boxABottom][leftBinX];
+            auto &loc=placementInfo->getCellId2location();
+            float oldLo=loc[cellIds.front()].Y,oldHi=loc[cellIds.back()].Y;
+            float inset=(bin->top()-bin->bottom())/(cellIds.size()+1.0f);
+            float newLo=bin->bottom()+inset,newHi=bin->top()-inset;
+            for(auto id:cellIds)loc[id].Y=oldHi-oldLo>1e-5f ?
+                newLo+(loc[id].Y-oldLo)*(newHi-newLo)/(oldHi-oldLo) : (newLo+newHi)/2;
+        }
         return;
-        assert(false && "should not happen");
     }
 
     //      ----------

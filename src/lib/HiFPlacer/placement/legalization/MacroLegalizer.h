@@ -764,6 +764,7 @@ class MacroLegalizer
     bool legalSiteRange(PlacementInfo::PlacementUnit *pu,
                         const std::vector<DeviceInfo::DeviceSite *> &sites, int first, int count) const;
     void verifyAvailableCapacity();
+    void selectAccessibleDspSites();
     bool canReceiveWholeMacro(int target, PlacementInfo::PlacementUnit *pu,
                               const std::vector<int> &utilization, const std::vector<float> &budgets,
                               std::vector<std::vector<DeviceInfo::DeviceSite *>> &sites,

@@ -1,3 +1,12 @@
+## 2026-10-21 combined source release
+
+This branch combines the 072 configuration/algorithm sources with the multi-device placement viewer.
+Start with [the 16-key placement configuration](configs/placement/README.md),
+[the viewer guide](tools/placement_viewer/README.md), and
+[scope, provenance, and validation limits](docs/research/combined-config-algorithms-viewer-release.md).
+U250 and VU095 device policies are retained; VHK158 placement remains a guarded single-clock LUT/FF pilot.
+No design checkpoints, placement traces, preview caches, or build outputs are included.
+
 # incremental_compilation snapshot
 
 Full and incremental compilation, native static cache, joint routing, DFX boundary policy, CARRY and clock repairs: see [current workflow, build and validation scope](docs/incremental-compilation.md).

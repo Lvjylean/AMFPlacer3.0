@@ -38,6 +38,8 @@ def source_contract(source):
     for part in job['partitions']:
         k = part['id']
         files += [source/'inputs'/('worker_'+k)/n for n in ('placement.tsv', 'blocked_sites.txt')]
+        if job.get('native_local_pin_access_policy','off')!='off':
+            files.append(source/'inputs'/('worker_'+k)/'lut_pin_assignments.tsv')
         files += [source/'inputs/common_static'/(k+'_common_static_boundary.tcldata')]
     if job.get('static_placement_audit') == 'full': files.append(source/'static_snapshot.tcldata')
     hashes = {str(p): sha(p) for p in files}

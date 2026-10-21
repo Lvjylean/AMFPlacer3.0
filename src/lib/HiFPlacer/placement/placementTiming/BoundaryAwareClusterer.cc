@@ -1,5 +1,6 @@
 #include "../../../utils/RuntimeProfiler.h"
 #include "BoundaryAwareClusterer.h"
+#include "BoundaryClusteringStrategy.h"
 #include "RegionCapacityTracker.h"
 #include <algorithm>
 #include <cmath>
@@ -31,11 +32,7 @@ BoundaryAwareClusterer::BoundaryAwareClusterer(PlacementInfo *p,PlacementTimingO
 {
     AMF_PROFILE_FUNCTION("boundary_clustering");
     if(!model)throw std::runtime_error("Boundary clustering requires a physical model");
-    auto strategy = cfg.find("BoundaryClusteringStrategy");
-    if (strategy != cfg.end() && strategy->second != "region-gain" && strategy->second != "paper-hierarchical")
-        throw std::runtime_error("Unknown BoundaryClusteringStrategy: " + strategy->second);
-    if (strategy != cfg.end() && strategy->second == "paper-hierarchical" && !p->boundaryClusteringEnabled())
-        throw std::runtime_error("Paper boundary anchors require BoundaryAwareClustering=true");
+    boundary_strategy::resolve(cfg); // Validate even when physical auditing runs with clustering disabled.
     y2xRatio=number(cfg,"y2xRatio",0.4f);
     maxClusters=int(number(cfg,"BoundaryMaxClusters",512));
     maxPathCells=int(number(cfg,"BoundaryMaxPathCells",128));

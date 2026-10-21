@@ -6,6 +6,7 @@ source [file join [file dirname [info script]] dfx_site_import.tcl]
 source [file join [file dirname [info script]] dfx_native_export.tcl]
 source [file join [file dirname [info script]] dfx_native_interface_buffers.tcl]
 source [file join [file dirname [info script]] dfx_ooc_clock_handoff.tcl]
+source [file join [file dirname [info script]] dfx_native_lut_pins.tcl]
 proc main {} {
     global dfx
     set out $dfx(output)
@@ -42,6 +43,9 @@ proc main {} {
         };close $log
     }
     amf_dfx::timed import_amf_placement {amf_site_import::place $requested}
+    if {[info exists dfx(native_local_pin_policy)] && $dfx(native_local_pin_policy)} {
+        amf_dfx::timed import_amf_lut_pins {amf_native_lut_pins::apply $out/lut_pin_assignments.tsv $prefix;amf_native_lut_pins::verify $out/lut_pin_assignments.tsv $prefix {} module_import}
+    }
     foreach {name variable} {allowed_sites allowed blocked_sites blocked} {
         set f [open $out/$name.txt r];set $variable [dict create]
         foreach s [split [string trim [read $f]] \n] {if {$s ne ""} {dict set $variable $s 1}};close $f

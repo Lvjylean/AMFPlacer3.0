@@ -32,13 +32,13 @@ def main():
     cfg.update(dumpDirectory=str(out / 'placement'), BoundaryReportDirectory=str(out / 'physical'))
     cfg['Dump Cluster file'] = 'clusters'
     if a.ordinary:
-        cfg['IncremenralCompilation'] = 'false'
+        cfg['IncrementalCompilation'] = 'false'
     else:
         raw = a.full_run / 'hard_region_sites.before_policy.tsv'
         if not raw.is_file():
             raw = a.full_run / 'hard_region_sites.tsv'
         cfg.update({
-            'IncremenralCompilation': 'true', 'DFX placement mode': 'full',
+            'IncrementalCompilation': 'true', 'DFX placement mode': 'full',
             'DFX partition floorplan': 'true',
             'DFX regions file': str(a.full_run / 'hard_regions.tsv'),
             'DFX region sites file': str(raw),

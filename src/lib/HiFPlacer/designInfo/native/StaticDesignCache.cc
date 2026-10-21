@@ -1,6 +1,8 @@
 #include "StaticDesignCache.h"
 #include "BoundarySitePolicy.h"
+#include "LocalAccessDatabase.h"
 #include "../../../utils/RuntimeProfiler.h"
+#include "../../../utils/IncrementalCompilationConfig.h"
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -264,6 +266,69 @@ void StaticDesignCache::certifyPinAccess(const Config &contract) {
     extra["pin_access_policy"]=contract.at("policy");
     metadata.insert(extra.begin(),extra.end());
 }
+void StaticDesignCache::certifyLocalPinAccess(const Config &contract) {
+    AMF_PROFILE_SCOPE("native_local_pin_cache_certify", "extend immutable cache with local entrance constraints");
+    need(sealed&&metadata.count("pin_access_policy"),"local access requires certified parent pin evidence");
+    need(!metadata.count("local_pin_access_policy"),"local access already certified");
+    for(const auto &k:{"identity","device","clock_period","static_shell_sha256"})
+        need(required(contract,k)==required(metadata,k),std::string("local access mismatch ")+k);
+    need(required(contract,"local_policy")==LocalAccessDatabase::version,"unknown local access policy");
+    auto file=required(contract,"local_access_file"),hash=required(contract,"local_access_sha256");
+    need(std::regex_match(hash,std::regex("[0-9a-f]{64}")),"invalid local access hash");
+    need(std::filesystem::file_size(file)<=64*1024*1024,"local access record exceeds bound");
+    std::ifstream f(file,std::ios::binary);need(bool(f),"missing local access data");
+    std::string bytes{std::istreambuf_iterator<char>(f),{}};
+    const auto decoded=LocalAccessDatabase::decodeBlob(bytes);
+    for(const auto &m:modules) {
+        LocalAccessDatabase test;test.load(decoded,m.first,"");
+        for(const auto &site:test.sites)need(m.second.sites.count(site),"local access site outside RP");
+    }
+    metadata["local_pin_access_policy"]=LocalAccessDatabase::version;
+    metadata["local_pin_access_data"]=std::move(bytes);
+    metadata["local_pin_access_sha256"]=hash;
+    metadata["local_pin_owner_sha256"]=required(contract,"local_owner_sha256");
+}
+// Extend only bounded metadata. The certified module/graph suffix is streamed
+// byte-for-byte; its old CRC is checked before publishing the immutable child.
+void StaticDesignCache::certifyLocalPinAccessStreaming(const Config &contract) {
+    AMF_PROFILE_SCOPE("native_local_pin_cache_stream", "immutable metadata extension without expanding static cells");
+    auto input=required(contract,"Native static cache proposal");
+    auto output=required(contract,"Native static cache sealed output");
+    need(input!=output&&!std::filesystem::exists(output),"immutable child output already exists");
+    std::ifstream f(input,std::ios::binary);need(bool(f),"cannot open parent cache");
+    char magic[11];f.read(magic,11);need(f&&std::string(magic,11)=="AMFSTATIC4\n","local extension requires version4");
+    auto size=number(f),oldChecksum=number(f);
+    need(size<32ULL*1024*1024*1024&&std::filesystem::file_size(input)==size+27,"parent length mismatch");
+    StaticDesignCache db;auto sealedValue=number(f);need(sealedValue==1,"unsealed parent");db.sealed=true;
+    auto k=count(f);while(k--){auto key=str(f);need(db.metadata.emplace(key,str(f)).second,"duplicate parent metadata");}
+    const auto suffixOffset=f.tellg();need(suffixOffset>=27,"invalid graph offset");
+    k=count(f);while(k--){Module m;m.id=str(f);m.instance=str(f);m.sites=loadSet(f);auto j=count(f);
+        while(j--){Port q;q.module=m.id;q.name=str(f);q.direction=str(f);q.driver=str(f);auto clk=number(f);need(clk<=1,"clock boolean");q.clock=clk;
+            q.partitionNode=str(f);q.x=std::stod(str(f));q.y=std::stod(str(f));need(std::isfinite(q.x)&&std::isfinite(q.y),"invalid endpoint");m.ports.push_back(q);}
+        need(db.modules.emplace(m.id,std::move(m)).second,"duplicate parent module");}
+    db.certifyLocalPinAccess(contract);
+    std::ostringstream prefix(std::ios::out|std::ios::binary);number(prefix,1);number(prefix,db.metadata.size());
+    for(const auto &entry:db.metadata){str(prefix,entry.first);str(prefix,entry.second);}
+    const auto bytes=prefix.str();
+    auto oldPrefixSize=static_cast<std::uint64_t>(suffixOffset)-27;
+    need(oldPrefixSize<=1024ULL*1024*1024&&oldPrefixSize<size,"metadata prefix bound");
+    std::string oldPrefix(oldPrefixSize,'\0');f.seekg(27);f.read(&oldPrefix[0],oldPrefix.size());need(bool(f),"truncated parent prefix");
+    std::uint32_t oldCrc=checksum(oldPrefix),newCrc=checksum(bytes);
+    const auto newSize=size-oldPrefixSize+bytes.size();auto temporary=output+".streaming";
+    need(!std::filesystem::exists(temporary),"streaming output already exists");
+    std::ofstream out(temporary,std::ios::binary);need(bool(out),"cannot write child");
+    out.write(magic,11);number(out,newSize);number(out,0);out.write(bytes.data(),bytes.size());
+    std::vector<char> block(4*1024*1024);auto remaining=size-oldPrefixSize;
+    while(remaining){auto n=std::min<std::uint64_t>(remaining,block.size());f.read(block.data(),n);need(bool(f),"truncated parent graph");
+        oldCrc=crc32(oldCrc,reinterpret_cast<const Bytef*>(block.data()),n);
+        newCrc=crc32(newCrc,reinterpret_cast<const Bytef*>(block.data()),n);
+        out.write(block.data(),n);need(bool(out),"child write failure");remaining-=n;}
+    need(f.peek()==EOF&&oldCrc==oldChecksum,"parent CRC mismatch");
+    out.seekp(19);number(out,newCrc);out.close();need(bool(out),"child close failure");
+    need(std::filesystem::file_size(temporary)==newSize+27,"child size mismatch");
+    std::filesystem::rename(temporary,output);
+}
+
 void StaticDesignCache::writeContextAuditSpec(const std::string &file) const {
     std::unordered_map<std::string,std::size_t> pins;
     std::unordered_map<std::string,std::vector<std::size_t>> sinks;
@@ -435,6 +500,13 @@ PreparedInput StaticDesignCache::compose(const std::string &id,std::vector<Cell>
              "pin filtering requires certified child cache");
         cfg["DFX cached FF Q mask"]=metadata.at("ff_q_mask/"+id);
     }
+    const auto localPolicy=cfg.count("Native local pin access policy")?cfg.at("Native local pin access policy"):"off";
+    need(localPolicy=="off"||localPolicy==LocalAccessDatabase::version,"unknown local entrance policy");
+    need(!cfg.count("DFX cached local pin policy")&&!cfg.count("DFX local pin aliases"),"local constraints must come from sealed cache");
+    if(localPolicy!="off") {
+        need(pinPolicy!="off"&&required(metadata,"local_pin_access_policy")==localPolicy,"local constraints require certified child cache");
+        cfg["DFX cached local pin policy"]=LocalAccessDatabase::decodeBlob(required(metadata,"local_pin_access_data"));
+    }
     auto newPorts=inputPorts;
     const auto outputBuffers=normalizeOutputInterfaces(id,dynamic,newPorts);
     const auto &m=modules.at(id);std::map<std::string,Port> np;
@@ -460,6 +532,14 @@ PreparedInput StaticDesignCache::compose(const std::string &id,std::vector<Cell>
         if(output)connection[token(p)]=pin;
         endpoints[name]=p;
         graph.push_back({name,"AMF_INTERFACE","","",{{pin,output?"O":"I0",p.direction,pin,output?pin:p.driver}},"",false});
+    }
+    if(localPolicy!="off") {
+        std::ostringstream aliases;
+        for(const auto &p:m.ports)if(!p.clock) {
+            auto driver=p.direction=="IN"?resolve(p.driver):resolve(qualify(np.at(p.name).driver));
+            if(!driver.empty())aliases<<driver<<'\t'<<id<<'/'<<p.name<<'\n';
+        }
+        cfg["DFX local pin aliases"]=aliases.str();
     }
     const auto fixedCount=graph.size();
     for(auto &c:dynamic){need(c.type!="GND"&&c.type!="VCC","constants must be normalized");
@@ -540,7 +620,8 @@ PreparedInput StaticDesignCache::compose(const std::string &id,std::vector<Cell>
     cfg["DFX allowed sites file"]=(out/"allowed_sites.txt").string();cfg["DFX blocked sites file"]=(out/"blocked_sites.txt").string();
     cfg["clock file"]=(out/"clocks").string();cfg["SRL control metadata file"]=(out/"srl_controls.tsv").string();
     cfg["DSP registered outputs file"]=(out/"dsp_registered_outputs.txt").string();cfg["DFX input scope"]="rm-boundary-cone-v1";
-    cfg["DFX placement mode"]="incremental";cfg["IncremenralCompilation"]="true";
+    amf_config::normalizeIncrementalCompilation(cfg);
+    cfg["DFX placement mode"]="incremental";cfg["IncrementalCompilation"]="true";
     result.netlist=net.str();return result;
 }
 PreparedInput StaticDesignCache::prepare(Config &cfg) {

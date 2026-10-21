@@ -62,6 +62,8 @@ int main(int argc, char **argv)
     try {
         require(argc == 4,"Usage: checkPaperBoundaryClustering config scenario result");
         auto cfg=parseJSONFile(argv[1]);std::string scenario=argv[2];omp_set_num_threads(1);
+        const bool crTest=scenario.find("cr-")==0;
+        if(crTest)scenario=scenario.substr(3);
         DeviceInfo device(cfg,cfg["device"]);DesignInfo design(cfg,&device);PlacementInfo p(&design,&device,cfg);
         PlacementInfo::PlacementMacro *macro=nullptr;
         bool oversized=scenario=="oversized";
@@ -100,10 +102,137 @@ int main(int argc, char **argv)
         auto model=device.getPhysicalBoundaryModel();
         std::map<PlacementInfo::PlacementUnit *,std::pair<float,float>> before;
         for(auto pu:p.getPlacementUnits())before[pu]={pu->X(),pu->Y()};
-        const bool deferInitialSLRSpreading = scenario.find("budget") == 0;
+        const bool stageModeTest = scenario == "stage-mode" || scenario == "stage-inactive";
+        const bool deferInitialSLRSpreading = scenario.find("budget") == 0 || stageModeTest || crTest;
         PlacementTimingOptimizer timing(&p,cfg);
-        timing.clusterCriticalPathsByPhysicalRegion(deferInitialSLRSpreading);
+        if (scenario != "stage-inactive") timing.clusterCriticalPathsByPhysicalRegion(deferInitialSLRSpreading);
         auto &prefs=p.getRegionPreferences();size_t moved=0;
+        if(crTest) {
+            require(p.crBoundaryClusteringEnabled() && !prefs.empty(),"CR strategy failed to dispatch");
+            const auto shared=prefs.begin()->second;
+            const auto &r=model->getRegions().at(shared.region);
+            const int expectedY=targetSLR==0?-1:(targetSLR==3?1:(shared.clusterMeanY<=(r.y0+r.y1)*.5?1:-1));
+            // Independent oracle from actual device geometry, including all CR
+            // rows of the target die, not the new selection helper.
+            float expectedAnchorY=expectedY>0?1e10f:-1e10f;
+            float expectedAnchorX=shared.pullX<0?-1e10f:1e10f;
+            for(auto row:device.getClockRegions())for(auto cr:row)if(cr) {
+                float cx=(cr->getLeft()+cr->getRight())*.5f,cy=(cr->getBottom()+cr->getTop())*.5f;
+                if(cy<=r.y0||cy>=r.y1)continue;
+                expectedAnchorY=expectedY>0?std::min(expectedAnchorY,cy):std::max(expectedAnchorY,cy);
+                if(cx>r.x0&&cx<r.x1)
+                    expectedAnchorX=shared.pullX<0?std::max(expectedAnchorX,cx):std::min(expectedAnchorX,cx);
+            }
+            for(auto entry:prefs) {
+                const auto &q=entry.second;
+                require(q.crEdgeAnchor&&q.cluster==shared.cluster&&q.clusterMeanY==shared.clusterMeanY,
+                        "Cluster average/identity was changed per PU");
+                require(q.pullY==expectedY&&q.crAnchorY==expectedAnchorY&&q.crAnchorRow==shared.crAnchorRow,
+                        "Members chose different Y edges or region center");
+                require(q.guideX==(scenario!="side-tie"),"CR mode changed side-majority policy");
+                if(q.guideX)require(q.crAnchorX==expectedAnchorX,"HPIO anchor is not its nearest CR column");
+            }
+            WirelengthOptimizer optimizer(&p,cfg,false);
+            // Exercise actual QP pseudo-nets before and after the shared anchor.
+            // The report records the resulting nonzero X/Y solver terms.
+            for(bool slr:{true,false}) {
+                p.setPaperSLRStage(slr);
+                for(int beyond:{-1,1}) {
+                    for(auto entry:prefs) {
+                        float x,y;require(p.regionAnchor(entry.first,entry.second,x,y),"Missing CR anchor");
+                        entry.first->setAnchorLocationAndForgetTheOriginalOne(
+                            entry.second.guideX?x+beyond*entry.second.pullX*10:x,
+                            y+beyond*entry.second.pullY*10);
+                    }
+                    p.updateElementBinGrid();optimizer.updateB2BNetWeight(.005f);
+                    require(!prefs.empty(),"QP dropped feasible CR preferences");
+                    for(auto entry:prefs)require(entry.second.crAnchorY==shared.crAnchorY&&
+                        entry.second.pullY==shared.pullY&&entry.second.clusterMeanY==shared.clusterMeanY,
+                        "QP/refresh recomputed cluster edge after crossing the center");
+                }
+            }
+            // Rebuild the same cluster on the other half of an interior SLR.
+            if(targetSLR==1) {
+                const double oldMean=shared.clusterMeanY;
+                for(auto pu:p.getPlacementUnits())if(!pu->isFixed()&&!pu->isLocked())
+                    pu->setAnchorLocationAndForgetTheOriginalOne(20,expectedY>0?r.y1-40:r.y0+40);
+                p.updateElementBinGrid();timing.clusterCriticalPathsByPhysicalRegion(true);
+                require(!prefs.empty(),"Rebuild lost cluster");
+                require(prefs.begin()->second.pullY==-expectedY && prefs.begin()->second.clusterMeanY!=oldMean,
+                        "Rebuild did not recompute the cluster-wide average and edge");
+            }
+            std::ofstream out(argv[3]);out<<"PASS CR cluster-wide anchor, real geometry, QP stop and rebuild\n";
+            std::cout<<"PASS cr-"<<scenario<<'\n';return 0;
+        }
+        if (stageModeTest) {
+            const bool active = scenario != "stage-inactive";
+            const bool merged = p.paperBoundaryMergedStages();
+            require(active == p.paperBoundaryClusteringEnabled(), "Fixture active-mode mismatch");
+            for (auto entry:before) {
+                require(entry.first->X()==entry.second.first && entry.first->Y()==entry.second.second,
+                        "Deferred preparation moved a PU");
+                if (entry.first->isFixed()) entry.first->setLocked();
+            }
+            GlobalPlacer placer(&p,cfg);
+            placer.GlobalPlacement_fixedCLB(1,.0002f);
+            for (auto entry:before)
+                require(entry.first->X()==entry.second.first && entry.first->Y()==entry.second.second,
+                        "Boundary preparation ran inside fixedCLB initialization");
+            WirelengthOptimizer optimizer(&p,cfg,false);
+            for (int generation=0; generation<3; ++generation) {
+                if (generation && active) {
+                    for (auto entry:before) if (!entry.first->isFixed() && !entry.first->isLocked())
+                        entry.first->setAnchorLocationAndForgetTheOriginalOne(entry.second.first,entry.second.second);
+                    p.updateElementBinGrid();timing.clusterCriticalPathsByPhysicalRegion();
+                }
+                std::cout << "MODE_GENERATION " << generation << '\n';
+                const bool pending = p.paperSLRStage();
+                placer.GlobalPlacement_CLBElements(0,true,2,false,true,200,&timing);
+                require(p.paperSLRStage()==pending,"Zero budget consumed boundary preparation");
+                if (generation==0) timing.spreadPaperBoundarySLR();
+                if (active) {
+                    require(!prefs.empty(),"Boundary preferences missing");
+                    require(p.paperSLRStage()==!merged,"Wrong boundary phase after preparation");
+                    // Put movable targets away from both centers to exercise
+                    // actual X/Y pseudo-net assembly, not just phase labels.
+                    for (auto entry:prefs) {
+                        float x,y;require(p.regionAnchor(entry.first,entry.second,x,y),"Missing anchor");
+                        entry.first->setAnchorLocationAndForgetTheOriginalOne(x-entry.second.pullX*10,y-10);
+                    }
+                    p.updateElementBinGrid();optimizer.updateB2BNetWeight(.005f);
+                    std::map<PlacementInfo::PlacementUnit *,std::pair<float,float>> prepared;
+                    for (auto pu:p.getPlacementUnits())prepared[pu]={pu->X(),pu->Y()};
+                    if (merged) {
+                        timing.spreadPaperBoundarySLR();timing.advancePaperBoundaryStage();
+                        for (auto entry:prepared)require(entry.first->X()==entry.second.first && entry.first->Y()==entry.second.second,
+                                                        "Merged preparation repeated without rebuild");
+                    }
+                } else require(!merged && prefs.empty(),"Inactive selector enabled boundary clustering");
+                placer.GlobalPlacement_CLBElements(3,generation!=0,2,false,true,200,&timing);
+                require(!p.paperSLRStage(),"SLR stage left active after GP");
+                for (auto entry:prefs)checkFence(p,entry.first);
+                optimizer.updateB2BNetWeight(.005f);
+                placer.GlobalPlacement_CLBElements(1,true,2,false,true,200,&timing);
+                for (auto entry:before)if(entry.first->isLocked())
+                    require(entry.first->X()==entry.second.first && entry.first->Y()==entry.second.second,
+                            "Locked static endpoint moved");
+            }
+            if (active) {
+                // Both fixed-only and locked-only PUs remain in the preference
+                // map, but neither may receive a pseudo-net or be projected.
+                auto a=prefs.begin()->first;auto b=std::next(prefs.begin())->first;
+                a->setFixed();b->setLocked();
+                auto ax=a->X(),ay=a->Y(),bx=b->X(),by=b->Y();
+                p.refreshRegionPreferences();require(prefs.count(a)&&prefs.count(b),"Fixed/locked preferences erased");
+                require(!p.clipPaperRegionLocation(a)&&!p.clipPaperRegionLocation(b),"Fixed/locked projection attempted");
+                optimizer.updateB2BNetWeight(.005f);
+                require(a->X()==ax&&a->Y()==ay&&b->X()==bx&&b->Y()==by,"Fixed/locked PU moved");
+                p.clearRegionPreferences();require(prefs.empty()&&!p.paperSLRStage(),"Stage reset failed");
+            }
+            std::ofstream out(argv[3]);out<<"pu\tx\ty\n";
+            for(auto pu:p.getPlacementUnits())out<<pu->getName()<<'\t'<<pu->X()<<'\t'<<pu->Y()<<'\n';
+            std::cout<<"PASS "<<scenario<<'\n';return 0;
+        }
         for(auto entry:before) {
             auto pu=entry.first;
             require(pu->Y()==entry.second.second,"SLR room-making moved Y or ran HPIO spreading too early");

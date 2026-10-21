@@ -8,6 +8,7 @@ import argparse
 import csv
 import datetime as dt
 import hashlib
+from incremental_config import normalize_incremental_config
 import json
 import os
 from pathlib import Path
@@ -78,9 +79,9 @@ def tcl_word(value):
 
 def load_job(path):
     path = Path(path).resolve()
-    job = json.loads(path.read_text())
-    if job.get('IncremenralCompilation') not in (True, 'true'):
-        raise ValueError('DFX entry requires explicit IncremenralCompilation=true')
+    job = normalize_incremental_config(json.loads(path.read_text()))
+    if job.get('IncrementalCompilation') not in (True, 'true'):
+        raise ValueError('DFX entry requires explicit IncrementalCompilation=true')
     for key in ('part', 'active_partition', 'pblock', 'clock_name', 'clock_period_ns',
                 'amf_config', 'static_checkpoint', 'reference_checkpoint', 'rm_checkpoint', 'vivado'):
         if key not in job: raise ValueError('Missing DFX job key: ' + key)
@@ -169,7 +170,7 @@ def check_complete_prepare_resume(job):
 
 def amf_configuration(job):
     path = Path(job['amf_config'])
-    cfg = json.loads(path.read_text())
+    cfg = normalize_incremental_config(json.loads(path.read_text()))
     # Do not carry GETRF-specific netlist/control/cluster caches into another RM.
     forbidden = ('fixed units file', 'unpredictable macro file', 'designCluster file', 'designCluster',
                  'DSP registered outputs file', 'SRL control metadata file')
@@ -218,6 +219,10 @@ def run(args):
     job = load_job(args.config)
     job['backend_place_mode'] = 'amf-import-only'
     cfg = amf_configuration(job)
+    from incremental_config import validate_incremental_binary
+    validate_incremental_binary(job,args.binary)
+    from paper_boundary_config import validate_paper_boundary_binary
+    validate_paper_boundary_binary(cfg,args.binary)
     if 'reuse_prepared_input_from_run' in job and 'prepare_from_run' in job:
         raise ValueError('Choose one preparation recovery mode')
     recovery = (check_complete_prepare_resume(job) if 'reuse_prepared_input_from_run' in job
@@ -298,7 +303,7 @@ def run(args):
         manifest['model_input_hashes'] = {k:sha(v) for k,v in cfg.items() if ('file' in k or k=='mergedSharedCellType2sharedCellType') and Path(v).is_file()}
         with zipfile.ZipFile(out/'netlist.zip', 'w', zipfile.ZIP_DEFLATED) as z:
             z.write(out/'netlist.txt', 'netlist')
-        cfg.update({'IncremenralCompilation':'true', 'DFX input scope':'rm-boundary-cone-v1', 'DFX active partition':job['active_partition'],
+        cfg.update({'IncrementalCompilation':'true', 'DFX input scope':'rm-boundary-cone-v1', 'DFX active partition':job['active_partition'],
                     'DFX allowed sites file':str(out/'allowed_sites.txt'), 'DFX blocked sites file':str(out/'blocked_sites.txt'),
                     'DFX static placement file':str(out/'static_placement.tsv'),
                     'SRL control metadata file':str(out/'srl_controls.tsv'),

@@ -19,7 +19,7 @@ int main(int argc, const char **argv)
 {
     if (argc == 2 && std::string(argv[1]) == "--capabilities")
     {
-        std::cout << "{\"schema\":\"amf-capabilities-v1\",\"clock_resource_capacity_schema\":1,\"external_floorplan_initialization_schema\":1,\"paper_hierarchical_boundaries_schema\":2,\"global_placement_inspection_schema\":1,\"amf2pro_integration_schema\":1,\"dfx_incremental_schema\":1,\"dfx_full_hard_regions_schema\":1,\"dfx_partition_floorplan_schema\":1,\"native_static_cache_schema\":2,\"native_placement_repair_schema\":1,\"native_ff_pin_access_repair_schema\":1,\"native_pin_cache_packing_schema\":1,\"native_dfx_edge_policy_schema\":1}\n";
+        std::cout << "{\"schema\":\"amf-capabilities-v1\",\"visualization_config_schema\":1,\"device_placement_policy_schema\":1,\"clock_region_column_stretch_schema\":1,\"vhk158_sparse_lutff_schema\":1,\"clock_resource_capacity_schema\":1,\"external_floorplan_initialization_schema\":1,\"paper_hierarchical_boundaries_schema\":2,\"boundary_clustering_strategy_schema\":1,\"cr_slr_hierarchical_schema\":1,\"boundary_clustering_strategy_default\":\"slr-hierarchical\",\"paper_region_clipping_toggle_schema\":1,\"paper_boundary_stage_mode_schema\":1,\"global_placement_inspection_schema\":1,\"amf2pro_integration_schema\":1,\"dfx_incremental_schema\":1,\"incremental_compilation_key_schema\":1,\"dfx_full_hard_regions_schema\":1,\"dfx_partition_floorplan_schema\":1,\"native_static_cache_schema\":2,\"native_placement_repair_schema\":1,\"native_ff_pin_access_repair_schema\":1,\"native_pin_cache_packing_schema\":1,\"native_inline_pin_cache_schema\":1,\"native_local_pin_access_schema\":2,\"native_dfx_edge_policy_schema\":1}\n";
         return 0;
     }
     amf_profile::Session profileSession;
@@ -54,6 +54,8 @@ int main(int argc, const char **argv)
                     cache.observeCell(c.name,c.type);for(const auto &p:c.pins)cache.observePin(p);
                 }
                 cache.finishCapture();cache.savePlacement(cfg.at("Native historical placement Tcl"),cfg);
+            }else if(action=="certify-local-pin-access") {
+                amf_native::StaticDesignCache::certifyLocalPinAccessStreaming(cfg);
             }else if(action=="certify-pin-access") {
                 auto cache=amf_native::StaticDesignCache::load(cfg.at("Native static cache proposal"));
                 cache.certifyPinAccess(cfg);
@@ -77,6 +79,12 @@ int main(int argc, const char **argv)
                 }
                 if(action=="seal")cache.seal(cfg.at("Native final static positions"),contract,true);
                 else cache.certifyResources(contract);
+                // Fresh full capture can certify pin access in the same cache
+                // load/write. Existing callers without this key are unchanged.
+                if(cfg.count("Native pin access certificate")) {
+                    if(action!="seal")throw std::runtime_error("Inline pin access requires fresh seal");
+                    cache.certifyPinAccess(parseJSONFile(cfg.at("Native pin access certificate")));
+                }
                 cache.write(cfg.at("Native static cache sealed output"));
             }else if(action=="compose-inspect") {
                 auto prepared=amf_native::StaticDesignCache::prepare(cfg);

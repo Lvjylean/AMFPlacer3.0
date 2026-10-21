@@ -782,7 +782,7 @@ bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::addPU(PlacementInfo::
     if (!parentPackingCLB->getPlacementInfo()->checkClockColumnLegalization(tmpPU, parentPackingCLB->getCLBSite()))
         return false;
 
-    return true;
+    return parentPackingCLB->localCandidateAllows(this);
 }
 
 bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::checkCellCorrectness(PlacementInfo::PlacementUnit *tmpPU,

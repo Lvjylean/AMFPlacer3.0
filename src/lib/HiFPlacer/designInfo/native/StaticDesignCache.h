@@ -69,6 +69,8 @@ public:
     // or edit a cache on disk; caller must publish an immutable child artifact.
     void certifyResources(const Config &contract);
     void certifyPinAccess(const Config &contract);
+    void certifyLocalPinAccess(const Config &contract);
+    static void certifyLocalPinAccessStreaming(const Config &contract);
     PreparedInput compose(const std::string &module, std::vector<Cell> dynamic,
                           const std::vector<Port> &ports, Config &cfg) const;
     const std::vector<Cell> &staticCells() const { return cells; }

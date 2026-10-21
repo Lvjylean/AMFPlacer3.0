@@ -1,4 +1,5 @@
 #include "HierarchicalBoundaryPolicy.h"
+#include "ClockRegionAnchorPolicy.h"
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -63,7 +64,33 @@ int main()
                         hierarchical_boundary::anchorDistance(y,360,direction),nets,!dsp);
                     require(std::fabs(actual-expected)<1e-5,"Rotated SLR weight differs from upstream branch");
                 }
-        std::cout << "PASS majority, stretch, 100 original-formula and 330 rotated-branch cases\n";
+        // Unequal CR spacing and shuffled row/column IDs: geometry, not an
+        // assumed U250 grid size or numbering, determines the edge centers.
+        struct Box { int slr; float x0,x1,y0,y1; };
+        std::vector<Box> boxes{{4,0,45,100,260},{4,55,100,100,260},
+                               {9,0,100,0,100},{2,0,100,260,400}};
+        std::vector<hierarchical_boundary::ClockRegionCenter> cr{
+            {8,99,10,120},{2,99,35,120},{1,99,70,120},{7,99,95,120},
+            {8,3,10,225},{2,3,35,225},{1,3,70,225},{7,3,95,225},
+            {8,7,10,20},{8,8,10,75},{8,4,10,290},{8,0,10,370}};
+        hierarchical_boundary::ClockRegionAnchor anchor;
+        auto selectCR=[&](int region,bool gx,bool gy,int dx,double mean) {
+            return hierarchical_boundary::selectClockRegionAnchor(boxes,region,gx,gy,dx,mean,cr,anchor);
+        };
+        require(selectCR(0,true,true,-1,150) && anchor.x==35 && anchor.y==120 &&
+                anchor.pullY==1 && anchor.column==2 && anchor.row==99,"Lower CR edge selection failed");
+        require(selectCR(1,true,true,1,210) && anchor.x==70 && anchor.y==225 &&
+                anchor.pullY==-1 && anchor.row==3,"Upper/right CR edge selection failed");
+        require(selectCR(0,false,true,0,180) && anchor.y==120 && anchor.pullY==1,
+                "Exact mean-Y tie is not deterministic");
+        require(selectCR(2,false,true,0,10) && anchor.y==75 && anchor.pullY==-1,
+                "Bottom die selected its exterior edge");
+        require(selectCR(3,false,true,0,390) && anchor.y==290 && anchor.pullY==1,
+                "Top die selected its exterior edge");
+        require(!selectCR(-1,true,true,1,150) && !selectCR(0,true,true,0,150),"Invalid CR request accepted");
+        require(!selectCR(0,true,true,-1,std::numeric_limits<double>::quiet_NaN()),"Nonfinite mean accepted");
+        cr.clear();require(!selectCR(0,true,true,-1,150),"Missing CR geometry fell back to region center");
+        std::cout << "PASS majority, stretch, original/rotated weights and CR edge geometry\n";
         return 0;
     } catch (const std::exception &e) { std::cerr << e.what() << '\n'; return 1; }
 }

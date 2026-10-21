@@ -7,7 +7,7 @@ from dfx_comparison import identity
 from run_dfx_multi import validate, check_shell
 
 def main():
-    job=dict(IncremenralCompilation=True,static_routing_containment=True,part="xcu250-figd2104-2L-e",
+    job=dict(IncrementalCompilation=True,static_routing_containment=True,part="xcu250-figd2104-2L-e",
              clock_name="clk",clock_period_ns=10,partitions=[
                  dict(id="a",active_partition="rp_a",pblock="pblock_a",
                       pblock_ranges=["CLOCKREGION_X1Y1:CLOCKREGION_X3Y1"],expected_slr="SLR0"),

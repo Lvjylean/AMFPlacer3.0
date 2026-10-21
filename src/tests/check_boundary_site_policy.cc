@@ -52,7 +52,8 @@ int main(){try {
  std::vector<Port> ports{{"a","x","IN","@PORT/x",false}};
  Config inc{{"Native static identity","fixture"},{"Native static shell sha256",std::string(64,'3')},{"device","U250"},{"ClockPeriod","20"},
  {"Native workspace",(p/"default").string()}};
- auto cfg=inc;cache.compose("a",dynamic,ports,cfg);auto nc=cfg;nc["IncremenralCompilation"]="false";
+ auto cfg=inc;cfg["IncremenralCompilation"]="false";cache.compose("a",dynamic,ports,cfg);
+ ck(cfg.at("IncrementalCompilation")=="true"&&!cfg.count("IncremenralCompilation"),"cache emits only canonical enable key");auto nc=cfg;nc["IncrementalCompilation"]="false";
  IncrementalContext normal(nc);ck(!normal.enabled,"ordinary placement unaffected");
  cfg=inc;cfg["Native DFX edge policy"]=BoundarySitePolicy::version;cfg["Native workspace"]=(p/"missing").string();reject([&]{cache.compose("a",dynamic,ports,cfg);});
  contract["resource_inventory_file"]=(p/"inventory").string();contract["resource_geometry_file"]=(p/"geometry").string();

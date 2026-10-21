@@ -230,6 +230,74 @@ void MacroLegalizer::fixedColumnLegalize(bool directLegalization)
     }
 }
 
+void MacroLegalizer::selectAccessibleDspSites()
+{
+    auto &policy=placementInfo->localPinAccess;
+    if(!policy.enabled||DSPPUs.empty())return;
+    AMF_PROFILE_SCOPE("native_local_dsp_legalize", "choose legal DSP candidates with joint local entrance allocation");
+    using PU=PlacementInfo::PlacementUnit;
+    using Site=DeviceInfo::DeviceSite;
+    struct Candidate {std::vector<Site*> sites;std::vector<amf_native::LocalPinAccess::Demand> demands;float distance;};
+    std::vector<PU*> pus(DSPPUs.begin(),DSPPUs.end());
+    std::sort(pus.begin(),pus.end(),[](PU*a,PU*b){return a->getId()<b->getId();});
+    std::map<PU*,std::vector<Candidate>> domains;
+    auto cellsOf=[&](PU *pu) {
+        std::vector<DesignInfo::DesignCell*> cells;
+        if(auto single=dynamic_cast<PlacementInfo::PlacementUnpackedCell*>(pu))cells.push_back(single->getCell());
+        else for(auto c:dynamic_cast<PlacementInfo::PlacementMacro*>(pu)->getCells())cells.push_back(c);
+        return cells;
+    };
+    for(auto pu:pus) {
+        auto cells=cellsOf(pu);auto &domain=domains[pu];auto current=PU2LegalSites.at(pu);
+        for(const auto &column:DSPColumn2Sites)for(int start=0;start+int(cells.size())<=int(column.size());++start) {
+            if(!legalSiteRange(pu,column,start,cells.size()))continue;
+            Candidate candidate;
+            candidate.sites.assign(column.begin()+start,column.begin()+start+cells.size());
+            if((pu->isFixed()||pu->isLocked())&&candidate.sites!=current)continue;
+            for(unsigned k=0;k<cells.size();++k) {
+                auto d=policy.dspDemands(cells[k],candidate.sites[k]->getName());
+                candidate.demands.insert(candidate.demands.end(),d.begin(),d.end());
+            }
+            if(!policy.database.access.solve(candidate.demands).feasible)continue;
+            candidate.distance=candidate.sites==current?-1.f:
+                std::fabs(candidate.sites[0]->X()-pu->X())+std::fabs(candidate.sites[0]->Y()-pu->Y());
+            domain.push_back(std::move(candidate));
+        }
+        std::stable_sort(domain.begin(),domain.end(),[](const Candidate&a,const Candidate&b){return a.distance<b.distance;});
+        if(domain.empty())throw std::runtime_error("DSP has no locally accessible legal candidate: "+pu->getName());
+    }
+    std::set<Site*> used;
+    std::vector<amf_native::LocalPinAccess::Demand> demands;
+    std::map<PU*,unsigned> selected;std::size_t explored=0;
+    std::function<bool(unsigned)> search=[&](unsigned step) {
+        if(step==pus.size())return true;
+        if(++explored>100000)throw std::runtime_error("DSP local-access search budget exhausted; feasibility unresolved");
+        auto pu=pus[step];const auto &domain=domains.at(pu);
+        for(unsigned index=0;index<domain.size();++index) {
+            const auto &candidate=domain[index];
+            if(std::any_of(candidate.sites.begin(),candidate.sites.end(),[&](Site*s){return used.count(s);}))continue;
+            auto oldSize=demands.size();demands.insert(demands.end(),candidate.demands.begin(),candidate.demands.end());
+            if(policy.database.access.solve(demands).feasible) {
+                for(auto s:candidate.sites)used.insert(s);selected[pu]=index;
+                if(search(step+1))return true;
+                for(auto s:candidate.sites)used.erase(s);selected.erase(pu);
+            }
+            demands.resize(oldSize);
+        }
+        return false;
+    };
+    if(!search(0))throw std::runtime_error("No joint DSP local-entrance assignment");
+    policy.setDspContext(demands);
+    unsigned changed=0;
+    for(auto pu:pus) {
+        const auto &sites=domains.at(pu).at(selected.at(pu)).sites;
+        if(PU2LegalSites.at(pu)!=sites)++changed;
+        PU2LegalSites[pu]=sites;PU2X[pu]=sites[0]->X();PU2Y[pu]=sites[0]->Y();
+    }
+    for(auto &entry:PULevelMatching)if(selected.count(entry.first))entry.second=PU2LegalSites.at(entry.first)[0];
+    print_info("AMF_DSP_LOCAL_ACCESS pus="+std::to_string(pus.size())+" candidate_changes="+std::to_string(changed));
+}
+
 void MacroLegalizer::finalLegalizeBasedOnDP()
 {
     AMF_PROFILE_FUNCTION("macro_legalization");
@@ -244,6 +312,7 @@ void MacroLegalizer::finalLegalizeBasedOnDP()
     tmpAverageDisplacement += DPForMinHPWL(DSPColumnNum, DSPColumn2Sites, DSPColumn2PUs);
     tmpAverageDisplacement += DPForMinHPWL(URAMColumnNum, URAMColumn2Sites, URAMColumn2PUs);
     tmpAverageDisplacement += DPForMinHPWL(CARRYColumnNum, CARRYColumn2Sites, CARRYColumn2PUs);
+    selectAccessibleDspSites();
     finalAverageDisplacement = tmpAverageDisplacement / PU2X.size();
     if (verbose)
         print_status("MacroLegalizer[" + legalizerName +
@@ -1006,6 +1075,7 @@ void MacroLegalizer::findPossibleLegalLocation(bool fixedColumn)
         for (auto curSite : *candidateSite)
         {
             if(!placementInfo->hardRegionAllows(curCell,curSite))continue;
+            if(!placementInfo->localPinAccess.dspAllows(curCell,curSite->getName()))continue;
             float curDisp = getDisplacement(cellLoc[curCell->getCellId()], curSite);
             if ((!fixedColumn && curDisp < displacementThreshold) ||
                 (fixedColumn && curDisp < 2 * displacementThreshold))
@@ -1916,6 +1986,17 @@ bool MacroLegalizer::legalSiteRange(PlacementInfo::PlacementUnit *pu,
 {
     if (!HardResourceUtils::contiguousWithinSLR(sites, first, count)) return false;
     for(int i=first;i<first+count;++i)if(!placementInfo->hardRegionAllows(pu,sites[i]))return false;
+    if(placementInfo->localPinAccess.enabled) {
+        if(auto single=dynamic_cast<PlacementInfo::PlacementUnpackedCell*>(pu)) {
+            if(!placementInfo->localPinAccess.dspAllows(single->getCell(),sites[first]->getName()))return false;
+        } else if(auto macro=dynamic_cast<PlacementInfo::PlacementMacro*>(pu)) {
+            if(macro->checkHasDSP()) {
+                if(int(macro->getCells().size())!=count)throw std::runtime_error("DSP macro/site coverage mismatch");
+                for(int i=0;i<count;++i)
+                    if(!placementInfo->localPinAccess.dspAllows(macro->getCells()[i],sites[first+i]->getName()))return false;
+            }
+        }
+    }
     if (auto macro = dynamic_cast<PlacementInfo::PlacementMacro *>(pu))
     {
         if (macro->getMacroType() != PlacementInfo::PlacementMacro::PlacementMacroType_CARRY &&

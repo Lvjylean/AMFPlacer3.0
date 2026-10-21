@@ -362,6 +362,26 @@ class GeneralSpreader
          */
         inline bool smartFindExpandDirection(std::set<PlacementInfo::PlacementBinInfo *> &coveredBinSet)
         {
+            if(placementInfo->sparseResourcePlacementEnabled()) {
+                int count=0;
+                for(int d=0;d<4;++d) {
+                    legalDir[d]=false;dir2utilization[d]=1e-1;dir2capacity[d]=1e-5;
+                    auto step=expandOps[d];
+                    // Cross arbitrary zero-capacity gaps, but never another
+                    // spreading window. Check EVERY intervening strip.
+                    for(;;step=step+1) {
+                        int t=topBinY+step.topYOp,b=bottomBinY+step.bottomYOp;
+                        int l=leftBinX+step.leftXOp,r=rightBinX+step.rightXOp;
+                        if(b<0||l<0||t>=int(binGrid.size())||r>=int(binGrid[0].size()))break;
+                        if(isCovered(t,b,l,r,static_cast<dirType>(d),coveredBinSet))break;
+                        getDirCapacityAndUtilization(t,b,l,r,static_cast<dirType>(d),dir2utilization[d],dir2capacity[d]);
+                        if(dir2capacity[d]>2e-5) {
+                            actualExpandOps[d]=step;legalDir[d]=true;++count;break;
+                        }
+                    }
+                }
+                return count;
+            }
             int possibleCnt = 0;
 
             // iterate the 4 direction

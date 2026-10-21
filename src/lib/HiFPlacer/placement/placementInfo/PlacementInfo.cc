@@ -1,4 +1,6 @@
 #include "../packing/FfQPinMask.h"
+#include "../placementTiming/BoundaryClusteringStrategy.h"
+#include "../placementTiming/ClockRegionAnchorPolicy.h"
 #include "../../../utils/RuntimeProfiler.h"
 #include <unordered_set>
 /**
@@ -29,6 +31,30 @@ PlacementInfo::PlacementInfo(DesignInfo *designInfo, DeviceInfo *deviceInfo,
     : designInfo(designInfo), deviceInfo(deviceInfo), JSONCfg(JSONCfg), incremental(JSONCfg), hardRegions(JSONCfg)
 {
     AMF_PROFILE_FUNCTION("placement_bookkeeping");
+
+    const auto strategyName = boundary_strategy::resolve(JSONCfg);
+    if (boundaryClusteringEnabled())
+        print_info("BoundaryClusteringStrategy=" + strategyName);
+
+    const auto stageMode = JSONCfg.find("BoundaryStageMode");
+    if (stageMode != JSONCfg.end()) {
+        if (stageMode->second != "independent-max2" && stageMode->second != "merged")
+            throw std::runtime_error("BoundaryStageMode must be independent-max2 or merged");
+        boundaryMergedStages = stageMode->second == "merged";
+    }
+    if (paperBoundaryClusteringEnabled())
+        print_info(std::string("PAPER_STAGE_MODE mode=") + (boundaryMergedStages ? "merged" : "independent-max2"));
+
+    auto clipOption = JSONCfg.find("BoundaryRegionClipping");
+    if (clipOption != JSONCfg.end()) {
+        if (clipOption->second != "true" && clipOption->second != "false")
+            throw std::runtime_error("BoundaryRegionClipping must be true or false");
+        boundaryRegionClipping = clipOption->second == "true";
+    }
+    // Only the soft SLR/HPIO preference projection is optional. Hard DFX
+    // ownership, anchors, clustering and resource reservations are unchanged.
+    if (paperBoundaryClusteringEnabled())
+        print_info(std::string("PAPER_REGION_CLIPPING enabled=") + (boundaryRegionClipping ? "true" : "false"));
 
     cellType2fixedAmoFileName = std::string(JSONCfg["cellType2fixedAmo file"]);
     cellType2sharedCellTypeFileName = std::string(JSONCfg["cellType2sharedCellType file"]);
@@ -113,6 +139,17 @@ PlacementInfo::PlacementInfo(DesignInfo *designInfo, DeviceInfo *deviceInfo,
             }
             print_info("AMF_PIN_ACCESS policy=fixed-static-ff-q-v1 sites="+std::to_string(ffQBlockedMasks.size())+" blocked_ff_bels="+std::to_string(bels));
         }
+        if(JSONCfg.count("DFX cached local pin policy")) {
+            AMF_PROFILE_SCOPE("native_local_pin_index", "load sealed local entrance policy");
+            if(JSONCfg.at("Native local pin access policy")!=amf_native::LocalAccessDatabase::version)
+                throw std::runtime_error("Uncertified local entrance policy");
+            localPinAccess.database.load(JSONCfg.at("DFX cached local pin policy"),
+                JSONCfg.at("Native active module"),JSONCfg.at("DFX local pin aliases"));
+            for(const auto &site:localPinAccess.database.sites)
+                if(!incremental.allowedSites.count(site))throw std::runtime_error("Local access site outside RP");
+            localPinAccess.enabled=true;
+            print_info("AMF_LOCAL_ACCESS enabled sites="+std::to_string(localPinAccess.database.sites.size()));
+        }
         incremental.minX = getMinXFromSites(activeSites) - 0.001f;
         incremental.maxX = getMaxXFromSites(activeSites) + 0.001f;
         incremental.minY = getMinYFromSites(activeSites) - 0.001f;
@@ -148,6 +185,7 @@ PlacementInfo::PlacementInfo(DesignInfo *designInfo, DeviceInfo *deviceInfo,
     {
         for (auto curClockRegion : curClockRegionRow)
         {
+            if (!curClockRegion) continue;
             for (auto curColRows : curClockRegion->getClockColumns())
             {
                 for (auto curCol : curColRows)
@@ -510,6 +548,7 @@ void PlacementInfo::createGridBins(float _binWidth, float _binHeight)
         std::string targetSiteType = compatiblePlacementTable->sharedCellType2SiteType[sharedBELStr];
 
         std::vector<DeviceInfo::DeviceSite *> &sitesInType = deviceInfo->getSitesInType(targetSiteType);
+        if(sitesInType.empty()) continue;
 
         // map some BEL type to the same BEL id tomporarily for cell spreading, e.g., SLICEM_LUT -> SLICEL_LUT
         std::string targetSharedBELStr = getBELType2FalseBELType(sharedBELStr);
@@ -586,6 +625,16 @@ void PlacementInfo::createGridBins(float _binWidth, float _binHeight)
         " X:" +
         std::to_string(SharedBELTypeBinGrid[compatiblePlacementTable->getSharedBELTypeId(SLICEL_LUT_STR)][0].size()));
 
+    if(sparseResourcePlacementEnabled()) {
+        // LUT and FF share these physical SLICE sites in the guarded pilot.
+        const auto &grid=SharedBELTypeBinGrid[compatiblePlacementTable->getSharedBELTypeId(SLICEL_LUT_STR)];
+        sparseResourceGrid.reset(startX,startY,binWidth,binHeight,grid.size());
+        size_t count=0;
+        for(size_t y=0;y<grid.size();++y)for(size_t x=0;x<grid[y].size();++x)
+            if(grid[y][x]->getCapacity()>0) { sparseResourceGrid.add(y,x);++count; }
+        if(!count)throw std::runtime_error("Sparse LUT/FF support contains no resource bins");
+        print_info("SPARSE_RESOURCE_SUPPORT bins="+std::to_string(count)+" bin_width="+std::to_string(binWidth));
+    }
     print_status("Bin Grid for Density Control Created");
 }
 
@@ -1555,6 +1604,7 @@ void PlacementInfo::adjustLUTFFUtilization_Clocking()
     {
         for (int j = 0; j < deviceInfo->getClockRegionNumX(); j++)
         {
+            if(!clockRegions[i][j]) continue;
             for (auto &row : clockRegions[i][j]->getClockColumns())
             {
                 for (auto clockColumn : row)
@@ -1731,6 +1781,7 @@ void PlacementInfo::createSiteBinGrid()
     for (std::string targetSiteType : checkSiteNameList)
     {
         std::vector<DeviceInfo::DeviceSite *> &sitesInType = deviceInfo->getSitesInType(targetSiteType);
+        if(sitesInType.empty()) continue;
 
         unsigned int siteIndex = 0;
         for (curBottomY = startY, i = 0; curBottomY < endY - eps; curBottomY += binHeight, i++)
@@ -2169,6 +2220,7 @@ void PlacementInfo::enhanceHighFanoutNet()
 
 void PlacementInfo::enhanceRiskyClockNet()
 {
+    if(deviceInfo->hasSparseClockGeometry()) return; // single-clock pilot: no uncalibrated 18-clock heuristic
     AMF_PROFILE_FUNCTION("placement_bookkeeping");
     for (auto curClockNet : clockNets)
     {
@@ -2255,12 +2307,19 @@ bool PlacementInfo::checkClockUtilization(bool dump)
     {
         for (int j = 0; j < deviceInfo->getClockRegionNumX(); j++)
         {
-            clockRegions[i][j]->resetClockUtilizationInfo();
+            if(clockRegions[i][j]) clockRegions[i][j]->resetClockUtilizationInfo();
         }
     }
 
     for (auto curClockNet : clockNets)
     {
+        if(deviceInfo->hasSparseClockGeometry()) {
+            for(int y=0;y<deviceInfo->getClockRegionNumY();++y)
+                for(int x=0;x<deviceInfo->getClockRegionNumX();++x)
+                    if(deviceInfo->clockRegionIntersects(x,y,curClockNet->getLeftPinX(),curClockNet->getRightPinX(),
+                        curClockNet->getBottomPinY(),curClockNet->getTopPinY())) ++clockRegionUtilization[y][x];
+            continue;
+        }
         int leftId, rightId, topId, bottomId;
         deviceInfo->getClockRegionByLocation(curClockNet->getLeftPinX(), curClockNet->getBottomPinY(), leftId,
                                              bottomId);
@@ -2299,6 +2358,7 @@ bool PlacementInfo::checkClockUtilization(bool dump)
         for (int j = 0; j < deviceInfo->getClockRegionNumX(); j++)
         {
             std::cout << std::left << std::setw(4) << clockRegionUtilization[i][j];
+            if(!clockRegions[i][j]) continue;
             isLegal &= (clockRegionUtilization[i][j] <= deviceInfo->getClockRegionCapacity(j, i).bboxClockLimit);
         }
         std::cout << "\n";
@@ -2309,6 +2369,7 @@ bool PlacementInfo::checkClockUtilization(bool dump)
     {
         for (int j = 0; j < deviceInfo->getClockRegionNumX(); j++)
         {
+            if(!clockRegions[i][j]) { std::cout << "-   "; continue; }
             int halfColumnUtil = deviceInfo->getMaxUtilizationOfClockColumns_InClockRegion(j, i);
             std::cout << std::left << std::setw(4) << halfColumnUtil;
             isLegal &= (halfColumnUtil <= deviceInfo->getClockRegionCapacity(j, i).halfColumnLimit);
@@ -2330,6 +2391,7 @@ void PlacementInfo::dumpOverflowClockUtilization()
             std::cout << "clock region " << i << "  " << j
                       << " ===================================================================\n";
             auto curClockRegion = deviceInfo->getClockRegions()[i][j];
+            if (!curClockRegion) continue;
             if (curClockRegion->getMaxUtilizationOfClockColumns() >
                 curClockRegion->getClockResourceCapacity().halfColumnLimit)
             {
@@ -2385,8 +2447,34 @@ bool PlacementInfo::boundaryClusteringEnabled() const
 }
 bool PlacementInfo::paperBoundaryClusteringEnabled() const
 {
-    auto it = JSONCfg.find("BoundaryClusteringStrategy");
-    return boundaryClusteringEnabled() && it != JSONCfg.end() && it->second == "paper-hierarchical";
+    if (!boundaryClusteringEnabled()) return false;
+    const auto strategy = boundary_strategy::resolve(JSONCfg);
+    return strategy == "slr-hierarchical" || strategy == "cr-slr-hierarchical";
+}
+bool PlacementInfo::crBoundaryClusteringEnabled() const
+{
+    return boundaryClusteringEnabled() && boundary_strategy::resolve(JSONCfg) == "cr-slr-hierarchical";
+}
+bool PlacementInfo::initializeCRBoundaryAnchor(RegionPreference &pref, double clusterMeanY)
+{
+    auto model = deviceInfo->getPhysicalBoundaryModel();
+    if (!model) return false;
+    std::vector<hierarchical_boundary::ClockRegionCenter> centers;
+    const auto &rows = deviceInfo->getClockRegions();
+    for (size_t y = 0; y < rows.size(); ++y)
+        for (size_t x = 0; x < rows[y].size(); ++x)
+            if (auto cr = rows[y][x])
+                centers.push_back({int(x), int(y), (cr->getLeft() + cr->getRight()) * .5f,
+                                   (cr->getBottom() + cr->getTop()) * .5f});
+    hierarchical_boundary::ClockRegionAnchor anchor;
+    if (!hierarchical_boundary::selectClockRegionAnchor(model->getRegions(), pref.region, pref.guideX,
+            pref.guideY, pref.pullX, clusterMeanY, centers, anchor)) return false;
+    pref.crEdgeAnchor = true;
+    pref.crAnchorX = anchor.x; pref.crAnchorY = anchor.y;
+    pref.crAnchorColumn = anchor.column; pref.crAnchorRow = anchor.row;
+    pref.clusterMeanY = clusterMeanY;
+    pref.pullY = anchor.pullY;
+    return true;
 }
 void PlacementInfo::clearRegionPreferences()
 {
@@ -2447,6 +2535,21 @@ bool PlacementInfo::paperRegionBounds(PlacementUnit *pu, const RegionPreference 
     right = std::min(right, globalMaxX - 2 * eps - ox1);
     bottom = std::max(bottom, globalMinY + 2 * eps - oy0);
     top = std::min(top, globalMaxY - 2 * eps - oy1);
+    // Boundary preferences are subordinate to the complete PU's hard RP.
+    // Clipping after the normal area projection must not undo that projection.
+    if (hardRegions.enabled && hardRegionForPU(pu) > 0)
+    {
+        const auto &box = hardRegions.regions.at(hardRegionForPU(pu)).box;
+        left = std::max(left, box.lx - ox0); right = std::min(right, box.hx - ox1);
+        bottom = std::max(bottom, box.ly - oy0); top = std::min(top, box.hy - oy1);
+    }
+    else if (incremental.enabled)
+    {
+        left = std::max(left, incremental.minX + 2 * eps - ox0);
+        right = std::min(right, incremental.maxX - 2 * eps - ox1);
+        bottom = std::max(bottom, incremental.minY + 2 * eps - oy0);
+        top = std::min(top, incremental.maxY - 2 * eps - oy1);
+    }
     return left <= right && bottom <= top;
 }
 bool PlacementInfo::regionAnchor(PlacementUnit *pu, const RegionPreference &pref, float &x, float &y)
@@ -2457,11 +2560,23 @@ bool PlacementInfo::regionAnchor(PlacementUnit *pu, const RegionPreference &pref
     if (!paperRegionBounds(pu, pref, true, left, right, bottom, top)) return false;
     x = pref.guideX ? (left + right) / 2 : pu->X();
     y = pref.guideY ? (bottom + top) / 2 : pu->Y();
+    if (crBoundaryClusteringEnabled())
+    {
+        // No silent fallback to the old region-center policy.
+        if (!pref.crEdgeAnchor) return false;
+        if (pref.guideX) x = std::max(left, std::min(right, pref.crAnchorX));
+        if (pref.guideY) y = std::max(bottom, std::min(top, pref.crAnchorY));
+    }
+    if (hardRegions.enabled || incremental.enabled)
+    {
+        legalizeXYInArea(pu, x, y);
+        if (x < left || x > right || y < bottom || y > top) return false;
+    }
     return std::isfinite(x) && std::isfinite(y);
 }
 bool PlacementInfo::clipPaperRegionLocation(PlacementUnit *pu)
 {
-    if (!paperBoundaryClusteringEnabled() || pu->isFixed() || pu->isLocked()) return false;
+    if (!boundaryRegionClipping || !paperBoundaryClusteringEnabled() || pu->isFixed() || pu->isLocked()) return false;
     // Const lookup: spreading workers only read this map while moving disjoint PUs.
     const auto &preferences = regionPreferences;
     auto it = preferences.find(pu);
@@ -2472,6 +2587,14 @@ bool PlacementInfo::clipPaperRegionLocation(PlacementUnit *pu)
     float x = pu->X(), y = pu->Y();
     if (!paperSLRStageActive && pref.guideX) x = std::max(left, std::min(right, x));
     if (pref.guideY) y = std::max(bottom, std::min(top, y));
+    if (hardRegions.enabled || incremental.enabled)
+    {
+        legalizeXYInArea(pu, x, y);
+        // Static RP exclusions may be non-rectangular. If their projection
+        // leaves the preference, retain the preceding legal placement.
+        if ((!paperSLRStageActive && pref.guideX && (x < left || x > right)) ||
+            (pref.guideY && (y < bottom || y > top))) return false;
+    }
     // Projection to the nearest interior point, never to the target center.
     if (x == pu->X() && y == pu->Y()) return false;
     pu->setAnchorLocationAndForgetTheOriginalOne(x, y);

@@ -2480,6 +2480,8 @@ class ParallelCLBPacker
         // scoring/committing it. Physical control banks and macro slots stay fixed.
         bool assignAccessibleFFSlots();
         void verifyFfQAccess() const;
+        bool chooseLocalPinMapping(amf_native::LutPinAssignment::Result *chosen=nullptr) const;
+        bool localCandidateAllows(PackingCLBCluster *candidate);
         unsigned ffQBlockedMask=0;
         void moveLUTToLUT6Slot();
 
@@ -3054,11 +3056,14 @@ class ParallelCLBPacker
     void dumpCLBPlacementTcl(std::ofstream &outfileTcl, bool packingRelatedToLUT6_2);
     void dumpPlacementTcl(std::string dumpTclFile);
     void dumpAllCellsCoordinate();
+    void dumpVisualizationSnapshot(const char* phase, int iteration, const char* step);
 
   private:
     DesignInfo *designInfo;
     DeviceInfo *deviceInfo;
     PlacementInfo *placementInfo;
+    size_t hardRegionRejectedDspCandidates = 0;
+    size_t hardRegionRejectedDspSwaps = 0;
     std::map<std::string, std::string> &JSONCfg;
     /**
      * @brief specify how many iterations a PlacementUnit should stay at the top priority of a

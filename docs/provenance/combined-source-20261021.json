@@ -1,0 +1,822 @@
+{
+  "created": "2026-10-21T21:10:54.875530+08:00",
+  "branch": "codex/amf3-config-algorithms-viewer-20261021",
+  "parent": "e222992ae0cfc870322d6c590db8dc4b846a53c4",
+  "sources": {
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261020-device-placement-policy-83/repo": "39464f8f9089821e52ee80107c0ddaf18215fbf7",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo": "e0d2eee0d9bbe81b49f24e305cf5600602c1be99",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-viewer-github-release/repo": "e222992ae0cfc870322d6c590db8dc4b846a53c4"
+  },
+  "notes": [
+    "Source paths are working tree snapshots, not clean commit claims.",
+    "No DCP, trajectory, preview, binary or experiment output copied.",
+    "No experiment launched."
+  ],
+  "files": {
+    "AGENTS.md": {
+      "final_sha256": "d72c66c942a356ed6e2ae0f152585ba0595c1eecd2c4fc080e1bf442a4539cc5",
+      "origin": "integration or documentation in independent release checkout"
+    },
+    "README.md": {
+      "final_sha256": "a1a37fa26fc8cf0e7d4a05735c4f45b21ab0adf7417fc6b9d54ddc0212d93d2f",
+      "origin": "integration or documentation in independent release checkout"
+    },
+    "configs/placement/README.md": {
+      "final_sha256": "f70e111f9879d486e30a5bb39eaaae0ab09f0a46343c18ef93821e625c81b5cc",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/configs/placement/README.md",
+        "sha256": "bca588e9c7eb9aa523d56969694af2ae201a7d5e8a46cc35cf71de44ef93239b"
+      }
+    },
+    "configs/placement/bases/getrf-input-provenance.json": {
+      "final_sha256": "d3d8ab585834fa65ab71b668e541b95a10d87d8e936960efc4596b8be8972bf0",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/configs/placement/bases/getrf-input-provenance.json",
+        "sha256": "d3d8ab585834fa65ab71b668e541b95a10d87d8e936960efc4596b8be8972bf0"
+      }
+    },
+    "configs/placement/bases/getrf-prepared.json": {
+      "final_sha256": "66be4017bcc0b184f2a2ace58f59dfaca5eae5a5639ef17825dca3bd5331400f",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/configs/placement/bases/getrf-prepared.json",
+        "sha256": "66be4017bcc0b184f2a2ace58f59dfaca5eae5a5639ef17825dca3bd5331400f"
+      }
+    },
+    "configs/placement/hosts.json": {
+      "final_sha256": "5eafe2febcd1bb53d9348893975af46d0251ad6a1d53700269c25dd8eabb5668",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/configs/placement/hosts.json",
+        "sha256": "5eafe2febcd1bb53d9348893975af46d0251ad6a1d53700269c25dd8eabb5668"
+      }
+    },
+    "configs/placement/machine.json": {
+      "final_sha256": "7d181070030407230ce9a5e930f932e447fb4fd77d28c90b3a4593b947dc4837",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/configs/placement/machine.json",
+        "sha256": "7d181070030407230ce9a5e930f932e447fb4fd77d28c90b3a4593b947dc4837"
+      }
+    },
+    "configs/placement/placer.json": {
+      "final_sha256": "79ce29de81ba0b026cfeb24807fe52af3c841ee25574117f10fbb44ed5223b15",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/configs/placement/placer.json",
+        "sha256": "79ce29de81ba0b026cfeb24807fe52af3c841ee25574117f10fbb44ed5223b15"
+      }
+    },
+    "docs/provenance/combined-release-validation-20261021.json": {
+      "final_sha256": "8dfaedafc512f553705e4e76890bb60d10214e3c4a97f37be43febde5a5b8993",
+      "origin": "integration or documentation in independent release checkout"
+    },
+    "docs/research/boundary-stage-mode.md": {
+      "final_sha256": "5ec8884291fd0ec082490ad6d49e5cc011f80e55f00576a27a9fb67a528d9243",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261020-device-placement-policy-83/repo/docs/research/boundary-stage-mode.md",
+        "sha256": "5ec8884291fd0ec082490ad6d49e5cc011f80e55f00576a27a9fb67a528d9243"
+      }
+    },
+    "docs/research/combined-config-algorithms-viewer-release.md": {
+      "final_sha256": "7322a6079f16400dcd1447ea6248b6104df2d537fc09c71e8dbfe1c24b2e7bf8",
+      "origin": "integration or documentation in independent release checkout"
+    },
+    "docs/research/cr-slr-hierarchical.md": {
+      "final_sha256": "4f44965f8ea539eec89a5dfeb4db5c4e6157a40e8da3a44ef8806c3aa6f13118",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261020-device-placement-policy-83/repo/docs/research/cr-slr-hierarchical.md",
+        "sha256": "4f44965f8ea539eec89a5dfeb4db5c4e6157a40e8da3a44ef8806c3aa6f13118"
+      }
+    },
+    "docs/research/device-placement-policy.md": {
+      "final_sha256": "9df0ded8e367046ae424299fa16be1b2a999363c8bf03faace0019c2bcfad89f",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261020-device-placement-policy-83/repo/docs/research/device-placement-policy.md",
+        "sha256": "9df0ded8e367046ae424299fa16be1b2a999363c8bf03faace0019c2bcfad89f"
+      }
+    },
+    "docs/research/incremental-compilation-key.md": {
+      "final_sha256": "71af2f82c6c495875c6269eb9a86a91ab4929f64b8eec56be8083bf1cbbc3b41",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261020-device-placement-policy-83/repo/docs/research/incremental-compilation-key.md",
+        "sha256": "71af2f82c6c495875c6269eb9a86a91ab4929f64b8eec56be8083bf1cbbc3b41"
+      }
+    },
+    "docs/research/placement-config-historical-profiles-20261020.md": {
+      "final_sha256": "1a616cd9244621ca13ceb4d914057882209f8ce49359ac9798d87418a0435daf",
+      "origin": "integration or documentation in independent release checkout"
+    },
+    "docs/research/slr-hierarchical-default.md": {
+      "final_sha256": "0b2569dd440e7158c17f4271d1292b2a91dae30e7405ca0537dc7daee6584865",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261020-device-placement-policy-83/repo/docs/research/slr-hierarchical-default.md",
+        "sha256": "0b2569dd440e7158c17f4271d1292b2a91dae30e7405ca0537dc7daee6584865"
+      }
+    },
+    "scripts/certify_local_pin_access.py": {
+      "final_sha256": "24f27c35d3b5acd2297f5a64e2a6512781c6ac40eca00177919a79a81f76d9b2",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/certify_local_pin_access.py",
+        "sha256": "24f27c35d3b5acd2297f5a64e2a6512781c6ac40eca00177919a79a81f76d9b2"
+      }
+    },
+    "scripts/completed_module_recovery.py": {
+      "final_sha256": "dbe1b1c14c9941be2043574bfd706a26a2ca276ea9b309e6d242d40785ad784b",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/completed_module_recovery.py",
+        "sha256": "dbe1b1c14c9941be2043574bfd706a26a2ca276ea9b309e6d242d40785ad784b"
+      }
+    },
+    "scripts/create_dfx_shell.py": {
+      "final_sha256": "82eeb577d9e245befe345e7e8d0bf9fe3256b25d2d026818e0f9e008cb0cc4f3",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/create_dfx_shell.py",
+        "sha256": "82eeb577d9e245befe345e7e8d0bf9fe3256b25d2d026818e0f9e008cb0cc4f3"
+      }
+    },
+    "scripts/device_placement_config.py": {
+      "final_sha256": "44d87a755b923dcdc7c8cdf3870b8ff2bb20611486ee4428c99a0ca2b2439804",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261020-device-placement-policy-83/repo/scripts/device_placement_config.py",
+        "sha256": "fca69a40ea9f6dd3c50ef56aa19c1c866f99ea48a43538b2df551723ea76e004"
+      }
+    },
+    "scripts/dfx_clock_guidance.tcl": {
+      "final_sha256": "af4f98a8f5c1962c1964f47161d54769cf9dd47adc299d2a4a086afbeea6f545",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/dfx_clock_guidance.tcl",
+        "sha256": "af4f98a8f5c1962c1964f47161d54769cf9dd47adc299d2a4a086afbeea6f545"
+      }
+    },
+    "scripts/dfx_common_static_shell.tcl": {
+      "final_sha256": "0f432673b1ccbcde1d462e46b8cd2efbf158563454ae5a1572ee5b0f4291e0f6",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/dfx_common_static_shell.tcl",
+        "sha256": "0f432673b1ccbcde1d462e46b8cd2efbf158563454ae5a1572ee5b0f4291e0f6"
+      }
+    },
+    "scripts/dfx_compare_clock_route.py": {
+      "final_sha256": "070497daed3ee5090792bb5edd5d394cfdfdb63152a3072d9fe3a3dec2c9b4be",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/dfx_compare_clock_route.py",
+        "sha256": "070497daed3ee5090792bb5edd5d394cfdfdb63152a3072d9fe3a3dec2c9b4be"
+      }
+    },
+    "scripts/dfx_compare_placement.py": {
+      "final_sha256": "d33ec1f2e59f90121c2da2d6dd7a43c04b4f25e5b4aa3ce54eea04e45aa0cd6b",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/dfx_compare_placement.py",
+        "sha256": "d33ec1f2e59f90121c2da2d6dd7a43c04b4f25e5b4aa3ce54eea04e45aa0cd6b"
+      }
+    },
+    "scripts/dfx_joint_backend.tcl": {
+      "final_sha256": "7b7fa038344aa225e07655a3204f570fa545950f5bcba7cd9226833a9d12f22f",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/dfx_joint_backend.tcl",
+        "sha256": "7b7fa038344aa225e07655a3204f570fa545950f5bcba7cd9226833a9d12f22f"
+      }
+    },
+    "scripts/dfx_joint_checks.tcl": {
+      "final_sha256": "1be158f6544c527cdb31188151fabbf92001e0baae9e657c9afad6e85dde5794",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/dfx_joint_checks.tcl",
+        "sha256": "1be158f6544c527cdb31188151fabbf92001e0baae9e657c9afad6e85dde5794"
+      }
+    },
+    "scripts/dfx_native_lut_pins.tcl": {
+      "final_sha256": "69cb419baeb906d8b3aa9a533a2dfdd7b45d372323bbad6ad7db2262e613bbd5",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/dfx_native_lut_pins.tcl",
+        "sha256": "69cb419baeb906d8b3aa9a533a2dfdd7b45d372323bbad6ad7db2262e613bbd5"
+      }
+    },
+    "scripts/dfx_native_pin_access.tcl": {
+      "final_sha256": "aff10aaefd208bbb08bc8c58a8d542fef8e28270603aa510e9380358cb18f630",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/dfx_native_pin_access.tcl",
+        "sha256": "aff10aaefd208bbb08bc8c58a8d542fef8e28270603aa510e9380358cb18f630"
+      }
+    },
+    "scripts/dfx_native_rm_import.tcl": {
+      "final_sha256": "52ad1841388d835c738f6e67d053af6dfffbba5a5adb4c86d87852f894eebb9e",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/dfx_native_rm_import.tcl",
+        "sha256": "52ad1841388d835c738f6e67d053af6dfffbba5a5adb4c86d87852f894eebb9e"
+      }
+    },
+    "scripts/dfx_pin_owner_overlay.tcl": {
+      "final_sha256": "6ec36d4f763074a8198c446824e0159684f24a5db59b23e079d0ab7c8624b8da",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/dfx_pin_owner_overlay.tcl",
+        "sha256": "6ec36d4f763074a8198c446824e0159684f24a5db59b23e079d0ab7c8624b8da"
+      }
+    },
+    "scripts/dfx_resume_joint_clock.tcl": {
+      "final_sha256": "614886b63793f5689bddac4a44b0c75acc06793433dc5041bf986b3182293005",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/dfx_resume_joint_clock.tcl",
+        "sha256": "614886b63793f5689bddac4a44b0c75acc06793433dc5041bf986b3182293005"
+      }
+    },
+    "scripts/dfx_same_session.tcl": {
+      "final_sha256": "90dee468e975362708531854b94088fc0ab1c2c63da8be26646bc35d5376dfd8",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/dfx_same_session.tcl",
+        "sha256": "90dee468e975362708531854b94088fc0ab1c2c63da8be26646bc35d5376dfd8"
+      }
+    },
+    "scripts/diagnostics/check_dfx_floorplan_initial.py": {
+      "final_sha256": "21f18da16b4db533488278c10ee6260a3293ea533aa89046485507ec02db35fe",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/diagnostics/check_dfx_floorplan_initial.py",
+        "sha256": "21f18da16b4db533488278c10ee6260a3293ea533aa89046485507ec02db35fe"
+      }
+    },
+    "scripts/diagnostics/configure_getrf_dfx.py": {
+      "final_sha256": "b2c213d880617a8878856a98650376fbe64487c575eb334c1a08777d616b6b4f",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/diagnostics/configure_getrf_dfx.py",
+        "sha256": "b2c213d880617a8878856a98650376fbe64487c575eb334c1a08777d616b6b4f"
+      }
+    },
+    "scripts/diagnostics/validate_boundary_stage_modes.py": {
+      "final_sha256": "59ce58ebb6f4a36a1cb849ba24cadf43def5169ce915bc365ab23e94d6903261",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/diagnostics/validate_boundary_stage_modes.py",
+        "sha256": "59ce58ebb6f4a36a1cb849ba24cadf43def5169ce915bc365ab23e94d6903261"
+      }
+    },
+    "scripts/diagnostics/validate_cr_slr_hierarchical.py": {
+      "final_sha256": "4ca6d0b4855610d6e019b5b82dec144ca3d064af5aa5b4b5a771f8e7b920cf4e",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/diagnostics/validate_cr_slr_hierarchical.py",
+        "sha256": "4ca6d0b4855610d6e019b5b82dec144ca3d064af5aa5b4b5a771f8e7b920cf4e"
+      }
+    },
+    "scripts/export_placement_config.py": {
+      "final_sha256": "b56b44581ad8cade47906ef715ca66cea07e4a46846b667686a0bbb5d777b470",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/export_placement_config.py",
+        "sha256": "c20f84ee70d105789ea3bb88df1adc3bf71e8e50128467ad7e26980309565e3e"
+      }
+    },
+    "scripts/incremental_config.py": {
+      "final_sha256": "73d089a8ea3cae4a364d8c52aa6ddec91bd4868ea1ea80d98058add97f3a4e0b",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/incremental_config.py",
+        "sha256": "73d089a8ea3cae4a364d8c52aa6ddec91bd4868ea1ea80d98058add97f3a4e0b"
+      }
+    },
+    "scripts/inspect_amf_inputs.py": {
+      "final_sha256": "954340848e9768d8a86faa1d7b119553609f83ffcab4cc40170b4b151452892c",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/inspect_amf_inputs.py",
+        "sha256": "954340848e9768d8a86faa1d7b119553609f83ffcab4cc40170b4b151452892c"
+      }
+    },
+    "scripts/launch_placement.py": {
+      "final_sha256": "aaa2a72909f2fa3b21f6b777a9249dac80395af4b43939e334fab73896aaa0c1",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/launch_placement.py",
+        "sha256": "aaa2a72909f2fa3b21f6b777a9249dac80395af4b43939e334fab73896aaa0c1"
+      }
+    },
+    "scripts/native_cache_contract.py": {
+      "final_sha256": "830e2ae0cf52afd4afd67499dc2e164884b50a71930bd38691413810ce164f29",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/native_cache_contract.py",
+        "sha256": "830e2ae0cf52afd4afd67499dc2e164884b50a71930bd38691413810ce164f29"
+      }
+    },
+    "scripts/native_local_pin_policy.py": {
+      "final_sha256": "0239f8a153f4a8a1ebd17abd38fbaa29e1216daf82112fd68fc6c9b5bdc17ca7",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/native_local_pin_policy.py",
+        "sha256": "0239f8a153f4a8a1ebd17abd38fbaa29e1216daf82112fd68fc6c9b5bdc17ca7"
+      }
+    },
+    "scripts/native_pin_access_classify.py": {
+      "final_sha256": "30df14146966b976b7b7585719bcd2e1c65f2aca79f3e85140f3264011237bf2",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/native_pin_access_classify.py",
+        "sha256": "30df14146966b976b7b7585719bcd2e1c65f2aca79f3e85140f3264011237bf2"
+      }
+    },
+    "scripts/native_pin_cache_auto.py": {
+      "final_sha256": "acbebc9c3811ff7048a522867eea702564c06c6556844d6ea4820651470b91a0",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/native_pin_cache_auto.py",
+        "sha256": "acbebc9c3811ff7048a522867eea702564c06c6556844d6ea4820651470b91a0"
+      }
+    },
+    "scripts/paper_boundary_config.py": {
+      "final_sha256": "4a2e22cfc159b3c095f13d216d99ce7f6ddeffc9ffbc3a1d0382e069dff204b6",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261020-device-placement-policy-83/repo/scripts/paper_boundary_config.py",
+        "sha256": "4a2e22cfc159b3c095f13d216d99ce7f6ddeffc9ffbc3a1d0382e069dff204b6"
+      }
+    },
+    "scripts/resume_joint_clock.py": {
+      "final_sha256": "e6bffa1e0d461d887fcc7f23bfb669648eb40916af77cd77faa2870a2d9aee8d",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/resume_joint_clock.py",
+        "sha256": "e6bffa1e0d461d887fcc7f23bfb669648eb40916af77cd77faa2870a2d9aee8d"
+      }
+    },
+    "scripts/retained_joint_session.py": {
+      "final_sha256": "0b7a09963641db019cb3ad6d4942b441e9dab7b9b6db67d272031fbdf337e4dc",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/retained_joint_session.py",
+        "sha256": "0b7a09963641db019cb3ad6d4942b441e9dab7b9b6db67d272031fbdf337e4dc"
+      }
+    },
+    "scripts/run_dfx.py": {
+      "final_sha256": "d913809f3da826d68862b3497a1522722c0703c92aee23922f6aee039077d015",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/run_dfx.py",
+        "sha256": "d913809f3da826d68862b3497a1522722c0703c92aee23922f6aee039077d015"
+      }
+    },
+    "scripts/run_dfx_full.py": {
+      "final_sha256": "c74ced64bc8f01a1cae19cbf3b824235468c48672900db487ba3393b70b46390",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/run_dfx_full.py",
+        "sha256": "c74ced64bc8f01a1cae19cbf3b824235468c48672900db487ba3393b70b46390"
+      }
+    },
+    "scripts/run_dfx_multi.py": {
+      "final_sha256": "910382f833b5401fa57a318c4badfe02b47ec1647551633ad733c9814b9f50c8",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/run_dfx_multi.py",
+        "sha256": "910382f833b5401fa57a318c4badfe02b47ec1647551633ad733c9814b9f50c8"
+      }
+    },
+    "scripts/run_full_flow.py": {
+      "final_sha256": "b0869c5e09dace4dd7e1faac36390941a1ac2af9782e1cb3d9c2e959e400f0e1",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/run_full_flow.py",
+        "sha256": "b0869c5e09dace4dd7e1faac36390941a1ac2af9782e1cb3d9c2e959e400f0e1"
+      }
+    },
+    "scripts/run_joint_backend.py": {
+      "final_sha256": "9058ad2a80b6e6e3c6f58ca1762ee345b7e608e33f846ea0513015af62c6dde1",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/run_joint_backend.py",
+        "sha256": "9058ad2a80b6e6e3c6f58ca1762ee345b7e608e33f846ea0513015af62c6dde1"
+      }
+    },
+    "scripts/run_native_module.py": {
+      "final_sha256": "ca45158b4c4da0f395229e47b2cc4125fae49b01c2d20f78b8001716c6088410",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/run_native_module.py",
+        "sha256": "ca45158b4c4da0f395229e47b2cc4125fae49b01c2d20f78b8001716c6088410"
+      }
+    },
+    "scripts/run_parallel_acceptance.py": {
+      "final_sha256": "6ae692fb53ddcf0f21492d36cd51509f72c414897b1381ef6f316b439c4efdc6",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/run_parallel_acceptance.py",
+        "sha256": "6ae692fb53ddcf0f21492d36cd51509f72c414897b1381ef6f316b439c4efdc6"
+      }
+    },
+    "scripts/run_parallel_incremental.py": {
+      "final_sha256": "80ef054f11561dcfb476ea766919098b22f014c3da9fb76180788898f7b9c3e7",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/run_parallel_incremental.py",
+        "sha256": "80ef054f11561dcfb476ea766919098b22f014c3da9fb76180788898f7b9c3e7"
+      }
+    },
+    "scripts/test_boundary_strategy_config.py": {
+      "final_sha256": "ab283913e409890d365e985fa588b13784eb36f20ac5a82ae974665020ed8b80",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/test_boundary_strategy_config.py",
+        "sha256": "ab283913e409890d365e985fa588b13784eb36f20ac5a82ae974665020ed8b80"
+      }
+    },
+    "scripts/test_clock_guidance_batch.py": {
+      "final_sha256": "1866eb0e23634f8ff343f20183934af0a6b4d1347c6b49a713e7da5287b2af64",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/test_clock_guidance_batch.py",
+        "sha256": "1866eb0e23634f8ff343f20183934af0a6b4d1347c6b49a713e7da5287b2af64"
+      }
+    },
+    "scripts/test_combined_placement_config.py": {
+      "final_sha256": "c1f170becc6c85dbc71f772d3484e7b33f44a20339b700adf8feb9aecc1095c4",
+      "origin": "integration or documentation in independent release checkout"
+    },
+    "scripts/test_device_placement_config.py": {
+      "final_sha256": "b6aa12bf69209b640b6b3c35afcb1a582fb01df9d7d7d9f69eaa30ec3729becc",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261020-device-placement-policy-83/repo/scripts/test_device_placement_config.py",
+        "sha256": "b6aa12bf69209b640b6b3c35afcb1a582fb01df9d7d7d9f69eaa30ec3729becc"
+      }
+    },
+    "scripts/test_dfx_clock_region_config.py": {
+      "final_sha256": "0c0cd8edda02fe928fe0dfbf8b5510a8df8434a80a4219c66fb5969067c5c678",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/test_dfx_clock_region_config.py",
+        "sha256": "0c0cd8edda02fe928fe0dfbf8b5510a8df8434a80a4219c66fb5969067c5c678"
+      }
+    },
+    "scripts/test_incremental_config.py": {
+      "final_sha256": "52cf8cb5991474f7c0c0ddf5aeb5b6375f237a14d96eadbbeef14f45599d11d1",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/test_incremental_config.py",
+        "sha256": "52cf8cb5991474f7c0c0ddf5aeb5b6375f237a14d96eadbbeef14f45599d11d1"
+      }
+    },
+    "scripts/test_placement_dispatch.py": {
+      "final_sha256": "53637693e8a06cfab1c3279d4f11a2666c4a081618872f3525b965a6698c490e",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/test_placement_dispatch.py",
+        "sha256": "53637693e8a06cfab1c3279d4f11a2666c4a081618872f3525b965a6698c490e"
+      }
+    },
+    "scripts/tests/clock_guidance_test.tcl": {
+      "final_sha256": "545b4a8e8567dcda7af8dd90b8621f9e86f074c5e90ff9daa3c6db4784fd4d68",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/tests/clock_guidance_test.tcl",
+        "sha256": "545b4a8e8567dcda7af8dd90b8621f9e86f074c5e90ff9daa3c6db4784fd4d68"
+      }
+    },
+    "scripts/tests/local_access_database_test.cc": {
+      "final_sha256": "5a5dd508dde53fc692245b2c5cca44d486db681c48287565d47ec1ff9ff75d85",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/tests/local_access_database_test.cc",
+        "sha256": "5a5dd508dde53fc692245b2c5cca44d486db681c48287565d47ec1ff9ff75d85"
+      }
+    },
+    "scripts/tests/local_pin_access_test.cc": {
+      "final_sha256": "4f74ece70a926bf53777ea67728640b281eee5eaf11d7102d1bef73627bad959",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/tests/local_pin_access_test.cc",
+        "sha256": "4f74ece70a926bf53777ea67728640b281eee5eaf11d7102d1bef73627bad959"
+      }
+    },
+    "scripts/tests/lut_pin_assignment_test.cc": {
+      "final_sha256": "a3da7591c58903e3d922591409af81403cef1b162b953b1a83dd4c86003f4d46",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/tests/lut_pin_assignment_test.cc",
+        "sha256": "a3da7591c58903e3d922591409af81403cef1b162b953b1a83dd4c86003f4d46"
+      }
+    },
+    "scripts/tests/lut_pin_import_test.tcl": {
+      "final_sha256": "a0e2e9de30ec47310cb69c003b25e9f0f2aa32fcae9b50f74c06f14322e1c7e9",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/scripts/tests/lut_pin_import_test.tcl",
+        "sha256": "a0e2e9de30ec47310cb69c003b25e9f0f2aa32fcae9b50f74c06f14322e1c7e9"
+      }
+    },
+    "src/CMakeLists.txt": {
+      "final_sha256": "4a27cad473dfa7521f9cdf4d30c1bb720ef077a5e517d6e595e449b880ff7722",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/CMakeLists.txt",
+        "sha256": "b23cf7f026d74143f346ab40879757958b0461b2549df11aa20a28e9b99e6d67"
+      }
+    },
+    "src/app/AMFPlacer/AMFPlacer.h": {
+      "final_sha256": "1f2c696f6a04580ef2386d028f43ff2ab03e767ec4a6ab8766da2dc1ef63e362",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/app/AMFPlacer/AMFPlacer.h",
+        "sha256": "5328b5f5fa7b14694591c77b3d8105761b25a239dbd370be430259579323cfc3"
+      }
+    },
+    "src/app/AMFPlacer/main.cc": {
+      "final_sha256": "19a42d246f5b5070d7830be7d96ba06ce5d4409281c18e1a551aa2c5ad0c4756",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/app/AMFPlacer/main.cc",
+        "sha256": "0f372cc4e7320eac044974929006ffa2473356f2bd97a322fffa64a9f834ef92"
+      }
+    },
+    "src/lib/HiFPlacer/designInfo/native/LocalAccessDatabase.h": {
+      "final_sha256": "18be4402b666c6a06084d569362859ae52360c2af8347537957fe1af60143b0c",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/designInfo/native/LocalAccessDatabase.h",
+        "sha256": "18be4402b666c6a06084d569362859ae52360c2af8347537957fe1af60143b0c"
+      }
+    },
+    "src/lib/HiFPlacer/designInfo/native/LocalPinAccess.h": {
+      "final_sha256": "780748514368d752712757a9ad02f863a55f6e05749533a1a4a5916f8ee1e4c0",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/designInfo/native/LocalPinAccess.h",
+        "sha256": "780748514368d752712757a9ad02f863a55f6e05749533a1a4a5916f8ee1e4c0"
+      }
+    },
+    "src/lib/HiFPlacer/designInfo/native/LocalPlacementAccess.h": {
+      "final_sha256": "e4de4f96a977f18f2776381523a23c03d194617c73109031fe0211095d9aafcc",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/designInfo/native/LocalPlacementAccess.h",
+        "sha256": "e4de4f96a977f18f2776381523a23c03d194617c73109031fe0211095d9aafcc"
+      }
+    },
+    "src/lib/HiFPlacer/designInfo/native/LutPinAssignment.h": {
+      "final_sha256": "c7839c8e8a0230225e85dd3caca087c4152179656fe34ac09af5e7e86fdaf64a",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/designInfo/native/LutPinAssignment.h",
+        "sha256": "c7839c8e8a0230225e85dd3caca087c4152179656fe34ac09af5e7e86fdaf64a"
+      }
+    },
+    "src/lib/HiFPlacer/designInfo/native/StaticDesignCache.cc": {
+      "final_sha256": "08766649d586b57493cc670df6d57971be30437d52524a16a768aa9ce450abab",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/designInfo/native/StaticDesignCache.cc",
+        "sha256": "08766649d586b57493cc670df6d57971be30437d52524a16a768aa9ce450abab"
+      }
+    },
+    "src/lib/HiFPlacer/designInfo/native/StaticDesignCache.h": {
+      "final_sha256": "8f972e6d83387ee1a08ea265af4e57a61f43e2bd7bf34bfdb3acc5c01c303f23",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/designInfo/native/StaticDesignCache.h",
+        "sha256": "8f972e6d83387ee1a08ea265af4e57a61f43e2bd7bf34bfdb3acc5c01c303f23"
+      }
+    },
+    "src/lib/HiFPlacer/deviceInfo/DeviceInfo.cc": {
+      "final_sha256": "50557eec3151396b409ac0c1be2f7aa83215f0d9bd252f7ff42a47e36ca430b4",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/deviceInfo/DeviceInfo.cc",
+        "sha256": "beb4397c4a7b8bca90ec4e33a3c0b89367cf7c6014d46cecc4c66060ac0d27df"
+      }
+    },
+    "src/lib/HiFPlacer/deviceInfo/DeviceInfo.h": {
+      "final_sha256": "76c80fe3498cce36f2923300fbe2afc71b53d80c37f45da7e8c919ad16822414",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/deviceInfo/DeviceInfo.h",
+        "sha256": "b3b8bfce0f4e83272a5316bb3c712598fe293acef76a3072ecb6173f5d69fc08"
+      }
+    },
+    "src/lib/HiFPlacer/deviceInfo/DevicePlacementPolicy.h": {
+      "final_sha256": "2f7ed05c86b9c2d398429412511602770267dd41dd33a323dbeddf5cd0a7f169",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261020-device-placement-policy-83/repo/src/lib/HiFPlacer/deviceInfo/DevicePlacementPolicy.h",
+        "sha256": "e8e8103f79e5e672dfa17852073faf5af5fb6419d9a697915e56ac8dab7f4f1a"
+      }
+    },
+    "src/lib/HiFPlacer/deviceInfo/SparseClockGeometry.h": {
+      "final_sha256": "5e255f08f5ca469d65c571543d10b5177ffd1cad0d7b995c04e6589c5fe4351c",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/deviceInfo/SparseClockGeometry.h",
+        "sha256": "5e255f08f5ca469d65c571543d10b5177ffd1cad0d7b995c04e6589c5fe4351c"
+      }
+    },
+    "src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc": {
+      "final_sha256": "0e2e90daadae72026573c9884db3af21089fa4658b7153c5c96a69c7f7f46d5c",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+        "sha256": "0e2e90daadae72026573c9884db3af21089fa4658b7153c5c96a69c7f7f46d5c"
+      }
+    },
+    "src/lib/HiFPlacer/placement/globalPlacement/ExternalFloorplan.cc": {
+      "final_sha256": "1c3fa1db260ef3b5167bbd9b8b0d7ab379daf584f4370e3deaed7b30bc8d6276",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/globalPlacement/ExternalFloorplan.cc",
+        "sha256": "1c3fa1db260ef3b5167bbd9b8b0d7ab379daf584f4370e3deaed7b30bc8d6276"
+      }
+    },
+    "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc": {
+      "final_sha256": "ebb2ae59589ef8f225958477cfe6c16ae555e0a697df83d373f65386c13b6908",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc",
+        "sha256": "1bacf52aad2d745c943546c8434d5fb3feb5b2a93295eb15ef62a491baffda31"
+      }
+    },
+    "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.h": {
+      "final_sha256": "77e92f399ad1797d5c9b6114026e98c828e713951d23d5d36ad5e92e486ed097",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.h",
+        "sha256": "77e92f399ad1797d5c9b6114026e98c828e713951d23d5d36ad5e92e486ed097"
+      }
+    },
+    "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc": {
+      "final_sha256": "2190aab98f101ad575235a7dea1c284959d4f9eb3ea87cefe991579c25d24326",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+        "sha256": "2190aab98f101ad575235a7dea1c284959d4f9eb3ea87cefe991579c25d24326"
+      }
+    },
+    "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc": {
+      "final_sha256": "9aa383446b532070e4358e7400eda1e235f43eade647e85bfc985db458949314",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261020-device-placement-policy-83/repo/src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc",
+        "sha256": "9aa383446b532070e4358e7400eda1e235f43eade647e85bfc985db458949314"
+      }
+    },
+    "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc": {
+      "final_sha256": "703c86c2e215f191d20b4b94779178bb1067c10567d2136dd82f5f30ec4a9e55",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/legalization/MacroLegalizer.cc",
+        "sha256": "703c86c2e215f191d20b4b94779178bb1067c10567d2136dd82f5f30ec4a9e55"
+      }
+    },
+    "src/lib/HiFPlacer/placement/legalization/MacroLegalizer.h": {
+      "final_sha256": "58eee7b725d57f0a95925eb2b14c60f959ce543d7783cf859dfce7b0981ee4d8",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/legalization/MacroLegalizer.h",
+        "sha256": "58eee7b725d57f0a95925eb2b14c60f959ce543d7783cf859dfce7b0981ee4d8"
+      }
+    },
+    "src/lib/HiFPlacer/placement/packing/InitialPacker.cc": {
+      "final_sha256": "392bccafe32d5eb535750734f7dbc51007fa8a76623d4818131c71da4e21c859",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/packing/InitialPacker.cc",
+        "sha256": "392bccafe32d5eb535750734f7dbc51007fa8a76623d4818131c71da4e21c859"
+      }
+    },
+    "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc": {
+      "final_sha256": "9431ab145e23899286c2597631fd46f6df4d3de51f353919fea2d537dffb699b",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+        "sha256": "9431ab145e23899286c2597631fd46f6df4d3de51f353919fea2d537dffb699b"
+      }
+    },
+    "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.h": {
+      "final_sha256": "ac48af165758e92999b0c296289fec56eec22875b481a0517feac1f1323f18c6",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/packing/ParallelCLBPacker.h",
+        "sha256": "ac48af165758e92999b0c296289fec56eec22875b481a0517feac1f1323f18c6"
+      }
+    },
+    "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBCluster.cc": {
+      "final_sha256": "f578f644b3ae0a342446d31f51e4e34654b5ae9c6fac5126970b97cf5e6d62f9",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBCluster.cc",
+        "sha256": "f578f644b3ae0a342446d31f51e4e34654b5ae9c6fac5126970b97cf5e6d62f9"
+      }
+    },
+    "src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc": {
+      "final_sha256": "b5ebcfd72c408ffc20ee3bbd40a6eccb0a192b12816810b823907585494ab872",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+        "sha256": "b5ebcfd72c408ffc20ee3bbd40a6eccb0a192b12816810b823907585494ab872"
+      }
+    },
+    "src/lib/HiFPlacer/placement/placementInfo/HardRegionConstraints.h": {
+      "final_sha256": "1e29e86cd727901696f691964305d5a4f656be09914461d4a4afe1a382b8c93b",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/placementInfo/HardRegionConstraints.h",
+        "sha256": "1e29e86cd727901696f691964305d5a4f656be09914461d4a4afe1a382b8c93b"
+      }
+    },
+    "src/lib/HiFPlacer/placement/placementInfo/IncrementalContext.h": {
+      "final_sha256": "aab4583593ab141d5a8145776104e05e2120debdc88a50d2f190cba6c79e7d2b",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/placementInfo/IncrementalContext.h",
+        "sha256": "aab4583593ab141d5a8145776104e05e2120debdc88a50d2f190cba6c79e7d2b"
+      }
+    },
+    "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc": {
+      "final_sha256": "598cb2635d50f4f4bb6299ad77680fc23199375d8f9cc5d546255d422bb5543d",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+        "sha256": "598cb2635d50f4f4bb6299ad77680fc23199375d8f9cc5d546255d422bb5543d"
+      }
+    },
+    "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.h": {
+      "final_sha256": "ed16487c92755057dead067894b38a18c977cdc2abc238b9b0ff99cbb0452e0c",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.h",
+        "sha256": "ed16487c92755057dead067894b38a18c977cdc2abc238b9b0ff99cbb0452e0c"
+      }
+    },
+    "src/lib/HiFPlacer/placement/placementInfo/SparseResourceGrid.h": {
+      "final_sha256": "a9e4be8aeac156703677f10f37801a91779f803a9c588386e3f9c0ce986e0bfb",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/placementInfo/SparseResourceGrid.h",
+        "sha256": "a9e4be8aeac156703677f10f37801a91779f803a9c588386e3f9c0ce986e0bfb"
+      }
+    },
+    "src/lib/HiFPlacer/placement/placementInfo/VisualizationConfig.h": {
+      "final_sha256": "e774795cb58ca479021bb796fa2420b69d4803229609c75633a1c6e5aba629e2",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/placementInfo/VisualizationConfig.h",
+        "sha256": "e774795cb58ca479021bb796fa2420b69d4803229609c75633a1c6e5aba629e2"
+      }
+    },
+    "src/lib/HiFPlacer/placement/placementInfo/VisualizationTrace.h": {
+      "final_sha256": "0444c9fb98a2f625013115afe64c52d1a4df0608e774429b3f618374fa0d5420",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/placementInfo/VisualizationTrace.h",
+        "sha256": "0444c9fb98a2f625013115afe64c52d1a4df0608e774429b3f618374fa0d5420"
+      }
+    },
+    "src/lib/HiFPlacer/placement/placementTiming/BoundaryAwareClusterer.cc": {
+      "final_sha256": "323cfc668e783dfd4958a16c0905bed7e8ab6f8c4c09a1942faa30974d28792b",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/placementTiming/BoundaryAwareClusterer.cc",
+        "sha256": "323cfc668e783dfd4958a16c0905bed7e8ab6f8c4c09a1942faa30974d28792b"
+      }
+    },
+    "src/lib/HiFPlacer/placement/placementTiming/BoundaryAwareClusterer_Paper.cc": {
+      "final_sha256": "ab27d5ea9e0c137408d0766a7dbcefc040410bbd3cdfa93c95d2c94260bb5f8a",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/placementTiming/BoundaryAwareClusterer_Paper.cc",
+        "sha256": "ab27d5ea9e0c137408d0766a7dbcefc040410bbd3cdfa93c95d2c94260bb5f8a"
+      }
+    },
+    "src/lib/HiFPlacer/placement/placementTiming/BoundaryClusteringStrategy.h": {
+      "final_sha256": "601fe3a477f08045aa5f4fac314414d4c9f83def9a3e65f7e5f8de0e235b3e56",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/placementTiming/BoundaryClusteringStrategy.h",
+        "sha256": "601fe3a477f08045aa5f4fac314414d4c9f83def9a3e65f7e5f8de0e235b3e56"
+      }
+    },
+    "src/lib/HiFPlacer/placement/placementTiming/ClockRegionAnchorPolicy.h": {
+      "final_sha256": "77e56d8de11eefbcb46c4709b3f6f84b89f63413153a92b497ff283a0d0b4e1c",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/HiFPlacer/placement/placementTiming/ClockRegionAnchorPolicy.h",
+        "sha256": "77e56d8de11eefbcb46c4709b3f6f84b89f63413153a92b497ff283a0d0b4e1c"
+      }
+    },
+    "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc": {
+      "final_sha256": "1b8f67feffa6b6db4313a381766986f2c348bf88f932f9eb9f11f5c489a3ef2d",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261020-device-placement-policy-83/repo/src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc",
+        "sha256": "1b8f67feffa6b6db4313a381766986f2c348bf88f932f9eb9f11f5c489a3ef2d"
+      }
+    },
+    "src/lib/utils/IncrementalCompilationConfig.h": {
+      "final_sha256": "86beecd4518986e0642b8c410fd90af0c04462c2f429e469e51ea54672f5c767",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/utils/IncrementalCompilationConfig.h",
+        "sha256": "86beecd4518986e0642b8c410fd90af0c04462c2f429e469e51ea54672f5c767"
+      }
+    },
+    "src/lib/utils/simpleJSON.h": {
+      "final_sha256": "18165178014ea54b5fc22a6d3add1ab3adf488eb3323e0423167e7c0793bac79",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/lib/utils/simpleJSON.h",
+        "sha256": "18165178014ea54b5fc22a6d3add1ab3adf488eb3323e0423167e7c0793bac79"
+      }
+    },
+    "src/tests/check_boundary_site_policy.cc": {
+      "final_sha256": "a69ac810c89c178bff1d21ad3045afc9dff0d0595d4f3c91931d540ada58f1ae",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/tests/check_boundary_site_policy.cc",
+        "sha256": "a69ac810c89c178bff1d21ad3045afc9dff0d0595d4f3c91931d540ada58f1ae"
+      }
+    },
+    "src/tests/check_device_placement_policy.cc": {
+      "final_sha256": "f36e536186757559283e3c9eaa2fbfae946f40daa8a6e3a5f7c0df05a00fa5e8",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261020-device-placement-policy-83/repo/src/tests/check_device_placement_policy.cc",
+        "sha256": "05f1a637451fba7235ba01540c8bcd45875b193bfa690fc7a6bc9bddab1580ee"
+      }
+    },
+    "src/tests/check_device_policy_stretch.cc": {
+      "final_sha256": "16b094c630f3a1085d732d71c4f7cc81877cb657c9171df408da8c3c37e05191",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261020-device-placement-policy-83/repo/src/tests/check_device_policy_stretch.cc",
+        "sha256": "16b094c630f3a1085d732d71c4f7cc81877cb657c9171df408da8c3c37e05191"
+      }
+    },
+    "src/tests/check_dfx_partition_floorplan.cc": {
+      "final_sha256": "fc4e084ee161384b3d8d5f4339d2b7b8b435fe381e18953447facaf365b36490",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/tests/check_dfx_partition_floorplan.cc",
+        "sha256": "fc4e084ee161384b3d8d5f4339d2b7b8b435fe381e18953447facaf365b36490"
+      }
+    },
+    "src/tests/check_hard_regions.cc": {
+      "final_sha256": "bf6ce2a7b5cd8fa899ac81d18df802d48059ec5d10550476266afcfa9e79878f",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/tests/check_hard_regions.cc",
+        "sha256": "bf6ce2a7b5cd8fa899ac81d18df802d48059ec5d10550476266afcfa9e79878f"
+      }
+    },
+    "src/tests/check_hierarchical_boundary_policy.cc": {
+      "final_sha256": "ea2f754e2f25f70fd5d7e8694ea2813bae1f40ad41c6cb2c2d8c4edfc295caac",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/tests/check_hierarchical_boundary_policy.cc",
+        "sha256": "ea2f754e2f25f70fd5d7e8694ea2813bae1f40ad41c6cb2c2d8c4edfc295caac"
+      }
+    },
+    "src/tests/check_incremental_config.cc": {
+      "final_sha256": "2f5a1dce213c96e1d7e44720154cc7f34f2843a0234d2b1be425296738310eba",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/tests/check_incremental_config.cc",
+        "sha256": "2f5a1dce213c96e1d7e44720154cc7f34f2843a0234d2b1be425296738310eba"
+      }
+    },
+    "src/tests/check_paper_boundary_clustering.cc": {
+      "final_sha256": "1657e3eb93aff90c35cf9132ffe14aa56ea35f1f5f812b6a6830f13b95dd14a9",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/tests/check_paper_boundary_clustering.cc",
+        "sha256": "1657e3eb93aff90c35cf9132ffe14aa56ea35f1f5f812b6a6830f13b95dd14a9"
+      }
+    },
+    "src/tests/check_paper_hard_region_interop.cc": {
+      "final_sha256": "6aff2c196ac5e642813928f24e5e0e1ef7e6a80970b571033f47dd0c64b1a22e",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/tests/check_paper_hard_region_interop.cc",
+        "sha256": "6aff2c196ac5e642813928f24e5e0e1ef7e6a80970b571033f47dd0c64b1a22e"
+      }
+    },
+    "src/tests/check_sparse_resource_grid.cc": {
+      "final_sha256": "a6d4c3800f0fe73fdfb29d646f582a9cd6c83075ee52cfba8746e01268a5eec4",
+      "origin": "integration or documentation in independent release checkout"
+    },
+    "src/tests/test_visualization_config.cc": {
+      "final_sha256": "99ad2d03ee6602d82f67c3901f2e22a1ca09f887c000208f89fa381dfb0a5979",
+      "copied_from": {
+        "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261021-vhk158-resource-spread-fix/repo/src/tests/test_visualization_config.cc",
+        "sha256": "99ad2d03ee6602d82f67c3901f2e22a1ca09f887c000208f89fa381dfb0a5979"
+      }
+    }
+  }
+}

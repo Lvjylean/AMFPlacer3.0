@@ -1,3 +1,5 @@
+#include "VisualizationTrace.h"
+#include "VisualizationConfig.h"
 /**
  * @file AMFPlacer.h
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -55,6 +57,13 @@ class AMFPlacer
     {
         AMF_PROFILE_FUNCTION("initialization");
         JSON = parseJSONFile(JSONFileName);
+        // Validate device policy before reading large inputs or creating trace output.
+        const auto devicePolicy = amf_device::resolve(
+            JSON, JSON.count("device") ? JSON.at("device") : "VCU108");
+        print_info("Device placement policy=" + devicePolicy.name +
+                   " ClockRegionColumnStretch=" +
+                   (devicePolicy.clockRegionColumnStretch ? "true" : "false"));
+        visualization_trace::configure(JSON, JSONFileName);
 
         assert(JSON.find("vivado extracted device information file") != JSON.end());
         // Special pin offsets are required only by designs using that hard IP.
@@ -85,6 +94,15 @@ class AMFPlacer
         // load design information
         designInfo = new DesignInfo(JSON, deviceinfo);
         designInfo->printStat();
+        if(deviceinfo->hasSparseClockGeometry()) {
+            if(designInfo->getClocksInDesign().size()!=1)
+                throw std::runtime_error("VHK158 LUT/FF pilot currently supports exactly one clock");
+            for(auto cell:designInfo->getCells()) {
+                auto type=designInfo->DesignCellTypeStr[cell->getCellType()];
+                if(type!="FDRE" && !(type.size()==4 && type.substr(0,3)=="LUT" && type[3]>='1' && type[3]<='6'))
+                    throw std::runtime_error("Unsupported VHK158 pilot cell: "+type);
+            }
+        }
     };
 
     ~AMFPlacer()
@@ -486,6 +504,7 @@ class AMFPlacer
                                   timingOptimizer, globalPlacer->getWirelengthOptimizer());
         parallelCLBPacker->packCLBs(30, true);
         parallelCLBPacker->setPULocationToPackedSite();
+        visualization_trace::snapshot(placementInfo, JSON, "final", -1, -1, "amf_final");
         if (JSON["experimental multi-SLR placement"] == "true")
             HardResourceUtils::writePlacement(placementInfo, JSON["dumpDirectory"]);
         timingOptimizer->conductStaticTimingAnalysis();

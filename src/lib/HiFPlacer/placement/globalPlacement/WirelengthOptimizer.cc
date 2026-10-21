@@ -1420,9 +1420,9 @@ void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
                 }
                 const float wx = !slrStage && pref.guideX ? hierarchical_boundary::anchorWeight(
                     beta, pref.pullX * (x - pu->X()), nets, boundaryWeakAttraction) : 0;
-                // Keep attraction axes separate: SLR anchors act only in the
-                // SLR phase. HPIO retains the SLR fence and Y room-making.
-                const float wy = slrStage && pref.guideY ? hierarchical_boundary::anchorWeight(
+                // Independent mode disables SLR Y anchors after its budget;
+                // merged mode retains them alongside HPIO X guidance.
+                const float wy = (slrStage || placementInfo->paperBoundaryMergedStages()) && pref.guideY ? hierarchical_boundary::anchorWeight(
                     beta, hierarchical_boundary::anchorDistance(pu->Y(), y, pref.pullY), nets, boundaryWeakAttraction) : 0;
                 if (pu->checkHasCARRY()) {
                     diagCarryX += wx>0; diagCarryY += wy>0;
@@ -1471,7 +1471,7 @@ void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
             std::ofstream f(JSONCfg["BoundaryReportDirectory"]+"/qp_region_targets.tsv",std::ios::app);
             if(f.tellp()==0)f<<"preferences\tx_attractions\ty_attractions\tweight\tstage\tentry_omitted\tstop_on_region_entry\tweak_attraction\n";
             f<<placementInfo->getRegionPreferences().size()<<'\t'<<xTargets<<'\t'<<yTargets<<'\t'<<pesudoNetWeight<<'\t'
-             <<(placementInfo->paperBoundaryClusteringEnabled() ? (placementInfo->paperSLRStage() ? "slr" : "hpio") : "region-gain")<<'\t'<<entryOmitted<<'\t'<<stopOnRegionEntry<<'\t'<<boundaryWeakAttraction<<'\n';
+             <<(placementInfo->paperBoundaryClusteringEnabled() ? placementInfo->paperBoundaryPhaseName() : "region-gain")<<'\t'<<entryOmitted<<'\t'<<stopOnRegionEntry<<'\t'<<boundaryWeakAttraction<<'\n';
         }
         print_info("AMF_DIAG_CARRY_ANCHOR x=" + std::to_string(diagCarryX) +
           " y=" + std::to_string(diagCarryY) + " x_opposed=" + std::to_string(diagCarryXOpposed) +
@@ -1485,6 +1485,7 @@ void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
 
     if (PU2ClockRegionCenter.size() <= 0)
         return;
+    const auto devicePolicy = placementInfo->getDeviceInfo()->getPlacementPolicy();
 
     for (auto PUXY : PU2ClockRegionCenter)
     {
@@ -1494,7 +1495,7 @@ void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
         {
             int clockRegionX = PU2ClockRegionColumn[curPU];
 
-            if (JSONCfg["experimental multi-SLR placement"] == "true")
+            if (devicePolicy.selectedColumnAttraction(JSONCfg["experimental multi-SLR placement"] == "true"))
             {
                 // Use the actual selected column on U250; VCU108's column-2
                 // special case must not pull an eight-column device toward 1/3.

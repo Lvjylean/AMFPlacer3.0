@@ -9,7 +9,7 @@ int main(int argc,char **argv) {
     auto defs=out/"regions.tsv",sites=out/"sites.tsv";
     std::ofstream(defs)<<"region\tinstance\nstatic\t*\na\ttop/rp_a\nb\ttop/rp_b\n";
     std::ofstream(sites)<<"region\tsite\nstatic\tS0\nstatic\tS1\na\tA0\na\tA1\nb\tB0\nb\tB1\n";
-    std::map<std::string,std::string> cfg{{"IncremenralCompilation","true"},{"DFX placement mode","full"},
+    std::map<std::string,std::string> cfg{{"IncrementalCompilation","true"},{"DFX placement mode","full"},
         {"DFX regions file",defs.string()},{"DFX region sites file",sites.string()}};
     HardRegionConstraints h(cfg);
     assert(h.enabled && !IncrementalContext(cfg).enabled);

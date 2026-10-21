@@ -1184,6 +1184,7 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCarrySite(int FFContro
     }
 
     if(ffQBlockedMask && !assignAccessibleFFSlots())return;
+    if(!chooseLocalPinMapping())return;
 
     auto &timingNodes = placementInfo->getTimingInfo()->getSimplePlacementTimingInfo();
     float clockPeriod = placementInfo->getTimingInfo()->getSimplePlacementTimingGraph()->getClockPeriod();
@@ -2055,7 +2056,21 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int 
         }
     }
 
+    if(placementInfo->sparseResourcePlacementEnabled()) {
+        // Versal's physical primary FF receives the paired 5LUT function;
+        // the legacy slot search pairs lane 0 with 6LUT and lane 1 with 5LUT.
+        // Convert the candidate before legality/scoring, not at Tcl export.
+        for(int h=0;h<2;++h)for(int k=0;k<4;++k)
+            std::swap(slotMapping.FFs[h][0][k],slotMapping.FFs[h][1][k]);
+        if(!CLBSiteLegality::checkControlsAndLUTs(slotMapping))return;
+        for(int h=0;h<2;++h)for(int k=0;k<4;++k) {
+            auto lut5=slotMapping.LUTs[h][1][k],ff=slotMapping.FFs[h][0][k];
+            if(lut5 && ff && !isDirectConnectLUTFF(lut5,ff))return;
+        }
+    }
+
     if(ffQBlockedMask && !assignAccessibleFFSlots())return;
+    if(!chooseLocalPinMapping())return;
 
     auto &timingNodes = placementInfo->getTimingInfo()->getSimplePlacementTimingInfo();
     float clockPeriod = placementInfo->getTimingInfo()->getSimplePlacementTimingGraph()->getClockPeriod();
@@ -2066,7 +2081,8 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int 
         {
             for (int k = 0; k < 4; k++)
             {
-                if (checkDirectLUTFFConnect(FF2LUT, slotMapping.LUTs[i][j][k], slotMapping.FFs[i][j][k]))
+                const int ffLane=placementInfo->sparseResourcePlacementEnabled() ? 1-j : j;
+                if (checkDirectLUTFFConnect(FF2LUT, slotMapping.LUTs[i][j][k], slotMapping.FFs[i][ffLane][k]))
                 {
                     auto srcCell = slotMapping.LUTs[i][j][k];
                     unsigned int srcCellId = srcCell->getCellId();
@@ -3187,6 +3203,7 @@ void ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite(int FFC
     }
 
     if(ffQBlockedMask && !assignAccessibleFFSlots())return;
+    if(!chooseLocalPinMapping())return;
 
     auto &timingNodes = placementInfo->getTimingInfo()->getSimplePlacementTimingInfo();
     float clockPeriod = placementInfo->getTimingInfo()->getSimplePlacementTimingGraph()->getClockPeriod();
@@ -3234,6 +3251,8 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite()
     for (int i = 0; i < 24; i++)
         finalMapToSlotsForCommonLUTFFInSite(i);
 
+    if(placementInfo->sparseResourcePlacementEnabled() && best_DirectConnect<=-100000000)
+        throw std::runtime_error("No legal Versal LUT/FF slot candidate at "+CLBSite->getName());
     slotMapping = best_SlotMapping;
     mappedCells = best_mappedCells;
     mappedLUTs = best_mappedLUTs;
@@ -3260,6 +3279,10 @@ void ParallelCLBPacker::PackingCLBSite::moveLUTToLUT6Slot()
                         continue;
                     slotMapping.LUTs[i][0][k] = slotMapping.LUTs[i][1][k];
                     slotMapping.LUTs[i][1][k] = nullptr;
+                    if(!chooseLocalPinMapping()) {
+                        slotMapping.LUTs[i][1][k]=slotMapping.LUTs[i][0][k];
+                        slotMapping.LUTs[i][0][k]=nullptr;
+                    }
                 }
             }
         }
@@ -3509,10 +3532,78 @@ bool ParallelCLBPacker::PackingCLBSite::assignAccessibleFFSlots()
 }
 void ParallelCLBPacker::PackingCLBSite::verifyFfQAccess() const
 {
+    if(!chooseLocalPinMapping())throw std::runtime_error("Local pin access rejected at packing commit: "+CLBSite->getName());
     if(!ffQBlockedMask)return;
     for(int i=0;i<2;++i)for(int j=0;j<2;++j)for(int k=0;k<4;++k) {
         auto ff=slotMapping.FFs[i][j][k];
         if(ff&&!ff->isVirtualCell()&&(ffQBlockedMask&FfQPinMask::bit(i,j,k)))
             throw std::runtime_error("FF Q access rejected at packing commit: "+CLBSite->getName()+"/"+ff->getName());
     }
+}
+bool ParallelCLBPacker::PackingCLBSite::chooseLocalPinMapping(
+    amf_native::LutPinAssignment::Result *chosen) const
+{
+    if(!placementInfo->localPinAccess.enabled)return true;
+    std::vector<amf_native::LocalPlacementAccess::Slot> slots;
+    for(int half=0;half<2;++half)for(int row=0;row<4;++row)for(int lane=0;lane<2;++lane) {
+        auto lut=slotMapping.LUTs[half][lane][row];
+        char letter='A'+half*4+row;
+        if(lut&&!lut->isVirtualCell()) {
+            bool internal=true;
+            for(auto output:lut->getOutputPins()) {
+                if(output->isUnconnected()||!output->getNet())continue;
+                int outputLane=lane;
+                if(lut->getOriCellType()==DesignInfo::CellType_LUT6_2)
+                    outputLane=output->getRefPinName()=="O5"?1:0;
+                for(auto sink:output->getNet()->getPinsBeDriven()) {
+                    auto target=sink->getCell();auto ref=sink->getRefPinName();
+                    bool direct=target==slotMapping.FFs[half][outputLane][row]&&ref=="D";
+                    direct|=target==slotMapping.Carry &&
+                        ref==std::string(outputLane?"DI[":"S[")+std::to_string(half*4+row)+"]";
+                    direct|=outputLane==0 && target==slotMapping.MuxF7[half][row/2] &&
+                        ref==(row%2?"I0":"I1");
+                    if(!direct)internal=false;
+                }
+            }
+            slots.push_back({lut,std::string(1,letter)+(lane?"5LUT":"6LUT"),internal});
+        }
+        auto ff=slotMapping.FFs[half][lane][row];
+        if(ff&&!ff->isVirtualCell())slots.push_back({ff,std::string(1,letter)+(lane?"FF2":"FF"),false});
+    }
+    auto result=placementInfo->localPinAccess.slice(CLBSite->getName(),slots);
+    if(chosen)*chosen=std::move(result);
+    return chosen?chosen->feasible:result.feasible;
+}
+
+bool ParallelCLBPacker::PackingCLBSite::localCandidateAllows(PackingCLBCluster *candidate)
+{
+    if(!placementInfo->localPinAccess.enabled ||
+       !placementInfo->localPinAccess.database.sites.count(CLBSite->getName()) || checkIsLUTRAMSite())return true;
+    AMF_PROFILE_SCOPE("native_local_candidate", "test candidate slot mappings before packing commit");
+    auto previousCluster=determinedClusterInSite;
+    auto previousSlots=slotMapping,previousBest=best_SlotMapping;
+    auto previousCells=mappedCells,previousLuts=mappedLUTs,previousFfs=mappedFFs;
+    auto previousBestCells=best_mappedCells,previousBestLuts=best_mappedLUTs,previousBestFfs=best_mappedFFs;
+    auto previousPairs=fixedPairedLUTs;auto previousFixed=fixedLUTsInPairs,previousConflicts=conflictLUTs;
+    auto previousCarryCell=carryCell;
+    float previousScore=best_DirectConnect;
+    auto restore=[&] {
+        determinedClusterInSite=previousCluster;slotMapping=previousSlots;best_SlotMapping=previousBest;
+        mappedCells=previousCells;mappedLUTs=previousLuts;mappedFFs=previousFfs;
+        best_mappedCells=previousBestCells;best_mappedLUTs=previousBestLuts;best_mappedFFs=previousBestFfs;
+        fixedPairedLUTs=previousPairs;fixedLUTsInPairs=previousFixed;conflictLUTs=previousConflicts;
+        best_DirectConnect=previousScore;carryCell=previousCarryCell;
+    };
+    try {
+        determinedClusterInSite=candidate;best_DirectConnect=-100000000;
+        // Reuse the packer's legal control-bank/macro enumeration. No tentative
+        // coordinates or cells escape this probe.
+        for(int order=0;order<24;++order) {
+            if(checkIsCarrySite())finalMapToSlotsForCarrySite(order);
+            else if(checkIsMuxSite())greedyMapMuxForCommonLUTFFInSite(order);
+            else finalMapToSlotsForCommonLUTFFInSite(order);
+            if(best_DirectConnect>-99999999)break;
+        }
+        bool accepted=best_DirectConnect>-99999999;restore();return accepted;
+    } catch(...) {restore();throw;}
 }

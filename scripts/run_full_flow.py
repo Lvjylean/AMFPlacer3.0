@@ -1,5 +1,6 @@
 """Recorded full placement and routing. DCP artifacts remain server-side."""
 import datetime as dt
+from incremental_config import normalize_incremental_config
 import json
 import os
 import re
@@ -74,8 +75,8 @@ def run(root, args):
         if capabilities.get('global_placement_inspection_schema') != 1:
             raise ValueError('Binary lacks global-placement inspection; refusing a full placement fallback')
     config_path = root / args.placement_run / 'config.json' if args.placement_run else root / args.config
-    config = json.loads(config_path.read_text())
-    if config.get("IncremenralCompilation") in (True, "true"):
+    config = normalize_incremental_config(json.loads(config_path.read_text()))
+    if config.get("IncrementalCompilation") in (True, "true"):
         raise ValueError("Use amf3.py dfx-run for a locked static shell; full-run unplaces the whole design")
     inputs = {}
     for key in ('vivado extracted device information file', 'vivado extracted design information file',
@@ -84,7 +85,7 @@ def run(root, args):
                 'fixed units file', 'unpredictable macro file', 'designCluster', 'DSP registered outputs file',
                 'clock resource capacity file', 'external floorplan membership file',
                 'external floorplan regions file', 'external floorplan manifest file',
-                'SRL control metadata file'):
+                'SRL control metadata file', 'clock region geometry file', 'visualization device metadata file'):
         if config.get(key):
             p = (root / config[key]).resolve()
             inputs[key] = dict(path=str(p), sha256=digest(p))

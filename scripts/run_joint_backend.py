@@ -90,7 +90,7 @@ def main():
  commit()
  try:
   job,proof=preflight();save(OUT/'preflight.json',proof);state['preflight']=proof
-  names=['dfx_joint_backend.tcl','dfx_multi_common.tcl','dfx_common.tcl','dfx_boundary_compatibility.tcl','dfx_common_static_shell.tcl']
+  names=['dfx_clock_guidance.tcl','dfx_pin_owner_overlay.tcl','dfx_same_session.tcl','dfx_native_lut_pins.tcl','dfx_clock_contract.tcl','dfx_joint_checks.tcl','dfx_joint_backend.tcl','dfx_multi_common.tcl','dfx_common.tcl','dfx_boundary_compatibility.tcl','dfx_common_static_shell.tcl']
   for n in names:shutil.copy2(D/'scripts'/n,OUT/'inputs'/n)
   common_dir=Path(job['common_static_shell_run'])
   metadata=OUT/'inputs/common_static';metadata.mkdir()

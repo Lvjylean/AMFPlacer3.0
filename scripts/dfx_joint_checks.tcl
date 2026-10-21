@@ -1,6 +1,7 @@
 source [file join [file dirname [info script]] dfx_multi_common.tcl]
 source [file join [file dirname [info script]] dfx_boundary_compatibility.tcl]
 source [file join [file dirname [info script]] dfx_clock_contract.tcl]
+source [file join [file dirname [info script]] dfx_native_lut_pins.tcl]
 namespace eval joint {
  proc worker {id} {global dfx;return [set dfx(worker_$id)]}
  proc requested {id rp} {
@@ -61,6 +62,9 @@ namespace eval joint {
    set dfx(active_partition) $rp;set dfx(pblock) $pb
    amf_dfx::assert_context
    verify_placement $id $rp $pb $label [dict get $requests $id]
+   if {[info exists dfx(native_local_pin_access_policy)] && $dfx(native_local_pin_access_policy) ne "off"} {
+    amf_native_lut_pins::verify [file join [worker $id] lut_pin_assignments.tsv] "$rp/" $rp $label
+   }
    if {[amf_multi::route_footprint $rp] ne [dict get $footprints $id]} {error "Joint RP footprint changed at $label/$id"}
    amf_dfx::save_dict $dfx(output)/[set id]_[set label]_boundary.tcldata [dfx_boundary::compare [dict get $boundaries $id] [amf_dfx::boundary_snapshot]]
   }

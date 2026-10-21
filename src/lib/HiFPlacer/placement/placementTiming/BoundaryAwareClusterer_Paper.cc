@@ -72,11 +72,18 @@ void BoundaryAwareClusterer::runPaper(bool deferSLRSpreading)
     std::set<int> claimed;
     RegionCapacityTracker capacity(placement);
     std::ofstream report;
+    std::ofstream anchorReport;
     if (!config["BoundaryReportDirectory"].empty())
     {
         report.open(config["BoundaryReportDirectory"] + "/paper_clusters.tsv", std::ios::app);
         if (report.tellp() == 0)
             report << "seed\tcluster\tinstances\tunits\tslr\tslr_votes\tregion\tside_votes\tguide_x\tguide_y\treason\n";
+        if (placement->crBoundaryClusteringEnabled()) {
+            anchorReport.open(config["BoundaryReportDirectory"] + "/cr_cluster_anchors.tsv", std::ios::app);
+            if (anchorReport.tellp() == 0)
+                anchorReport << "seed\tcluster\tpu\tregion\tmean_y\tcr_column\tcr_row\tanchor_x\tanchor_y\tpull_x\tpull_y\n";
+            anchorReport.precision(17);
+        }
     }
     int accepted = 0, selectedPUs = 0;
     for (size_t s = 0; s < seeds; ++s)
@@ -112,14 +119,19 @@ void BoundaryAwareClusterer::runPaper(bool deferSLRSpreading)
         }
         if (count < size_t(threshold)) continue;
         std::map<int, double> votes;
+        double sumY = 0;
+        size_t votingCells = 0;
         for (auto entry : units)
             for (auto c : cells(entry.second))
                 if (!c->isVirtualCell())
                 {
                     auto loc = locations.at(c->getCellId());
                     ++votes[model->regionAt(loc.X, loc.Y)];
+                    sumY += loc.Y;
+                    ++votingCells;
                 }
         auto choice = hierarchical_boundary::select(regions, votes);
+        const double meanY = votingCells ? sumY / votingCells : 0;
         size_t sideCount = 0;
         for (const auto &r : regions) if (r.slr == choice.slr) ++sideCount;
         bool guideX = choice.region >= 0 && sideCount > 1;
@@ -145,8 +157,7 @@ void BoundaryAwareClusterer::runPaper(bool deferSLRSpreading)
                         { target = r.id; break; }
                 }
                 PlacementInfo::RegionPreference pref{target, accepted, 1.0f, guideX, guideY};
-                float x, y;
-                if (!placement->regionAnchor(pu, pref, x, y))
+                if (target < 0 || target >= int(regions.size()))
                 { valid = false; reason = "macro-does-not-fit-target"; break; }
                 const auto &selected = regions[target];
                 float slrLeft = selected.x0, slrRight = selected.x1;
@@ -156,6 +167,12 @@ void BoundaryAwareClusterer::runPaper(bool deferSLRSpreading)
                 // use the upstream outer/middle cases rotated from X to Y.
                 if (guideX) pref.pullX = (selected.x0 + selected.x1 < slrLeft + slrRight) ? -1 : 1;
                 if (guideY) pref.pullY = hierarchical_boundary::slrPullDirection(regions, target);
+                if (placement->crBoundaryClusteringEnabled() &&
+                    !placement->initializeCRBoundaryAnchor(pref, meanY))
+                { valid = false; reason = "missing-cr-anchor-geometry"; break; }
+                float x, y;
+                if (!placement->regionAnchor(pu, pref, x, y))
+                { valid = false; reason = "macro-does-not-fit-target"; break; }
                 preferences[pu] = pref;
                 targets[pu] = target;
             }
@@ -168,6 +185,12 @@ void BoundaryAwareClusterer::runPaper(bool deferSLRSpreading)
             {
                 placement->getRegionPreferences()[entry.first] = entry.second;
                 claimed.insert(entry.first->getId());
+                if (anchorReport) {
+                    const auto &p = entry.second;
+                    anchorReport << seed->getId() << '\t' << accepted << '\t' << entry.first->getId() << '\t'
+                        << p.region << '\t' << p.clusterMeanY << '\t' << p.crAnchorColumn << '\t' << p.crAnchorRow << '\t'
+                        << p.crAnchorX << '\t' << p.crAnchorY << '\t' << p.pullX << '\t' << p.pullY << '\n';
+                }
             }
             selectedPUs += preferences.size();
             reason = guideX ? "accepted-slr-and-side" : "accepted-slr-only";
@@ -182,6 +205,8 @@ void BoundaryAwareClusterer::runPaper(bool deferSLRSpreading)
     // not alter X coordinates before fixedCLB initialization completes.
     if (deferSLRSpreading && placement->paperSLRStage())
         print_info("Paper boundary SLR X spreading deferred until after fixedCLB initialization");
+    else if (placement->paperBoundaryMergedStages() && placement->paperSLRStage())
+        spreadPaperSLR();
     else
         spreadPaper(placement->paperSLRStage());
     print_info("Paper boundary clustering accepted " + std::to_string(accepted) + " clusters / " +
@@ -194,18 +219,24 @@ void BoundaryAwareClusterer::spreadPaperSLR()
     if (!placement->paperBoundaryClusteringEnabled() || !placement->paperSLRStage()) return;
     print_info("Paper boundary SLR X spreading at first phase entry");
     spreadPaper(true);
+    // In merged mode the SLR stage is preparation only, with no SLR GP rounds.
+    if (placement->paperBoundaryMergedStages()) advancePaperStage();
 }
 
 void BoundaryAwareClusterer::advancePaperStage()
 {
     if (!placement->paperBoundaryClusteringEnabled() || !placement->paperSLRStage()) return;
-    // Called after the independently budgeted SLR GP phase ends (budget or
-    // normal convergence), never after an individual spread or fixedCLB QP.
+    // Independent: after the SLR GP budget. Merged: immediately after SLR
+    // X room-making. Neither mode consumes this transition in fixedCLB QP.
     placement->clipPaperRegionLocations();
     placement->setPaperSLRStage(false);
     placement->refreshRegionPreferences();
     spreadPaper(false);
-    print_info("Paper boundary phase: HPIO guidance prepared (SLR anchors disabled; SLR fence retained)");
+    if (placement->paperBoundaryMergedStages()) {
+        placement->clipPaperRegionLocations();
+        print_info("Paper boundary phase: merged XY guidance prepared");
+    } else
+        print_info("Paper boundary phase: HPIO guidance prepared (SLR anchors disabled; SLR fence retained)");
 }
 
 void BoundaryAwareClusterer::spreadPaper(bool slrStage)
