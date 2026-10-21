@@ -1,0 +1,102 @@
+{
+  "release_date": "2026-10-21",
+  "base_branch": "incremental_compilation_静态布线bug",
+  "base_commit": "39464f8f9089821e52ee80107c0ddaf18215fbf7",
+  "release_branch": "codex/placement-viewer-multidevice-20261021",
+  "scope": "Standalone viewer publication; not a release of unpublished placer algorithm changes",
+  "source_snapshots": [
+    "20261021-vhk158-viewer-hard-resources/viewer",
+    "20261021-viewer-device-catalog/launcher"
+  ],
+  "packaging_changes": [
+    "Repository-local viewer and launcher paths",
+    "Machine-specific SSH settings excluded from Git",
+    "One device-aware renderer for both U250 and VHK158; legacy trace layouts preserved",
+    "Documented device metadata and display-only inventory scope"
+  ],
+  "core_src_tree_sha1": "a3d4c23faab92483903983ee70309248fb7278f0",
+  "core_paths_unchanged": [
+    "src",
+    "scripts",
+    "configs",
+    "variants",
+    "CMakeLists.txt"
+  ],
+  "unit_tests": {
+    "eda072": {
+      "passed": 34,
+      "failed": 0
+    },
+    "099": {
+      "passed": 34,
+      "failed": 0
+    }
+  },
+  "readonly_historical_smoke": [
+    {
+      "device": "U250",
+      "frames": 425,
+      "trace_layout": "placement/visualization",
+      "cells_in_last_frame": 1054641,
+      "cr_count": 128,
+      "read_seconds": 38.259357699076645,
+      "resource_overlay": false,
+      "preview": "idle",
+      "input_and_cache_files_unchanged": true
+    },
+    {
+      "device": "U250",
+      "frames": 446,
+      "trace_layout": "placement",
+      "cells_in_last_frame": 1054641,
+      "cr_count": 128,
+      "read_seconds": 18.851977286976762,
+      "resource_overlay": false,
+      "preview": "idle",
+      "input_and_cache_files_unchanged": true
+    },
+    {
+      "device": "U250",
+      "frames": 97,
+      "trace_layout": "placement",
+      "cells_in_last_frame": 1054641,
+      "cr_count": 128,
+      "read_seconds": 17.85110710002482,
+      "resource_overlay": false,
+      "preview": "idle",
+      "input_and_cache_files_unchanged": true
+    },
+    {
+      "device": "VHK158",
+      "frames": 262,
+      "trace_layout": "placement/visualization",
+      "cells_in_last_frame": 512,
+      "cr_count": 92,
+      "read_seconds": 1.2589860139414668,
+      "resource_overlay": true,
+      "preview": "ready",
+      "input_and_cache_files_unchanged": true
+    }
+  ],
+  "ssh_catalog_smoke": {
+    "rows": 28,
+    "devices": [
+      "U250",
+      "VHK158"
+    ],
+    "dcps": 48,
+    "seconds": 27.452392833,
+    "operation": "read-only catalog via configured SSH launcher; no service start"
+  },
+  "excluded": [
+    "DCP",
+    "bitstream",
+    "coordinate trajectories",
+    "preview/binary caches",
+    "personal launcher settings",
+    "live run catalogs",
+    "build outputs"
+  ],
+  "active_services_restarted": false,
+  "AMF_or_Vivado_runs_started": false
+}

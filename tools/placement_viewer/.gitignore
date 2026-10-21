@@ -1,0 +1,22 @@
+# Source and device inventory belong in Git; run-specific artifacts do not.
+__pycache__/
+*.pyc
+*.dcp
+*.DCP
+*.bit
+*.pdi
+*.log
+*.jou
+DumpAllCoordTrace-*
+visualization-virtual-cells.json
+.viewer-*/
+viewer-exports/
+*.gif
+*.webp
+*.bin
+*.bin.gz
+launcher/viewer_settings.json
+launcher/artifact_links.json
+launcher/latest-catalog.json
+launcher/amf-picker-data.json
+launcher/amf-picker-data.tmp

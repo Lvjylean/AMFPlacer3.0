@@ -1,0 +1,798 @@
+{
+  "schema": 1,
+  "part": "xcvh1582-vsva3697-2mp-e-s",
+  "device_input_sha256": "89746180d47f02018c2d7ed17934274c48a63abfa74ad0f66aec3994e4e94c8a",
+  "geometry_sha256": "cf7a509c01ecbd511e7aea24c2592026144fe702a9ad8277182dfb69902a7bd9",
+  "coordinate_system": "Vivado tile COLUMN and reversed ROW; SLICE subslot X offsets",
+  "palette": {
+    "PS": "#bd9bff",
+    "NoC": "#59d5d1",
+    "CPM5": "#f3b873",
+    "GTYP": "#f482a7"
+  },
+  "coverage": "Two queried left-hand non-SLICE areas only; not whole-device hard-IP inventory.",
+  "semantics": "Dots are actual tile anchors of sites; colored labels are annotations, not hard-IP footprints. NoC edges are not inferred.",
+  "source": {
+    "host": "eda072",
+    "vivado": "2026.1",
+    "query": "20261021-vhk158-viewer-boundaries/blank-areas/query.tcl",
+    "sha256": {
+      "lower-tiles.tsv": "42d28d0cd1e58350b6015b2f22f49518e12d76ffc7f1f1fce455ee8baae7772f",
+      "upper-tiles.tsv": "d0e56ddf34824fa8feb48880bdc1c41b058ecc92aa59e85b2b6e078be7ad8fce",
+      "upper-sites.tsv": "34b9f825a0b90df9ebcc7cec970b5b55561531d859a7227a2d3eed0e97cc5687",
+      "source.tsv": "7d2dad9e1f7af2d431232dc0251698d26b52df4ae14d3d5842046572bc09cedb",
+      "lower-sites.tsv": "12e154b1cd30be3ae832110089984aa29888381ae42b3f409b99e74b31c64845"
+    }
+  },
+  "regions": [
+    {
+      "id": "upper",
+      "title": "上方专用资源区",
+      "slr": 1,
+      "clock_regions": [
+        "X0Y5"
+      ],
+      "bands": [
+        [
+          -0.5,
+          92.5,
+          428.5,
+          549.5
+        ]
+      ],
+      "label_bounds": [
+        -0.5,
+        92.5,
+        428.5,
+        549.5
+      ],
+      "slice_count": 0,
+      "resources": [
+        {
+          "kind": "PS",
+          "color": "#bd9bff",
+          "sites": [
+            {
+              "site": "PS9_X0Y1",
+              "type": "PS9",
+              "cr": "X0Y5",
+              "tile": "PSS_BASE_CORE_X0Y353",
+              "position": [
+                1,
+                452
+              ],
+              "tile_type": "PSS_BASE_CORE"
+            }
+          ],
+          "site_types": {
+            "PS9": 1
+          },
+          "anchors": [
+            {
+              "tile": "PSS_BASE_CORE_X0Y353",
+              "position": [
+                1,
+                452
+              ],
+              "sites": [
+                "PS9_X0Y1"
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "NoC",
+          "color": "#59d5d1",
+          "sites": [
+            {
+              "site": "NOC_NSU128_X0Y7",
+              "type": "NOC_NSU128",
+              "cr": "X0Y5",
+              "tile": "NOC_PNOC_SSIT_CORE_X0Y336",
+              "position": [
+                2,
+                430
+              ],
+              "tile_type": "NOC_PNOC_SSIT_CORE"
+            },
+            {
+              "site": "NOC_NMU128_X0Y12",
+              "type": "NOC_NMU128",
+              "cr": "X0Y5",
+              "tile": "NOC_PNOC_SSIT_CORE_X0Y336",
+              "position": [
+                2,
+                430
+              ],
+              "tile_type": "NOC_PNOC_SSIT_CORE"
+            },
+            {
+              "site": "NPI_NIR_X0Y1",
+              "type": "NPI_NIR",
+              "cr": "X0Y5",
+              "tile": "NOC_PNOC_SSIT_CORE_X0Y336",
+              "position": [
+                2,
+                430
+              ],
+              "tile_type": "NOC_PNOC_SSIT_CORE"
+            },
+            {
+              "site": "NOC_NPS7575_X0Y2",
+              "type": "NOC_NPS7575",
+              "cr": "X0Y5",
+              "tile": "NOC_TNOC_SSIT_S2_CORE_X0Y336",
+              "position": [
+                36,
+                429
+              ],
+              "tile_type": "NOC_TNOC_SSIT_S2_CORE"
+            },
+            {
+              "site": "NOC_NPS7575_X0Y3",
+              "type": "NOC_NPS7575",
+              "cr": "X0Y5",
+              "tile": "NOC_TNOC_SSIT_S2_CORE_X0Y336",
+              "position": [
+                36,
+                429
+              ],
+              "tile_type": "NOC_TNOC_SSIT_S2_CORE"
+            },
+            {
+              "site": "NOC_NPS7575_X1Y2",
+              "type": "NOC_NPS7575",
+              "cr": "X0Y5",
+              "tile": "NOC_TNOC_SSIT_S2_CORE_1_X0Y336",
+              "position": [
+                40,
+                429
+              ],
+              "tile_type": "NOC_TNOC_SSIT_S2_CORE"
+            },
+            {
+              "site": "NOC_NPS7575_X1Y3",
+              "type": "NOC_NPS7575",
+              "cr": "X0Y5",
+              "tile": "NOC_TNOC_SSIT_S2_CORE_1_X0Y336",
+              "position": [
+                40,
+                429
+              ],
+              "tile_type": "NOC_TNOC_SSIT_S2_CORE"
+            },
+            {
+              "site": "NOC_NPS7575_X2Y2",
+              "type": "NOC_NPS7575",
+              "cr": "X0Y5",
+              "tile": "NOC_TNOC_SSIT_S2_CORE_X4Y336",
+              "position": [
+                60,
+                429
+              ],
+              "tile_type": "NOC_TNOC_SSIT_S2_CORE"
+            },
+            {
+              "site": "NOC_NPS7575_X2Y3",
+              "type": "NOC_NPS7575",
+              "cr": "X0Y5",
+              "tile": "NOC_TNOC_SSIT_S2_CORE_X4Y336",
+              "position": [
+                60,
+                429
+              ],
+              "tile_type": "NOC_TNOC_SSIT_S2_CORE"
+            },
+            {
+              "site": "NOC_NPS7575_X3Y2",
+              "type": "NOC_NPS7575",
+              "cr": "X0Y5",
+              "tile": "NOC_TNOC_SSIT_S2_CORE_X6Y336",
+              "position": [
+                67,
+                429
+              ],
+              "tile_type": "NOC_TNOC_SSIT_S2_CORE"
+            },
+            {
+              "site": "NOC_NPS7575_X3Y3",
+              "type": "NOC_NPS7575",
+              "cr": "X0Y5",
+              "tile": "NOC_TNOC_SSIT_S2_CORE_X6Y336",
+              "position": [
+                67,
+                429
+              ],
+              "tile_type": "NOC_TNOC_SSIT_S2_CORE"
+            }
+          ],
+          "site_types": {
+            "NOC_NSU128": 1,
+            "NOC_NMU128": 1,
+            "NPI_NIR": 1,
+            "NOC_NPS7575": 8
+          },
+          "anchors": [
+            {
+              "tile": "NOC_PNOC_SSIT_CORE_X0Y336",
+              "position": [
+                2,
+                430
+              ],
+              "sites": [
+                "NOC_NSU128_X0Y7",
+                "NOC_NMU128_X0Y12",
+                "NPI_NIR_X0Y1"
+              ]
+            },
+            {
+              "tile": "NOC_TNOC_SSIT_S2_CORE_X0Y336",
+              "position": [
+                36,
+                429
+              ],
+              "sites": [
+                "NOC_NPS7575_X0Y2",
+                "NOC_NPS7575_X0Y3"
+              ]
+            },
+            {
+              "tile": "NOC_TNOC_SSIT_S2_CORE_1_X0Y336",
+              "position": [
+                40,
+                429
+              ],
+              "sites": [
+                "NOC_NPS7575_X1Y2",
+                "NOC_NPS7575_X1Y3"
+              ]
+            },
+            {
+              "tile": "NOC_TNOC_SSIT_S2_CORE_X4Y336",
+              "position": [
+                60,
+                429
+              ],
+              "sites": [
+                "NOC_NPS7575_X2Y2",
+                "NOC_NPS7575_X2Y3"
+              ]
+            },
+            {
+              "tile": "NOC_TNOC_SSIT_S2_CORE_X6Y336",
+              "position": [
+                67,
+                429
+              ],
+              "sites": [
+                "NOC_NPS7575_X3Y2",
+                "NOC_NPS7575_X3Y3"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lower",
+      "title": "下方专用资源区",
+      "slr": 0,
+      "clock_regions": [
+        "X0Y1",
+        "X0Y2",
+        "X0Y3"
+      ],
+      "bands": [
+        [
+          -0.5,
+          104.5,
+          5.5,
+          125.5
+        ],
+        [
+          -0.5,
+          103.5,
+          125.5,
+          245.5
+        ],
+        [
+          -0.5,
+          104.5,
+          245.5,
+          365.5
+        ]
+      ],
+      "label_bounds": [
+        -0.5,
+        103.5,
+        5.5,
+        365.5
+      ],
+      "slice_count": 0,
+      "resources": [
+        {
+          "kind": "GTYP",
+          "color": "#f482a7",
+          "sites": [
+            {
+              "site": "GTYP_QUAD_X0Y5",
+              "type": "GTYP_QUAD",
+              "cr": "X0Y3",
+              "tile": "GTYP_QUAD_SINGLE_X0Y240",
+              "position": [
+                0,
+                307
+              ],
+              "tile_type": "GTYP_QUAD_SINGLE_MY"
+            },
+            {
+              "site": "GTYP_REFCLK_X0Y10",
+              "type": "GTYP_REFCLK",
+              "cr": "X0Y3",
+              "tile": "GTYP_QUAD_SINGLE_X0Y240",
+              "position": [
+                0,
+                307
+              ],
+              "tile_type": "GTYP_QUAD_SINGLE_MY"
+            },
+            {
+              "site": "GTYP_REFCLK_X0Y11",
+              "type": "GTYP_REFCLK",
+              "cr": "X0Y3",
+              "tile": "GTYP_QUAD_SINGLE_X0Y240",
+              "position": [
+                0,
+                307
+              ],
+              "tile_type": "GTYP_QUAD_SINGLE_MY"
+            },
+            {
+              "site": "GTYP_QUAD_X0Y4",
+              "type": "GTYP_QUAD",
+              "cr": "X0Y3",
+              "tile": "GTYP_QUAD_SINGLE_X0Y192",
+              "position": [
+                0,
+                247
+              ],
+              "tile_type": "GTYP_QUAD_SINGLE_MY"
+            },
+            {
+              "site": "GTYP_REFCLK_X0Y8",
+              "type": "GTYP_REFCLK",
+              "cr": "X0Y3",
+              "tile": "GTYP_QUAD_SINGLE_X0Y192",
+              "position": [
+                0,
+                247
+              ],
+              "tile_type": "GTYP_QUAD_SINGLE_MY"
+            },
+            {
+              "site": "GTYP_REFCLK_X0Y9",
+              "type": "GTYP_REFCLK",
+              "cr": "X0Y3",
+              "tile": "GTYP_QUAD_SINGLE_X0Y192",
+              "position": [
+                0,
+                247
+              ],
+              "tile_type": "GTYP_QUAD_SINGLE_MY"
+            },
+            {
+              "site": "GTYP_QUAD_X0Y3",
+              "type": "GTYP_QUAD",
+              "cr": "X0Y2",
+              "tile": "GTYP_QUAD_SINGLE_X0Y144",
+              "position": [
+                0,
+                187
+              ],
+              "tile_type": "GTYP_QUAD_SINGLE_MY"
+            },
+            {
+              "site": "GTYP_REFCLK_X0Y6",
+              "type": "GTYP_REFCLK",
+              "cr": "X0Y2",
+              "tile": "GTYP_QUAD_SINGLE_X0Y144",
+              "position": [
+                0,
+                187
+              ],
+              "tile_type": "GTYP_QUAD_SINGLE_MY"
+            },
+            {
+              "site": "GTYP_REFCLK_X0Y7",
+              "type": "GTYP_REFCLK",
+              "cr": "X0Y2",
+              "tile": "GTYP_QUAD_SINGLE_X0Y144",
+              "position": [
+                0,
+                187
+              ],
+              "tile_type": "GTYP_QUAD_SINGLE_MY"
+            },
+            {
+              "site": "GTYP_QUAD_X0Y2",
+              "type": "GTYP_QUAD",
+              "cr": "X0Y2",
+              "tile": "GTYP_QUAD_SINGLE_X0Y96",
+              "position": [
+                0,
+                127
+              ],
+              "tile_type": "GTYP_QUAD_SINGLE_MY"
+            },
+            {
+              "site": "GTYP_REFCLK_X0Y4",
+              "type": "GTYP_REFCLK",
+              "cr": "X0Y2",
+              "tile": "GTYP_QUAD_SINGLE_X0Y96",
+              "position": [
+                0,
+                127
+              ],
+              "tile_type": "GTYP_QUAD_SINGLE_MY"
+            },
+            {
+              "site": "GTYP_REFCLK_X0Y5",
+              "type": "GTYP_REFCLK",
+              "cr": "X0Y2",
+              "tile": "GTYP_QUAD_SINGLE_X0Y96",
+              "position": [
+                0,
+                127
+              ],
+              "tile_type": "GTYP_QUAD_SINGLE_MY"
+            }
+          ],
+          "site_types": {
+            "GTYP_QUAD": 4,
+            "GTYP_REFCLK": 8
+          },
+          "anchors": [
+            {
+              "tile": "GTYP_QUAD_SINGLE_X0Y240",
+              "position": [
+                0,
+                307
+              ],
+              "sites": [
+                "GTYP_QUAD_X0Y5",
+                "GTYP_REFCLK_X0Y10",
+                "GTYP_REFCLK_X0Y11"
+              ]
+            },
+            {
+              "tile": "GTYP_QUAD_SINGLE_X0Y192",
+              "position": [
+                0,
+                247
+              ],
+              "sites": [
+                "GTYP_QUAD_X0Y4",
+                "GTYP_REFCLK_X0Y8",
+                "GTYP_REFCLK_X0Y9"
+              ]
+            },
+            {
+              "tile": "GTYP_QUAD_SINGLE_X0Y144",
+              "position": [
+                0,
+                187
+              ],
+              "sites": [
+                "GTYP_QUAD_X0Y3",
+                "GTYP_REFCLK_X0Y6",
+                "GTYP_REFCLK_X0Y7"
+              ]
+            },
+            {
+              "tile": "GTYP_QUAD_SINGLE_X0Y96",
+              "position": [
+                0,
+                127
+              ],
+              "sites": [
+                "GTYP_QUAD_X0Y2",
+                "GTYP_REFCLK_X0Y4",
+                "GTYP_REFCLK_X0Y5"
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "CPM5",
+          "color": "#f3b873",
+          "sites": [
+            {
+              "site": "CPM5_X0Y0",
+              "type": "CPM5",
+              "cr": "X0Y2",
+              "tile": "CPM_G5_TILE_X0Y95",
+              "position": [
+                34,
+                126
+              ],
+              "tile_type": "CPM_G5_TILE"
+            }
+          ],
+          "site_types": {
+            "CPM5": 1
+          },
+          "anchors": [
+            {
+              "tile": "CPM_G5_TILE_X0Y95",
+              "position": [
+                34,
+                126
+              ],
+              "sites": [
+                "CPM5_X0Y0"
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "PS",
+          "color": "#bd9bff",
+          "sites": [
+            {
+              "site": "PS9_X0Y0",
+              "type": "PS9",
+              "cr": "X0Y1",
+              "tile": "PSS_BASE_CORE_X0Y17",
+              "position": [
+                1,
+                28
+              ],
+              "tile_type": "PSS_BASE_CORE"
+            }
+          ],
+          "site_types": {
+            "PS9": 1
+          },
+          "anchors": [
+            {
+              "tile": "PSS_BASE_CORE_X0Y17",
+              "position": [
+                1,
+                28
+              ],
+              "sites": [
+                "PS9_X0Y0"
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "NoC",
+          "color": "#59d5d1",
+          "sites": [
+            {
+              "site": "NOC_NSU128_X0Y0",
+              "type": "NOC_NSU128",
+              "cr": "X0Y1",
+              "tile": "NOC_PNOC_MONO_CORE_X0Y0",
+              "position": [
+                6,
+                6
+              ],
+              "tile_type": "NOC_PNOC_MONO_CORE"
+            },
+            {
+              "site": "NOC_NMU128_X0Y0",
+              "type": "NOC_NMU128",
+              "cr": "X0Y1",
+              "tile": "NOC_PNOC_MONO_CORE_X0Y0",
+              "position": [
+                6,
+                6
+              ],
+              "tile_type": "NOC_PNOC_MONO_CORE"
+            },
+            {
+              "site": "NOC_NMU128_X0Y1",
+              "type": "NOC_NMU128",
+              "cr": "X0Y1",
+              "tile": "NOC_PNOC_MONO_CORE_X0Y0",
+              "position": [
+                6,
+                6
+              ],
+              "tile_type": "NOC_PNOC_MONO_CORE"
+            },
+            {
+              "site": "NOC_NSU128_X0Y1",
+              "type": "NOC_NSU128",
+              "cr": "X0Y1",
+              "tile": "NOC_PNOC_MONO_CORE_X0Y0",
+              "position": [
+                6,
+                6
+              ],
+              "tile_type": "NOC_PNOC_MONO_CORE"
+            },
+            {
+              "site": "NOC_NMU128_X0Y2",
+              "type": "NOC_NMU128",
+              "cr": "X0Y1",
+              "tile": "NOC_PNOC_MONO_CORE_X0Y0",
+              "position": [
+                6,
+                6
+              ],
+              "tile_type": "NOC_PNOC_MONO_CORE"
+            },
+            {
+              "site": "NOC_NMU128_X0Y3",
+              "type": "NOC_NMU128",
+              "cr": "X0Y1",
+              "tile": "NOC_PNOC_MONO_CORE_X0Y0",
+              "position": [
+                6,
+                6
+              ],
+              "tile_type": "NOC_PNOC_MONO_CORE"
+            },
+            {
+              "site": "NPI_NIR_X0Y0",
+              "type": "NPI_NIR",
+              "cr": "X0Y1",
+              "tile": "NOC_PNOC_MONO_CORE_X0Y0",
+              "position": [
+                6,
+                6
+              ],
+              "tile_type": "NOC_PNOC_MONO_CORE"
+            },
+            {
+              "site": "NOC_NMU128_X0Y4",
+              "type": "NOC_NMU128",
+              "cr": "X0Y1",
+              "tile": "NOC_PNOC_MONO_CORE_X0Y0",
+              "position": [
+                6,
+                6
+              ],
+              "tile_type": "NOC_PNOC_MONO_CORE"
+            },
+            {
+              "site": "NOC_NMU128_X0Y5",
+              "type": "NOC_NMU128",
+              "cr": "X0Y1",
+              "tile": "NOC_PNOC_MONO_CORE_X0Y0",
+              "position": [
+                6,
+                6
+              ],
+              "tile_type": "NOC_PNOC_MONO_CORE"
+            },
+            {
+              "site": "NOC_NSU128_X0Y2",
+              "type": "NOC_NSU128",
+              "cr": "X0Y1",
+              "tile": "NOC_PNOC_MONO_CORE_X0Y0",
+              "position": [
+                6,
+                6
+              ],
+              "tile_type": "NOC_PNOC_MONO_CORE"
+            },
+            {
+              "site": "NOC_NSU128_X0Y3",
+              "type": "NOC_NSU128",
+              "cr": "X0Y1",
+              "tile": "NOC_PNOC_MONO_CORE_X0Y0",
+              "position": [
+                6,
+                6
+              ],
+              "tile_type": "NOC_PNOC_MONO_CORE"
+            },
+            {
+              "site": "NOC_NSU128_X0Y4",
+              "type": "NOC_NSU128",
+              "cr": "X0Y1",
+              "tile": "NOC_PNOC_MONO_CORE_X0Y0",
+              "position": [
+                6,
+                6
+              ],
+              "tile_type": "NOC_PNOC_MONO_CORE"
+            },
+            {
+              "site": "NOC_NSU128_X0Y5",
+              "type": "NOC_NSU128",
+              "cr": "X0Y1",
+              "tile": "NOC_PNOC_MONO_CORE_X0Y0",
+              "position": [
+                6,
+                6
+              ],
+              "tile_type": "NOC_PNOC_MONO_CORE"
+            },
+            {
+              "site": "NOC_NMU128_X0Y6",
+              "type": "NOC_NMU128",
+              "cr": "X0Y1",
+              "tile": "NOC_PNOC_MONO_CORE_X0Y0",
+              "position": [
+                6,
+                6
+              ],
+              "tile_type": "NOC_PNOC_MONO_CORE"
+            },
+            {
+              "site": "NOC_NMU128_X0Y7",
+              "type": "NOC_NMU128",
+              "cr": "X0Y1",
+              "tile": "NOC_PNOC_MONO_CORE_X0Y0",
+              "position": [
+                6,
+                6
+              ],
+              "tile_type": "NOC_PNOC_MONO_CORE"
+            },
+            {
+              "site": "NOC_NMU128_X0Y8",
+              "type": "NOC_NMU128",
+              "cr": "X0Y1",
+              "tile": "NOC_PNOC_MONO_CORE_X0Y0",
+              "position": [
+                6,
+                6
+              ],
+              "tile_type": "NOC_PNOC_MONO_CORE"
+            },
+            {
+              "site": "NOC_NMU128_X0Y9",
+              "type": "NOC_NMU128",
+              "cr": "X0Y1",
+              "tile": "NOC_PNOC_MONO_CORE_X0Y0",
+              "position": [
+                6,
+                6
+              ],
+              "tile_type": "NOC_PNOC_MONO_CORE"
+            }
+          ],
+          "site_types": {
+            "NOC_NSU128": 6,
+            "NOC_NMU128": 10,
+            "NPI_NIR": 1
+          },
+          "anchors": [
+            {
+              "tile": "NOC_PNOC_MONO_CORE_X0Y0",
+              "position": [
+                6,
+                6
+              ],
+              "sites": [
+                "NOC_NSU128_X0Y0",
+                "NOC_NMU128_X0Y0",
+                "NOC_NMU128_X0Y1",
+                "NOC_NSU128_X0Y1",
+                "NOC_NMU128_X0Y2",
+                "NOC_NMU128_X0Y3",
+                "NPI_NIR_X0Y0",
+                "NOC_NMU128_X0Y4",
+                "NOC_NMU128_X0Y5",
+                "NOC_NSU128_X0Y2",
+                "NOC_NSU128_X0Y3",
+                "NOC_NSU128_X0Y4",
+                "NOC_NSU128_X0Y5",
+                "NOC_NMU128_X0Y6",
+                "NOC_NMU128_X0Y7",
+                "NOC_NMU128_X0Y8",
+                "NOC_NMU128_X0Y9"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

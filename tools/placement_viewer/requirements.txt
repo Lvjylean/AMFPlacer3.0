@@ -1,0 +1,2 @@
+# Only preview rendering / GIF export requires Pillow. HTTP viewing uses stdlib.
+Pillow>=9.2

@@ -1,0 +1,126 @@
+<!doctype html><html lang="zh"><meta charset="utf-8"><title>AMF3 · Placement Trace</title>
+<style>body{margin:0;background:#111923;color:#e2ebf4;font:15px system-ui}header{padding:20px 28px;background:#1b2939}h1{font-size:23px;margin:0 0 8px}button,input,select{padding:8px;margin:5px;border:1px solid #53677e;border-radius:5px;background:#22364a;color:white}button{cursor:pointer}#timeline{width:35vw}#status,#path{overflow-wrap:anywhere;color:#acc4dc}canvas{display:block;width:100%;height:68vh;touch-action:none}footer{padding:12px 28px;color:#acc4dc}
+header{padding:10px 16px}h1{font-size:17px;margin:0 0 6px}.toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:3px}button,input,select{margin:2px;padding:6px}#timeline{flex:1;min-width:110px;width:auto}#settings{margin:6px 0;max-height:45vh;overflow:auto}summary{cursor:pointer;color:#acc4dc;padding:3px}#path{font-size:12px;margin:6px 0}#status,#stage{font-size:13px}footer{padding:4px 16px;font-size:12px}canvas{cursor:grab}canvas:active{cursor:grabbing}#activeGroupBadge:empty{display:none}
+#boundaryLegend{display:flex;gap:15px;align-items:center;flex-wrap:wrap;margin:9px 0 6px;font-size:12px;color:#bdccdc}#boundaryLegend [hidden]{display:none}#boundaryLegend span{display:inline-flex;gap:6px;align-items:center}#boundaryLegend #geometryNote{color:#829bb4}.swatch{display:inline-block;width:19px;border-top:1px solid #69809a}.swatch.cr{border-color:#435d78}.swatch.raw{border-color:#9576bc}.swatch.slr{border-color:#f4be62;border-width:2px}.swatch.fabric{height:9px;background:#223449;border:1px solid #435d78}#toggleRaw{font-size:11px;color:#a9bed5;background:transparent;border-color:#3b526a;border-radius:16px;padding:4px 10px}#toggleRaw[aria-pressed="true"]{color:#d9b5ff;border-color:#9576bc}header{border-bottom:1px solid #30455c}#previewProgress{color:#85a3be;font-size:12px}#stage{margin-top:5px}#status{color:#a5b8cb}
+#hardwareLegend{display:flex;align-items:center;flex-wrap:wrap;gap:12px;font-size:12px;color:#c0cfe0;margin:4px 0}#hardwareLegend[hidden],#hardwareDetails[hidden]{display:none}#hardwareLegend span{display:inline-flex;align-items:center;gap:5px}#hardwareLegend i{display:inline-block;width:9px;height:9px;border-radius:2px}#hardwareLegend button{font-size:11px;background:transparent;border-radius:16px;padding:3px 9px}.hardwareNote{color:#829bb4}#hardwareDetails{font-size:12px}#hardwareDetails h3{font-size:13px;margin:12px 0 4px}#hardwareDetails p{color:#a9bed5;max-width:850px}#hardwareDetails table{border-collapse:collapse;margin:5px}#hardwareDetails td{padding:4px 10px;border-bottom:1px solid #30455c;overflow-wrap:anywhere}#hardwareDetails section{padding:5px 10px;border-left:2px solid #435d78;margin:8px 0}</style>
+<header><h1>AMF3 / 布局优化过程</h1><div id="path"></div>
+<button id="reload">刷新轨迹</button><button id="play">播放</button><label for="speed">速度</label><select id="speed" title="目标播放速度；实际速度受帧加载耗时限制"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option><option value="5">5×</option></select><label for="mode">显示</label><select id="mode"><option value="fast">快速预览</option><option value="detail" selected>精细交互</option></select><span id="modeInfo"></span><button id="exportGif">导出 GIF</button><span id="exportStatus"></span><button id="prev">上一帧</button><button id="next">下一帧</button>
+<input id="timeline" type="range" min="0" max="0" value="0"><button id="fit">适应视图</button><button id="fitCells" title="切换精细交互并缩放到当前帧实际 cell 范围">放大到布局</button>
+<input id="search" placeholder="单元名称（包含匹配）"><div><label><input id="slr" type="checkbox" checked>SLR 接缝</label><label><input id="cr" type="checkbox" checked>CR 网格</label><label><input id="rawOutline" type="checkbox">原始 tile 轮廓</label><label><input id="wide" type="checkbox" checked>横向展开 ×4</label></div><div id="legend"></div>
+<div id="boundaryLegend" aria-label="边界图例"><span><i class="swatch outer"></i>器件坐标范围</span><span><i class="swatch cr"></i>CR 网格</span><span><i class="swatch slr"></i>SLR 接缝</span><span><i class="swatch fabric"></i>含 SLICE 的 CR</span><button id="toggleRaw" aria-pressed="false" title="查看原始 tile 行包络；周边短线并非路由连线">显示原始轮廓</button><span id="rawLegend" hidden><i class="swatch raw"></i>原始 tile 轮廓</span><span id="geometryNote"></span></div><div id="hardwareLegend" hidden aria-label="专用资源图例"></div><details id="hardwareDetails" hidden><summary>专用资源与原始站点</summary></details><div id="previewProgress" role="status" aria-live="polite">正在查询快速预览状态…</div><progress id="previewBar" value="0" max="1" hidden></progress><div id="activeGroupBadge"></div><details id="groupPanel"><summary>模块 / Cluster 单元追踪</summary>
+<div><label for="groupName">分组名</label><input id="groupName" placeholder="module 或 cluster 名称"><label for="groupKind">选取方式</label><select id="groupKind"><option value="prefix">网表层级模块</option><option value="cells">精确 cell 名单</option></select><label for="groupColor">高亮色</label><input id="groupColor" type="color" value="#ff33cc"><label><input id="dimOthers" type="checkbox" checked>淡化其他 cells</label><label><input id="includeVirtual" type="checkbox">包含虚拟占位</label></div>
+<div><label for="modulePrefix">模块层级路径</label><input id="modulePrefix" list="modulePaths" placeholder="例如 gmem0_m_axi_U/bus_read" style="width:45vw"><datalist id="modulePaths"></datalist></div>
+<div><label for="cellList">精确 cell 名单（每行一个）</label><textarea id="cellList" rows="3" style="width:70%;background:#22364a;color:white"></textarea></div>
+<div><label for="groupFile">导入 TXT / JSON 分组</label><input id="groupFile" type="file" accept=".txt,.json"><label for="importedGroups">已导入分组</label><select id="importedGroups"></select><button id="applyGroup">应用追踪</button><button id="clearGroup">清除追踪</button><button id="exportGroup" disabled>导出分组定义</button></div>
+<div>以综合后 cell 名称匹配；综合前模块若被展开或改名，需先映射到这些名称。选中组始终高亮，其余单元保留资源颜色。分组高亮仅用于页面，GIF 导出仍为原始全资源视图。</div>
+<div id="groupStatus">未选择分组</div><div id="groupReport"></div><details id="missingBox" hidden><summary>未匹配名称</summary><textarea id="missingCells" readonly rows="3" style="width:90%"></textarea></details></details><div id="stage"></div><div id="status">读取轨迹…</div></header>
+<canvas id="view"></canvas><footer><details><summary>操作说明：滚轮缩放 · 拖动平移</summary>快速预览：WebP、预取12帧；精细交互：二进制、最多3帧 · 滚轮缩放 · 拖动平移 · 金色线：SLR 接缝 · 蓝灰细线：CR 包络网格 · 淡灰外框：器件坐标范围 · 紫色细线：原始 tile 行包络（默认隐藏），不是路由连线。CR 包络只用于显示，不表示包络内每一点都可放置 cell · 白色：搜索匹配。横向展开仅改变显示比例。坐标为 AMF 布局坐标，非布线结果。细粒度轨迹按实际执行顺序显示，包含初始 QP、全局布局、Packing、详细布局及最终状态。</details></footer>
+<script src="hard_resources.js"></script>
+<script src="boundaries.js"></script>
+<script src="group_tracking.js"></script>
+<script src="preview_status.js"></script>
+<script>
+const $=id=>document.getElementById(id), canvas=$('view'), ctx=canvas.getContext('2d');
+const colors={LUT:"#55baf2",FF:"#60dc91",DSP:"#ff9d47",BRAM:"#d68bff",URAM:"#ff6490",CARRY:"#f4d35e",MUX:"#b3a5ed","LUTRAM/SRL":"#44ddd0",OTHER:"#b9c3cf",UNKNOWN:"#e45555",VIRTUAL:"#4a5565"};
+let metadata={}, enabled=new Set(Object.keys(colors).filter(t=>!["UNKNOWN","VIRTUAL"].includes(t)));
+function xscale(){return scale*($('wide').checked?(metadata.display_x_stretch||1):1)}
+for(const [t,c] of Object.entries(colors)){const label=document.createElement("label");label.style.color=c;const box=document.createElement("input");box.type="checkbox";box.checked=enabled.has(t);box.onchange=()=>{box.checked?enabled.add(t):enabled.delete(t);draw()};label.append(box,document.createTextNode(t==='VIRTUAL'?'虚拟占位':t));$("legend").append(label)}
+let names=[], points=[], current=0, scale=1, ox=0, oy=0, playing=false, busy=false, drag=null, serial=0;
+function resize(){canvas.style.height=Math.max(260,window.innerHeight-document.querySelector('header').offsetHeight-document.querySelector('footer').offsetHeight-10)+'px';canvas.width=canvas.clientWidth;canvas.height=canvas.clientHeight;draw()}
+function fit(){if(fastMode){previewZoom=1;previewX=0;previewY=0;draw();return;}if(!points.length&&!metadata.bounds)return;let [xmin,xmax,ymin,ymax]=metadata.bounds||[Infinity,-Infinity,Infinity,-Infinity];for(const [x,y] of points){xmin=Math.min(xmin,x);xmax=Math.max(xmax,x);ymin=Math.min(ymin,y);ymax=Math.max(ymax,y)}scale=Math.min((canvas.width-100)/(Math.max(1,xmax-xmin)*($('wide').checked?(metadata.display_x_stretch||1):1)),(canvas.height-45)/Math.max(1,ymax-ymin));ox=(canvas.width-xscale()*(xmax+xmin))/2;oy=(canvas.height+scale*(ymax+ymin))/2;draw()}
+async function fitCells(){
+  playing=false;$('play').textContent='播放';$('fitCells').disabled=true;
+  try{
+    if(fastMode||!points.length){modeChosen=true;$('mode').value='detail';applyMode();await load(current);}
+    if(busy)return;
+    let xmin=Infinity,xmax=-Infinity,ymin=Infinity,ymax=-Infinity,count=0;
+    for(const [x,y,name,type] of points){
+      if(type==='VIRTUAL'||!enabled.has(type||'UNKNOWN')||!Number.isFinite(x)||!Number.isFinite(y))continue;
+      xmin=Math.min(xmin,x);xmax=Math.max(xmax,x);ymin=Math.min(ymin,y);ymax=Math.max(ymax,y);count++;
+    }
+    if(!count){$('status').textContent='当前帧没有可见的实际 cell。';return;}
+    const stretch=$('wide').checked?(metadata.display_x_stretch||1):1;
+    scale=Math.min(Math.max(1,canvas.width-100)/(Math.max(1,xmax-xmin)*stretch),Math.max(1,canvas.height-60)/Math.max(1,ymax-ymin));
+    ox=(canvas.width-xscale()*(xmax+xmin))/2;oy=(canvas.height+scale*(ymax+ymin))/2;draw();
+    $('status').textContent+=` · 已定位 ${count.toLocaleString()} 个 cell 的布局区域`;
+  }finally{$('fitCells').disabled=false;}
+}
+function boundaries(){paintBoundaries(ctx,metadata,x=>ox+x*xscale(),y=>oy-y*scale,{cr:$('cr').checked,slr:$('slr').checked,raw:$('rawOutline').checked});}
+
+function draw(){if(fastMode){drawPreview();return;}const stage=metadata.stages?.[names[current]];$("stage").textContent=stage?"阶段："+stage.label+(stage.time_origin==='first_snapshot'?" · 首帧起 ":" · 实验耗时 ")+stage.elapsed_seconds+" s":"阶段：未记录";ctx.fillStyle='#111923';ctx.fillRect(0,0,canvas.width,canvas.height);boundaries();const term=$('search').value;let matches=0;const selected=[];ctx.globalAlpha=activeGroup&&$('dimOthers').checked?0.3:1;for(const [x,y,name,type,id] of points){if(activeGroup&&groupIDs.has(id)){selected.push([x,y]);continue;}if(!enabled.has(type||'UNKNOWN'))continue;const hit=term&&name.includes(term);if(hit)matches++;ctx.fillStyle=hit?'#fff':colors[type]||colors.UNKNOWN;const size=hit?4:['DSP','BRAM','URAM'].includes(type)?3:(points.length<=5000?3:1.3);ctx.fillRect(ox+x*xscale(),oy-y*scale,size,size)}ctx.globalAlpha=1;drawDetailGroup(selected);if(!activeGroup&&points.length&&points.length<=5000){
+ const xs=points.map(p=>ox+p[0]*xscale()),ys=points.map(p=>oy-p[1]*scale);
+ if(Math.max(...xs)-Math.min(...xs)<24&&Math.max(...ys)-Math.min(...ys)<24){const x=xs.reduce((a,b)=>a+b,0)/xs.length,y=ys.reduce((a,b)=>a+b,0)/ys.length;
+ ctx.strokeStyle='#75e5bf';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x,y,8,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(x+8,y);ctx.lineTo(x+21,y);ctx.stroke();ctx.font='12px system-ui';ctx.lineWidth=3;ctx.strokeStyle='#111923';ctx.strokeText(points.length+' cells',x+25,y+4);ctx.fillStyle='#a9f6db';ctx.fillText(points.length+' cells',x+25,y+4);}}
+if(names.length&&!busy)$('status').textContent=`${current+1} / ${names.length} · ${names[current]} · ${points.length.toLocaleString()} 个坐标点 · 匹配 ${matches}`}
+let playbackStart=0,playbackFrames=0,playbackLast=0;
+let previewZoom=1,previewX=0,previewY=0;
+let fastMode=false,previewReady=false,modeChosen=false,previewImage=null;
+let previewState={state:'unknown'},previewPollTimer;
+const previewCache=new Map();
+function previewFrame(i){const name=names[i];if(!previewCache.has(name)){const promise=fetch('api/preview?name='+encodeURIComponent(name),{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('预览尚未准备好');return r.blob()}).then(createImageBitmap);promise.catch(()=>previewCache.delete(name));previewCache.set(name,promise)}return previewCache.get(name)}
+function previewPrefetch(i){const keep=new Set(names.slice(Math.max(0,i-1),i+12));for(const [name,promise] of previewCache)if(!keep.has(name)){promise.then(image=>{if(image!==previewImage)image.close()}).catch(()=>{});previewCache.delete(name)}for(let j=i+1;j<Math.min(names.length,i+12);j++)previewFrame(j).catch(()=>{})}
+function drawPreview(){ctx.fillStyle='#111923';ctx.fillRect(0,0,canvas.width,canvas.height);if(previewImage){const f=Math.min(canvas.width/previewImage.width,canvas.height/previewImage.height)*previewZoom;const left=(canvas.width-previewImage.width*f)/2+previewX,top=(canvas.height-previewImage.height*f)/2+previewY;ctx.globalAlpha=activeGroup&&$('dimOthers').checked?0.3:1;ctx.drawImage(previewImage,left,top,previewImage.width*f,previewImage.height*f);ctx.globalAlpha=1;drawGroupOverlay(f,left,top)}const stage=metadata.stages?.[names[current]];$('stage').textContent=stage?'阶段：'+stage.label:'';if(!busy)$('status').textContent=`${current+1} / ${names.length} · 快速预览 · ${names[current]}${playbackFrames>5?" · 实测 "+(playbackFrames/((playbackLast-playbackStart)/1000)).toFixed(1)+" 帧/秒":""}`}
+function applyMode(){fastMode=$('mode').value==='fast'&&previewReady;$('modeInfo').textContent=fastMode?'支持缩放拖动；筛选/搜索请切精细交互':(previewReady?'':'预览状态见上方进度');for(const box of document.querySelectorAll('#legend input,#search,#slr,#cr,#wide'))box.disabled=fastMode;canvas.style.pointerEvents='';if(fastMode){$('rawOutline').checked=false;$('rawLegend').hidden=true;$('toggleRaw').setAttribute('aria-pressed','false');$('toggleRaw').textContent='显示原始轮廓';for(const v of frameCache.values())v.controller.abort();frameCache.clear();points=[];}else{for(const promise of previewCache.values())promise.then(im=>im.close()).catch(()=>{});previewCache.clear();previewImage=null}}
+$('mode').onchange=()=>{modeChosen=true;applyMode();load(current)};
+let binaryReady=false,liveBinary=false;
+let dictionary, dictionaryPromise, frameCache=new Map();
+function getDictionary(){if(!dictionaryPromise)dictionaryPromise=fetch(liveBinary?'api/live-dictionary':'api/dictionary',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('二进制缓存尚未准备好');return r.json()}).then(d=>dictionary=d).catch(e=>{dictionaryPromise=null;throw e});return dictionaryPromise}
+function binaryFrame(i){const name=names[i];if(!frameCache.has(name)){const controller=new AbortController();const promise=fetch((liveBinary?'api/live-binary?name=':'api/binary?name=')+encodeURIComponent(name),{signal:controller.signal,cache:'no-store'}).then(r=>{if(!r.ok)throw Error('轨迹二进制读取失败');return r.arrayBuffer()});promise.catch(()=>{});frameCache.set(name,{promise,controller})}return frameCache.get(name).promise}
+function limitCache(i){const keep=new Set(names.slice(i,i+3));for(const [key,value] of frameCache){if(!keep.has(key)){value.controller.abort();frameCache.delete(key)}}}
+function preload(i){limitCache(i);for(let j=i+1;j<Math.min(names.length,i+3);j++)binaryFrame(j).catch(()=>{})}
+async function load(i){if(!names.length)return;const ticket=++serial;busy=true;limitCache(i);$('status').textContent='正在加载 '+names[i]+' …';let errorMessage='';try{if(fastMode){const [image,overlay]=await Promise.all([previewFrame(i),groupFrameRequest(i)]);if(ticket!==serial)return;previewImage=image;groupFrame=overlay;if(playing){playbackFrames++;playbackLast=performance.now();}current=i;$('timeline').value=i;previewPrefetch(i);prefetchGroup(i);return;}if(!binaryReady&&!liveBinary){const r=await fetch('api/frame?name='+encodeURIComponent(names[i]));if(!r.ok)throw Error('轨迹尚未写完');const data=await r.json();if(ticket!==serial)return;const first=!points.length;points=data.points;current=i;$('timeline').value=i;if(first)fit();return;}const [d,buffer]=await Promise.all([getDictionary(),binaryFrame(i)]);if(ticket!==serial)return;if(buffer.byteLength%12)throw Error('二进制帧长度异常');const ints=new Uint32Array(buffer),floats=new Float32Array(buffer);const first=!points.length;points=new Array(buffer.byteLength/12);for(let j=0;j<points.length;j++){const id=ints[3*j];if(id>=d.names.length)throw Error('轨迹单元编号异常');points[j]=[floats[3*j+1],floats[3*j+2],d.names[id],d.types[id],id]}current=i;$('timeline').value=i;if(first)fit();preload(i)}catch(e){if(ticket!==serial)return;errorMessage=e.message;playing=false;$('play').textContent='播放';frameCache.delete(names[i])}finally{if(ticket===serial){busy=false;draw();if(errorMessage)$('status').textContent=errorMessage}}}
+async function refresh(){try{const r=await fetch('api/frames');if(!r.ok)throw Error('无法读取轨迹目录');const d=await r.json();names=d.frames;previewState=d.preview||{state:'unknown'};previewReady=!!d.preview_ready;showPreviewProgress();$('mode').options[0].disabled=!previewReady;if(!modeChosen&&previewReady)$('mode').value='fast';applyMode();const newLive=!d.binary_ready&&!!d.live_binary;if(newLive!==liveBinary){dictionaryPromise=null;dictionary=null;for(const v of frameCache.values())v.controller.abort();frameCache.clear()}liveBinary=newLive;binaryReady=!!d.binary_ready;$('exportGif').disabled=!binaryReady;$('exportGif').title=binaryReady?'':'等待本轮完成并准备缓存';metadata.stages=d.stages||metadata.stages;$('path').textContent=d.directory;resize();$('timeline').max=Math.max(0,names.length-1);if(names.length)await load(Math.min(current,names.length-1));else $('status').textContent='尚无轨迹。新实验需配置 DumpAllCoordTrace 输出前缀，生成后点击刷新。'}catch(e){$('status').textContent=e.message}}
+function showPreviewProgress(){
+  $('previewProgress').textContent=previewStatusText(previewState);
+  $('previewBar').hidden=previewState.state!=='running';
+  $('previewBar').max=previewState.total||1;
+  $('previewBar').value=previewState.completed||0;
+}
+async function pollPreviewStatus(){
+  try{
+    const r=await fetch('api/preview/status',{cache:'no-store'});
+    if(!r.ok)throw Error('无法读取生成状态');
+    previewState=await r.json();showPreviewProgress();
+    const wasReady=previewReady;previewReady=!!previewState.ready;
+    $('mode').options[0].disabled=!previewReady;
+    if(previewReady!==wasReady){
+      if(!modeChosen&&previewReady)$('mode').value='fast';
+      applyMode();if(names.length)await load(current);
+    }
+  }catch(e){
+    $('previewProgress').textContent='快速预览状态读取失败，正在重试；暂不能确认生成进度';
+    $('previewBar').hidden=true;
+  }finally{previewPollTimer=setTimeout(pollPreviewStatus,3000);}
+}
+let exportPoll;
+function showExport(state,speed){const out=$('exportStatus');out.textContent='';if(state.state==='ready'){const a=document.createElement('a');a.href=state.url;a.download='amf-placement-'+speed+'x.gif';a.textContent='下载 '+speed+'× GIF';a.style.color='#60dc91';out.append(a);$('exportGif').disabled=false}else if(state.state==='running'){out.textContent=' 正在生成 '+speed+'× GIF…';exportPoll=setTimeout(async()=>{try{const r=await fetch('api/gif/status?speed='+speed);if(!r.ok)throw Error('状态读取失败');showExport(await r.json(),speed)}catch(e){out.textContent=e.message;$('exportGif').disabled=false}},2000)}else{out.textContent=state.message||'导出未完成，请重试';$('exportGif').disabled=false}}
+$('exportGif').onclick=async()=>{clearTimeout(exportPoll);$('exportGif').disabled=true;const speed=$('speed').value;try{const r=await fetch('api/gif?speed='+speed,{method:'POST'});if(!r.ok)throw Error('导出请求失败');showExport(await r.json(),speed)}catch(e){$('exportStatus').textContent=e.message;$('exportGif').disabled=false}};
+$('reload').onclick=refresh;$('fit').onclick=fit;$('fitCells').onclick=fitCells;$('search').oninput=draw;
+$('timeline').onchange=()=>load(Number($('timeline').value));$('prev').onclick=()=>load(Math.max(0,current-1));$('next').onclick=()=>load(Math.min(names.length-1,current+1));
+$('play').onclick=()=>{playing=!playing;if(playing){playbackStart=performance.now();playbackFrames=0;}$('play').textContent=playing?'暂停':'播放'};
+let playbackTimer;
+function updatePlaybackSpeed(){clearInterval(playbackTimer);playbackTimer=setInterval(()=>{if(playing&&!busy&&names.length){if(current===names.length-1){playing=false;$('play').textContent='播放'}else load(current+1)}},600/Number($('speed').value));}
+$('speed').onchange=updatePlaybackSpeed;updatePlaybackSpeed();
+canvas.addEventListener('wheel',e=>{e.preventDefault();const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const factor=Math.exp(-Math.max(-100,Math.min(100,e.deltaY))*0.004);if(fastMode){const zoom=Math.max(0.25,Math.min(20,previewZoom*factor)),f=zoom/previewZoom;previewX=(x-canvas.width/2)*(1-f)+previewX*f;previewY=(y-canvas.height/2)*(1-f)+previewY*f;previewZoom=zoom;}else{ox=x+(ox-x)*factor;oy=y+(oy-y)*factor;scale*=factor;}draw()},{passive:false});
+canvas.onpointerdown=e=>{drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId)};canvas.onpointerup=canvas.onpointercancel=()=>drag=null;
+canvas.onpointermove=e=>{if(drag){const dx=e.clientX-drag[0],dy=e.clientY-drag[1];if(fastMode){previewX+=dx;previewY+=dy;}else{ox+=dx;oy+=dy;}drag=[e.clientX,e.clientY];draw()}};
+$('slr').onchange=$('cr').onchange=draw;
+async function showRawOutline(value){
+  modeChosen=true;$('rawLegend').hidden=!value;
+  $('rawOutline').checked=value;$('toggleRaw').setAttribute('aria-pressed',String(value));$('toggleRaw').textContent=value?'隐藏原始轮廓':'显示原始轮廓';
+  if(fastMode){modeChosen=true;$('mode').value='detail';applyMode();await load(current);fit();}else draw();
+}
+$('rawOutline').onchange=()=>showRawOutline($('rawOutline').checked);
+$('toggleRaw').onclick=()=>showRawOutline(!$('rawOutline').checked);
+$('wide').onchange=fit;
+// Keep playback visible; move infrequent controls into one collapsed panel.
+const header=document.querySelector('header'), toolbar=document.createElement('div');toolbar.className='toolbar';header.querySelector('h1').after(toolbar);
+for(const id of ['play','prev','next','speed','timeline','fit','fitCells']){const el=$(id);const label=header.querySelector('label[for="'+id+'"]');if(label)toolbar.append(label);toolbar.append(el);}
+const settings=document.createElement('details');settings.id='settings';const summary=document.createElement('summary');summary.textContent='展开 / 收起配置（显示、资源、模块追踪、导出）';settings.append(summary);toolbar.after(settings);
+for(const node of Array.from(header.childNodes)){if(node===toolbar||node===settings||node.nodeName==='H1'||['activeGroupBadge','stage','status','previewProgress','previewBar','boundaryLegend','hardwareLegend'].includes(node.id))continue;settings.append(node);}
+settings.ontoggle=resize;document.querySelector('footer details').ontoggle=resize;
+new ResizeObserver(resize).observe(header);
+initGroupTracking();$('groupPanel').ontoggle=resize;window.onresize=resize;resize();fetch('api/metadata').then(r=>r.json()).then(m=>{metadata=m;initHardResourceUI(m);$('geometryNote').textContent=`CR 包络视图 · ${m.boundary_view.fabric_cr}/${m.boundary_view.total_cr} 个 CR 含 SLICE · 非板卡外形`; $('wide').parentNode.lastChild.textContent='横向展开 ×'+(m.display_x_stretch||1);document.querySelector('h1').textContent='AMF3 / '+m.device+' / 布局优化过程';return refresh()}).catch(e=>{$('status').textContent=e.message});
+
+previewPollTimer=setTimeout(pollPreviewStatus,3000);
+</script></html>

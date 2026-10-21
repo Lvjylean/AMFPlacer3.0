@@ -1,0 +1,7 @@
+{
+  "ssh_host": "your-ssh-alias",
+  "remote_project_root": "/absolute/path/to/AMFplacer3.0",
+  "remote_tools_dir": "/absolute/path/to/AMFplacer3.0/tools/placement_viewer",
+  "ssh_key": "",
+  "picker_port": 18760
+}

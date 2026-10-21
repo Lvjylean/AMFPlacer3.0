@@ -1,0 +1,11 @@
+<!doctype html><html lang="zh"><meta charset="utf-8"><title>AMF3 · 器件布局查看器</title>
+<style>body{height:100dvh;display:flex;flex-direction:column;overflow:hidden;margin:0;background:#111923;color:#e2ebf4;font:15px system-ui}header{flex:none;padding:14px 20px;background:#1b2939;display:flex;align-items:center;gap:16px;flex-wrap:wrap}strong{font-size:20px}select{padding:7px;background:#22364a;color:white;border:1px solid #53677e;border-radius:5px}#info{color:#acc4dc;font-size:13px}iframe{border:0;width:100%;flex:1;min-height:0}#error{padding:20px;color:#ffb19d}</style>
+<header><strong>AMF3 / 多器件布局</strong><label>器件 <select id="device"></select></label><label>实验 <select id="run"></select></label><span id="info"></span></header>
+<div id="error" hidden></div><iframe id="viewer" title="当前实验的布局轨迹"></iframe>
+<script>
+const el=id=>document.getElementById(id);let catalog=[];
+function showRun(){const item=catalog.find(x=>x.id===el('run').value);if(!item)return;el('info').textContent=item.part+' · '+item.scope;el('viewer').src='view/'+item.id+'/';history.replaceState(null,'','?run='+item.id)}
+function showDevice(preferred){el('run').replaceChildren();for(const item of catalog.filter(x=>x.device===el('device').value)){const o=document.createElement('option');o.value=item.id;o.textContent=item.label;el('run').append(o)}if(preferred)el('run').value=preferred;showRun()}
+el('device').onchange=()=>showDevice();el('run').onchange=showRun;
+fetch('api/catalog').then(r=>{if(!r.ok)throw Error('无法读取实验列表');return r.json()}).then(data=>{catalog=data.runs;for(const device of ['U250','VHK158']){const o=document.createElement('option');o.value=device;o.textContent=device;o.disabled=!catalog.some(x=>x.device===device);el('device').append(o)}const preferred=catalog.find(x=>x.id===new URLSearchParams(location.search).get('run'))||catalog[0];if(!preferred)throw Error('尚无已登记实验');el('device').value=preferred.device;showDevice(preferred.id)}).catch(e=>{el('error').hidden=false;el('error').textContent=e.message});
+</script></html>
