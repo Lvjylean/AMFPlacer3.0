@@ -2,6 +2,7 @@
 #define AMF_SLL_QUANTITY_MODEL_H
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -22,11 +23,20 @@ struct Net {
     unsigned id;
     bool optimize = true;
     double weight = 1.0;
+    bool gradientActive = true; // Frozen per QP; never removes full S/F statistics.
+};
+struct NetGeometry {double span=0;int crossings=-1;};
+struct DiscreteResult {
+    std::int64_t discrete=0,discreteOptimized=0;
+    std::size_t invalidNets=0,validNets=0;
+    std::vector<std::int64_t> seams;
+    double seconds=0;
 };
 struct Result {
     std::int64_t discrete = 0, discreteOptimized = 0;
     std::size_t invalidNets = 0, validNets = 0;
-    double smooth = 0;
+    double smooth = 0, activeSmooth = 0;
+    double discreteSeconds=0, smoothGradientSeconds=0;
     std::vector<std::int64_t> seams;
     std::vector<double> gradient;
 };
@@ -75,8 +85,47 @@ struct Model {
         return int(std::lower_bound(boundaries.begin(), boundaries.end(), y) - boundaries.begin());
     }
 
+    // One pin scan supplies full integer demand and optional exclusion geometry.
+    // This replaces the old discrete scan inside evaluate; it is not an extra pin scan.
+    DiscreteResult countDiscrete(const std::vector<double>&y,int threads,
+                                 std::vector<NetGeometry>*geometry=nullptr) const {
+        const auto started=std::chrono::steady_clock::now();
+        if(y.size()!=units || threads<1)throw std::invalid_argument("Invalid SLL counting dimensions");
+        for(double v:y)if(!std::isfinite(v))throw std::invalid_argument("Non-finite SLL coordinate");
+        const int chunks=int(std::min(size_t(16),std::max(size_t(1),nets.size())));
+        threads=std::min(threads,chunks);
+        std::vector<DiscreteResult> partial(chunks);
+        for(auto&r:partial)r.seams.assign(boundaries.size(),0);
+        if(geometry)geometry->assign(nets.size(),{});
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static) num_threads(threads)
+#endif
+        for(int chunk=0;chunk<chunks;++chunk){auto&out=partial[chunk];
+            for(size_t ni=nets.size()*chunk/chunks;ni<nets.size()*(chunk+1)/chunks;++ni){
+                const auto&net=nets[ni];if(net.begin==net.end)continue;
+                int lo=int(boundaries.size()),hi=0;bool valid=true;
+                double ymin=INFINITY,ymax=-INFINITY;
+                for(size_t j=net.begin;j<net.end;++j){const auto&pin=pins[j];double py=y[pin.unit]+pin.offsetY;
+                    if(!std::isfinite(py)||py<minY||py>maxY){valid=false;break;}
+                    const int s=slr(py);lo=std::min(lo,s);hi=std::max(hi,s);
+                    if(geometry){ymin=std::min(ymin,py);ymax=std::max(ymax,py);}
+                }
+                if(!valid){++out.invalidNets;continue;}
+                ++out.validNets;out.discrete+=hi-lo;if(net.optimize)out.discreteOptimized+=hi-lo;
+                for(int b=lo;b<hi;++b)++out.seams[b];
+                if(geometry)(*geometry)[ni]={ymax-ymin,hi-lo};
+            }
+        }
+        DiscreteResult result;result.seams.assign(boundaries.size(),0);
+        for(const auto&r:partial){result.discrete+=r.discrete;result.discreteOptimized+=r.discreteOptimized;
+            result.validNets+=r.validNets;result.invalidNets+=r.invalidNets;
+            for(size_t b=0;b<boundaries.size();++b)result.seams[b]+=r.seams[b];}
+        result.seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();return result;
+    }
+
     Result evaluate(const std::vector<double> &y, const std::vector<unsigned char> &movable,
-                    int threads, bool needGradient, std::vector<double> *netStrength = nullptr) const {
+                    int threads, bool needGradient, std::vector<double> *netStrength = nullptr,
+                    const DiscreteResult *samePositionCount = nullptr) const {
         if (y.size() != units || movable.size() != units || threads < 1)
             throw std::invalid_argument("Invalid SLL evaluation dimensions/threads");
         for (double v : y)
@@ -84,6 +133,10 @@ struct Model {
 #ifndef _OPENMP
         threads = 1;
 #endif
+        // A supplied count must describe exactly these positions. Only the QP
+        // preparation path reuses its immediately preceding geometry/count pass.
+        const auto counted=samePositionCount?*samePositionCount:countDiscrete(y,threads);
+        const auto smoothStarted=std::chrono::steady_clock::now();
         // Fixed logical chunks keep both summation order and gradient storage
         // independent of the number of OpenMP workers (including serial runs).
         const int chunks = int(std::min(std::size_t(16), std::max(std::size_t(1), nets.size())));
@@ -106,23 +159,7 @@ struct Model {
                 const auto &net = nets[ni];
                 const auto count = net.end - net.begin;
                 if (!count) continue;
-                int lo = int(boundaries.size()), hi = 0;
-                bool valid = true;
-                for (std::size_t j = net.begin; j < net.end; ++j) {
-                    const auto &pin = pins[j];
-                    const double py = y[pin.unit] + pin.offsetY;
-                    if (!std::isfinite(py) || py < minY || py > maxY) { valid = false; break; }
-                    const int s = slr(py);
-                    lo = std::min(lo, s); hi = std::max(hi, s);
-                }
-                if (!valid) ++out.invalidNets;
-                else {
-                    ++out.validNets;
-                    out.discrete += hi - lo;
-                    for (int b = lo; b < hi; ++b) ++out.seams[b];
-                }
                 if (!net.optimize) continue;
-                if (valid) out.discreteOptimized += hi - lo;
                 // Keep the smooth cost even outside the known physical domain;
                 // moving a pin out of bounds must never erase an objective term.
                 if (count < 2 || net.weight == 0) continue;
@@ -135,7 +172,7 @@ struct Model {
                     for (std::size_t b = 0; b < boundaries.size(); ++b) {
                         const double s = sigmoid((py - boundaries[b]) / tau[b]);
                         z[j] += s;
-                        if (needGradient) dz[j] += s * (1 - s) / tau[b];
+                        if (needGradient && net.gradientActive) dz[j] += s * (1 - s) / tau[b];
                     }
                     zlo = std::min(zlo, z[j]); zhi = std::max(zhi, z[j]);
                 }
@@ -149,7 +186,8 @@ struct Model {
                 }
                 const double mup = zp / sp, mum = zm / sm;
                 out.smooth += net.weight * (mup - mum);
-                if (needGradient)
+                if(net.gradientActive)out.activeSmooth += net.weight * (mup - mum);
+                if (needGradient && net.gradientActive)
                     for (std::size_t j = 0; j < count; ++j) {
                         const auto &pin = pins[net.begin + j];
                         if (!movable[pin.unit]) continue;
@@ -168,11 +206,15 @@ struct Model {
         for (const auto &r : partial) {
             result.discrete += r.discrete; result.discreteOptimized += r.discreteOptimized;
             result.validNets += r.validNets; result.invalidNets += r.invalidNets;
-            result.smooth += r.smooth;
+            result.smooth += r.smooth;result.activeSmooth += r.activeSmooth;
             for (std::size_t b = 0; b < boundaries.size(); ++b) result.seams[b] += r.seams[b];
             if (needGradient)
                 for (std::size_t i = 0; i < units; ++i) result.gradient[i] += r.gradient[i];
         }
+        result.discrete=counted.discrete;result.discreteOptimized=counted.discreteOptimized;
+        result.validNets=counted.validNets;result.invalidNets=counted.invalidNets;result.seams=counted.seams;
+        result.discreteSeconds=counted.seconds;
+        result.smoothGradientSeconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-smoothStarted).count();
         if (!std::isfinite(result.smooth)) throw std::runtime_error("Non-finite SLL cost");
         for (double g : result.gradient)
             if (!std::isfinite(g)) throw std::runtime_error("Non-finite SLL gradient");

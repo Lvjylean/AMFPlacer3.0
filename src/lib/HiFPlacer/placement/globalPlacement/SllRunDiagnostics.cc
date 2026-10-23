@@ -1,5 +1,6 @@
 #include "SllRunDiagnostics.h"
 #include "SllDiagnosticMath.h"
+#include "SllAdaptivePolicy.h"
 #include "SllQpAudit.h"
 #include "PlacementInfo.h"
 #include "../../../utils/RuntimeProfiler.h"
@@ -34,7 +35,13 @@ uint64_t stableHash(const std::string&s) {uint64_t h=1469598103934665603ULL;for(
 
 struct SllRunDiagnostics::Impl {
     PlacementInfo* placement;amf_sll::Model model;
-    bool enabled=false, globalActive=false, prepared=false;
+    bool enabled=false, globalActive=false, prepared=false, dynamicTau=false, shortSpan=false;
+    amf_sll::TauSchedule schedule;
+    amf_sll::ShortSpanPolicy shortPolicy;
+    amf_sll::ShortSpanPolicy::Update exclusion;
+    bool haveRoundS=false;std::int64_t previousRoundS=0;
+    std::map<std::string,std::pair<size_t,double>> timingTotals;
+    double timingLogSeconds=0;
     int threads=1,round=0,iteration=-1;size_t qid=0,event=0;
     double ratio=1,coefficient=60,pseudoWeight=0,limit=-10;
     std::string directory,samplePath,phase="initial";
@@ -45,11 +52,12 @@ struct SllRunDiagnostics::Impl {
     std::set<std::string> fixedNames;std::set<size_t> selected,top;
     std::unique_ptr<SllQpAudit> audit;
     amf_sll::FrozenAxis x,y;amf_sll::Result before;
-    std::ofstream qp,pins,nets,stages,solver,mapping;
+    std::ofstream qp,pins,nets,stages,solver,mapping,rounds,shortReport,perf;
     std::chrono::steady_clock::time_point origin=std::chrono::steady_clock::now();
     double seconds()const{return std::chrono::duration<double>(std::chrono::steady_clock::now()-origin).count();}
     Impl(PlacementInfo*pi,const std::map<std::string,std::string>&cfg,double r):placement(pi),ratio(r) {
         enabled=flag(cfg,"SllQuantityEnable");flag(cfg,"SllQuantityDiagnostics");
+        dynamicTau=flag(cfg,"SllDynamicTauEnable");shortSpan=flag(cfg,"SllShortSpanEnable");
         amf_sll::rejectDeprecatedParameters(cfg);coefficient=amf_sll::firstOrderCoefficient(r);
         if(cfg.count("SllQuantityMaxStep"))throw std::invalid_argument("SllQuantityMaxStep is unsupported in original-writeback diagnostic mode");
         if(cfg.count("SllRegionPolicy") && cfg.at("SllRegionPolicy")!="preserve")
@@ -68,6 +76,7 @@ struct SllRunDiagnostics::Impl {
         std::vector<double> seams;for(const auto&b:physical->getBoundaries())if(b.active&&b.kind=="SLR"&&b.orientation=='Y')seams.push_back(b.coordinate);
         std::sort(seams.begin(),seams.end());if(seams!=model.boundaries)throw std::invalid_argument("SLR boundary mismatch");
         model.tau.assign(model.boundaries.size(),number(cfg,"SllQuantityTau",10));model.gamma=number(cfg,"SllQuantityGamma",0.02);
+        if(dynamicTau && model.tau[0]!=10)throw std::invalid_argument("Dynamic tau rule v1 must start at tau=10");
         directory=cfg.at("SllReportDirectory");samplePath=cfg.at("SllTraceNetList");
         std::filesystem::create_directories(directory);
         audit.reset(new SllQpAudit(pi,cfg));
@@ -76,15 +85,48 @@ struct SllRunDiagnostics::Impl {
             if(std::filesystem::exists(path))throw std::runtime_error("Refusing to overwrite diagnostics "+path);
             out.open(path);out<<std::setprecision(17)<<header<<'\n';if(!out)throw std::runtime_error("Cannot open "+path);
         };
-        open(qp,"qp.tsv","qp\tphase\tround\titeration\tstate\tseconds\tinjected\tpseudo_weight\toriginal_limit\tF\tS\tinvalid_nets\tdQx\tdQy\tdF\tc_dF\tdJ\tlinear_model_delta\tbase_gradient_dot_step\tsll_gradient_dot_step\tcombined_gradient_dot_step\tbase_gradient_y_norm\tsll_gradient_y_norm\tcombined_gradient_y_norm\tsll_gradient_y_max\tsll_gradient_y_p95\topposed_y_coordinates\tsll_dominant_y_coordinates\tmax_xy_move\tp95_xy_move\tmax_y_move\tp95_y_move\traw_to_written_changed\traw_exceeds_original_limit");
-        open(pins,"net-pins.tsv","event\tqp\tphase\tround\titeration\tstate\tseconds\tselection\tnet_id\tnet\tpin_index\tpin\tcell\tpu\tmovable\tx\ty\toffset_y\tz\tdz_dy\tp_plus\tp_minus\tdF_dpin_y\tc_dF_dpin_y\tpu_sll_gradient_at_qp_start\tpu_base_gradient_at_qp_start\tpu_dy_from_qp_start\tnet_F\tnet_S\textremum");
-        open(nets,"net-stages.tsv","event\tqp\tphase\tround\titeration\tstate\tselection\tnet_id\tnet\tpins\tF\tS\tweighted_hpwl\tmin_y\tmax_y");
-        open(stages,"stages.tsv","event\tqp\tphase\tround\titeration\tstep\tseconds\tF\tS\tS_optimized\tinvalid_nets\tvalid_nets\tseam0\tseam1\tseam2\tmapped_hpwl_x_plus_r_y\thpwl_plus_cF");
+        open(qp,"qp.tsv","qp\tphase\tround\titeration\tstate\tseconds\tinjected\tpseudo_weight\toriginal_limit\tF\tS\tinvalid_nets\tdQx\tdQy\tdF\tc_dF\tdJ\tlinear_model_delta\tbase_gradient_dot_step\tsll_gradient_dot_step\tcombined_gradient_dot_step\tbase_gradient_y_norm\tsll_gradient_y_norm\tcombined_gradient_y_norm\tsll_gradient_y_max\tsll_gradient_y_p95\topposed_y_coordinates\tsll_dominant_y_coordinates\tmax_xy_move\tp95_xy_move\tmax_y_move\tp95_y_move\traw_to_written_changed\traw_exceeds_original_limit\ttau\texcluded_nets\tF_active_frozen_mask\tdF_active_frozen_mask\tc_dF_active_frozen_mask\tdJ_active_frozen_mask");
+        open(pins,"net-pins.tsv","event\tqp\tphase\tround\titeration\tstate\tseconds\tselection\tnet_id\tnet\tpin_index\tpin\tcell\tpu\tmovable\tx\ty\toffset_y\tz\tdz_dy\tp_plus\tp_minus\tdF_dpin_y\tc_dF_dpin_y\tpu_sll_gradient_at_qp_start\tpu_base_gradient_at_qp_start\tpu_dy_from_qp_start\tnet_F\tnet_S\textremum\tsll_gradient_active\tc_active_dF_dpin_y");
+        open(nets,"net-stages.tsv","event\tqp\tphase\tround\titeration\tstate\tselection\tnet_id\tnet\tpins\tF\tS\tweighted_hpwl\tmin_y\tmax_y\tsll_gradient_active");
+        open(stages,"stages.tsv","event\tqp\tphase\tround\titeration\tstep\tseconds\tF\tS\tS_optimized\tinvalid_nets\tvalid_nets\tseam0\tseam1\tseam2\tmapped_hpwl_x_plus_r_y\thpwl_plus_cF\ttau\texcluded_nets_at_last_qp");
         open(solver,"solver.tsv","qp\tphase\tround\titeration\taxis\titerations\trelative_error\tconverged\trollback\trepaired_rows\tmax_diagonal_delta\tconfigured_tolerance\tconfigured_max_iterations\tbase_rhs_norm\tsll_b_increment_norm");
         open(mapping,"mapping.tsv","reload\tunits\tnets\tpins\tpower_excluded\tglobal_excluded\tincomplete\toptimization_excluded");
+        open(rounds,"adaptive-rounds.tsv","round\tphase\titeration\ttau\tnext_tau\tS\tdelta_S\tinvalid_nets\tF_full\tH\tH_plus_cF_full\texcluded_nets_at_last_qp\tmedian_S\tentry_median_S\tinitial_median_S\tcompleted_rounds\theld_rounds\tphase_rounds\tdecision");
+        open(shortReport,"short-span.tsv","qp\tphase\tround\titeration\ttau\tpolicy_applied\texcluded_nets\tentered\tresumed\texcluded_S\tS_full\tinvalid_nets\tdiscrete_count_seconds\tlist_update_seconds");
+        open(perf,"sll-overhead.tsv","event\tqp\tphase\tround\titeration\tstate\ttau\tcategory\twall_seconds");
         std::ofstream meta(directory+"/parameters.tsv");meta<<std::setprecision(17)
             <<"model\tsigmoid_wa_first_order_original_writeback_v1\nenabled\t"<<enabled<<"\ntau\t"<<model.tau[0]<<"\ngamma\t"<<model.gamma
-            <<"\nsll_length_tiles\t60\ny2x_ratio\t"<<ratio<<"\nlength_coefficient\t"<<coefficient<<"\nextra_y_limit\tfalse\nbacktracking\tfalse\nJ_increase_policy\trecord_only\ninjection_scope\tglobal_placement_after_common_initial_QP\nregion_policy\tpreserve\nnet_selection\t64_common_stratified_plus_8_dynamic\n";
+            <<"\nsll_length_tiles\t60\ny2x_ratio\t"<<ratio<<"\nlength_coefficient\t"<<coefficient<<"\nextra_y_limit\tfalse\nbacktracking\tfalse\nJ_increase_policy\trecord_only\ninjection_scope\tglobal_placement_after_common_initial_QP\nregion_policy\tpreserve\nnet_selection\t64_common_stratified_plus_8_dynamic\n"
+            <<"dynamic_tau_enabled\t"<<dynamicTau<<"\nshort_span_enabled\t"<<shortSpan
+            <<"\nadaptive_rule_version\t1\ntau_floor\t0.2\ntau_factor\t0.5\ninitial_hold_rounds\t6\nminimum_level_hold_rounds\t4\nphase_settling_rounds\t2\nmedian_window_rounds\t3\nlevel_drop_fraction\t0.1\nplateau_fraction\t0.01\nshort_span_enter_y\t2\nshort_span_resume_y\t3\nshort_span_required_crossings\t1\nmask_update\tbefore_each_QP_frozen_through_writeback\nfull_statistics\tinclude_temporarily_excluded_nets\nround_statistic\tafter_legalization\nS_meaning\tdiscrete_vertical_boundary_demand_not_routed_usage\ntiming_scope\twall_seconds_nonoverlapping_categories_except_explicit_total\n";
+    }
+    ~Impl() {
+        // Destructor must not throw. Per-event measurements remain in the TSV.
+        std::ofstream summary(directory+"/sll-overhead-summary.tsv");summary<<std::setprecision(17)<<"category\tcalls\twall_seconds\n";
+        for(const auto&t:timingTotals)summary<<t.first<<'\t'<<t.second.first<<'\t'<<t.second.second<<'\n';
+        summary<<"timing_log_write\t"<<0<<'\t'<<timingLogSeconds<<'\n';
+    }
+    void timing(const char*category,const char*state,double elapsed) {
+        auto started=std::chrono::steady_clock::now();auto&t=timingTotals[category];++t.first;t.second+=elapsed;
+        perf<<event<<'\t'<<qid<<'\t'<<phase<<'\t'<<round<<'\t'<<iteration<<'\t'<<state<<'\t'<<model.tau[0]<<'\t'<<category<<'\t'<<elapsed<<std::endl;
+        if(!perf)throw std::runtime_error("SLL overhead report write failed");
+        timingLogSeconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
+    }
+    void evaluationTiming(const char*state,const amf_sll::Result&r) {
+        timing("discrete_count",state,r.discreteSeconds);timing("smooth_and_gradient",state,r.smoothGradientSeconds);
+    }
+    void roundComplete(const amf_sll::Result&r,double h) {
+        auto d=dynamicTau?schedule.finish(r.discrete,r.invalidNets==0):amf_sll::TauSchedule::Decision{};
+        if(!dynamicTau){d.tau=d.nextTau=model.tau[0];d.reason="disabled";}
+        rounds<<round<<'\t'<<phase<<'\t'<<iteration<<'\t'<<d.tau<<'\t'<<d.nextTau<<'\t'<<r.discrete<<'\t';
+        if(haveRoundS)rounds<<r.discrete-previousRoundS;else rounds<<"nan";
+        rounds<<'\t'<<r.invalidNets<<'\t'<<r.smooth<<'\t'<<h<<'\t'<<h+coefficient*r.smooth<<'\t'<<exclusion.excluded<<'\t';
+        if(d.hasMedian)rounds<<d.median;else rounds<<"nan";rounds<<'\t';
+        if(d.hasEntry)rounds<<d.entry;else rounds<<"nan";rounds<<'\t';
+        if(d.hasStart)rounds<<d.start;else rounds<<"nan";
+        rounds<<'\t'<<d.completed<<'\t'<<d.held<<'\t'<<d.phaseRounds<<'\t'<<d.reason<<std::endl;
+        if(!rounds)throw std::runtime_error("SLL round report write failed");
+        haveRoundS=r.invalidNets==0;previousRoundS=r.discrete;
     }
     std::vector<double> coordinates(bool isY)const {
         std::vector<double> a(model.units);for(auto pu:placement->getPlacementUnits())a.at(pu->getId())=isY?pu->Y():pu->X();return a;
@@ -118,19 +160,21 @@ struct SllRunDiagnostics::Impl {
     void details(const char*state,const std::vector<double>&xx,const std::vector<double>&yy) {
         std::set<size_t> all=selected;all.insert(top.begin(),top.end());
         for(size_t ni:all){auto&n=model.nets[ni];auto d=amf_sll::detail(model,n,yy);auto net=designNets[ni];const char*kind=selected.count(ni)?"fixed":"dynamic";
-            nets<<event<<'\t'<<qid<<'\t'<<phase<<'\t'<<round<<'\t'<<iteration<<'\t'<<state<<'\t'<<kind<<'\t'<<n.id<<'\t'<<safe(net->getName())<<'\t'<<n.end-n.begin<<'\t'<<d.value<<'\t'<<d.discrete<<'\t'<<hpwl(ni,xx,yy)<<'\t'<<d.minimum<<'\t'<<d.maximum<<'\n';
+            nets<<event<<'\t'<<qid<<'\t'<<phase<<'\t'<<round<<'\t'<<iteration<<'\t'<<state<<'\t'<<kind<<'\t'<<n.id<<'\t'<<safe(net->getName())<<'\t'<<n.end-n.begin<<'\t'<<d.value<<'\t'<<d.discrete<<'\t'<<hpwl(ni,xx,yy)<<'\t'<<d.minimum<<'\t'<<d.maximum<<'\t'<<n.gradientActive<<'\n';
             // Dynamic high-fanout records retain all pins; no truncated gradient is used.
             for(size_t j=0;j<d.y.size();++j){auto&p=model.pins[n.begin+j];auto pin=designPins[n.begin+j];
                 bool ref=prepared && before.gradient.size()==model.units;
                 pins<<event<<'\t'<<qid<<'\t'<<phase<<'\t'<<round<<'\t'<<iteration<<'\t'<<state<<'\t'<<seconds()<<'\t'<<kind<<'\t'<<n.id<<'\t'<<safe(net->getName())<<'\t'<<j<<'\t'<<safe(pin->getName())<<'\t'<<safe(pin->getCell()->getName())<<'\t'<<p.unit<<'\t'<<int(movable[p.unit])<<'\t'<<xx[p.unit]+xOffsets[n.begin+j]<<'\t'<<d.y[j]<<'\t'<<p.offsetY<<'\t'<<d.z[j]<<'\t'<<d.dz[j]<<'\t'<<d.pplus[j]<<'\t'<<d.pminus[j]<<'\t'<<d.gradient[j]<<'\t'<<coefficient*d.gradient[j]<<'\t';
                 if(ref)pins<<coefficient*before.gradient[p.unit]<<'\t'<<y.gradient[p.unit]<<'\t'<<yy[p.unit]-y.position[p.unit];else pins<<"nan\tnan\tnan";
-                pins<<'\t'<<d.value<<'\t'<<d.discrete<<'\t'<<(d.y[j]==d.minimum&&d.y[j]==d.maximum?"both":d.y[j]==d.minimum?"min":d.y[j]==d.maximum?"max":"interior")<<'\n';
+                pins<<'\t'<<d.value<<'\t'<<d.discrete<<'\t'<<(d.y[j]==d.minimum&&d.y[j]==d.maximum?"both":d.y[j]==d.minimum?"min":d.y[j]==d.maximum?"max":"interior")<<'\t'<<n.gradientActive<<'\t'<<(n.gradientActive?coefficient*d.gradient[j]:0)<<'\n';
             }
         }
         pins.flush();nets.flush();if(!pins||!nets)throw std::runtime_error("SLL trace write failed");
     }
     void result(const char*state,const std::vector<double>&xx,const std::vector<double>&yy) {
-        auto f=model.evaluate(yy,movable,threads,false);double qx=x.change(xx),qy=y.change(yy),baseDot=0,sllDot=0;
+        amf_sll::Result evaluated;const bool reuse=std::string(state)=="before";
+        if(!reuse){evaluated=model.evaluate(yy,movable,threads,false);evaluationTiming(state,evaluated);}
+        const auto&f=reuse?before:evaluated;auto metricsStarted=std::chrono::steady_clock::now();double qx=x.change(xx),qy=y.change(yy),baseDot=0,sllDot=0;
         std::vector<double> moves,ymoves,gs,gq,gt;gs.resize(model.units);gq=y.gradient;gt.resize(model.units);
         size_t opposed=0,dominant=0,changed=0,exceeds=0;
         for(size_t i=0;i<model.units;++i)if(movable[i]) {
@@ -141,9 +185,12 @@ struct SllRunDiagnostics::Impl {
             if(rawX.size()==model.units){changed+=xx[i]!=rawX[i]||yy[i]!=rawY[i];exceeds+=limit>0&&std::hypot(rawX[i]-x.position[i],rawY[i]-y.position[i])>limit;}
         }
         std::vector<double> absGs;for(size_t i=0;i<gs.size();++i)if(movable[i])absGs.push_back(std::abs(gs[i]));
-        double df=f.smooth-before.smooth;
-        qp<<qid<<'\t'<<phase<<'\t'<<round<<'\t'<<iteration<<'\t'<<state<<'\t'<<seconds()<<'\t'<<(enabled&&globalActive)<<'\t'<<pseudoWeight<<'\t'<<limit<<'\t'<<f.smooth<<'\t'<<f.discrete<<'\t'<<f.invalidNets<<'\t'<<qx<<'\t'<<qy<<'\t'<<df<<'\t'<<coefficient*df<<'\t'<<qx+qy+coefficient*df<<'\t'<<qx+qy+sllDot<<'\t'<<baseDot<<'\t'<<sllDot<<'\t'<<baseDot+sllDot<<'\t'<<norm(gq,movable)<<'\t'<<norm(gs,movable)<<'\t'<<norm(gt,movable)<<'\t'<<percentile(absGs,1)<<'\t'<<percentile(absGs,.95)<<'\t'<<opposed<<'\t'<<dominant<<'\t'<<percentile(moves,1)<<'\t'<<percentile(moves,.95)<<'\t'<<percentile(ymoves,1)<<'\t'<<percentile(ymoves,.95)<<'\t'<<changed<<'\t'<<exceeds<<std::endl;
+        double df=f.smooth-before.smooth,adf=f.activeSmooth-before.activeSmooth;
+        timing("qp_metrics",state,std::chrono::duration<double>(std::chrono::steady_clock::now()-metricsStarted).count());
+        auto logStarted=std::chrono::steady_clock::now();
+        qp<<qid<<'\t'<<phase<<'\t'<<round<<'\t'<<iteration<<'\t'<<state<<'\t'<<seconds()<<'\t'<<(enabled&&globalActive)<<'\t'<<pseudoWeight<<'\t'<<limit<<'\t'<<f.smooth<<'\t'<<f.discrete<<'\t'<<f.invalidNets<<'\t'<<qx<<'\t'<<qy<<'\t'<<df<<'\t'<<coefficient*df<<'\t'<<qx+qy+coefficient*df<<'\t'<<qx+qy+sllDot<<'\t'<<baseDot<<'\t'<<sllDot<<'\t'<<baseDot+sllDot<<'\t'<<norm(gq,movable)<<'\t'<<norm(gs,movable)<<'\t'<<norm(gt,movable)<<'\t'<<percentile(absGs,1)<<'\t'<<percentile(absGs,.95)<<'\t'<<opposed<<'\t'<<dominant<<'\t'<<percentile(moves,1)<<'\t'<<percentile(moves,.95)<<'\t'<<percentile(ymoves,1)<<'\t'<<percentile(ymoves,.95)<<'\t'<<changed<<'\t'<<exceeds<<'\t'<<model.tau[0]<<'\t'<<exclusion.excluded<<'\t'<<f.activeSmooth<<'\t'<<adf<<'\t'<<coefficient*adf<<'\t'<<qx+qy+coefficient*adf<<std::endl;
         if(!qp)throw std::runtime_error("SLL QP report write failed");details(state,xx,yy);
+        timing("trace_and_log",state,std::chrono::duration<double>(std::chrono::steady_clock::now()-logStarted).count());
     }
 };
 
@@ -167,17 +214,29 @@ void SllRunDiagnostics::reload(){
         bool optimize=net->getDriverPins().size()==1&&m.pins.size()-begin>=2;if(!optimize)++excluded;
         m.nets.push_back({begin,m.pins.size(),unsigned(net->getElementIdInType()),optimize,1.0});s.designNets.push_back(net);
     }
+    for(auto&n:m.nets)n.gradientActive=!s.shortPolicy.excluded(n.id);
     m.validate();s.mask();
     for(size_t i=0;i<s.designNets.size();++i)if(s.fixedNames.count(s.designNets[i]->getName()))s.selected.insert(i);
     if(!s.fixedNames.empty()&&s.selected.size()!=s.fixedNames.size())throw std::runtime_error("Tracked net disappeared during PU remapping");
     s.mapping<<s.event<<'\t'<<m.units<<'\t'<<m.nets.size()<<'\t'<<m.pins.size()<<'\t'<<power<<'\t'<<global<<'\t'<<incomplete<<'\t'<<excluded<<std::endl;
 }
 void SllRunDiagnostics::stage(const char*phase,int round,int iteration,const char*step){
-    AMF_PROFILE_FUNCTION("sll_stage_diagnostics");auto&s=*p;s.phase=phase;s.round=round;s.iteration=iteration;s.globalActive=s.phase!="initial"&&s.phase!="final"&&s.phase!="outside_global";++s.event;s.mask();auto xx=s.coordinates(false),yy=s.coordinates(true);
+    AMF_PROFILE_FUNCTION("sll_stage_diagnostics");auto&s=*p;s.phase=phase;s.round=round;s.iteration=iteration;s.globalActive=s.phase!="initial"&&s.phase!="final"&&s.phase!="outside_global";++s.event;
+    if(s.dynamicTau && s.globalActive && std::string(step)=="begin"){
+        double tau=s.schedule.begin(s.phase,round,iteration);std::fill(s.model.tau.begin(),s.model.tau.end(),tau);
+    }
+    auto started=std::chrono::steady_clock::now();s.mask();auto xx=s.coordinates(false),yy=s.coordinates(true);
     if(s.globalActive)s.select(yy);
-    auto r=s.model.evaluate(yy,s.movable,s.threads,false);double h=0;for(size_t i=0;i<s.model.nets.size();++i)h+=s.hpwl(i,xx,yy);
+    s.timing("coordinates_and_selection",step,std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count());
+    auto r=s.model.evaluate(yy,s.movable,s.threads,false);s.evaluationTiming(step,r);
+    started=std::chrono::steady_clock::now();double h=0;for(size_t i=0;i<s.model.nets.size();++i)h+=s.hpwl(i,xx,yy);
+    s.timing("hpwl_scan",step,std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count());
+    started=std::chrono::steady_clock::now();
     s.stages<<s.event<<'\t'<<s.qid<<'\t'<<phase<<'\t'<<round<<'\t'<<iteration<<'\t'<<step<<'\t'<<s.seconds()<<'\t'<<r.smooth<<'\t'<<r.discrete<<'\t'<<r.discreteOptimized<<'\t'<<r.invalidNets<<'\t'<<r.validNets;
-    for(auto n:r.seams)s.stages<<'\t'<<n;s.stages<<'\t'<<h<<'\t'<<h+s.coefficient*r.smooth<<std::endl;s.details(step,xx,yy);
+    for(auto n:r.seams)s.stages<<'\t'<<n;s.stages<<'\t'<<h<<'\t'<<h+s.coefficient*r.smooth<<'\t'<<s.model.tau[0]<<'\t'<<s.exclusion.excluded<<std::endl;
+    if(s.globalActive && std::string(step)=="after_legalization")s.roundComplete(r,h);
+    s.details(step,xx,yy);if(!s.stages)throw std::runtime_error("SLL stage report write failed");
+    s.timing("trace_and_log",step,std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count());
 }
 void SllRunDiagnostics::beginModelAudit(QPSolverWrapper&x,QPSolverWrapper&y,float weight,float ratio){auto&s=*p;s.audit->begin(s.qid+1,s.phase,s.round,s.iteration,x,y,weight,ratio);}
 bool SllRunDiagnostics::auditTarget(int id)const{return p->audit->target(id);}
@@ -186,14 +245,30 @@ void SllRunDiagnostics::auditCheckpoint(const char*name,const QPSolverWrapper&x,
 void SllRunDiagnostics::endPhase(){p->globalActive=false;p->prepared=false;p->phase="outside_global";}
 void SllRunDiagnostics::prepare(QPSolverWrapper&x,QPSolverWrapper&y,float weight,float limit){
     AMF_PROFILE_FUNCTION("sll_qp_diagnostics");auto&s=*p;++s.qid;s.mask();s.pseudoWeight=weight;s.limit=limit;
-    auto xx=s.coordinates(false),yy=s.coordinates(true);s.x.capture(x,xx);s.y.capture(y,yy);
-    s.before=s.model.evaluate(yy,s.movable,s.threads,true,&s.strength);s.prepared=true;s.rawX.clear();s.rawY.clear();
+    auto started=std::chrono::steady_clock::now();auto xx=s.coordinates(false),yy=s.coordinates(true);s.x.capture(x,xx);s.y.capture(y,yy);
+    s.timing("coordinates_and_base_capture","prepare",std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count());
+    if(s.shortSpan){
+        std::vector<amf_sll::NetGeometry> geometry;auto counted=s.model.countDiscrete(yy,s.threads,&geometry);
+        s.exclusion=s.shortPolicy.update(s.model,geometry,s.globalActive);
+        s.before=s.model.evaluate(yy,s.movable,s.threads,true,&s.strength,&counted);
+    }else{s.exclusion={};s.before=s.model.evaluate(yy,s.movable,s.threads,true,&s.strength);}
+    s.evaluationTiming("prepare",s.before);s.timing("short_span_list_update","prepare",s.exclusion.seconds);
+    started=std::chrono::steady_clock::now();
+    s.shortReport<<s.qid<<'\t'<<s.phase<<'\t'<<s.round<<'\t'<<s.iteration<<'\t'<<s.model.tau[0]<<'\t'<<(s.shortSpan&&s.globalActive)<<'\t'<<s.exclusion.excluded<<'\t'<<s.exclusion.entered<<'\t'<<s.exclusion.resumed<<'\t'<<s.exclusion.excludedS<<'\t'<<s.before.discrete<<'\t'<<s.before.invalidNets<<'\t'<<s.before.discreteSeconds<<'\t'<<s.exclusion.seconds<<std::endl;
+    if(!s.shortReport)throw std::runtime_error("Short-span report write failed");
+    s.timing("trace_and_log","mask_counts",std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count());
+    started=std::chrono::steady_clock::now();s.prepared=true;s.rawX.clear();s.rawY.clear();
     std::vector<size_t> ids(s.model.nets.size());std::iota(ids.begin(),ids.end(),0);size_t count=std::min(size_t(8),ids.size());
     std::partial_sort(ids.begin(),ids.begin()+count,ids.end(),[&](size_t a,size_t b){return s.strength[a]!=s.strength[b]?s.strength[a]>s.strength[b]:s.model.nets[a].id<s.model.nets[b].id;});
     s.top.clear();for(size_t i=0;i<count;++i)if(s.strength[ids[i]]>0)s.top.insert(ids[i]);
+    s.timing("gradient_net_selection","prepare",std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count());
     s.result("before",xx,yy);
+    started=std::chrono::steady_clock::now();
     s.audit->freeze(s.model,s.movable,s.y,s.before.gradient,s.coefficient,s.enabled&&s.globalActive,limit,x,y);
+    s.timing("frozen_archive","prepare",std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count());
+    started=std::chrono::steady_clock::now();
     if(s.enabled&&s.globalActive){std::vector<double> linear(y.solverData.objectiveVector.data(),y.solverData.objectiveVector.data()+yy.size());amf_sll::addFirstOrderModel(s.before.gradient,s.movable,s.coefficient,linear);for(size_t i=0;i<linear.size();++i)y.solverData.objectiveVector[i]=linear[i];}
+    s.timing("gradient_injection","prepare",std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count());
 }
 void SllRunDiagnostics::candidate(QPSolverWrapper&x,QPSolverWrapper&y){
     auto&s=*p;if(!s.prepared)return;

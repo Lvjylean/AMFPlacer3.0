@@ -83,7 +83,7 @@ WirelengthOptimizer::WirelengthOptimizer(PlacementInfo *placementInfo, std::map<
 void WirelengthOptimizer::recordSllStage(const char* phase, int round, int iteration, const char* step)
 {
     bool requested=false;
-    for(const auto& key : {"SllQuantityEnable", "SllQuantityDiagnostics"}) {
+    for(const auto& key : {"SllQuantityEnable", "SllQuantityDiagnostics", "SllDynamicTauEnable", "SllShortSpanEnable"}) {
         auto it=JSONCfg.find(key);if(it==JSONCfg.end())continue;
         if(it->second!="true" && it->second!="false")throw std::invalid_argument(std::string(key)+" must be true/false");
         requested=requested||it->second=="true";

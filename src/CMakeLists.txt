@@ -296,3 +296,8 @@ target_link_libraries(replayFrozenSllQp ProblemSolvers Utils pthread ${Boost_LIB
 
 add_executable(checkSllQpAuditIntegration EXCLUDE_FROM_ALL tests/check_sll_qp_audit_integration.cc)
 target_link_libraries(checkSllQpAuditIntegration GlobalPlacer Packing Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkSllAdaptivePolicy EXCLUDE_FROM_ALL tests/check_sll_adaptive_policy.cc)
+target_link_libraries(checkSllAdaptivePolicy Utils pthread)
+add_executable(checkSllAdaptiveIntegration EXCLUDE_FROM_ALL tests/check_sll_adaptive_integration.cc)
+target_link_libraries(checkSllAdaptiveIntegration GlobalPlacer Packing Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})

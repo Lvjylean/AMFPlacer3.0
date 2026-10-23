@@ -55,8 +55,8 @@ int main(int argc,char**argv){try{
         bool firstNet=true;std::set<uint32_t> targets(f.targets.begin(),f.targets.end());
         for(auto&net:model.nets){bool incident=false;for(size_t j=net.begin;j<net.end;++j)if(targets.count(model.pins[j].unit)){incident=true;break;}if(!incident)continue;
             auto detail=amf_sll::detail(model,net,f.y.position);if(!firstNet)out<<',';firstNet=false;
-            out<<"{\"net_id\":"<<net.id<<",\"optimize\":"<<int(net.optimize)<<",\"F\":"<<detail.value<<",\"S\":"<<detail.discrete<<",\"target_contributions\":[";
-            for(size_t k=0;k<f.targets.size();++k){if(k)out<<',';double v=0;for(size_t j=net.begin;j<net.end;++j)if(model.pins[j].unit==f.targets[k]&&f.movable[f.targets[k]]&&net.optimize)v+=c*detail.gradient[j-net.begin];out<<v;}
+            out<<"{\"net_id\":"<<net.id<<",\"optimize\":"<<int(net.optimize)<<",\"gradient_active\":"<<int(net.gradientActive)<<",\"F\":"<<detail.value<<",\"S\":"<<detail.discrete<<",\"target_contributions\":[";
+            for(size_t k=0;k<f.targets.size();++k){if(k)out<<',';double v=0;for(size_t j=net.begin;j<net.end;++j)if(model.pins[j].unit==f.targets[k]&&f.movable[f.targets[k]]&&net.optimize&&net.gradientActive)v+=c*detail.gradient[j-net.begin];out<<v;}
             out<<"]}";
         }
         out<<"]}";

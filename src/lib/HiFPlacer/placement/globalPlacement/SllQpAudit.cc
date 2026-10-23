@@ -54,7 +54,7 @@ struct SllQpAudit::Impl {
         std::ostringstream nr,pr;nr<<"net_id\tnet_json\tpins\tmodel_index\toptimize\texclusion\twhole_net_cluster_factor\twhole_net_timing_factor\tpin_scope\n";
         pr<<std::setprecision(17)<<"net_id\tpin_json\tcell_json\tpu\tx\ty\toffset_x\toffset_y\tmovable\tmapped\n";
         for(auto n:ordered){auto it=models.find(n->getElementIdInType());
-            std::string reason=it!=models.end()?(m.nets[it->second].optimize?"included":"optimization_excluded"):(n->checkIsPowerNet()?"power":n->checkIsGlobalClock()?"global_clock":"incomplete_or_empty");
+            std::string reason=it!=models.end()?(m.nets[it->second].optimize?(m.nets[it->second].gradientActive?"included":"short_span_this_QP"):"optimization_excluded"):(n->checkIsPowerNet()?"power":n->checkIsGlobalClock()?"global_clock":"incomplete_or_empty");
             nr<<n->getElementIdInType()<<'\t'<<json(n->getName())<<'\t'<<n->getPins().size()<<'\t'<<(it==models.end()?-1:long(it->second))<<'\t'<<(it!=models.end()&&m.nets[it->second].optimize)<<'\t'<<reason<<'\t'<<n->getOverallClusterEnhanceRatio()<<'\t'<<n->getOverallTimingEnhanceRatio()<<'\t'<<(it==models.end()?"target_member_pins_only_excluded_from_SLL":"all_pins")<<'\n';
             for(auto pin:n->getPins()){
                 auto cell=pin?pin->getCell():nullptr;auto pu=cell&&!cell->isVirtualCell()?pi->getPlacementUnitByCellId(cell->getCellId()):nullptr;
