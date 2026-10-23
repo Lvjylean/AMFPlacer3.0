@@ -1,0 +1,8 @@
+{
+  "project_root": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261023-preg-legacy-depth-coupled/repo",
+  "ssh_alias": "eda072",
+  "vivado": "/Projects/Xilinx26/2026.1/Vivado/bin/vivado",
+  "build_jobs": 4,
+  "amf_jobs": 12,
+  "vivado_threads": 4
+}

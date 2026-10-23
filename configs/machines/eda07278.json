@@ -1,0 +1,8 @@
+{
+  "project_root": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261019-cr-slr-hierarchical-78/repo",
+  "ssh_alias": "eda072",
+  "vivado": "/Projects/Xilinx26/2026.1/Vivado/bin/vivado",
+  "build_jobs": 8,
+  "amf_jobs": 12,
+  "vivado_threads": 4
+}

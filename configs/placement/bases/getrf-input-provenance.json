@@ -1,0 +1,88 @@
+{
+  "input_dcp_sha256": "6283aa4874b42d939a2b00e53cce77574fa03a26f45914364ab9ca632b42c031",
+  "case": "GETRF ordinary full design",
+  "amf_clock_period_ns": 10,
+  "vivado_clock_period_ns": 10,
+  "vivado_clock_source": "reused original post-opt DCP: ap_clk 10.000 ns; verified in embedded XDC",
+  "synthesis_executed": false,
+  "input_export_executed": false,
+  "input_reuse": {
+    "vivado extracted device information file": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/5cc26c1cc8b7-exportSiteLocation.zip",
+      "sha256": "5cc26c1cc8b74ca1f32945c77d48058b8a04d2c9fdc40fcf5e82fe6c552f6a25",
+      "bytes": 25537274,
+      "origin_072_path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261007-external-floorplan-copy/repo/experiments/preflight/20261008-amf2pro-integration/repo/experiments/preflight/20261010-slr-stage-comparison-01/experiments/preflight/20261010-dual-host-macro-study-01/inputs/5cc26c1cc8b7-exportSiteLocation.zip"
+    },
+    "vivado extracted design information file": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/43f9519fc3df-netlist.zip",
+      "sha256": "43f9519fc3dfdbc6fe899c0bdfdbcff12d3e077d74f6acf456262c0859d50a4b",
+      "bytes": 68237832,
+      "origin_072_path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261007-external-floorplan-copy/repo/experiments/preflight/20261008-amf2pro-integration/repo/experiments/preflight/20261010-slr-stage-comparison-01/experiments/preflight/20261010-dual-host-macro-study-01/inputs/43f9519fc3df-netlist.zip"
+    },
+    "physical boundary model file": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/d1116390e6bc-physical_structure.tsv",
+      "sha256": "d1116390e6bce6e879fb40ee50c9f3cef80645e77d7d6b0bc94b271bd8a645fa",
+      "bytes": 10640664,
+      "origin_072_path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261007-external-floorplan-copy/repo/experiments/preflight/20261008-amf2pro-integration/repo/experiments/preflight/20261010-slr-stage-comparison-01/experiments/preflight/20261010-dual-host-macro-study-01/inputs/d1116390e6bc-physical_structure.tsv"
+    },
+    "clock file": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/07a841cee796-clocks",
+      "sha256": "07a841cee796403bb14a3659b2c4a5c09a79047f0bdf6662b2c64c8bb9801a27",
+      "bytes": 13,
+      "origin_072_path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261007-external-floorplan-copy/repo/experiments/preflight/20261008-amf2pro-integration/repo/experiments/preflight/20261010-slr-stage-comparison-01/experiments/preflight/20261010-dual-host-macro-study-01/inputs/07a841cee796-clocks"
+    },
+    "mergedSharedCellType2sharedCellType": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/164948971004-mergedSharedCellType2sharedCellType",
+      "sha256": "1649489710040b2425f5f508c241101e37bbf62eae60f8eb4fd736ff1079c982",
+      "bytes": 143,
+      "origin_072_path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261007-external-floorplan-copy/repo/experiments/preflight/20261008-amf2pro-integration/repo/experiments/preflight/20261010-slr-stage-comparison-01/experiments/preflight/20261010-dual-host-macro-study-01/inputs/164948971004-mergedSharedCellType2sharedCellType"
+    },
+    "cellType2fixedAmo file": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/f3e4d2bbe26b-cellType2fixedAmo",
+      "sha256": "f3e4d2bbe26b45c0eb562b7fb8249524dc7f01c0be9595ffeb722cc572ed4e33",
+      "bytes": 317,
+      "origin_072_path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261007-external-floorplan-copy/repo/experiments/preflight/20261008-amf2pro-integration/repo/experiments/preflight/20261010-slr-stage-comparison-01/experiments/preflight/20261010-dual-host-macro-study-01/inputs/f3e4d2bbe26b-cellType2fixedAmo"
+    },
+    "cellType2sharedCellType file": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/f2f1832e4776-cellType2sharedCellType",
+      "sha256": "f2f1832e477624e1b1f563c85415405c8fbe85b93809509e5eac5cf73d73d553",
+      "bytes": 424,
+      "origin_072_path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261007-external-floorplan-copy/repo/experiments/preflight/20261008-amf2pro-integration/repo/experiments/preflight/20261010-slr-stage-comparison-01/experiments/preflight/20261010-dual-host-macro-study-01/inputs/f2f1832e4776-cellType2sharedCellType"
+    },
+    "sharedCellType2BELtype file": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/ff49d19d6fac-sharedCellType2BELtype",
+      "sha256": "ff49d19d6fac348d39e23ceb1fcd5b678e01f7ff32f60e9d13448bed30d64781",
+      "bytes": 779,
+      "origin_072_path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261007-external-floorplan-copy/repo/experiments/preflight/20261008-amf2pro-integration/repo/experiments/preflight/20261010-slr-stage-comparison-01/experiments/preflight/20261010-dual-host-macro-study-01/inputs/ff49d19d6fac-sharedCellType2BELtype"
+    },
+    "clock resource capacity file": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/39e34938d3ed-clock_capacity.tsv",
+      "sha256": "39e34938d3edb29f928b1e35e805fe5738a1c44a895cffff57b6a511067d27d4",
+      "bytes": 4163,
+      "origin_072_path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261007-external-floorplan-copy/repo/experiments/preflight/20261008-amf2pro-integration/repo/experiments/preflight/20261010-slr-stage-comparison-01/experiments/preflight/20261010-dual-host-macro-study-01/inputs/39e34938d3ed-clock_capacity.tsv"
+    },
+    "SRL control metadata file": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261011-srl-share4/validation/srl-controls.tsv",
+      "sha256": "8edcd83b969707c19737358cee7f3e8f7cf9dff227f45d886147649e4295bd79",
+      "bytes": 6878730,
+      "origin_072_path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261011-srl-share4/validation/srl-controls.tsv"
+    },
+    "post_opt.dcp": {
+      "path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/post_opt.dcp",
+      "sha256": "6283aa4874b42d939a2b00e53cce77574fa03a26f45914364ab9ca632b42c031",
+      "bytes": 314541880,
+      "origin_072_path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261007-external-floorplan-copy/repo/experiments/preflight/20261008-amf2pro-integration/repo/experiments/preflight/20261010-slr-stage-comparison-01/experiments/preflight/20261010-dual-host-macro-study-01/inputs/post_opt.dcp"
+    }
+  },
+  "historical_input_hash_reference": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261017-grid-cause/repo/experiments/runs/grid-cause-legacy-full-20261017-171517-429635/manifest.json",
+  "historical_reference_scope": "input hashes only; not a successful QoR comparator",
+  "dfx_pblocks_present_in_embedded_xdc": false,
+  "xdc_clock_lines": [
+    "create_clock -period 10.000 [get_ports {ap_clk}]",
+    "create_clock -period 10.000 -name ap_clk [get_ports ap_clk]"
+  ],
+  "replica_source_host": "eda072",
+  "replica_source_config_sha256": "67bf364bf42656651c8f8033de137887d66321b8cfefc92c3da03805886867b9",
+  "replica_input_host": "coldsun",
+  "historical_input_hash_reference_host": "eda072"
+}

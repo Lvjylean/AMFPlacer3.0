@@ -1,0 +1,1086 @@
+#include "../../../utils/RuntimeProfiler.h"
+/**
+ * @file PlacementTimingInfo.cc
+ * @author Tingyuan LIANG (tliang@connect.ust.hk)
+ * @brief This implementation file contains APIs' implementation for the timing information related to placement.
+ * @version 0.1
+ * @date 2021-10-02
+ *
+ * @copyright Copyright (c) 2021 Reconfiguration Computing Systems Lab, The Hong Kong University of Science and
+ * Technology. All rights reserved.
+ *
+ */
+
+#include "PlacementTimingInfo.h"
+#include "PlacementInfo.h"
+#include "stringCheck.h"
+#include <algorithm>
+#include <cmath>
+#include <codecvt>
+#include <numeric>
+#include <queue>
+#include <set>
+#include <stack>
+
+PlacementTimingInfo::PlacementTimingInfo(DesignInfo *designInfo, DeviceInfo *deviceInfo,
+                                         std::map<std::string, std::string> &JSONCfg)
+    : designInfo(designInfo), deviceInfo(deviceInfo), JSONCfg(JSONCfg)
+{
+    AMF_PROFILE_FUNCTION("timing");
+    if (JSONCfg.find("PlacementTimingInfoVerbose") != JSONCfg.end())
+        verbose = JSONCfg["PlacementTimingInfoVerbose"] == "true";
+
+    if (JSONCfg.find("ClockPeriod") != JSONCfg.end())
+        clockPeriod = std::stof(JSONCfg["ClockPeriod"]);
+
+    if (JSONCfg.find("DSPCritical") != JSONCfg.end())
+        DSPCritical = JSONCfg["DSPCritical"] == "true";
+
+    clockNet2Period.clear();
+    cellId2Period.clear();
+    for (auto pair : JSONCfg)
+    {
+        if (pair.first.find("ClockPeriod:") != std::string::npos)
+        {
+            auto clockDriver = pair.first;
+            std::string from = "ClockPeriod:";
+            std::string to = "";
+            replaceAll(clockDriver, from, to);
+            auto driverNet = designInfo->getNet(clockDriver);
+            float tmpClkPeriod = std::stof(pair.second);
+
+            clockNet2Period[driverNet] = tmpClkPeriod;
+            for (auto succPin : driverNet->getPinsBeDriven())
+            {
+                auto cell = succPin->getCell();
+                if (cell)
+                {
+                    cellId2Period[cell->getCellId()] = tmpClkPeriod;
+                }
+            }
+        }
+    }
+}
+
+void PlacementTimingInfo::setDSPInnerDelay()
+{
+    AMF_PROFILE_FUNCTION("timing");
+    if (!DSPCritical)
+        return;
+    auto &nodes = simpleTimingGraph->getNodes();
+    for (auto curCell : designInfo->getCells())
+    {
+
+        if (curCell->isDSP())
+        {
+            auto newNode = nodes[curCell->getCellId()];
+            newNode->setInnerDelay(1.3);
+        }
+    }
+
+    print_status("PlacementTimingInfo: set DSP inner delay");
+}
+
+PlacementTimingInfo::TimingGraph<DesignInfo::DesignCell> *
+PlacementTimingInfo::buildCellGraph(bool legacyClustering)
+{
+    AMF_PROFILE_FUNCTION("timing");
+    print_status("PlacementTimingInfo: building simple timing graph (TimingNode is DesignCell)");
+    auto graph = new TimingGraph<DesignInfo::DesignCell>(this);
+    graph->setClockPeriod(clockPeriod);
+
+    for (auto curCell : designInfo->getCells())
+    {
+        auto newNode =
+            new TimingGraph<DesignInfo::DesignCell>::TimingNode(curCell, graph->getNodes().size());
+
+        if (curCell->isTimingEndPoint())
+        {
+            if (!curCell->isDSP())
+            {
+                newNode->setIsRegister();
+                if (cellId2Period.find(curCell->getCellId()) != cellId2Period.end())
+                {
+                    newNode->setClockPeriod(cellId2Period[curCell->getCellId()]);
+                }
+                else
+                {
+                    newNode->setClockPeriod(clockPeriod);
+                }
+            }
+            else if ((legacyClustering ? curCell->dspClusteringIsRegister(DSPCritical) :
+                     curCell->dspTimingIsRegister(DSPCritical)))
+            {
+                newNode->setIsRegister();
+                if (cellId2Period.find(curCell->getCellId()) != cellId2Period.end())
+                {
+                    newNode->setClockPeriod(cellId2Period[curCell->getCellId()]);
+                }
+                else
+                {
+                    newNode->setClockPeriod(clockPeriod);
+                }
+            }
+        }
+        if(curCell->isInterfaceEndpoint())newNode->setInnerDelay(0);
+        graph->insertTimingNode(newNode);
+    }
+
+    float defaultNetDelay = 1;
+    for (auto curCell : designInfo->getCells())
+    {
+        assert(curCell);
+        int curId = curCell->getCellId();
+        for (auto srcPin : curCell->getOutputPins())
+        {
+            assert(srcPin);
+            auto curNet = srcPin->getNet();
+            if (!curNet)
+                continue;
+            if (curNet->checkIsGlobalClock() || curNet->checkIsPowerNet())
+                continue;
+            for (auto pinBeDriven : curNet->getPinsBeDriven())
+            {
+                if (auto cellBeDriven = pinBeDriven->getCell())
+                {
+                    assert(srcPin);
+                    assert(pinBeDriven);
+                    graph->addEdgeBetween(curId, cellBeDriven->getCellId(), srcPin, pinBeDriven, curNet,
+                                                      defaultNetDelay);
+                }
+            }
+        }
+    }
+
+    graph->forwardLevelization();
+    graph->backwardLevelization();
+    graph->setLongestPathLength(!legacyClustering);
+
+    print_info(std::string("PlacementTimingInfo: graph view=") +
+               (legacyClustering ? "legacy-topology-clustering" : "certified-timing") +
+               " long_path_percentile=0.95 threshold=" + std::to_string(graph->getLongPathThresholdLevel()));
+    return graph;
+}
+
+void PlacementTimingInfo::buildSimpleTimingGraph()
+{
+    delete clusteringGraph;
+    clusteringGraph = nullptr;
+    delete simpleTimingGraph;
+    simpleTimingGraph = nullptr;
+    simpleTimingGraph = buildCellGraph(false);
+}
+
+PlacementTimingInfo::TimingGraph<DesignInfo::DesignCell> *PlacementTimingInfo::getClusteringGraph()
+{
+    if (!simpleTimingGraph)
+        throw std::runtime_error("Build the certified timing graph before the clustering view");
+    if (!clusteringGraph) clusteringGraph = buildCellGraph(true);
+    return clusteringGraph;
+}
+
+void PlacementTimingInfo::reduceClockPeriodToRatio(float ratio)
+{
+    print_status("PlacementTimingInfo: reducing clock period for further optimization");
+
+    float globalClock = simpleTimingGraph->getClockPeriod();
+
+    simpleTimingGraph->setClockPeriod(globalClock * ratio);
+    auto &nodes = simpleTimingGraph->getNodes();
+    for (unsigned int i = 0; i < nodes.size(); i++)
+    {
+        auto curCell = nodes[i]->getDesignNode();
+        if (nodes[i]->getClockPeriod() > 0)
+        {
+            float newClock = nodes[i]->getClockPeriod() * ratio;
+            nodes[i]->setClockPeriod(newClock);
+        }
+    }
+    print_status("PlacementTimingInfo: reduced clock period for further optimization");
+}
+
+template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::forwardLevelization()
+{
+    AMF_PROFILE_FUNCTION("timing");
+    print_status("PlacementTimingInfo: Timing graph starts forward levalization");
+    forwardlevel2NodeIds.clear();
+
+    std::vector<int> curLevelIds;
+    curLevelIds.clear();
+    for (unsigned int i = 0; i < nodes.size(); i++)
+    {
+        if (nodes[i]->checkIsRegister())
+        {
+            curLevelIds.push_back(i);
+            nodes[i]->setForwardLevel(0);
+        }
+    }
+
+    int curLevel = 0;
+    while (curLevelIds.size())
+    {
+        // print_info("level#" + std::to_string(curLevel) + " has " + std::to_string(curLevelIds.size()) + " nodes");
+        forwardlevel2NodeIds.push_back(curLevelIds);
+
+        curLevelIds.clear();
+
+        int nextLevel = curLevel + 1;
+        for (auto curId : forwardlevel2NodeIds[curLevel])
+        {
+            for (auto outEdge : nodes[curId]->getOutEdges())
+            {
+                int nextId = outEdge->getSink()->getId();
+
+                if (!nodes[nextId]->checkIsRegister())
+                {
+                    if (nodes[nextId]->getForwardLevel() < nextLevel)
+                    {
+                        nodes[nextId]->setForwardLevel(nextLevel);
+                        curLevelIds.push_back(nextId);
+                    }
+                }
+            }
+        }
+        curLevel++;
+
+        if (curLevel > 100)
+        {
+            print_warning("Reach level#" + std::to_string(curLevel) + " has " + std::to_string(curLevelIds.size()) +
+                          " nodes. It might mean that there are loops in timing graph.");
+            std::vector<int> nodeInPath;
+            for (auto tmpId : curLevelIds)
+            {
+                nodeInPath.clear();
+                nodeInPath.push_back(tmpId);
+                findALoopFromNode(nodeInPath, tmpId, tmpId, 0);
+            }
+        }
+    }
+
+    // some nodes are duplicated in some lower levels, remove them
+    for (unsigned int level = 0; level < forwardlevel2NodeIds.size(); level++)
+    {
+        std::vector<int> filteredList;
+        filteredList.clear();
+        for (auto id : forwardlevel2NodeIds[level])
+        {
+            assert(nodes[id]->getForwardLevel() >= 0);
+            if ((unsigned int)nodes[id]->getForwardLevel() == level)
+                filteredList.push_back(id);
+        }
+        forwardlevel2NodeIds[level] = filteredList;
+    }
+
+    // set the destination level of the nodes, in reversed topological order
+    for (int level = forwardlevel2NodeIds.size() - 2; level >= 0; level--)
+    {
+        for (auto curId : forwardlevel2NodeIds[level])
+        {
+            for (auto outEdge : nodes[curId]->getOutEdges())
+            {
+                int nextId = outEdge->getSink()->getId();
+
+                if (!nodes[nextId]->checkIsRegister())
+                {
+                    if (nodes[nextId]->getDestLevel() > nodes[curId]->getDestLevel())
+                    {
+                        nodes[curId]->setDestLevel(nodes[nextId]->getDestLevel());
+                    }
+                }
+            }
+        }
+    }
+
+    longPathThresholdLevel = 1;
+
+    int thresholdLevelNum = nodes.size() * longPathThrRatio;
+    int mediumThresholdLevelNum = nodes.size() * mediumPathThrRatio;
+    int cntNodes = 0;
+    std::string levelInfoStr = " details: ";
+    for (unsigned int i = 0; i < forwardlevel2NodeIds.size(); i++)
+    {
+        if (cntNodes < thresholdLevelNum)
+        {
+            longPathThresholdLevel = i;
+        }
+        if (cntNodes < mediumThresholdLevelNum)
+        {
+            mediumPathThresholdLevel = i;
+        }
+        cntNodes += forwardlevel2NodeIds[i].size();
+        levelInfoStr += std::to_string(i) + "(" + std::to_string(forwardlevel2NodeIds[i].size()) + ", " +
+                        std::to_string((float)cntNodes / nodes.size()) + "), ";
+    }
+
+    for (unsigned int i = 0; i < nodes.size(); i++)
+    {
+        nodes[i]->sortInEdgesByForwardLevel();
+    }
+
+    print_info("PlacementTimingInfo: total level = " + std::to_string(forwardlevel2NodeIds.size()) + levelInfoStr);
+    print_info("PlacementTimingInfo: long path threshold level = " + std::to_string(longPathThresholdLevel));
+    print_info("PlacementTimingInfo: medium path threshold level = " + std::to_string(mediumPathThresholdLevel));
+    print_status("PlacementTimingInfo: Timing graph finished forward levalization");
+}
+
+template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::backwardLevelization()
+{
+    AMF_PROFILE_FUNCTION("timing");
+    print_status("PlacementTimingInfo: Timing graph starts backward levalization");
+    backwardlevel2NodeIds.clear();
+
+    std::vector<int> curLevelIds;
+    curLevelIds.clear();
+    for (unsigned int i = 0; i < nodes.size(); i++)
+    {
+        if (nodes[i]->checkIsRegister())
+        {
+            curLevelIds.push_back(i);
+            nodes[i]->setBackwardLevel(0);
+        }
+    }
+
+    int curLevel = 0;
+    while (curLevelIds.size())
+    {
+        // print_info("level#" + std::to_string(curLevel) + " has " + std::to_string(curLevelIds.size()) + " nodes");
+        backwardlevel2NodeIds.push_back(curLevelIds);
+
+        curLevelIds.clear();
+
+        int nextLevel = curLevel + 1;
+        for (auto curId : backwardlevel2NodeIds[curLevel])
+        {
+            for (auto inEdge : nodes[curId]->getInEdges())
+            {
+                int nextId = inEdge->getSource()->getId();
+
+                if (!nodes[nextId]->checkIsRegister())
+                {
+                    if (nodes[nextId]->getBackwardLevel() < nextLevel)
+                    {
+                        nodes[nextId]->setBackwardLevel(nextLevel);
+                        curLevelIds.push_back(nextId);
+                    }
+                }
+            }
+        }
+        curLevel++;
+    }
+
+    // some nodes are duplicated in some lower levels, remove them
+    for (unsigned int level = 0; level < backwardlevel2NodeIds.size(); level++)
+    {
+        std::vector<int> filteredList;
+        filteredList.clear();
+        for (auto id : backwardlevel2NodeIds[level])
+        {
+            assert(nodes[id]->getBackwardLevel() >= 0);
+            if ((unsigned int)nodes[id]->getBackwardLevel() == level)
+                filteredList.push_back(id);
+        }
+        backwardlevel2NodeIds[level] = filteredList;
+    }
+
+    for (unsigned int level = 0; level < backwardlevel2NodeIds.size() - 1; level++)
+    {
+        for (auto curId : backwardlevel2NodeIds[level])
+        {
+            assert(curId < nodes.size());
+            float curClockPeriod = nodes[curId]->getClockPeriod();
+            if (curClockPeriod < 0)
+            {
+                continue;
+            }
+            for (auto inEdge : nodes[curId]->getInEdges())
+            {
+                int nextId = inEdge->getSource()->getId();
+
+                assert(nextId < nodes.size());
+                if (!nodes[nextId]->checkIsRegister())
+                {
+                    nodes[nextId]->setClockPeriod(curClockPeriod);
+                }
+            }
+        }
+    }
+
+    for (unsigned int level = 1; level < backwardlevel2NodeIds.size(); level++)
+    {
+        for (auto curId : backwardlevel2NodeIds[level])
+        {
+            assert(curId < nodes.size());
+            float curClockPeriod = nodes[curId]->getClockPeriod();
+            if (curClockPeriod < 0)
+            {
+                continue;
+            }
+            for (auto outEdge : nodes[curId]->getOutEdges())
+            {
+                int nextId = outEdge->getSink()->getId();
+
+                assert(nextId < nodes.size());
+                nodes[curId]->addTotalFanout(nodes[nextId]->getTotalFanout());
+            }
+        }
+    }
+
+    for (unsigned int i = 0; i < nodes.size(); i++)
+    {
+        nodes[i]->sortOutEdgesByBackwardLevel();
+    }
+
+    print_status("PlacementTimingInfo: Timing graph finished backward levalization");
+}
+
+template <typename nodeType>
+std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::traceBackFromNode(int targetId)
+{
+    AMF_PROFILE_FUNCTION("timing");
+    std::vector<int> resPath;
+    resPath.clear();
+    resPath.push_back(targetId);
+
+    int curId = targetId;
+    while (nodes[curId]->getForwardLevel() != 0)
+    {
+        int maxLevelInLastId = -1;
+        int cellInMaxLevelInLastId = -1;
+        for (auto inEdge : nodes[curId]->getInEdges())
+        {
+            int lastId = inEdge->getSource()->getId();
+
+            if (nodes[lastId]->getForwardLevel() > maxLevelInLastId && !nodes[lastId]->checkIsRegister())
+            {
+                maxLevelInLastId = nodes[lastId]->getForwardLevel();
+                cellInMaxLevelInLastId = lastId;
+            }
+        }
+        if (cellInMaxLevelInLastId < 0)
+            break;
+        curId = cellInMaxLevelInLastId;
+        resPath.push_back(curId);
+    }
+    return resPath;
+}
+
+template <typename nodeType>
+std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::traceForwardFromNode(int targetId)
+{
+    AMF_PROFILE_FUNCTION("timing");
+    std::vector<int> resPath;
+    resPath.clear();
+    resPath.push_back(targetId);
+
+    int targetPathLength = nodes[targetId]->getLongestPathLength();
+    int curId = targetId;
+    while (curId >= 0)
+    {
+        int maxLevelInLastId = -1;
+        int cellInMaxLevelInLastId = -1;
+        for (auto outEdge : nodes[curId]->getOutEdges())
+        {
+            int lastId = outEdge->getSink()->getId();
+            if (nodes[lastId]->getBackwardLevel() > maxLevelInLastId &&
+                nodes[lastId]->getLongestPathLength() >= targetPathLength && !nodes[lastId]->checkIsRegister())
+            {
+                maxLevelInLastId = nodes[lastId]->getBackwardLevel();
+                cellInMaxLevelInLastId = lastId;
+            }
+        }
+        if (cellInMaxLevelInLastId < 0)
+            break;
+        curId = cellInMaxLevelInLastId;
+        resPath.push_back(curId);
+    }
+    return resPath;
+}
+
+template <typename nodeType>
+std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::DFSFromNode(int startNodeId, int pathLenThr,
+                                                                         unsigned int sizeThr,
+                                                                         std::set<int> &exceptionCells, int fanoutThr)
+{
+    AMF_PROFILE_FUNCTION("timing");
+    std::vector<int> resSucessors;
+    std::stack<int> nodeStack;
+    std::set<int> nodeSet;
+    nodeSet.clear();
+    resSucessors.clear();
+    nodeSet.insert(startNodeId);
+    resSucessors.push_back(startNodeId);
+    nodeStack.push(startNodeId);
+    int targetPathLen = nodes[startNodeId]->getLongestPathLength();
+
+    if (targetPathLen && nodes[startNodeId]->getForwardLevel() > targetPathLen * 0.2)
+    {
+        return resSucessors;
+    }
+
+    while (nodeStack.size() && nodeSet.size() < sizeThr)
+    {
+        int curNode = nodeStack.top();
+        nodeStack.pop();
+
+        for (auto outEdge : nodes[curNode]->getOutEdges())
+        {
+            int nextId = outEdge->getSink()->getId();
+
+            if (!nodes[nextId]->checkIsRegister() && nodes[nextId]->getLongestPathLength() > pathLenThr)
+            {
+                if (nodeSet.find(nextId) == nodeSet.end())
+                {
+                    resSucessors.push_back(nextId);
+                    nodeSet.insert(nextId);
+                    nodeStack.push(nextId);
+                }
+            }
+        }
+
+        for (auto inEdge : nodes[curNode]->getInEdges())
+        {
+            int nextId = inEdge->getSource()->getId();
+
+            if (!nodes[nextId]->checkIsRegister() && nodes[nextId]->getLongestPathLength() > pathLenThr)
+            {
+                if (nodeSet.find(nextId) == nodeSet.end())
+                {
+                    resSucessors.push_back(nextId);
+                    nodeSet.insert(nextId);
+                    nodeStack.push(nextId);
+                }
+            }
+        }
+    }
+    return resSucessors;
+}
+
+template <typename nodeType>
+std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::BFSFromNode(int startNodeId, int pathLenThr,
+                                                                         unsigned int sizeThr,
+                                                                         std::set<int> &exceptionCells)
+{
+    AMF_PROFILE_FUNCTION("timing");
+    std::vector<int> resSucessors;
+    std::queue<int> nodeQ;
+    std::set<int> nodeSet;
+    nodeSet.clear();
+    resSucessors.clear();
+    resSucessors.push_back(startNodeId);
+    nodeSet.insert(startNodeId);
+    nodeQ.push(startNodeId);
+    // int targetPathLen = nodes[startNodeId]->getLongestPathLength();
+
+    int targetPathLen = nodes[startNodeId]->getLongestPathLength();
+
+    if (targetPathLen && nodes[startNodeId]->getForwardLevel() > targetPathLen * 0.2)
+    {
+        return resSucessors;
+    }
+
+    while (nodeQ.size() && nodeSet.size() < sizeThr)
+    {
+        int curNode = nodeQ.front();
+        nodeQ.pop();
+
+        for (auto outEdge : nodes[curNode]->getOutEdges())
+        {
+            int nextId = outEdge->getSink()->getId();
+
+            if (!nodes[nextId]->checkIsRegister() && nodes[nextId]->getLongestPathLength() > pathLenThr)
+            {
+                if (nodeSet.find(nextId) == nodeSet.end() && exceptionCells.find(nextId) == exceptionCells.end())
+                {
+                    resSucessors.push_back(nextId);
+                    nodeSet.insert(nextId);
+                    nodeQ.push(nextId);
+                }
+            }
+        }
+
+        if (curNode != startNodeId)
+        {
+            for (auto inEdge : nodes[curNode]->getInEdges())
+            {
+                int nextId = inEdge->getSource()->getId();
+
+                if (!nodes[nextId]->checkIsRegister() && nodes[nextId]->getLongestPathLength() > pathLenThr)
+                {
+                    if (nodeSet.find(nextId) == nodeSet.end() && exceptionCells.find(nextId) == exceptionCells.end())
+                    {
+                        resSucessors.push_back(nextId);
+                        nodeSet.insert(nextId);
+                        nodeQ.push(nextId);
+                    }
+                }
+            }
+        }
+    }
+    return resSucessors;
+}
+
+template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::propogateArrivalTime()
+{
+    AMF_PROFILE_FUNCTION("timing");
+    invArrivalNotUpdated = true;
+    int nodeNum = nodes.size();
+#pragma omp parallel for
+    for (int j = 0; j < nodeNum; j++)
+    {
+        auto curNode = nodes[j];
+        curNode->setLatestInputArrival(0.0);
+        curNode->setLatestOutputArrival(0.0);
+        curNode->setSlowestPredecessorId(-1);
+    }
+    for (unsigned int i = 1; i < forwardlevel2NodeIds.size(); i++)
+    {
+        int numNodeInLayer = forwardlevel2NodeIds[i].size();
+#pragma omp parallel for
+        for (int j = 0; j < numNodeInLayer; j++)
+        {
+            auto curNodeId = forwardlevel2NodeIds[i][j];
+            auto curNode = nodes[curNodeId];
+            for (auto inEdge : curNode->getInEdges())
+            {
+                int predId = inEdge->getSource()->getId();
+                float predDelay = inEdge->getSource()->getLatestInputArrival();
+                float edgeDelay = inEdge->getDelay();
+                float newDelay;
+
+                if (inEdge->getSource()->getInnerDelay() < 1.0 || inEdge->getSource()->getForwardLevel() > 0)
+                    newDelay = predDelay + edgeDelay + inEdge->getSource()->getInnerDelay();
+                else
+                    newDelay = predDelay + edgeDelay;
+                if (newDelay > curNode->getLatestInputArrival())
+                {
+                    curNode->setLatestInputArrival(newDelay);
+                    curNode->setSlowestPredecessorId(predId);
+                    // curNode->setLatestOutputArrival(newDelay + curNode->getInnerDelay());
+                    curNode->setLatestOutputArrival(newDelay);
+                }
+            }
+        }
+    }
+
+    int numNodeInLayer = forwardlevel2NodeIds[0].size();
+#pragma omp parallel for
+    for (int j = 0; j < numNodeInLayer; j++)
+    {
+        auto curNodeId = forwardlevel2NodeIds[0][j];
+        assert(curNodeId < nodes.size());
+        auto curNode = nodes[curNodeId];
+        if (curNode->getDesignNode()->isVirtualCell())
+            continue;
+
+        for (auto inEdge : curNode->getInEdges())
+        {
+            if (inEdge->getSource())
+            {
+                if (inEdge->getSource()->getForwardLevel() > 0)
+                {
+                    int predId = inEdge->getSource()->getId();
+                    float predDelay = inEdge->getSource()->getLatestInputArrival();
+                    float edgeDelay = inEdge->getDelay();
+                    float newDelay = predDelay + edgeDelay + inEdge->getSource()->getInnerDelay();
+                    if (newDelay > curNode->getLatestInputArrival())
+                    {
+                        curNode->setLatestInputArrival(newDelay);
+                        curNode->setSlowestPredecessorId(predId);
+                    }
+                }
+            }
+        }
+    }
+}
+
+template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::backPropogateRequiredArrivalTime()
+{
+    AMF_PROFILE_FUNCTION("timing");
+    int nodeNum = nodes.size();
+#pragma omp parallel for
+    for (int j = 0; j < nodeNum; j++)
+    {
+        auto curNode = nodes[j];
+        curNode->setInitialRequiredArrivalTime(clockPeriod);
+        curNode->setEarlestSuccessorId(-1);
+        curNode->setEndpointCriticality(1000.0);
+    }
+    for (unsigned int i = 1; i < backwardlevel2NodeIds.size(); i++)
+    {
+        int numNodeInLayer = backwardlevel2NodeIds[i].size();
+#pragma omp parallel for
+        for (int j = 0; j < numNodeInLayer; j++)
+        {
+            auto curNodeId = backwardlevel2NodeIds[i][j];
+            auto curNode = nodes[curNodeId];
+            assert(!curNode->checkIsRegister());
+            for (auto outEdge : curNode->getOutEdges())
+            {
+                int succId = outEdge->getSink()->getId();
+                float succRequiredArrival = outEdge->getSink()->getRequiredArrivalTime();
+                float edgeDelay = outEdge->getDelay();
+                float newRequiredArrival = succRequiredArrival - edgeDelay - outEdge->getSink()->getInnerDelay();
+                if (newRequiredArrival < curNode->getRequiredArrivalTime())
+                {
+                    curNode->setRequiredArrivalTime(newRequiredArrival);
+                    curNode->setEarlestSuccessorId(succId);
+                }
+            }
+        }
+    }
+
+    int numNodeInLayer = backwardlevel2NodeIds[0].size();
+#pragma omp parallel for
+    for (int j = 0; j < numNodeInLayer; j++)
+    {
+        auto curNodeId = backwardlevel2NodeIds[0][j];
+        auto curNode = nodes[curNodeId];
+        assert(curNode->checkIsRegister());
+        for (auto outEdge : curNode->getOutEdges())
+        {
+            int succId = outEdge->getSink()->getId();
+            float succRequiredArrival = outEdge->getSink()->getRequiredArrivalTime();
+            float edgeDelay = outEdge->getDelay();
+            float newRequiredArrival = succRequiredArrival - edgeDelay - outEdge->getSink()->getInnerDelay();
+            if (newRequiredArrival < curNode->getEndpointCriticality())
+            {
+                curNode->setEndpointCriticality(newRequiredArrival);
+                assert(succId >= 0);
+                curNode->setEarlestSuccessorId(succId);
+            }
+        }
+    }
+}
+
+template <typename nodeType>
+std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::backTraceDelayLongestPathFromNode(int curNodeId)
+{
+    AMF_PROFILE_FUNCTION("timing");
+    int slowestPredecessorId = curNodeId;
+    std::vector<int> resPath;
+    resPath.clear();
+    resPath.push_back(slowestPredecessorId);
+    while (slowestPredecessorId != -1)
+    {
+        slowestPredecessorId = nodes[slowestPredecessorId]->getSlowestPredecessorId();
+        resPath.push_back(slowestPredecessorId);
+
+        if (slowestPredecessorId == -1 || nodes[slowestPredecessorId]->getForwardLevel() == 0)
+            break;
+    }
+    return resPath;
+}
+
+template <typename nodeType>
+bool PlacementTimingInfo::TimingGraph<nodeType>::backTraceDelayLongestPathFromNode(
+    int curNodeId, std::vector<int> &isCovered, std::vector<int> &resPath, int coverThr, int backTraceCheckFanoutLevel)
+{
+    AMF_PROFILE_FUNCTION("timing");
+    int levelThr = backTraceCheckFanoutLevel;
+    if (mediumPathThresholdLevel < 5)
+    {
+        levelThr = 2;
+    }
+    int slowestPredecessorId = curNodeId;
+    resPath.clear();
+    resPath.push_back(slowestPredecessorId);
+    while (slowestPredecessorId != -1)
+    {
+        slowestPredecessorId = nodes[slowestPredecessorId]->getSlowestPredecessorId();
+        if (slowestPredecessorId == -1)
+            break;
+        resPath.push_back(slowestPredecessorId);
+
+        if (isCovered[slowestPredecessorId] > coverThr && nodes[slowestPredecessorId]->getForwardLevel() > levelThr &&
+            nodes[slowestPredecessorId]->getOutEdges().size() > 1)
+        {
+            // if (nodes[slowestPredecessorId]->getDesignNode()->isDSP() ||
+            //     nodes[slowestPredecessorId]->getDesignNode()->isBRAM())
+            // {
+            //     if (isCovered[slowestPredecessorId] > 100)
+            //         return false;
+            // }
+            // else
+            {
+                return false;
+            }
+        }
+        if (slowestPredecessorId == -1 || nodes[slowestPredecessorId]->getForwardLevel() == 0)
+            break;
+    }
+    return true;
+}
+
+template <typename nodeType>
+bool PlacementTimingInfo::TimingGraph<nodeType>::backTraceDelayLongestPathFromNode_inv(
+    int curNodeId, std::vector<int> &isCovered, std::vector<int> &resPath, int coverThr, int backTraceCheckFanoutLevel)
+{
+    int levelThr = backTraceCheckFanoutLevel;
+    if (mediumPathThresholdLevel < 5)
+    {
+        levelThr = 2;
+    }
+    int slowestPredecessorId_inv = curNodeId;
+    resPath.clear();
+    resPath.push_back(slowestPredecessorId_inv);
+    while (slowestPredecessorId_inv != -1)
+    {
+        slowestPredecessorId_inv = nodes[slowestPredecessorId_inv]->getSlowestPredecessorId_inv();
+        if (slowestPredecessorId_inv == -1)
+            break;
+        resPath.push_back(slowestPredecessorId_inv);
+
+        if (isCovered[slowestPredecessorId_inv] > coverThr &&
+            nodes[slowestPredecessorId_inv]->getBackwardLevel() > levelThr &&
+            nodes[slowestPredecessorId_inv]->getInEdges().size() > 1)
+        {
+            return false;
+        }
+        if (slowestPredecessorId_inv == -1 || nodes[slowestPredecessorId_inv]->getBackwardLevel() == 0)
+            break;
+    }
+
+    std::reverse(resPath.begin(), resPath.end());
+    return true;
+}
+
+template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::sortedEndpointByDelay_inv()
+{
+    if (invArrivalNotUpdated)
+    {
+        print_status("sortedEndpointByDelay_inv\n");
+        invArrivalNotUpdated = false;
+        int nodeNum = nodes.size();
+#pragma omp parallel for
+        for (int j = 0; j < nodeNum; j++)
+        {
+            auto curNode = nodes[j];
+            curNode->setLatestInputArrival_inv(0.0);
+            curNode->setLatestOutputArrival_inv(0.0);
+            curNode->setSlowestPredecessorId_inv(-1);
+        }
+        for (unsigned int i = 1; i < backwardlevel2NodeIds.size(); i++)
+        {
+            int numNodeInLayer = backwardlevel2NodeIds[i].size();
+#pragma omp parallel for
+            for (int j = 0; j < numNodeInLayer; j++)
+            {
+                auto curNodeId = backwardlevel2NodeIds[i][j];
+                auto curNode = nodes[curNodeId];
+                for (auto outEdge : curNode->getOutEdges())
+                {
+                    int succId = outEdge->getSink()->getId();
+                    float succDelay = outEdge->getSink()->getLatestInputArrival_inv();
+                    float edgeDelay = outEdge->getDelay();
+                    float newDelay;
+
+                    if (outEdge->getSink()->getInnerDelay() < 1.0 || outEdge->getSink()->getForwardLevel() > 0)
+                        newDelay = succDelay + edgeDelay + outEdge->getSink()->getInnerDelay();
+                    else
+                        newDelay = succDelay + edgeDelay;
+                    if (newDelay > curNode->getLatestInputArrival_inv())
+                    {
+                        curNode->setLatestInputArrival_inv(newDelay);
+                        curNode->setSlowestPredecessorId_inv(succId);
+                        // curNode->setLatestOutputArrival_inv(newDelay + curNode->getInnerDelay());
+                        curNode->setLatestOutputArrival_inv(newDelay);
+                    }
+                }
+            }
+        }
+
+        int numNodeInLayer = backwardlevel2NodeIds[0].size();
+
+#pragma omp parallel for
+        for (int j = 0; j < numNodeInLayer; j++)
+        {
+            auto curNodeId = backwardlevel2NodeIds[0][j];
+            assert(curNodeId < nodes.size());
+            auto curNode = nodes[curNodeId];
+            if (curNode->getDesignNode()->isVirtualCell())
+                continue;
+
+            for (auto outEdge : curNode->getOutEdges())
+            {
+                if (outEdge->getSink())
+                {
+                    if (outEdge->getSink()->getForwardLevel() > 0)
+                    {
+                        int succId = outEdge->getSink()->getId();
+                        float succDelay = outEdge->getSink()->getLatestInputArrival_inv();
+                        float edgeDelay = outEdge->getDelay();
+                        float newDelay = succDelay + edgeDelay + outEdge->getSink()->getInnerDelay();
+                        if (newDelay > curNode->getLatestInputArrival_inv())
+                        {
+                            curNode->setLatestInputArrival_inv(newDelay);
+                            curNode->setSlowestPredecessorId_inv(succId);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    delaySortedTimingEndpointNodes_inv.clear();
+    for (auto id : forwardlevel2NodeIds[0])
+    {
+        if (nodes[id]->getInEdges().size() == 0)
+            continue;
+        delaySortedTimingEndpointNodes_inv.push_back(nodes[id]);
+    }
+    std::sort(delaySortedTimingEndpointNodes_inv.begin(), delaySortedTimingEndpointNodes_inv.end(),
+              [](TimingNode *a, TimingNode *b) -> bool {
+                  return (a->getLatestInputArrival_inv() > b->getLatestInputArrival_inv());
+              });
+}
+
+template <typename nodeType>
+std::vector<std::vector<int>>
+PlacementTimingInfo::TimingGraph<nodeType>::backTraceDelayLongestPathsFromNodeWithTolerance(int startNodeId,
+                                                                                            float tolerance,
+                                                                                            int pathNumThr, int sizeThr)
+{
+    std::vector<std::vector<int>> resPaths;
+    std::vector<float> resDelays;
+    std::vector<int> curPath;
+    std::stack<int> nodeStack;
+    std::stack<float> curDelays;
+    std::stack<int> curDepths;
+    std::map<int, int> nodeSet;
+
+    float endDelay = nodes[startNodeId]->getLatestInputArrival();
+    nodeSet.clear();
+    curPath.clear();
+    nodeSet[startNodeId] = 0;
+    nodeStack.push(startNodeId);
+    curDepths.push(1);
+    curDelays.push(0.0);
+
+    int inResultCnt = 0;
+
+    while (nodeStack.size() && nodeSet.size() < sizeThr && inResultCnt < sizeThr && resPaths.size() < pathNumThr)
+    {
+        int curNode = nodeStack.top();
+        int curDepth = curDepths.top();
+        float curDelay = curDelays.top();
+        nodeStack.pop();
+        curDepths.pop();
+        curDelays.pop();
+
+        if (curPath.size() > curDepth - 1)
+            curPath.resize(curDepth - 1);
+        curPath.push_back(curNode);
+
+        for (auto inEdge : nodes[curNode]->getInEdges())
+        {
+            int nextId = inEdge->getSource()->getId();
+            float srcDelay = 0;
+            if (!nodes[nextId]->checkIsRegister())
+                srcDelay = nodes[nextId]->getLatestInputArrival();
+            if (srcDelay + inEdge->getDelay() + nodes[nextId]->getInnerDelay() + curDelay > endDelay - tolerance)
+            {
+                if (nodeSet.find(nextId) == nodeSet.end())
+                {
+                    nodeSet[nextId] = 0;
+                }
+                else
+                {
+                    if (nodeSet[nextId] > 10 && curDepth > 10)
+                        continue;
+                }
+                nodeSet[nextId]++;
+                if (!nodes[nextId]->checkIsRegister())
+                {
+                    nodeStack.push(nextId);
+                    curDepths.push(curDepth + 1);
+                    curDelays.push(curDelay + inEdge->getDelay() + nodes[nextId]->getInnerDelay());
+                }
+                else
+                {
+                    float totalDelay = curDelay + inEdge->getDelay() + nodes[nextId]->getInnerDelay();
+                    if (totalDelay > endDelay - tolerance)
+                    {
+                        resDelays.push_back(totalDelay);
+                        resPaths.push_back(curPath);
+                        resPaths[resPaths.size() - 1].push_back(nextId);
+                        inResultCnt += (curPath.size() + 1);
+                    }
+                }
+            }
+        }
+    }
+
+    std::vector<int> indices(resPaths.size());
+    std::iota(indices.begin(), indices.end(), 0);
+    std::sort(indices.begin(), indices.end(), [&](int A, int B) -> bool { return resDelays[A] > resDelays[B]; });
+
+    std::vector<std::vector<int>> actualResPaths;
+
+    for (int i = 0; i < 100 && i < resPaths.size(); i++)
+    {
+        actualResPaths.push_back(resPaths[indices[i]]);
+    }
+
+    return actualResPaths;
+}
+
+template <typename nodeType>
+std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::forwardTraceDelayLongestPathFromNode(int curNodeId)
+{
+    int earlestSuccessorId = curNodeId;
+    std::vector<int> resPath;
+    resPath.clear();
+    resPath.push_back(earlestSuccessorId);
+    while (earlestSuccessorId != -1)
+    {
+        earlestSuccessorId = nodes[earlestSuccessorId]->getEarlestSuccessorId();
+        resPath.push_back(earlestSuccessorId);
+
+        if (earlestSuccessorId == -1 || nodes[earlestSuccessorId]->getForwardLevel() == 0)
+            break;
+    }
+    return resPath;
+}
+
+template <typename nodeType>
+bool PlacementTimingInfo::TimingGraph<nodeType>::forwardTraceDelayLongestPathFromNode(int curNodeId,
+                                                                                      std::vector<int> &isCovered,
+                                                                                      std::vector<int> &resPath,
+                                                                                      int coverThr)
+{
+    int levelThr = 5;
+    if (mediumPathThresholdLevel < 5)
+    {
+        levelThr = 2;
+    }
+    int earlestSuccessorId = curNodeId;
+    resPath.clear();
+    resPath.push_back(earlestSuccessorId);
+    while (earlestSuccessorId != -1)
+    {
+        earlestSuccessorId = nodes[earlestSuccessorId]->getEarlestSuccessorId();
+        if (earlestSuccessorId == -1)
+            break;
+        resPath.push_back(earlestSuccessorId);
+
+        if (isCovered[earlestSuccessorId] > coverThr && nodes[earlestSuccessorId]->getForwardLevel() > levelThr &&
+            nodes[earlestSuccessorId]->getOutEdges().size() > 1)
+        {
+            // if (nodes[slowestPredecessorId_inv]->getDesignNode()->isDSP() ||
+            //     nodes[slowestPredecessorId_inv]->getDesignNode()->isBRAM() ||
+            //     nodes[slowestPredecessorId_inv]->getDesignNode()->isCarry())
+            // {
+            //     if (isCovered[slowestPredecessorId_inv] > 60)
+            //         return false;
+            // }
+            // else
+            {
+                return false;
+            }
+        }
+        if (earlestSuccessorId == -1 || nodes[earlestSuccessorId]->getBackwardLevel() == 0)
+            break;
+    }
+    return true;
+}
+
+template class PlacementTimingInfo::TimingGraph<DesignInfo::DesignCell>;
