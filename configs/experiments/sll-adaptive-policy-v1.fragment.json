@@ -1,0 +1,10 @@
+{
+  "SllQuantityEnable": "true",
+  "SllQuantityDiagnostics": "true",
+  "SllDynamicTauEnable": "true",
+  "SllShortSpanEnable": "true",
+  "SllQuantityTau": "10",
+  "SllQuantityGamma": "0.02",
+  "y2xRatio": "0.4",
+  "SllRegionPolicy": "preserve"
+}

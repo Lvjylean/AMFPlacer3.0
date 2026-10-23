@@ -76,7 +76,7 @@ public:
     Update update(Model&m,const std::vector<NetGeometry>&geometry,bool enabled) {
         if(geometry.size()!=m.nets.size())throw std::invalid_argument("SLL short-span geometry mismatch");
         const auto started=std::chrono::steady_clock::now();Update out;
-        std::unordered_set<unsigned> next;
+        {std::unordered_set<unsigned> next;
         for(size_t i=0;i<m.nets.size();++i){auto&n=m.nets[i];const auto&g=geometry[i];bool old=excluded(n.id);
             bool off=enabled && n.optimize && n.weight>0 && g.crossings==1 &&
                      (old?g.span<3.0:g.span<=2.0);
@@ -85,7 +85,7 @@ public:
             out.entered+=off&&!old;out.resumed+=old&&!off;
         }
         // Replace state so disappeared/filtered nets cannot leave stale exclusions.
-        excluded_.swap(next);
+        excluded_.swap(next); } // Include destruction of the previous set in the update timer.
         out.seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();return out;
     }
 };

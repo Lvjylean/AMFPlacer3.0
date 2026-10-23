@@ -53,6 +53,7 @@ struct SllRunDiagnostics::Impl {
     std::unique_ptr<SllQpAudit> audit;
     amf_sll::FrozenAxis x,y;amf_sll::Result before;
     std::ofstream qp,pins,nets,stages,solver,mapping,rounds,shortReport,perf;
+    std::chrono::steady_clock::time_point solveStarted,writebackStarted;
     std::chrono::steady_clock::time_point origin=std::chrono::steady_clock::now();
     double seconds()const{return std::chrono::duration<double>(std::chrono::steady_clock::now()-origin).count();}
     Impl(PlacementInfo*pi,const std::map<std::string,std::string>&cfg,double r):placement(pi),ratio(r) {
@@ -269,19 +270,28 @@ void SllRunDiagnostics::prepare(QPSolverWrapper&x,QPSolverWrapper&y,float weight
     started=std::chrono::steady_clock::now();
     if(s.enabled&&s.globalActive){std::vector<double> linear(y.solverData.objectiveVector.data(),y.solverData.objectiveVector.data()+yy.size());amf_sll::addFirstOrderModel(s.before.gradient,s.movable,s.coefficient,linear);for(size_t i=0;i<linear.size();++i)y.solverData.objectiveVector[i]=linear[i];}
     s.timing("gradient_injection","prepare",std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count());
+    s.solveStarted=std::chrono::steady_clock::now();
 }
 void SllRunDiagnostics::candidate(QPSolverWrapper&x,QPSolverWrapper&y){
     auto&s=*p;if(!s.prepared)return;
+    s.timing("qp_solve_window","candidate",std::chrono::duration<double>(std::chrono::steady_clock::now()-s.solveStarted).count());
     const auto&xx=x.solverSettings.solutionForward?x.solverData.oriSolution:x.solverData.solution;
     const auto&yy=y.solverSettings.solutionForward?y.solverData.oriSolution:y.solverData.solution;
     s.rawX=s.x.position;s.rawY=s.y.position;
     for(size_t i=0;i<s.model.units;++i)if(s.movable[i]){s.rawX[i]=xx[i];s.rawY[i]=yy[i];if(!std::isfinite(xx[i])||!std::isfinite(yy[i]))throw std::runtime_error("Non-finite QP output before original writeback");}
     s.result("raw",s.rawX,s.rawY);
-    s.audit->result("raw",s.rawX,s.rawY,y);
+    auto archiveStarted=std::chrono::steady_clock::now();s.audit->result("raw",s.rawX,s.rawY,y);
+    s.timing("frozen_archive","raw",std::chrono::duration<double>(std::chrono::steady_clock::now()-archiveStarted).count());
     for(auto pair:{std::make_pair("X",&x),std::make_pair("Y",&y)}){
         auto&v=*pair.second;auto&d=v.guardDiagnostics;bool guard=v.solverSettings.stabilityGuard;
         const auto&f=pair.second==&x?s.x:s.y;double rhs=0,inc=0;for(size_t i=0;i<f.linear.size();++i){rhs+=f.linear[i]*f.linear[i];if(pair.second==&y&&s.enabled&&s.globalActive)inc+=s.coefficient*s.coefficient*s.before.gradient[i]*s.before.gradient[i];}
         s.solver<<s.qid<<'\t'<<s.phase<<'\t'<<s.round<<'\t'<<s.iteration<<'\t'<<pair.first<<'\t'<<(guard?d.iterations:v.CGSolver.iterations())<<'\t'<<(guard?d.relativeError:v.CGSolver.error())<<'\t'<<(guard?d.converged:v.CGSolver.info()==Eigen::Success)<<'\t'<<d.rollback<<'\t'<<d.repairedRows<<'\t'<<d.maxDiagonalDelta<<'\t'<<v.solverSettings.tolerence<<'\t'<<v.solverSettings.maxIters<<'\t'<<std::sqrt(rhs)<<'\t'<<std::sqrt(inc)<<std::endl;
     }
+    s.writebackStarted=std::chrono::steady_clock::now();
 }
-void SllRunDiagnostics::written(QPSolverWrapper&,QPSolverWrapper&y){auto&s=*p;if(s.prepared){auto xx=s.coordinates(false),yy=s.coordinates(true);s.result("after_writeback",xx,yy);s.audit->result("written",xx,yy,y);}}
+void SllRunDiagnostics::written(QPSolverWrapper&,QPSolverWrapper&y){auto&s=*p;if(s.prepared){
+    s.timing("original_writeback_window","written",std::chrono::duration<double>(std::chrono::steady_clock::now()-s.writebackStarted).count());
+    auto xx=s.coordinates(false),yy=s.coordinates(true);s.result("after_writeback",xx,yy);
+    auto started=std::chrono::steady_clock::now();s.audit->result("written",xx,yy,y);
+    s.timing("frozen_archive","written",std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count());
+}}
