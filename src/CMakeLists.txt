@@ -301,3 +301,6 @@ add_executable(checkSllAdaptivePolicy EXCLUDE_FROM_ALL tests/check_sll_adaptive_
 target_link_libraries(checkSllAdaptivePolicy Utils pthread)
 add_executable(checkSllAdaptiveIntegration EXCLUDE_FROM_ALL tests/check_sll_adaptive_integration.cc)
 target_link_libraries(checkSllAdaptiveIntegration GlobalPlacer Packing Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkDieFirstSpreading EXCLUDE_FROM_ALL tests/check_die_first_spreading.cc)
+target_link_libraries(checkDieFirstSpreading GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})

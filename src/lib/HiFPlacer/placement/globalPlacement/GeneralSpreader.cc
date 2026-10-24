@@ -21,6 +21,8 @@
 #include <queue>
 #include <thread>
 #include "SpreadReplayCapture.h"
+#include <filesystem>
+#include <iomanip>
 
 GeneralSpreader::GeneralSpreader(PlacementInfo *placementInfo, std::map<std::string, std::string> &JSONCfg,
                                  std::string &sharedCellType, int currentIteration, float capacityShrinkRatio,
@@ -39,6 +41,30 @@ GeneralSpreader::GeneralSpreader(PlacementInfo *placementInfo, std::map<std::str
     {
         useSimpleExpland = JSONCfg["SpreaderSimpleExpland"] == "true";
     }
+    std::vector<float> seams;
+    if (auto physical=placementInfo->getDeviceInfo()->getPhysicalBoundaryModel())
+        for (const auto &b:physical->getBoundaries())
+            if (b.active && b.kind=="SLR" && b.orientation=='Y') seams.push_back(b.coordinate);
+    if (!seams.empty()) {
+        auto &original=placementInfo->getBinGrid(placementInfo->getSharedBELTypeId(sharedCellType));
+        dieView.reset(new die_spread::GridView(original,placementInfo->getCompatiblePlacementTable(),seams,
+            placementInfo->getCellId2location().size(),
+            [&](int id){return placementInfo->getCellId2location().at(id);},
+            [&](int id){return int(placementInfo->getCellId2CellBinInfo().at(id).occupation);}));
+        binGrid=dieView->rows;
+        auto dir=JSONCfg.find("SllReportDirectory");
+        const std::filesystem::path output=dir==JSONCfg.end()?std::filesystem::path("."):dir->second;
+        std::filesystem::create_directories(output);
+        auto open=[&](std::ofstream &f,const char *name,const char *header){
+            auto path=output/name;bool fresh=!std::filesystem::exists(path)||std::filesystem::file_size(path)==0;
+            f.open(path,std::ios::app);if(!f)throw std::runtime_error("Cannot write spreading diagnostics");
+            f<<std::setprecision(10);if(fresh)f<<header<<'\n';
+        };
+        open(regionLog,"spreading-regions.tsv","resource\tcall\titeration\tinner\tseed_x\tseed_y\tdie\tphase\treason\tlocal_stop\tlocal_bins\tlocal_demand\tlocal_capacity\tdie_demand\tdie_nominal_capacity\tdie_effective_capacity\tbins\tleft\tright\tbottom\ttop\tremaining_overflow\tseed_remaining_overflow\tpu_count\tmoved_pus\tmax_displacement\tmean_displacement\tmax_abs_dy\tmax_move_pu\tcrossing_cells");
+        open(passLog,"spreading-passes.tsv","resource\tcall\titeration\tinner\tremaining_bins\tremaining_overflow\tregions\tcross_search_regions");
+        open(crossingLog,"spreading-crossings.tsv","resource\tcall\titeration\tinner\tpu_id\tpu_name\told_x\told_y\tnew_x\tnew_y\tdx\tdy\tcrossing_cells\tlocal_guard");
+    }
+
 }
 
 void GeneralSpreader::spreadPlacementUnits(float forgetRatio, bool enableClockRegionAware, float displacementLimit,
@@ -84,6 +110,13 @@ void GeneralSpreader::spreadPlacementUnits(float forgetRatio, bool enableClockRe
         if (verbose)
             print_status("GeneralSpreader: finding overflow regions");
         findOverflowBins(capacityShrinkRatio);
+        if(dieView) {
+            dieSupply=dieView->supply();
+            for(auto it=localFailures.begin();it!=localFailures.end();) {
+                if(!binGrid[it->first.second][it->first.first]->isOverflow(capacityShrinkRatio)) it=localFailures.erase(it);
+                else ++it;
+            }
+        }
         if (overflowBins.size() == 0)
             break;
         int totalCellNum = 0;
@@ -235,16 +268,19 @@ void GeneralSpreader::spreadPlacementUnits(float forgetRatio, bool enableClockRe
         replay.puState(involvedPUVec,"before");
         omp_set_num_threads(nJobs);
 
-        for (auto curRegion : expandedRegions)
-        {
-            delete curRegion;
-        }
-
+        std::map<int,PlacementInfo::Location> before;
+        if(dieView) for(auto pu:involvedPUVec) before.emplace(pu->getId(),PlacementInfo::Location{pu->X(),pu->Y()});
         if (verbose)
             print_status("GeneralSpreader: updating Placement Units With Spreaded Cell Locations");
         updatePlacementUnitsWithSpreadedCellLocations(involvedPUs, involvedCells, involvedPUVec, forgetRatio,
                                                       enableClockRegionAware, displacementLimit);
+        if(dieView) {
+            constrainLocalWrites(involvedPUVec,before);
+            finishDieFirstIteration(replayCall,loopCnt,involvedPUVec,before);
+        }
         replay.puState(involvedPUVec,"after");
+        for(auto region:expandedRegions) delete region;
+        expandedRegions.clear();
         if (verbose)
             print_status("GeneralSpreader: updated Placement Units With Spreaded Cell Locations");
         dumpLUTFFCoordinate();
@@ -691,6 +727,12 @@ GeneralSpreader::SpreadRegion *GeneralSpreader::expandFromABin(PlacementInfo::Pl
                                                                float capacityShrinkRatio, unsigned int numBinThr)
 {
     AMF_PROFILE_FUNCTION("spreading"); // Our Region Expanding (1.4x faster)
+    if(dieView) {
+        auto range=dieView->rowRange(curBin->Y()); const int die=dieView->rowDie[curBin->Y()];
+        return selectDieFirstRegion(curBin,placementInfo,binGrid,capacityShrinkRatio,
+            std::min(numBinThr,200u),coveredBinSet,range.first,range.second,die,
+            localFailures[{curBin->X(),curBin->Y()}],dieSupply.at(die),useSimpleExpland);
+    }
     GeneralSpreader::SpreadRegion *resRegion =
         new GeneralSpreader::SpreadRegion(curBin, placementInfo, binGrid, capacityShrinkRatio, numBinThr);
 
@@ -1225,8 +1267,8 @@ void GeneralSpreader::SpreadRegion::SubBox::spreadCellsV(SubBox **boxA, SubBox *
             {
                 assert(binY >= 0);
                 assert((unsigned int)binY < binGrid.size());
-                float newBottomY = binGrid[binY][leftBinX]->bottom() + placementInfo->getBinGridH() / (num + 1.0);
-                float newTopY = binGrid[binY][leftBinX]->top() - placementInfo->getBinGridH() / (num + 1.0);
+                float newBottomY = binGrid[binY][leftBinX]->bottom() + (binGrid[binY][leftBinX]->top()-binGrid[binY][leftBinX]->bottom()) / (num + 1.0);
+                float newTopY = binGrid[binY][leftBinX]->top() - (binGrid[binY][leftBinX]->top()-binGrid[binY][leftBinX]->bottom()) / (num + 1.0);
                 assert(newTopY >= newBottomY);
                 float rangeold = oriTopY - oriBottomY;
                 float rangenew = newTopY - newBottomY;
@@ -1291,8 +1333,8 @@ void GeneralSpreader::SpreadRegion::SubBox::spreadCellsV(SubBox **boxA, SubBox *
             {
                 assert(binY >= 0);
                 assert((unsigned int)binY < binGrid.size());
-                float newBottomY = binGrid[binY][leftBinX]->bottom() + placementInfo->getBinGridH() / (num + 1.0);
-                float newTopY = binGrid[binY][leftBinX]->top() - placementInfo->getBinGridH() / (num + 1.0);
+                float newBottomY = binGrid[binY][leftBinX]->bottom() + (binGrid[binY][leftBinX]->top()-binGrid[binY][leftBinX]->bottom()) / (num + 1.0);
+                float newTopY = binGrid[binY][leftBinX]->top() - (binGrid[binY][leftBinX]->top()-binGrid[binY][leftBinX]->bottom()) / (num + 1.0);
                 float rangeold = oriTopY - oriBottomY;
                 float rangenew = newTopY - newBottomY;
                 assert(rangeold > -1e-4);
@@ -1457,4 +1499,141 @@ void GeneralSpreader::DumpPUCoordinate(std::string dumpFileName,
         writeStrToGZip(dumpFileName, outfile0);
         // print_status("GeneralSpreader: dumped coordinate archieve to: " + dumpFileName);
     }
+}
+
+
+GeneralSpreader::SpreadRegion *GeneralSpreader::selectDieFirstRegion(
+    PlacementInfo::PlacementBinInfo *seed, PlacementInfo *placement, die_spread::Grid &grid,
+    float ratio, unsigned limit, std::set<PlacementInfo::PlacementBinInfo *> &covered,
+    int minRow, int maxRow, int die, const die_spread::Failure &failure,
+    const die_spread::GridView::Supply &supply, bool simple)
+{
+    limit=std::min(limit,200u);
+    auto search=[&](SpreadRegion &r,std::set<die_spread::Bin*> &claimed,bool exhaust){
+        while(exhaust || r.getOverflowRatio()>ratio) {
+            if(!(simple?r.simpleFindExpandDirection(claimed):r.smartFindExpandDirection(claimed))) break;
+            const auto size=r.getBinsInRegion().size();
+            if(simple)r.simpleExpand(claimed);else r.smartExpand(claimed);
+            if(r.getBinsInRegion().size()<=size) throw std::logic_error("Non-progressing spread search");
+        }
+    };
+    // Probing a failed local candidate must not reserve its bins against fallback.
+    auto localCovered=covered;
+    std::unique_ptr<SpreadRegion> local(new SpreadRegion(seed,placement,grid,ratio,limit,minRow,maxRow));
+    search(*local,localCovered,failure.needsWiderLocal);
+    auto &d=local->decision;d.local=true;d.seedX=seed->X();d.seedY=seed->Y();d.die=die;
+    d.localBins=local->getBinsInRegion().size();d.localCapacity=0;d.localDemand=0;
+    for(auto b:local->getBinsInRegion()){d.localCapacity+=b->getCapacity();d.localDemand+=b->getUtilization();}
+    const bool insufficient=d.localDemand>ratio*d.localCapacity;
+    d.boundedLocal=insufficient || failure.needsWiderLocal;
+    d.localStop=d.boundedLocal?(local->budgetBlocked?"region_budget_or_strip":"no_local_direction"):"capacity_satisfied";
+    d.dieDemand=supply.demand;d.dieNominal=supply.nominal;d.dieEffective=supply.effective;
+    d.reason="local_capacity_satisfied";
+    if(!insufficient && !failure.exhaustedLocalWritten) {
+        if(failure.needsWiderLocal)d.reason="wider_local_writeback_trial";
+        covered.swap(localCovered);return local.release();
+    }
+    if(insufficient) {
+        if(supply.demand>supply.nominal+1e-5)d.reason="die_resource_capacity_shortage";
+        else if(supply.demand>ratio*supply.effective+1e-5)d.reason="die_target_supply_shortage";
+        else d.reason="local_capacity_search_exhausted";
+    } else d.reason="local_writeback_overflow_after_bounded_search";
+    std::unique_ptr<SpreadRegion> cross(new SpreadRegion(seed,placement,grid,ratio,limit));
+    cross->decision=d;cross->decision.local=false;
+    // Rebuild from the same seed; never append to a full 200-bin local rectangle.
+    search(*cross,covered,false);
+    return cross.release();
+}
+
+namespace {
+using PU=PlacementInfo::PlacementUnit;
+using Loc=PlacementInfo::Location;
+template<class F> void spreadMembers(PU *pu,F visit) {
+    if(auto macro=dynamic_cast<PlacementInfo::PlacementMacro*>(pu)) {
+        for(int i=0;i<macro->getNumOfCells();++i) {
+            float x,y;DesignInfo::DesignCellType type;macro->getVirtualCellInfo(i,x,y,type);
+            visit(macro->getCell(i),x,y);
+        }
+    } else if(auto cell=dynamic_cast<PlacementInfo::PlacementUnpackedCell*>(pu))visit(cell->getCell(),0.f,0.f);
+}
+double spreadOverflow(die_spread::Bin *b,float ratio) {
+    return std::max(0.,double(b->getUtilization())-ratio*b->getNominalCapacity());
+}
+std::string spreadSafe(std::string s) {for(char &c:s)if(c=='\t'||c=='\n'||c=='\r')c=' ';return s;}
+}
+
+void GeneralSpreader::constrainLocalWrites(const std::vector<PU*> &units,const std::map<int,Loc> &before)
+{
+    std::set<int> local;
+    for(auto r:expandedRegions)if(r->decision.local)for(auto c:r->getCells())
+        local.insert(placementInfo->getPlacementUnitByCell(c)->getId());
+    for(auto pu:units)if(local.count(pu->getId())&&!pu->isFixed()&&!pu->isLocked()) {
+        const auto old=before.at(pu->getId());die_spread::Range range;
+        spreadMembers(pu,[&](DesignInfo::DesignCell*,float,float y){range.includeMember(dieView->seams,old.Y+y,y);});
+        if(!range.contains(pu->Y())) {
+            float y=std::max(range.low,std::min(range.high,pu->Y()));
+            pu->setAnchorLocationAndForgetTheOriginalOne(pu->X(),y);
+            placementInfo->enforceLegalizeXYInArea(pu);
+            placementInfo->clipPaperRegionLocation(pu);
+            bool valid=range.contains(pu->Y());
+            spreadMembers(pu,[&](DesignInfo::DesignCell*,float,float offset){
+                valid=valid && die_spread::dieAt(dieView->seams,old.Y+offset)==die_spread::dieAt(dieView->seams,pu->Y()+offset);
+            });
+            // Prefer a retained legal original placement to violating a region,
+            // macro footprint, or original die membership due to rounding.
+            if(!valid)pu->setAnchorLocationAndForgetTheOriginalOne(old.X,old.Y);
+            spreadMembers(pu,[&](DesignInfo::DesignCell *cell,float x,float y){
+                placementInfo->transferCellBinInfo(cell->getCellId(),pu->X()+x,pu->Y()+y);
+                placementInfo->getCellId2location()[cell->getCellId()]={pu->X()+x,pu->Y()+y};
+            });
+        }
+    }
+}
+
+void GeneralSpreader::finishDieFirstIteration(int call,int inner,const std::vector<PU*> &units,
+                                             const std::map<int,Loc> &before)
+{
+    std::map<int,int> crossings;std::set<int> local;
+    for(auto r:expandedRegions)if(r->decision.local)for(auto cell:r->getCells())
+        local.insert(placementInfo->getPlacementUnitByCell(cell)->getId());
+    for(auto pu:units) {
+        const auto old=before.at(pu->getId());int cross=0;
+        spreadMembers(pu,[&](DesignInfo::DesignCell *cell,float x,float y){
+            dieView->update(cell,pu->X()+x,pu->Y()+y);
+            if(!cell->isVirtualCell() && die_spread::dieAt(dieView->seams,old.Y+y)!=die_spread::dieAt(dieView->seams,pu->Y()+y))++cross;
+        });
+        crossings[pu->getId()]=cross;
+        if(cross)crossingLog<<sharedCellType<<'\t'<<call<<'\t'<<currentIteration<<'\t'<<inner<<'\t'<<pu->getId()<<'\t'
+            <<spreadSafe(pu->getName())<<'\t'<<old.X<<'\t'<<old.Y<<'\t'<<pu->X()<<'\t'<<pu->Y()<<'\t'
+            <<pu->X()-old.X<<'\t'<<pu->Y()-old.Y<<'\t'<<cross<<'\t'<<local.count(pu->getId())<<'\n';
+        if(cross && local.count(pu->getId()))throw std::logic_error("Die-local spreading crossed a physical seam");
+    }
+    size_t crossRegions=0;
+    for(auto r:expandedRegions) {
+        const auto &d=r->decision;double residual=0,maxMove=0,sumMove=0,maxDy=0;int maxId=-1,moved=0,cross=0;
+        std::set<PU*> members;for(auto cell:r->getCells())members.insert(placementInfo->getPlacementUnitByCell(cell));
+        for(auto pu:members) {
+            const auto old=before.at(pu->getId());double dx=pu->X()-old.X,dy=pu->Y()-old.Y,norm=std::hypot(dx,dy);
+            if(norm>1e-6)++moved;if(norm>maxMove){maxMove=norm;maxId=pu->getId();}
+            maxDy=std::max(maxDy,std::abs(dy));sumMove+=norm;cross+=crossings.at(pu->getId());
+        }
+        for(auto b:r->getBinsInRegion()) {
+            residual+=spreadOverflow(b,capacityShrinkRatio);
+            const auto key=std::make_pair(b->X(),b->Y());
+            if(d.local && b->isOverflow(capacityShrinkRatio))localFailures[key]={true,d.boundedLocal};
+            else localFailures.erase(key);
+        }
+        crossRegions+=!d.local;
+        regionLog<<sharedCellType<<'\t'<<call<<'\t'<<currentIteration<<'\t'<<inner<<'\t'<<d.seedX<<'\t'<<d.seedY<<'\t'<<d.die<<'\t'
+            <<(d.local?"die_local":"cross_die_search")<<'\t'<<d.reason<<'\t'<<d.localStop<<'\t'<<d.localBins<<'\t'
+            <<d.localDemand<<'\t'<<d.localCapacity<<'\t'<<d.dieDemand<<'\t'<<d.dieNominal<<'\t'<<d.dieEffective<<'\t'
+            <<r->getBinsInRegion().size()<<'\t'<<r->left()<<'\t'<<r->right()<<'\t'<<r->bottom()<<'\t'<<r->top()<<'\t'
+            <<residual<<'\t'<<spreadOverflow(binGrid[d.seedY][d.seedX],capacityShrinkRatio)<<'\t'
+            <<members.size()<<'\t'<<moved<<'\t'<<maxMove<<'\t'<<(members.empty()?0:sumMove/members.size())<<'\t'<<maxDy<<'\t'<<maxId<<'\t'<<cross<<'\n';
+    }
+    size_t remaining=0;double residual=0;
+    for(auto &row:binGrid)for(auto b:row){remaining+=b->isOverflow(capacityShrinkRatio);residual+=spreadOverflow(b,capacityShrinkRatio);}
+    passLog<<sharedCellType<<'\t'<<call<<'\t'<<currentIteration<<'\t'<<inner<<'\t'<<remaining<<'\t'<<residual<<'\t'<<expandedRegions.size()<<'\t'<<crossRegions<<'\n';
+    regionLog.flush();passLog.flush();crossingLog.flush();
+    if(!regionLog||!passLog||!crossingLog)throw std::runtime_error("Failed to write spreading diagnostics");
 }

@@ -16,6 +16,7 @@
 #define _GENERALSPREADER
 
 #include "DesignInfo.h"
+#include "DieFirstSpreading.h"
 #include "DeviceInfo.h"
 #include "PlacementInfo.h"
 #include "const.h"
@@ -67,6 +68,8 @@ class GeneralSpreader
                               unsigned int spreadRegionBinSizeLimit);
     void dumpLUTFFCoordinate();
 
+
+
     /**
      * @brief SpreadRegion is an object that record cell spreading region information, including boundaries, cells,
      * bins, and spreading boxes.
@@ -86,10 +89,13 @@ class GeneralSpreader
          */
         SpreadRegion(PlacementInfo::PlacementBinInfo *curBin, PlacementInfo *placementInfo,
                      std::vector<std::vector<PlacementInfo::PlacementBinInfo *>> &binGrid, float capacityShrinkRatio,
-                     unsigned int maxBinCount)
-            : placementInfo(placementInfo), maxBinCount(maxBinCount), binGrid(binGrid),
+                     unsigned int maxBinCount, int minRow = 0, int maxRow = -1)
+            : placementInfo(placementInfo), maxBinCount(maxBinCount), minRow(minRow),
+              maxRow(maxRow < 0 ? int(binGrid.size())-1 : maxRow), binGrid(binGrid),
               capacityShrinkRatio(capacityShrinkRatio)
         {
+            if (this->minRow > curBin->Y() || this->maxRow < curBin->Y())
+                throw std::invalid_argument("Seed outside local row domain");
             if (maxBinCount == 0)
                 throw std::invalid_argument("Spread region bin limit must be positive");
             topBinY = bottomBinY = curBin->Y();
@@ -107,7 +113,8 @@ class GeneralSpreader
             }
             totalCapacity = curBin->getCapacity();
             totalUtilization = curBin->getUtilization();
-            overflowRatio = totalUtilization / totalCapacity;
+            overflowRatio = totalCapacity > 0 ? totalUtilization / totalCapacity :
+                (totalUtilization > 0 ? std::numeric_limits<float>::infinity() : 0);
         }
         ~SpreadRegion()
         {
@@ -1076,21 +1083,33 @@ class GeneralSpreader
             int minExpandSize = 2;
         };
 
+        struct Decision {
+            bool local = false, boundedLocal = false;
+            int seedX=0, seedY=0, die=-1;
+            size_t localBins=0;
+            float localCapacity=0, localDemand=0;
+            double dieDemand=0, dieNominal=0, dieEffective=0;
+            std::string reason="single_die", localStop="not_applicable";
+        } decision;
+        mutable bool budgetBlocked = false;
         static constexpr float eps = 1e-4;
 
       private:
         // Every region remains a rectangle; count all bins, not only bins with capacity.
         bool withinBinLimit(int top, int bottom, int left, int right) const
         {
-            if (bottom < 0 || left < 0 || top < bottom || right < left)
+            if (bottom < minRow || top > maxRow || left < 0 || top < bottom || right < left)
                 return false;
             const std::size_t rows = static_cast<std::size_t>(top - bottom) + 1;
             const std::size_t columns = static_cast<std::size_t>(right - left) + 1;
-            return rows <= maxBinCount / columns;
+            const bool fits = rows <= maxBinCount / columns;
+            if (!fits) budgetBlocked = true;
+            return fits;
         }
 
         PlacementInfo *placementInfo;
         const unsigned int maxBinCount;
+        const int minRow, maxRow;
         float totalCapacity;
         float totalUtilization;
         float overflowRatio;
@@ -1162,6 +1181,12 @@ class GeneralSpreader
          */
         std::set<PlacementInfo::PlacementBinInfo *> binSetInRegion;
     };
+
+    static SpreadRegion *selectDieFirstRegion(PlacementInfo::PlacementBinInfo *seed,
+        PlacementInfo *placement, die_spread::Grid &grid, float ratio, unsigned limit,
+        std::set<PlacementInfo::PlacementBinInfo *> &covered, int minRow, int maxRow,
+        int die, const die_spread::Failure &failure, const die_spread::GridView::Supply &supply,
+        bool simple=false);
 
     /**
      * @brief update the information of the involved PlacementUnit(s)
@@ -1248,7 +1273,16 @@ class GeneralSpreader
      * @brief a reference of the global bin grid for data accessing and updating of cell density
      *
      */
-    std::vector<std::vector<PlacementInfo::PlacementBinInfo *>> &binGrid;
+    std::vector<std::vector<PlacementInfo::PlacementBinInfo *>> binGrid;
+    std::unique_ptr<die_spread::GridView> dieView;
+    std::map<std::pair<int,int>, die_spread::Failure> localFailures;
+    std::vector<die_spread::GridView::Supply> dieSupply;
+    std::ofstream regionLog, passLog, crossingLog;
+    void finishDieFirstIteration(int call, int inner,
+        const std::vector<PlacementInfo::PlacementUnit *> &units,
+        const std::map<int,PlacementInfo::Location> &before);
+    void constrainLocalWrites(const std::vector<PlacementInfo::PlacementUnit *> &units,
+        const std::map<int,PlacementInfo::Location> &before);
 
     int dumpSiteGridDensityCnt = 0;
     int LUTFFCoordinateDumpCnt = 0;
@@ -1289,6 +1323,8 @@ class GeneralSpreader
      *
      * @param overflowThreshold a given threshold
      */
+
+
     void findOverflowBins(float overflowThreshold);
 
     /**

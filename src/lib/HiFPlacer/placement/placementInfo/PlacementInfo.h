@@ -676,6 +676,8 @@ class PlacementInfo
             return (float)utilization;
         }
 
+        inline int getNominalCapacity() const { return capacity; }
+
         inline float getCapacity()
         {
             return (float)capacity * binShrinkRatio;
