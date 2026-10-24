@@ -68,8 +68,6 @@ class GeneralSpreader
                               unsigned int spreadRegionBinSizeLimit);
     void dumpLUTFFCoordinate();
 
-
-
     /**
      * @brief SpreadRegion is an object that record cell spreading region information, including boundaries, cells,
      * bins, and spreading boxes.
@@ -849,7 +847,7 @@ class GeneralSpreader
                    float capacityShrinkRatio = 1.0, int level = 100, bool dirIsH = true)
                 : placementInfo(placementInfo), binGrid(binGrid), capacityShrinkRatio(capacityShrinkRatio),
                   topBinY(curRegion->top()), bottomBinY(curRegion->bottom()), leftBinX(curRegion->left()),
-                  rightBinX(curRegion->right()), level(level), dirIsH(dirIsH)
+                  rightBinX(curRegion->right()), level(level), dirIsH(dirIsH), seamAware(curRegion->decision.die>=0)
             {
                 cellIds.clear();
                 std::vector<DesignInfo::DesignCell *> tmpCells;
@@ -883,7 +881,7 @@ class GeneralSpreader
                    int cellRangeEnd)
                 : placementInfo(parentBox->placementInfo), binGrid(parentBox->binGrid),
                   capacityShrinkRatio(parentBox->capacityShrinkRatio), topBinY(topBinY), bottomBinY(bottomBinY),
-                  leftBinX(leftBinX), rightBinX(rightBinX), level(parentBox->getLevel() - 1), dirIsH(!parentBox->dirIsH)
+                  leftBinX(leftBinX), rightBinX(rightBinX), level(parentBox->getLevel() - 1), dirIsH(!parentBox->dirIsH), seamAware(parentBox->seamAware)
             {
                 if (cellRangeBegin <= cellRangeEnd)
                     cellIds = std::vector<int>(
@@ -1080,6 +1078,7 @@ class GeneralSpreader
              * @brief the minimum length of boundary
              *
              */
+            bool seamAware = false;
             int minExpandSize = 2;
         };
 
@@ -1129,7 +1128,7 @@ class GeneralSpreader
         dirType curDirection = expandLeft;
 
         /**
-         * @brief a reference of the global bin grid for data accessing and updating of cell density
+         * @brief Original bin pointers, or a private seam-split density view for die-first spreading
          *
          */
         std::vector<std::vector<PlacementInfo::PlacementBinInfo *>> &binGrid;
@@ -1270,7 +1269,7 @@ class GeneralSpreader
     bool verbose;
 
     /**
-     * @brief a reference of the global bin grid for data accessing and updating of cell density
+     * @brief Original bin pointers, or a private seam-split density view for die-first spreading
      *
      */
     std::vector<std::vector<PlacementInfo::PlacementBinInfo *>> binGrid;
@@ -1323,8 +1322,6 @@ class GeneralSpreader
      *
      * @param overflowThreshold a given threshold
      */
-
-
     void findOverflowBins(float overflowThreshold);
 
     /**

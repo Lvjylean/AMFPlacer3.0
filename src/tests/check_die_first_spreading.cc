@@ -79,6 +79,15 @@ int main(int argc,char **argv){try{
         view.update(b,.5,8);check(view.rows[2][0]->contains(b)&&view.rows[1][0]->getUtilization()==0,"view move update");
         check(g.rows[0][0]->getUtilization()==2,"private view modified global bins");
     }
+    // A seam coincident with an original grid edge creates a one-ULP
+    // boundary-point fragment; its endpoints must never reverse or escape.
+    for(auto limits:std::vector<std::pair<float,float>>{{239.5f,std::nextafter(239.5f,INFINITY)},
+            {std::nextafter(239.5f,INFINITY),244.5f},{235.f,240.f}}){
+        Bin bin("SLICEL_CARRY8",0,1,limits.first,limits.second,0,0,&table);
+        for(int n:{1,2,50}){auto p=die_spread::verticalBounds(&bin,5,n);
+            check(p.first<=p.second,"fragment endpoints reversed");
+            check(p.first>=bin.bottom()&&p.second<bin.top(),"fragment mapped outside domain");}
+    }
     for(float offset:{-3.f,0.f,3.f}){
         die_spread::Range r;r.includeMember({10,20},9,offset);
         check(r.contains(9-offset)&&!r.contains(11-offset),"local macro offset guard");

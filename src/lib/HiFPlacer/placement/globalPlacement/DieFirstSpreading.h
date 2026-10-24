@@ -27,6 +27,19 @@ struct Range {
     bool contains(float y) const { return y >= low && y <= high; }
 };
 
+// Seam fragments can be only one float ULP tall. Keep their mapped values
+// inside [bottom, top), including the single-cell case. Full bins retain the
+// original nominal-height arithmetic.
+inline std::pair<float,float> verticalBounds(Bin *bin, float nominal, int count, bool seamAware=true) {
+    if (!seamAware || bin->top()-bin->bottom()==nominal)
+        return {bin->bottom()+nominal/(count+1.0), bin->top()-nominal/(count+1.0)};
+    const double bottom=bin->bottom(), top=bin->top();
+    const double margin=(top-bottom)/(count+1.0);
+    const float last=std::nextafter(bin->top(),-INFINITY);
+    auto inside=[&](double y){return std::max(bin->bottom(),std::min(last,float(y)));};
+    return {inside(bottom+margin),inside(top-margin)};
+}
+
 class GridView {
   public:
     Grid rows;

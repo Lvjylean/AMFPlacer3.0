@@ -24,13 +24,6 @@
 #include <filesystem>
 #include <iomanip>
 
-namespace {
-float spreadBinHeight(PlacementInfo::PlacementBinInfo *bin,float nominal) {
-    const float actual=bin->top()-bin->bottom();
-    return std::fabs(actual-nominal)>1e-4f ? actual : nominal;
-}
-}
-
 GeneralSpreader::GeneralSpreader(PlacementInfo *placementInfo, std::map<std::string, std::string> &JSONCfg,
                                  std::string &sharedCellType, int currentIteration, float capacityShrinkRatio,
                                  bool verbose)
@@ -1274,8 +1267,8 @@ void GeneralSpreader::SpreadRegion::SubBox::spreadCellsV(SubBox **boxA, SubBox *
             {
                 assert(binY >= 0);
                 assert((unsigned int)binY < binGrid.size());
-                float newBottomY = binGrid[binY][leftBinX]->bottom() + spreadBinHeight(binGrid[binY][leftBinX],placementInfo->getBinGridH()) / (num + 1.0);
-                float newTopY = binGrid[binY][leftBinX]->top() - spreadBinHeight(binGrid[binY][leftBinX],placementInfo->getBinGridH()) / (num + 1.0);
+                auto bounds = die_spread::verticalBounds(binGrid[binY][leftBinX],placementInfo->getBinGridH(),num,seamAware);
+                float newBottomY=bounds.first, newTopY=bounds.second;
                 assert(newTopY >= newBottomY);
                 float rangeold = oriTopY - oriBottomY;
                 float rangenew = newTopY - newBottomY;
@@ -1340,8 +1333,8 @@ void GeneralSpreader::SpreadRegion::SubBox::spreadCellsV(SubBox **boxA, SubBox *
             {
                 assert(binY >= 0);
                 assert((unsigned int)binY < binGrid.size());
-                float newBottomY = binGrid[binY][leftBinX]->bottom() + spreadBinHeight(binGrid[binY][leftBinX],placementInfo->getBinGridH()) / (num + 1.0);
-                float newTopY = binGrid[binY][leftBinX]->top() - spreadBinHeight(binGrid[binY][leftBinX],placementInfo->getBinGridH()) / (num + 1.0);
+                auto bounds = die_spread::verticalBounds(binGrid[binY][leftBinX],placementInfo->getBinGridH(),num,seamAware);
+                float newBottomY=bounds.first, newTopY=bounds.second;
                 float rangeold = oriTopY - oriBottomY;
                 float rangenew = newTopY - newBottomY;
                 assert(rangeold > -1e-4);

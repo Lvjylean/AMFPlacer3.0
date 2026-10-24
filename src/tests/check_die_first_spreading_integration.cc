@@ -41,9 +41,13 @@ int main(int argc,char **argv){try{
     check(pi.getPlacementUnits().size()==(macroMode?3:4),"synthetic PU count");
     pi.updateCells2PlacementUnits();pi.reloadNets();pi.setBELTypeForCells(&design);
     // Synthetic demand forces a small local overflow without running a placer flow.
-    for(auto &v:pi.getCompatiblePlacementTable()->getcellId2Occupation())v=100;
-    pi.createGridBins(5,5);pi.updateElementBinGrid(false);
+    pi.createGridBins(5,5);
     std::string type="SLICEL_LUT";
+    int bx,by;pi.getGridXY(50,seam-.5f,bx,by);
+    auto seed=pi.getBinGrid(pi.getSharedBELTypeId(type))[by][bx];
+    const float load=std::max(100,seed->getNominalCapacity()+1);
+    for(auto &v:pi.getCompatiblePlacementTable()->getcellId2Occupation())v=load;
+    pi.updateElementBinGrid(false);
     {GeneralSpreader spread(&pi,cfg,type,0,.8,false);spread.spreadPlacementUnits(.2,false,-10,200);}
     auto local=rows(root/"local/spreading-regions.tsv");check(!local.empty(),"fixture must exercise spreading");
     size_t localCount=0;
