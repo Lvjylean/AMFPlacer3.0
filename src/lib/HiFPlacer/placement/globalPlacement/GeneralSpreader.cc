@@ -24,6 +24,13 @@
 #include <filesystem>
 #include <iomanip>
 
+namespace {
+float spreadBinHeight(PlacementInfo::PlacementBinInfo *bin,float nominal) {
+    const float actual=bin->top()-bin->bottom();
+    return std::fabs(actual-nominal)>1e-4f ? actual : nominal;
+}
+}
+
 GeneralSpreader::GeneralSpreader(PlacementInfo *placementInfo, std::map<std::string, std::string> &JSONCfg,
                                  std::string &sharedCellType, int currentIteration, float capacityShrinkRatio,
                                  bool verbose)
@@ -53,7 +60,7 @@ GeneralSpreader::GeneralSpreader(PlacementInfo *placementInfo, std::map<std::str
             [&](int id){return int(placementInfo->getCellId2CellBinInfo().at(id).occupation);}));
         binGrid=dieView->rows;
         auto dir=JSONCfg.find("SllReportDirectory");
-        const std::filesystem::path output=dir==JSONCfg.end()?std::filesystem::path("."):dir->second;
+        const std::filesystem::path output=dir==JSONCfg.end()?std::filesystem::path("."):std::filesystem::path(dir->second);
         std::filesystem::create_directories(output);
         auto open=[&](std::ofstream &f,const char *name,const char *header){
             auto path=output/name;bool fresh=!std::filesystem::exists(path)||std::filesystem::file_size(path)==0;
@@ -1267,8 +1274,8 @@ void GeneralSpreader::SpreadRegion::SubBox::spreadCellsV(SubBox **boxA, SubBox *
             {
                 assert(binY >= 0);
                 assert((unsigned int)binY < binGrid.size());
-                float newBottomY = binGrid[binY][leftBinX]->bottom() + (binGrid[binY][leftBinX]->top()-binGrid[binY][leftBinX]->bottom()) / (num + 1.0);
-                float newTopY = binGrid[binY][leftBinX]->top() - (binGrid[binY][leftBinX]->top()-binGrid[binY][leftBinX]->bottom()) / (num + 1.0);
+                float newBottomY = binGrid[binY][leftBinX]->bottom() + spreadBinHeight(binGrid[binY][leftBinX],placementInfo->getBinGridH()) / (num + 1.0);
+                float newTopY = binGrid[binY][leftBinX]->top() - spreadBinHeight(binGrid[binY][leftBinX],placementInfo->getBinGridH()) / (num + 1.0);
                 assert(newTopY >= newBottomY);
                 float rangeold = oriTopY - oriBottomY;
                 float rangenew = newTopY - newBottomY;
@@ -1333,8 +1340,8 @@ void GeneralSpreader::SpreadRegion::SubBox::spreadCellsV(SubBox **boxA, SubBox *
             {
                 assert(binY >= 0);
                 assert((unsigned int)binY < binGrid.size());
-                float newBottomY = binGrid[binY][leftBinX]->bottom() + (binGrid[binY][leftBinX]->top()-binGrid[binY][leftBinX]->bottom()) / (num + 1.0);
-                float newTopY = binGrid[binY][leftBinX]->top() - (binGrid[binY][leftBinX]->top()-binGrid[binY][leftBinX]->bottom()) / (num + 1.0);
+                float newBottomY = binGrid[binY][leftBinX]->bottom() + spreadBinHeight(binGrid[binY][leftBinX],placementInfo->getBinGridH()) / (num + 1.0);
+                float newTopY = binGrid[binY][leftBinX]->top() - spreadBinHeight(binGrid[binY][leftBinX],placementInfo->getBinGridH()) / (num + 1.0);
                 float rangeold = oriTopY - oriBottomY;
                 float rangenew = newTopY - newBottomY;
                 assert(rangeold > -1e-4);
