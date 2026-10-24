@@ -1577,7 +1577,11 @@ void GeneralSpreader::constrainLocalWrites(const std::vector<PU*> &units,const s
     for(auto pu:units)if(local.count(pu->getId())&&!pu->isFixed()&&!pu->isLocked()) {
         const auto old=before.at(pu->getId());die_spread::Range range;
         spreadMembers(pu,[&](DesignInfo::DesignCell*,float,float y){range.includeMember(dieView->seams,old.Y+y,y);});
-        if(!range.contains(pu->Y())) {
+        bool sameDie=true;
+        spreadMembers(pu,[&](DesignInfo::DesignCell*,float,float offset){
+            sameDie=sameDie && die_spread::dieAt(dieView->seams,old.Y+offset)==die_spread::dieAt(dieView->seams,pu->Y()+offset);
+        });
+        if(!range.contains(pu->Y()) || !sameDie) {
             float y=std::max(range.low,std::min(range.high,pu->Y()));
             pu->setAnchorLocationAndForgetTheOriginalOne(pu->X(),y);
             placementInfo->enforceLegalizeXYInArea(pu);

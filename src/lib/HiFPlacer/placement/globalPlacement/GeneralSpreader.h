@@ -388,7 +388,7 @@ class GeneralSpreader
                 dir2utilization[tmpDir] = 1e-1;
                 dir2capacity[tmpDir] = 1e-5;
                 legalDir[tmpDir] = false;
-                if (newTopBinY < binGrid.size() && newBottomBinY >= 0)
+                if (newTopBinY <= static_cast<unsigned>(maxRow) && newBottomBinY >= minRow)
                 {
                     if (newRightBinX < binGrid[newTopBinY].size() && newLeftBinX >= 0)
                     {
@@ -417,7 +417,7 @@ class GeneralSpreader
                                 int newBottomBinY = bottomBinY + actualExpandOps[tmpDir].bottomYOp;
                                 int newLeftBinX = leftBinX + actualExpandOps[tmpDir].leftXOp;
                                 unsigned int newRightBinX = rightBinX + actualExpandOps[tmpDir].rightXOp;
-                                if (newTopBinY < binGrid.size() && newBottomBinY >= 0)
+                                if (newTopBinY <= static_cast<unsigned>(maxRow) && newBottomBinY >= minRow)
                                 {
                                     if (newRightBinX < binGrid[newTopBinY].size() && newLeftBinX >= 0)
                                     {
@@ -444,7 +444,7 @@ class GeneralSpreader
                                                 int newLeftBinX = leftBinX + actualExpandOps[tmpDir].leftXOp;
                                                 unsigned int newRightBinX =
                                                     rightBinX + actualExpandOps[tmpDir].rightXOp;
-                                                if (newTopBinY < binGrid.size() && newBottomBinY >= 0)
+                                                if (newTopBinY <= static_cast<unsigned>(maxRow) && newBottomBinY >= minRow)
                                                 {
                                                     if (newRightBinX < binGrid[newTopBinY].size() && newLeftBinX >= 0)
                                                     {
@@ -709,7 +709,7 @@ class GeneralSpreader
                 int newBottomBinY = bottomBinY + expandOps[curDirectionIndex].bottomYOp;
                 int newLeftBinX = leftBinX + expandOps[curDirectionIndex].leftXOp;
                 unsigned int newRightBinX = rightBinX + expandOps[curDirectionIndex].rightXOp;
-                if (newTopBinY < binGrid.size() && newBottomBinY >= 0)
+                if (newTopBinY <= static_cast<unsigned>(maxRow) && newBottomBinY >= minRow)
                 {
                     if (newRightBinX < binGrid[newTopBinY].size() && newLeftBinX >= 0)
                     {
