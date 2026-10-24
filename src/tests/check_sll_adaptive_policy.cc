@@ -55,12 +55,70 @@ int main(){try{
     y[1]=107;counted=m.countDiscrete(y,1,&geometry);u=policy.update(m,geometry,true);check(!u.excluded&&u.resumed==1,"resume inclusive 3");
     y[1]=106.5;counted=m.countDiscrete(y,1,&geometry);u=policy.update(m,geometry,true);check(!u.excluded,"2.5 cannot enter without history");
     y[1]=106;counted=m.countDiscrete(y,1,&geometry);policy.update(m,geometry,true);
-    y[1]=104.5;counted=m.countDiscrete(y,1,&geometry);u=policy.update(m,geometry,true);check(!u.excluded&&u.resumed==1,"same die immediately resumes");
+    y[1]=104.5;counted=m.countDiscrete(y,1,&geometry);u=policy.update(m,geometry,true);
+    check(u.excluded==1&&u.excludedSameDie==1&&!u.excludedCrossDie&&!u.resumed,"cross to same die retains exclusion");
     y[1]=106;counted=m.countDiscrete(y,1,&geometry);policy.update(m,geometry,true);
     y[1]=450;counted=m.countDiscrete(y,1,&geometry);u=policy.update(m,geometry,true);check(!u.excluded&&counted.invalidNets==1,"invalid geometry not hidden by mask");
     y[1]=106;counted=m.countDiscrete(y,1,&geometry);policy.update(m,geometry,true);u=policy.update(m,geometry,false);
     check(!u.excluded&&m.nets[0].gradientActive,"disabled policy restores full gradient");
     check(m.slr(100)==0&&m.slr(100.0001)==1,"exact seam convention unchanged");
     check(counted.seconds>=0&&u.seconds>=0&&active.smoothGradientSeconds>=0,"separate finite clocks");
+
+    // Inclusive entry, exclusive retention, both sides, all physical pins.
+    Model compact;compact.units=3;compact.boundaries={100,200};compact.tau={10,10};
+    compact.gamma=.02;compact.minY=0;compact.maxY=300;
+    compact.pins={{0,0},{1,0},{2,0}};compact.nets={{0,3,123}};compact.validate();
+    ShortSpanPolicy edge;std::vector<unsigned char> allMovable={1,1,1};
+    auto update=[&](std::vector<double> v,bool enabled=true){
+        auto fullBefore=compact.evaluate(v,allMovable,1,true);
+        compact.countDiscrete(v,4,&geometry);auto result=edge.update(compact,geometry,enabled);
+        auto fullAfter=compact.evaluate(v,allMovable,4,true);
+        check(fullBefore.discrete==fullAfter.discrete&&fullBefore.smooth==fullAfter.smooth,"policy does not change full S/F");
+        check(result.excluded==result.excludedSameDie+result.excludedCrossDie,"same/cross counts close");
+        if(result.excluded)check(fullAfter.activeSmooth==0&&fullAfter.gradient==std::vector<double>(3,0),"all excluded-net contributions zero");
+        return result;
+    };
+    check(update({98,99,100}).excludedSameDie==1,"lower same-die entry at radius/span 2");
+    check(update({99,100,101}).excludedCrossDie==1,"same to cross stays excluded");
+    check(update({100.25,101,102.5}).excludedSameDie==1,"radius/span below 3 retain across side change");
+    check(update({100.25,101,103}).resumed==1,"farthest distance exactly 3 restores");
+    check(!update({100.25,101,102.5}).excluded,"radius above 2 cannot freshly enter");
+    check(update({100.25,101,102}).entered==1,"upper same-die radius 2 enters");
+    check(update({98.5,100,101.5}).resumed==1,"span exactly 3 restores despite radius below 2");
+    check(!update({98.75,100,101.25}).excluded,"span above 2 cannot freshly enter");
+    check(update({99,100,101}).entered==1,"crossing entry");
+    check(update({99,100,200}).resumed==1,"third pin cannot be ignored or use a different boundary");
+    check(!update({150,150.5,151}).excluded,"short net far from seams stays active");
+    check(update({199,200,201}).entered==1,"second physical boundary entry");
+    check(update({97.5,98,99}).resumed==1,"old boundary is not silently replaced for retention");
+    check(update({99,100,101}).entered==1,"fresh entry near different boundary allowed");
+    check(!update({99,100,301}).excluded,"out of domain restores active objective");
+    check(update({99,100,101}).entered==1,"valid geometry re-enters");
+    compact.nets[0].weight=0;check(update({99,100,101}).resumed==1,"zero weight cannot retain");
+    compact.nets[0].weight=1;compact.nets[0].optimize=false;
+    check(!update({99,100,101}).excluded,"report-only net stays outside optimization mask");
+    compact.nets[0].optimize=true;check(update({99,100,101}).entered==1,"optimizable again");
+    check(update({99,100,101},false).resumed==1,"outside-global clears policy state");
+    for(double tau:{10.,5.,.2,.1}){compact.tau={tau,tau};
+        check(update({99,100,101}).excluded==1,"physical predicate independent of tau");}
+    compact.countDiscrete({99,100,101},1,&geometry);
+    compact.nets.clear();compact.pins.clear();edge.update(compact,{},true);
+    compact.nets={{0,3,123}};compact.pins={{0,0},{1,0},{2,0}};
+    check(!update({98.75,100,101.25}).excluded,"disappeared net cannot retain stale hysteresis");
+    // Independent all-pin reference over a deterministic moving sequence. It
+    // does not use NetGeometry or the production extrema/radius predicate.
+    std::mt19937 random(20261024);std::uniform_real_distribution<double> offset(-4,4);
+    bool referenceOff=false;double referenceBoundary=0;
+    for(int k=0;k<1000;++k){double b=k%11==0?200:100;std::vector<double> v={b+offset(random),b+offset(random),b+offset(random)};
+        if(k%7==0)v[1]=v[2]=v[0]+.5;
+        bool enabled=k%29!=0;double span=*std::max_element(v.begin(),v.end())-*std::min_element(v.begin(),v.end());
+        auto allNear=[&](double seam,double distance,bool inclusive){for(double py:v)
+            if(inclusive?std::abs(py-seam)>distance:std::abs(py-seam)>=distance)return false;return true;};
+        bool next=enabled&&referenceOff&&span<3&&allNear(referenceBoundary,3,false);
+        if(enabled&&!next&&span<=2)for(double seam:compact.boundaries)if(allNear(seam,2,true)){next=true;referenceBoundary=seam;break;}
+        auto actual=update(v,enabled);check(bool(actual.excluded)==next,"all-pin reference agreement");
+        check(actual.entered==size_t(next&&!referenceOff)&&actual.resumed==size_t(referenceOff&&!next),"transition counts match reference");
+        referenceOff=next;
+    }
     std::cout<<"PASS "<<checks<<" adaptive policy checks; synthetic geometry only\n";
 }catch(const std::exception&e){std::cerr<<e.what()<<'\n';return 1;}}

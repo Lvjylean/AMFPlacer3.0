@@ -93,13 +93,13 @@ struct SllRunDiagnostics::Impl {
         open(solver,"solver.tsv","qp\tphase\tround\titeration\taxis\titerations\trelative_error\tconverged\trollback\trepaired_rows\tmax_diagonal_delta\tconfigured_tolerance\tconfigured_max_iterations\tbase_rhs_norm\tsll_b_increment_norm");
         open(mapping,"mapping.tsv","reload\tunits\tnets\tpins\tpower_excluded\tglobal_excluded\tincomplete\toptimization_excluded");
         open(rounds,"adaptive-rounds.tsv","round\tphase\titeration\ttau\tnext_tau\tS\tdelta_S\tinvalid_nets\tF_full\tH\tH_plus_cF_full\texcluded_nets_at_last_qp\tmedian_S\tentry_median_S\tinitial_median_S\tcompleted_rounds\theld_rounds\tphase_rounds\tdecision");
-        open(shortReport,"short-span.tsv","qp\tphase\tround\titeration\ttau\tpolicy_applied\texcluded_nets\tentered\tresumed\texcluded_S\tS_full\tinvalid_nets\tdiscrete_count_seconds\tlist_update_seconds");
+        open(shortReport,"short-span.tsv","qp\tphase\tround\titeration\ttau\tpolicy_applied\texcluded_nets\tentered\tresumed\texcluded_S\tS_full\tinvalid_nets\tdiscrete_count_seconds\tlist_update_seconds\texcluded_same_die_nets\texcluded_cross_die_nets");
         open(perf,"sll-overhead.tsv","event\tqp\tphase\tround\titeration\tstate\ttau\tcategory\twall_seconds");
         std::ofstream meta(directory+"/parameters.tsv");meta<<std::setprecision(17)
             <<"model\tsigmoid_wa_first_order_original_writeback_v1\nenabled\t"<<enabled<<"\ntau\t"<<model.tau[0]<<"\ngamma\t"<<model.gamma
             <<"\nsll_length_tiles\t60\ny2x_ratio\t"<<ratio<<"\nlength_coefficient\t"<<coefficient<<"\nextra_y_limit\tfalse\nbacktracking\tfalse\nJ_increase_policy\trecord_only\ninjection_scope\tglobal_placement_after_common_initial_QP\nregion_policy\tpreserve\nnet_selection\t64_common_stratified_plus_8_dynamic\n"
             <<"dynamic_tau_enabled\t"<<dynamicTau<<"\nshort_span_enabled\t"<<shortSpan
-            <<"\nadaptive_rule_version\t1\ntau_floor\t0.2\ntau_factor\t0.5\ninitial_hold_rounds\t6\nminimum_level_hold_rounds\t4\nphase_settling_rounds\t2\nmedian_window_rounds\t3\nlevel_drop_fraction\t0.1\nplateau_fraction\t0.01\nshort_span_enter_y\t2\nshort_span_resume_y\t3\nshort_span_required_crossings\t1\nmask_update\tbefore_each_QP_frozen_through_writeback\nfull_statistics\tinclude_temporarily_excluded_nets\nround_statistic\tafter_legalization\nS_meaning\tdiscrete_vertical_boundary_demand_not_routed_usage\ntiming_scope\twall_seconds_nonoverlapping_categories_except_explicit_total\n";
+            <<"\nadaptive_rule_version\t1\ntau_floor\t0.2\ntau_factor\t0.5\ninitial_hold_rounds\t6\nminimum_level_hold_rounds\t4\nphase_settling_rounds\t2\nmedian_window_rounds\t3\nlevel_drop_fraction\t0.1\nplateau_fraction\t0.01\nshort_span_enter_y\t2\nshort_span_resume_y\t3\nshort_span_rule_version\t2\nshort_span_boundary_distance_enter_y\t2\nshort_span_boundary_distance_resume_y\t3\nshort_span_required_crossings\tnone\nshort_span_boundary_retention\tsame_physical_boundary_as_entry\nshort_span_list_update_scope\tboundary_radius_and_hysteresis_mask_without_second_pin_scan\nmask_update\tbefore_each_QP_frozen_through_writeback\nfull_statistics\tinclude_temporarily_excluded_nets\nround_statistic\tafter_legalization\nS_meaning\tdiscrete_vertical_boundary_demand_not_routed_usage\ntiming_scope\twall_seconds_nonoverlapping_categories_except_explicit_total\n";
     }
     ~Impl() {
         // Destructor must not throw. Per-event measurements remain in the TSV.
@@ -255,7 +255,7 @@ void SllRunDiagnostics::prepare(QPSolverWrapper&x,QPSolverWrapper&y,float weight
     }else{s.exclusion={};s.before=s.model.evaluate(yy,s.movable,s.threads,true,&s.strength);}
     s.evaluationTiming("prepare",s.before);s.timing("short_span_list_update","prepare",s.exclusion.seconds);
     started=std::chrono::steady_clock::now();
-    s.shortReport<<s.qid<<'\t'<<s.phase<<'\t'<<s.round<<'\t'<<s.iteration<<'\t'<<s.model.tau[0]<<'\t'<<(s.shortSpan&&s.globalActive)<<'\t'<<s.exclusion.excluded<<'\t'<<s.exclusion.entered<<'\t'<<s.exclusion.resumed<<'\t'<<s.exclusion.excludedS<<'\t'<<s.before.discrete<<'\t'<<s.before.invalidNets<<'\t'<<s.before.discreteSeconds<<'\t'<<s.exclusion.seconds<<std::endl;
+    s.shortReport<<s.qid<<'\t'<<s.phase<<'\t'<<s.round<<'\t'<<s.iteration<<'\t'<<s.model.tau[0]<<'\t'<<(s.shortSpan&&s.globalActive)<<'\t'<<s.exclusion.excluded<<'\t'<<s.exclusion.entered<<'\t'<<s.exclusion.resumed<<'\t'<<s.exclusion.excludedS<<'\t'<<s.before.discrete<<'\t'<<s.before.invalidNets<<'\t'<<s.before.discreteSeconds<<'\t'<<s.exclusion.seconds<<'\t'<<s.exclusion.excludedSameDie<<'\t'<<s.exclusion.excludedCrossDie<<std::endl;
     if(!s.shortReport)throw std::runtime_error("Short-span report write failed");
     s.timing("trace_and_log","mask_counts",std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count());
     started=std::chrono::steady_clock::now();s.prepared=true;s.rawX.clear();s.rawY.clear();

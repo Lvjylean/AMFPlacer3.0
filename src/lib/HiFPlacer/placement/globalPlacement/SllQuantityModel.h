@@ -25,7 +25,11 @@ struct Net {
     double weight = 1.0;
     bool gradientActive = true; // Frozen per QP; never removes full S/F statistics.
 };
-struct NetGeometry {double span=0;int crossings=-1;};
+struct NetGeometry {
+    double span=0;
+    int crossings=-1; // Empty/invalid geometry is never eligible for exclusion.
+    double minimumY=INFINITY,maximumY=-INFINITY;
+};
 struct DiscreteResult {
     std::int64_t discrete=0,discreteOptimized=0;
     std::size_t invalidNets=0,validNets=0;
@@ -113,7 +117,7 @@ struct Model {
                 if(!valid){++out.invalidNets;continue;}
                 ++out.validNets;out.discrete+=hi-lo;if(net.optimize)out.discreteOptimized+=hi-lo;
                 for(int b=lo;b<hi;++b)++out.seams[b];
-                if(geometry)(*geometry)[ni]={ymax-ymin,hi-lo};
+                if(geometry)(*geometry)[ni]={ymax-ymin,hi-lo,ymin,ymax};
             }
         }
         DiscreteResult result;result.seams.assign(boundaries.size(),0);

@@ -1,6 +1,6 @@
 #pragma once
 #include "SllQuantityModel.h"
-#include <unordered_set>
+#include <unordered_map>
 
 namespace amf_sll {
 // Rule version 1: decisions use complete GP rounds, never raw QP positions.
@@ -68,20 +68,44 @@ public:
 };
 
 class ShortSpanPolicy {
-    // Stable design-net identity; PU indices can change during packing/remapping.
-    std::unordered_set<unsigned> excluded_;
+    // Stable design-net ID -> physical boundary at entry. PU indices may change
+    // on remapping. Retention uses this SAME boundary, independently of tau.
+    std::unordered_map<unsigned,double> excluded_;
 public:
-    struct Update {size_t excluded=0,entered=0,resumed=0;std::int64_t excludedS=0;double seconds=0;};
+    struct Update {
+        size_t excluded=0,entered=0,resumed=0;
+        size_t excludedSameDie=0,excludedCrossDie=0;
+        std::int64_t excludedS=0;
+        double seconds=0;
+    };
     bool excluded(unsigned id)const{return excluded_.count(id)!=0;}
     Update update(Model&m,const std::vector<NetGeometry>&geometry,bool enabled) {
         if(geometry.size()!=m.nets.size())throw std::invalid_argument("SLL short-span geometry mismatch");
         const auto started=std::chrono::steady_clock::now();Update out;
-        {std::unordered_set<unsigned> next;
+        {std::unordered_map<unsigned,double> next;
         for(size_t i=0;i<m.nets.size();++i){auto&n=m.nets[i];const auto&g=geometry[i];bool old=excluded(n.id);
-            bool off=enabled && n.optimize && n.weight>0 && g.crossings==1 &&
-                     (old?g.span<3.0:g.span<=2.0);
+            bool off=false;double boundary=0;
+            const bool eligible=enabled && n.optimize && n.weight>0 && g.crossings>=0 &&
+                std::isfinite(g.minimumY) && std::isfinite(g.maximumY) &&
+                std::isfinite(g.span) && g.span>=0 && g.minimumY<=g.maximumY;
+            auto radius=[&](double b){return std::max(std::abs(g.minimumY-b),std::abs(g.maximumY-b));};
+            if(eligible){
+                if(old){boundary=excluded_.at(n.id);
+                    off=g.span<3.0 && radius(boundary)<3.0;
+                }
+                // Pin extrema suffice: ALL pins must be near ONE boundary.
+                // No discrete crossing-count filter. Fresh entry is inclusive.
+                if(!off && g.span<=2.0){
+                    double nearest=INFINITY;
+                    for(double b:m.boundaries){double r=radius(b);
+                        if(r<nearest){nearest=r;boundary=b;}}
+                    off=nearest<=2.0;
+                }
+            }
             n.gradientActive=!off;
-            if(off){next.insert(n.id);++out.excluded;out.excludedS+=g.crossings;}
+            if(off){next.emplace(n.id,boundary);++out.excluded;out.excludedS+=g.crossings;
+                if(g.crossings==0)++out.excludedSameDie;else ++out.excludedCrossDie;
+            }
             out.entered+=off&&!old;out.resumed+=old&&!off;
         }
         // Replace state so disappeared/filtered nets cannot leave stale exclusions.

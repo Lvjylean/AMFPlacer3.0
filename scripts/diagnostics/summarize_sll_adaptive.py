@@ -31,7 +31,7 @@ def summarize(directory):
         "source": str(directory.resolve()),
         "scope": "Measured diagnostic categories, not an estimate of added total placement runtime",
         "discrete_count_scope": "All reportable nets; includes shared physical-pin span collection when requested",
-        "short_span_update_scope": "Per-net hysteresis and activity-mask update using precomputed geometry; no second pin scan",
+        "short_span_update_scope": "Per-net boundary-radius test, hysteresis and activity-mask update using precomputed geometry; no second pin scan",
         "trace_and_log_scope": "Selected-net detail calculation, statistics formatting, output and flush",
         "tau_update_scope": "Scalar decision included in round reporting; no separate all-net pass",
         "category_totals": dict(totals),
@@ -39,6 +39,7 @@ def summarize(directory):
                               for (phase, number), values in sorted(rounds.items(), key=lambda item: (item[0][1], item[0][0]))],
         "completed_rounds": decisions,
         "per_qp_exclusion": short,
+        "exclusion_count_scope": "Same-die/cross-die counts classify current full discrete S at QP preparation; both remain in full S/F",
         "notes": [
             "Discrete S is geometric boundary demand, not measured routed SLL use.",
             "Full S and F retain temporarily inactive nets. QP active-objective differences use a frozen mask.",

@@ -33,7 +33,7 @@ int main(int argc,char**argv){try{
         c["SllShortSpanEnable"]=c["SllDynamicTauEnable"];if(std::string(mode)=="baseline")c["SllQuantityEnable"]="false";
         {SllRunDiagnostics diag(&pi,c,.4);
         for(int round=1;round<=12;++round){
-            double early[]={90,250,500,750},late[]={239,240,240,240};
+            double early[]={90,250,500,750},late[]={239,240,240.25,240};
             for(auto u:pi.getPlacementUnits())u->setAnchorLocationAndForgetTheOriginalOne(50+u->getId(),round<=3?early[u->getId()]:late[u->getId()]);
             diag.stage("hpio",round,round-1,"begin");
             for(int pass=0;pass<2;++pass){
@@ -59,12 +59,18 @@ int main(int argc,char**argv){try{
         for(auto&r:q){int round=std::stoi(r["round"]);double tau=std::stod(r["tau"]);
             check(tau==(std::string(mode)=="disabled"||round<=6?10:5),"tau constant within both QPs; next-round reduction");}
         if(std::string(mode)!="disabled"){
-            check(std::stoul(ss[6]["excluded_nets"])==2&&std::stoul(ss[7]["excluded_nets"])==1,"mask recomputed before second QP");
-            check(ss[7]["resumed"]=="1","second QP resume logged");
+            check(std::stoul(ss[6]["excluded_nets"])==3&&std::stoul(ss[7]["excluded_nets"])==1,"mask recomputed before second QP");
+            check(ss[6]["excluded_same_die_nets"]=="1"&&ss[6]["excluded_cross_die_nets"]=="2","same/cross exclusion counts");
+            check(ss[7]["resumed"]=="2","second QP resume logged");
             auto archive=root/mode/"frozen-qp/qp-7";auto m=readModel(archive/"model.bin");auto f=readFrozen(archive/"original-y.bin");
             auto r=m.evaluate(f.y.position,f.movable,2,true);check(r.gradient==f.sll,"masked archive gradient reproduced");
             for(auto&n:m.nets)n.gradientActive=true;auto full=m.evaluate(f.y.position,f.movable,2,true);
             check(full.discrete==r.discrete&&full.smooth==r.smooth&&full.activeSmooth>r.activeSmooth,"full S/F preserved in archive");
+        }
+        for(size_t i=0;i<ss.size();++i){auto&r=ss[i];
+            check(std::stoul(r["excluded_same_die_nets"])+std::stoul(r["excluded_cross_die_nets"])==std::stoul(r["excluded_nets"]),"diagnostic counts close");
+            check(r["S_full"]==q[3*i]["S"],"mask report uses full discrete S");
+            check(std::stod(q[3*i]["original_limit"])==-10,"original movement limit unchanged");
         }
         auto overhead=table(root/mode/"sll-overhead.tsv");std::map<std::string,double> totals;
         size_t prepareCounts=0;for(auto&r:overhead){double v=std::stod(r["wall_seconds"]);check(std::isfinite(v)&&v>=0,"finite measured overhead");totals[r["category"]]+=v;
