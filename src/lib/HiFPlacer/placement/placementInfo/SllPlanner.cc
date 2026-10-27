@@ -57,6 +57,7 @@ struct SllPlanner::Impl {
             std::set<std::string> all;for(auto&c:m.channels)all.insert(c.resource);
             while(std::getline(r,row))if(!row.empty()&&row[0]!='#'){if(!all.count(row))throw std::invalid_argument("Unknown reserved SLL resource");m.reserved.insert(row);}
         }
+        m.indexTiles(); // Recompute tile supply after applying reserved resources.
         if(m.jointPlacement)density.index(m);
         for(const auto&bucket:m.available) {
             std::map<std::tuple<double,double,double,double>,int> representatives;
@@ -71,7 +72,7 @@ struct SllPlanner::Impl {
             if(m.jointPlacement){
                 const auto jpath=cfg.at("SllPlanningReportDirectory")+"/sll-joint-qp.tsv";
                 if(std::filesystem::exists(jpath))throw std::runtime_error("Refusing to overwrite SLL joint diagnostics");
-                jointLog.open(jpath);jointLog<<"qp\tvirtual_pairs\tmoved_channels\tdensity_before\tdensity_after\tmax_projection_distance\n";
+                jointLog.open(jpath);jointLog<<"qp\tvirtual_pairs\tmoved_tiles\tdensity_before\tdensity_after\tmax_projection_distance\n";
             }
         }
     }
@@ -88,7 +89,7 @@ struct SllPlanner::Impl {
         p.id=pin->getElementIdInType();p.unit=pu->getId();p.name=pin->getName();p.p=position(pin);p.slr=slr(p.p);p.offset={p.p.x-pu->X(),p.p.y-pu->Y()};p.movable=!pu->isFixed();return p;
     }
     Pin virtualPin(const Plan&plan,int k,bool exit)const {
-        const auto&c=m.channels.at(plan.crossings.at(k).channel);Pin v;
+        const auto&c=m.geometry(plan.crossings.at(k));Pin v;
         v.unit=pi->getPlacementUnits().size()+virtualBase.at(plan.net.id)+k;
         v.p=exit?c.out:c.in;v.offset=exit?Point{c.out.x-c.in.x,c.out.y-c.in.y}:Point{};
         v.slr=exit?c.to:c.from;v.movable=true;return v;
@@ -113,13 +114,13 @@ size_t SllPlanner::variableCount()const {
 }
 std::vector<Point> SllPlanner::virtualPositions()const {
     std::vector<Point> result;if(!jointPlacement())return result;
-    for(const auto&plan:p->m.plans)for(const auto&e:plan.crossings)result.push_back(p->m.channels[e.channel].in);
+    for(const auto&plan:p->m.plans)for(const auto&e:plan.crossings)result.push_back(p->m.geometry(e).in);
     return result;
 }
 void SllPlanner::prepareDensityTargets() {
     if(!jointPlacement())return;
     const auto spread=p->density.assign(p->m,virtualPositions());p->densityTargets.clear();
-    for(int ci:spread.channels)p->densityTargets.push_back(p->m.channels[ci].in);
+    for(int ti:spread.tiles)p->densityTargets.push_back(p->m.tiles[ti].in);
 }
 void SllPlanner::addDensityModel(std::vector<float>&diag,Eigen::VectorXd&rhs,bool x)const {
     if(!jointPlacement())return;const size_t offset=p->pi->getPlacementUnits().size();
@@ -131,11 +132,17 @@ void SllPlanner::projectQp(const Eigen::VectorXd&x,const Eigen::VectorXd&y) {
     if(!jointPlacement())return;const size_t offset=p->pi->getPlacementUnits().size(),n=variableCount();
     if(x.size()!=offset+n||y.size()!=offset+n)throw std::runtime_error("SLL QP dimension mismatch");
     std::vector<Point> desired;for(size_t i=0;i<n;++i)desired.push_back({x[offset+i],y[offset+i]});
+    // Real cells have already been written back. Score both sides using their
+    // current coordinates; topology stays frozen until the next refresh.
+    for(auto&plan:p->m.plans){
+        plan.net.source.p=p->position(p->pi->getDesignInfo()->getPins().at(plan.net.source.id));
+        for(auto&s:plan.net.sinks)s.p=p->position(p->pi->getDesignInfo()->getPins().at(s.id));
+    }
     auto assigned=p->density.assign(p->m,desired);size_t i=0;double maxMove=0;
     for(auto&plan:p->m.plans)for(auto&e:plan.crossings){
-        e.channel=assigned.channels[i];const auto&c=p->m.channels[e.channel];
+        e.tile=assigned.tiles[i];e.channel=-1;const auto&c=p->m.tiles[e.tile];
         maxMove=std::max(maxMove,std::hypot(desired[i].x-c.in.x,desired[i].y-c.in.y));
-        p->m.previous[e.key]=e.channel;++i;
+        p->m.previous[e.key]=e.tile;++i;
     }
     if(p->jointLog)p->jointLog<<++p->qpGeneration<<'\t'<<n<<'\t'<<assigned.moved<<'\t'<<assigned.energyBefore<<'\t'<<assigned.energyAfter<<'\t'<<maxMove<<std::endl;
 }
@@ -223,13 +230,13 @@ void SllPlanner::addTimingModel(std::vector<Eigen::Triplet<float>>&trip,std::vec
             const auto&path=plan.paths.at(s.id);
             if(path.empty()){p->addPair(&plan.net.source,plan.net.source.p,&s,s.p,strength/std::max(.5,length(plan.net.source.p,s.p,p->m.ratio)),trip,diag,rhs,x);continue;}
             shared[path.front()]=std::max(shared[path.front()],strength);
-            Point root=p->m.channels[plan.crossings[path.back()].channel].out;
+            Point root=p->m.geometry(plan.crossings[path.back()]).out;
             Pin v;if(jointPlacement())v=p->virtualPin(plan,path.back(),true);
             p->addPair(jointPlacement()?&v:nullptr,root,&s,s.p,strength/std::max(.5,length(root,s.p,p->m.ratio)),trip,diag,rhs,x);
             for(size_t j=1;j<path.size();++j)shared[path[j]]=std::max(shared[path[j]],strength);
         }
         for(auto&v:shared){
-            const auto&e=plan.crossings[v.first];Point end=p->m.channels[e.channel].in;
+            const auto&e=plan.crossings[v.first];Point end=p->m.geometry(e).in;
             if(e.parent<0){
                 Pin dest;if(jointPlacement())dest=p->virtualPin(plan,v.first,false);
                 p->addPair(&plan.net.source,plan.net.source.p,jointPlacement()?&dest:nullptr,end,v.second/std::max(.5,length(plan.net.source.p,end,p->m.ratio)),trip,diag,rhs,x);
@@ -241,7 +248,15 @@ void SllPlanner::addTimingModel(std::vector<Eigen::Triplet<float>>&trip,std::vec
     }
 }
 void SllPlanner::exportPlan(const std::string&path) {
-    refresh();std::ofstream out(path);if(!out)throw std::runtime_error("Cannot export SLL plan");
+    refresh();
+    if(jointPlacement()){
+        // Final tile optimization uses the final real-cell positions, then
+        // precise lane allocation validates access-node conflicts before export.
+        auto result=p->density.assign(p->m,virtualPositions());size_t i=0;
+        for(auto&plan:p->m.plans)for(auto&e:plan.crossings){e.tile=result.tiles[i++];e.channel=-1;p->m.previous[e.key]=e.tile;}
+        p->m.legalizeChannels();
+    }
+    std::ofstream out(path);if(!out)throw std::runtime_error("Cannot export SLL plan");
     out<<"# E2 physical-only SLL trees; apply after final placement.\nset e2_sll_plan [list";
     for(const auto&plan:p->m.plans) {
         std::function<std::string(int)> children=[&](int parent){std::string text="[list";

@@ -12,6 +12,8 @@ def validate(config,binary):
         if caps.get(key)!=1:raise ValueError('Binary lacks E2 capability '+key)
     if config.get('SllJointPlacementEnable','false')=='true' and caps.get('joint_sll_qp_density_schema')!=1:
         raise ValueError('Binary lacks joint SLL QP/density capability')
+    if config.get('SllTilePlanningEnable','false')=='true' and caps.get('tile_sll_global_schema')!=1:
+        raise ValueError('Binary lacks tile-global SLL planning capability')
     table=Path(config['SllChannelFile'])
     with table.open() as f:header=[next(f).rstrip('\n') for _ in range(3)]
     if header[0]!='#part\t'+config['physical device part']:raise ValueError('SLL part mismatch')

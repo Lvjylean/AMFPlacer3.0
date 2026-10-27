@@ -21,6 +21,11 @@ struct Channel {
     double slowMax=0,slowMin=0,fastMax=0,fastMin=0;
     std::vector<std::string> resources;
 };
+using TileKey=std::tuple<int,int,double>;
+struct Tile : Channel {
+    TileKey key;
+    std::vector<int> members; // Inventory only; no lane is selected in global placement.
+};
 struct Pin {
     int id=-1,unit=-1,slr=-1;
     std::string name;
@@ -33,6 +38,7 @@ struct Crossing {
     std::string key;
     int channel=-1,parent=-1;
     std::vector<int> sinks; // Pin IDs downstream, not resource multiplicity.
+    int tile=-1; // Joint placement selects a tile; channel stays -1 until final legalization.
 };
 struct Plan { Net net;std::vector<Crossing> crossings;std::map<int,std::vector<int>> paths; };
 struct Terminal { int pin=-1;Point fixed;bool isFixed=true;int crossing=-1;bool exit=false; };
@@ -42,6 +48,9 @@ inline double length(Point a,Point b,double ratio) {return std::abs(a.x-b.x)+rat
 class Model {
 public:
     std::vector<Channel> channels;
+    std::vector<Tile> tiles;
+    std::map<std::pair<int,int>,std::vector<int>> availableTiles;
+    std::map<TileKey,size_t> tileCapacity;
     std::vector<Plan> plans;
     std::map<std::pair<int,int>,std::vector<int>> available;
     std::map<std::pair<int,int>,std::vector<std::vector<int>>> geometryBuckets;
@@ -54,6 +63,14 @@ public:
     bool jointPlacement=false,sourceNearInitialization=false;
     size_t created=0,retained=0,deleted=0;
     LocalDelay local;
+
+    void indexTiles();
+    void rebuildTiles(std::vector<Net>);
+    void legalizeChannels();
+    const Channel& geometry(const Crossing&e)const {
+        if(e.channel>=0)return channels.at(e.channel);
+        return tiles.at(e.tile);
+    }
 
     static std::vector<std::string> makeFootprint(const Channel&c) {
         std::vector<std::string> v{c.resource};size_t b=0;
@@ -80,6 +97,7 @@ public:
             for(auto&g:groups){auto&v=g.second;std::stable_sort(v.begin(),v.end(),[&](int a,int b){return channels[a].slowMax<channels[b].slowMax;});geometryBuckets[range.first].push_back(std::move(v));}
         }
         if(channels.empty())throw std::invalid_argument("Empty SLL channel inventory");
+        indexTiles();
     }
     std::vector<int> candidates(int from,int to,const std::set<std::string>&used,const std::function<double(const Channel&)>&rank,int incumbent=-1)const {
         const auto&groups=geometryBuckets.at({from,to});std::vector<std::pair<double,size_t>> order;order.reserve(groups.size());
@@ -109,7 +127,7 @@ public:
         std::vector<std::vector<Terminal>> trees(p.crossings.size()+1);
         trees[0].push_back({p.net.source.id,{},false});
         for(size_t k=0;k<p.crossings.size();++k) {
-            const auto&e=p.crossings[k];const auto&c=channels.at(e.channel);
+            const auto&e=p.crossings[k];const auto&c=geometry(e);
             trees.at(e.parent+1).push_back({-1,c.in,true,int(k),false});
             trees[k+1].push_back({-1,c.out,true,int(k),true});
         }
@@ -131,7 +149,7 @@ public:
     }
     double pathDelay(const Plan&p,int sink,Point sourcePoint,Point sinkPoint)const {
         Point cur=sourcePoint;double d=0;
-        for(int k:p.paths.at(sink)){const auto&c=channels.at(p.crossings.at(k).channel);d+=delay(cur,c.in)+c.slowMax;cur=c.out;}
+        for(int k:p.paths.at(sink)){const auto&c=geometry(p.crossings.at(k));d+=delay(cur,c.in)+c.slowMax;cur=c.out;}
         return d+delay(cur,sinkPoint);
     }
     double cost(const Plan&p)const {
@@ -195,6 +213,7 @@ public:
         return p;
     }
     void rebuild(std::vector<Net> nets) {
+        if(jointPlacement){rebuildTiles(std::move(nets));return;}
         for(auto&n:nets){n.sinkLookup.clear();for(size_t i=0;i<n.sinks.size();++i)n.sinkLookup[n.sinks[i].id]=i;}
         std::stable_sort(nets.begin(),nets.end(),[](const Net&a,const Net&b){double wa=1,wb=1;for(auto&s:a.sinks)wa=std::max(wa,s.criticality);for(auto&s:b.sinks)wb=std::max(wb,s.criticality);return wa==wb?a.id<b.id:wa>wb;});
         std::vector<Plan> next;std::set<std::string> occupied=reserved;
@@ -242,4 +261,5 @@ public:
     }
 };
 }
+#include "SllTilePlacement.h"
 #endif

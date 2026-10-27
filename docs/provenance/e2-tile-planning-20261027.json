@@ -1,0 +1,16 @@
+{
+  "base_commit": "577d08aa0a29e1808d600049d87b0e7d98064a6b",
+  "global_objects": "paired tile endpoints; Crossing.tile selected, Crossing.channel=-1 until final legalization",
+  "candidate_score": "complete local hyperedge HPWL + weighted complete path timing + marginal tile density; no proposal displacement or switching penalty",
+  "x_initialization": "newborn crossings seed nearest feasible source-side entry X; subsequent complete-cost tile updates may change columns",
+  "y": "both paired endpoints and all incident local trees; subsequent crossings included after tree construction",
+  "qp": "existing real/virtual wire and timing couplings preserved; additional kappa density-target feedback remains 0.05",
+  "global_timing": "conservative per-tile envelope over unreserved channel timing models; no lane preference",
+  "capacity": "24 canonical channels per full U250 tile pair; opposing directions share capacity; count crossing once",
+  "finalization": "refresh final cells, score tiles, then assign exact channels with access-footprint checks and bounded search within each tile pair; fail before export if unresolved",
+  "limitations": [
+    "Final exact legalization may fail despite aggregate tile capacity. Search is bounded and does not prove infeasibility.",
+    "Enumerating all tile positions is not yet benchmarked on a large design.",
+    "No full-design QoR claim."
+  ]
+}

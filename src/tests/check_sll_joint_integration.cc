@@ -39,11 +39,11 @@ int main(int argc,char**argv){try{
     WirelengthOptimizer wl(&pi,cfg,false);wl.recordSllStage("ordinary",1,0,"begin");
     wl.GlobalPlacementQPSolve(.02,true,true,false,true,false,-10,nullptr,false);
     std::set<int> columns;std::set<std::string> used;
-    for(const auto&p:pi.sllPlanner->model().plans)for(const auto&e:p.crossings){const auto&c=pi.sllPlanner->model().channels[e.channel];columns.insert(c.column);check(!amf_sll_plan::Model::conflicts(c,used),"unique exact channels");amf_sll_plan::Model::occupy(c,used);}
+    for(const auto&p:pi.sllPlanner->model().plans)for(const auto&e:p.crossings){const auto&c=pi.sllPlanner->model().geometry(e);columns.insert(c.column);check(e.channel==-1,"no exact channel during QP");}
     if(tileMode){
         std::set<amf_sll_plan::DensityModel::Bin> bins;
         for(const auto&p:pi.sllPlanner->model().plans)for(const auto&e:p.crossings)
-            bins.insert(tileInventory.bin(pi.sllPlanner->model().channels[e.channel]));
+            bins.insert(tileInventory.bin(pi.sllPlanner->model().geometry(e)));
         check(bins.size()>1,"tile density disperses virtual cells while real endpoints remain fixed");
     } else check(columns.size()>1,"density disperses virtual SLL cells while real endpoints are fixed");
     for(auto u:pi.getPlacementUnits())check(u->X()==50&&u->Y()==(u->getId()%2?510:270),"fixed real cells unchanged");
@@ -66,6 +66,10 @@ int main(int argc,char**argv){try{
     pi.updateElementBinGrid(false);
     timing.conductStaticTimingAnalysis();
     pi.sllPlanner->exportPlan((root/"sll-plan.tcl").string());
+    for(const auto&p:pi.sllPlanner->model().plans)for(const auto&e:p.crossings){
+        check(e.channel>=0,"export assigns precise SLL channels");const auto&c=pi.sllPlanner->model().channels[e.channel];
+        check(!amf_sll_plan::Model::conflicts(c,used),"final SLL paths are disjoint");amf_sll_plan::Model::occupy(c,used);
+    }
     check(design.getCells().size()==cells,"logical netlist unchanged");
     std::cout<<"PASS joint QP coupling, density movement, legal channels, two solves, dynamic tau/quantity, lifecycle, export\n";
 }catch(const std::exception&e){std::cerr<<e.what()<<'\n';return 1;}}
