@@ -1,0 +1,508 @@
+{
+  "schema": "amf-e2-sll-planning-v1",
+  "state": "implemented_built_small_fixture_validated",
+  "display_name": "E2：SLL数量优化＋die内优先扩散（原动态τ）+SLL位置规划与跨die时序修正",
+  "repository": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/repo",
+  "branch": "codex/e2-sll-planning-20261027",
+  "parent_commit": "534daacd7ab589771b574517da62f6ba0e8941bf",
+  "build_id": "build-20261027-175331-358367-ee7510ad",
+  "build_source_commit": "ee7510ad89af5199d95c24951d64847fc1d16f50",
+  "build_binaries": {
+    "AMFPlacer": "0ace21f8c56adb1e74d9789b7ce2df360042618e803aa77ec4bc37e20a533b57",
+    "partitionHyperGraph": "5e11cd29aab94425059a7eea844307547bd9a07e80b907ec01cebdde4b49a26a"
+  },
+  "build_source_files_verified": 3496,
+  "e1_unchanged": true,
+  "original_tau_and_spreading_source_checks": {
+    "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc": "f709a5d9c8d9242255f28f9e34005f230b7479d5ed506d84db3dd0d4636bcbfe",
+    "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.h": "a66e2be1f21a9e2ba03fe8680d76f9bbaf48c920d21e775776b3e524520c44fa",
+    "src/lib/HiFPlacer/placement/globalPlacement/SllAdaptivePolicy.h": "4e7df3c9be0ef7acb840c3106f518d92798735c043e00d01c77a05c7f9fb2e8b",
+    "src/lib/HiFPlacer/placement/globalPlacement/SllQuantityModel.h": "4d84d39516dfa701bf260506b5bddd7ccd07faf3c02bb4bd09975bdf663da112",
+    "src/lib/HiFPlacer/placement/globalPlacement/SllRunDiagnostics.cc": "7b27275853eb719101e14f5811049309725c43061f2812876263f6738e927111"
+  },
+  "core_clock_ns": 10,
+  "clock_uncertainty_ns": 0.1,
+  "pro_primitive_timing": false,
+  "sll_region_policy": "preserve",
+  "channel_inventory": {
+    "part": "xcu250-figd2104-2L-e",
+    "vivado": "2026.1",
+    "rows": 138240,
+    "physical_resources": 69120,
+    "speed_models": 196,
+    "delay_method": "Sum of node/pip speed-model transition envelopes; timing-model proxy, not a silicon measurement or guaranteed routed net delay",
+    "coordinate_rule": "AMF tile-column base at routing access tile; Y is tile-row anchor",
+    "groups": {
+      "1->0": {
+        "n": 23040,
+        "min": 0.7310000000000001,
+        "median": 0.766,
+        "max": 0.789
+      },
+      "0->1": {
+        "n": 23040,
+        "min": 0.7310000000000001,
+        "median": 0.766,
+        "max": 0.789
+      },
+      "2->1": {
+        "n": 23040,
+        "min": 0.7310000000000001,
+        "median": 0.766,
+        "max": 0.789
+      },
+      "1->2": {
+        "n": 23040,
+        "min": 0.7310000000000001,
+        "median": 0.766,
+        "max": 0.789
+      },
+      "3->2": {
+        "n": 23040,
+        "min": 0.7310000000000001,
+        "median": 0.766,
+        "max": 0.789
+      },
+      "2->3": {
+        "n": 23040,
+        "min": 0.7310000000000001,
+        "median": 0.766,
+        "max": 0.789
+      }
+    },
+    "channel_sha256": "bc6ffb509d8733291aacf6eb296211c4f7975c50296c021fcd8c7e487268cfb5",
+    "coordinate_sha256": "2ef92b1113f9e99fc8cfbe9b4db6407b703a768b8de14047e2edbb39656c6cff"
+  },
+  "direct_sll_delay_slow_max_ns": {
+    "n": 12,
+    "min": 0.658,
+    "median": 0.658,
+    "max": 0.658
+  },
+  "direct_model_assembly_error_ns": {
+    "n": 12,
+    "min": 0.0010000000000000009,
+    "median": 0.0010000000000000009,
+    "max": 0.0010000000000000009
+  },
+  "full_route_cases": 15,
+  "delay_cases": 12,
+  "receiver_tree_cases": [
+    {
+      "case": "local_remote",
+      "route_seconds": "59.557",
+      "route_status": "ROUTED",
+      "slls": "1",
+      "drc_errors": "0",
+      "drc_critical": "0",
+      "cells_unchanged": "1",
+      "setup_min_ns": 3.366,
+      "hold_min_ns": 1.77,
+      "receivers": [
+        {
+          "pin": "dst_24/D",
+          "sll_count": 0,
+          "predicted_ns": 3.78977,
+          "observed_ns": 5.401,
+          "prediction_minus_observed_ns": -1.61123
+        },
+        {
+          "pin": "dst_25/D",
+          "sll_count": 0,
+          "predicted_ns": 3.50441,
+          "observed_ns": 4.457,
+          "prediction_minus_observed_ns": -0.9525899999999998
+        },
+        {
+          "pin": "dst_26/D",
+          "sll_count": 0,
+          "predicted_ns": 3.16576,
+          "observed_ns": 3.606,
+          "prediction_minus_observed_ns": -0.44023999999999974
+        },
+        {
+          "pin": "dst_27/D",
+          "sll_count": 1,
+          "predicted_ns": 5.6286,
+          "observed_ns": 5.9,
+          "prediction_minus_observed_ns": -0.27140000000000075
+        },
+        {
+          "pin": "dst_28/D",
+          "sll_count": 1,
+          "predicted_ns": 4.80144,
+          "observed_ns": 5.209,
+          "prediction_minus_observed_ns": -0.40755999999999926
+        },
+        {
+          "pin": "dst_29/D",
+          "sll_count": 1,
+          "predicted_ns": 4.22074,
+          "observed_ns": 4.491,
+          "prediction_minus_observed_ns": -0.2702599999999995
+        }
+      ]
+    },
+    {
+      "case": "lower_local_upper",
+      "route_seconds": "45.355",
+      "route_status": "ROUTED",
+      "slls": "2",
+      "drc_errors": "0",
+      "drc_critical": "0",
+      "cells_unchanged": "1",
+      "setup_min_ns": 3.884,
+      "hold_min_ns": 1.255,
+      "receivers": [
+        {
+          "pin": "dst_24/D",
+          "sll_count": 1,
+          "predicted_ns": 4.06612,
+          "observed_ns": 4.419,
+          "prediction_minus_observed_ns": -0.35287999999999986
+        },
+        {
+          "pin": "dst_25/D",
+          "sll_count": 1,
+          "predicted_ns": 3.37173,
+          "observed_ns": 3.573,
+          "prediction_minus_observed_ns": -0.20127000000000006
+        },
+        {
+          "pin": "dst_26/D",
+          "sll_count": 0,
+          "predicted_ns": 3.16576,
+          "observed_ns": 3.377,
+          "prediction_minus_observed_ns": -0.21123999999999965
+        },
+        {
+          "pin": "dst_27/D",
+          "sll_count": 0,
+          "predicted_ns": 3.16977,
+          "observed_ns": 3.411,
+          "prediction_minus_observed_ns": -0.24122999999999983
+        },
+        {
+          "pin": "dst_28/D",
+          "sll_count": 1,
+          "predicted_ns": 4.80232,
+          "observed_ns": 5.193,
+          "prediction_minus_observed_ns": -0.3906799999999997
+        },
+        {
+          "pin": "dst_29/D",
+          "sll_count": 1,
+          "predicted_ns": 4.22164,
+          "observed_ns": 4.465,
+          "prediction_minus_observed_ns": -0.24336000000000002
+        }
+      ]
+    },
+    {
+      "case": "local_near_far",
+      "route_seconds": "39.81",
+      "route_status": "ROUTED",
+      "slls": "2",
+      "drc_errors": "0",
+      "drc_critical": "0",
+      "cells_unchanged": "1",
+      "setup_min_ns": 2.379,
+      "hold_min_ns": 2.09,
+      "receivers": [
+        {
+          "pin": "dst_24/D",
+          "sll_count": 0,
+          "predicted_ns": 3.78977,
+          "observed_ns": 5.143,
+          "prediction_minus_observed_ns": -1.35323
+        },
+        {
+          "pin": "dst_25/D",
+          "sll_count": 0,
+          "predicted_ns": 3.50441,
+          "observed_ns": 4.531,
+          "prediction_minus_observed_ns": -1.0265899999999997
+        },
+        {
+          "pin": "dst_26/D",
+          "sll_count": 1,
+          "predicted_ns": 5.55243,
+          "observed_ns": 5.916,
+          "prediction_minus_observed_ns": -0.36357000000000017
+        },
+        {
+          "pin": "dst_27/D",
+          "sll_count": 1,
+          "predicted_ns": 5.55623,
+          "observed_ns": 5.759,
+          "prediction_minus_observed_ns": -0.20277000000000012
+        },
+        {
+          "pin": "dst_28/D",
+          "sll_count": 2,
+          "predicted_ns": 6.93253,
+          "observed_ns": 7.025,
+          "prediction_minus_observed_ns": -0.0924700000000005
+        },
+        {
+          "pin": "dst_29/D",
+          "sll_count": 2,
+          "predicted_ns": 6.39358,
+          "observed_ns": 6.406,
+          "prediction_minus_observed_ns": -0.012419999999999654
+        }
+      ]
+    }
+  ],
+  "receiver_paths_verified": 18,
+  "direct_route_seconds": 535.936,
+  "receiver_tree_route_seconds": 144.722,
+  "prediction_minus_routed_net_delay_ns": {
+    "cross_die": {
+      "n": 11,
+      "min": -0.40755999999999926,
+      "median": -0.2702599999999995,
+      "max": -0.012419999999999654
+    },
+    "same_die": {
+      "n": 7,
+      "min": -1.61123,
+      "median": -0.9525899999999998,
+      "max": -0.21123999999999965
+    }
+  },
+  "validation_commands": 14,
+  "input_checks": {
+    "state": "passed",
+    "checks": [
+      "valid table and E2 binary accepted",
+      "physical device part rejected",
+      "SllCoordinateMapSha256 rejected",
+      "SllChannelFileSha256 rejected",
+      "ProPrimitiveTiming rejected",
+      "old E1 binary rejected for E2 configuration",
+      "disabled feature preserves ordinary entry",
+      "reusable converter exactly reproduces measured channel input"
+    ],
+    "roundtrip": {
+      "rows": 138240,
+      "sha256": "bc6ffb509d8733291aacf6eb296211c4f7975c50296c021fcd8c7e487268cfb5",
+      "coordinate_sha256": "2ef92b1113f9e99fc8cfbe9b4db6407b703a768b8de14047e2edbb39656c6cff"
+    }
+  },
+  "inputs": {
+    "e1_inputs_verified": {
+      "vivado extracted device information file": {
+        "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/5cc26c1cc8b7-exportSiteLocation.zip",
+        "size": 25537274,
+        "sha256": "5cc26c1cc8b74ca1f32945c77d48058b8a04d2c9fdc40fcf5e82fe6c552f6a25",
+        "origin_path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/5cc26c1cc8b7-exportSiteLocation.zip",
+        "verified_sha256": "5cc26c1cc8b74ca1f32945c77d48058b8a04d2c9fdc40fcf5e82fe6c552f6a25"
+      },
+      "vivado extracted design information file": {
+        "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/43f9519fc3df-netlist.zip",
+        "size": 68237832,
+        "sha256": "43f9519fc3dfdbc6fe899c0bdfdbcff12d3e077d74f6acf456262c0859d50a4b",
+        "origin_path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/43f9519fc3df-netlist.zip",
+        "verified_sha256": "43f9519fc3dfdbc6fe899c0bdfdbcff12d3e077d74f6acf456262c0859d50a4b"
+      },
+      "clock file": {
+        "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/07a841cee796-clocks",
+        "size": 13,
+        "sha256": "07a841cee796403bb14a3659b2c4a5c09a79047f0bdf6662b2c64c8bb9801a27",
+        "origin_path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/07a841cee796-clocks",
+        "verified_sha256": "07a841cee796403bb14a3659b2c4a5c09a79047f0bdf6662b2c64c8bb9801a27"
+      },
+      "cellType2fixedAmo file": {
+        "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/f3e4d2bbe26b-cellType2fixedAmo",
+        "size": 317,
+        "sha256": "f3e4d2bbe26b45c0eb562b7fb8249524dc7f01c0be9595ffeb722cc572ed4e33",
+        "origin_path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/f3e4d2bbe26b-cellType2fixedAmo",
+        "verified_sha256": "f3e4d2bbe26b45c0eb562b7fb8249524dc7f01c0be9595ffeb722cc572ed4e33"
+      },
+      "cellType2sharedCellType file": {
+        "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/f2f1832e4776-cellType2sharedCellType",
+        "size": 424,
+        "sha256": "f2f1832e477624e1b1f563c85415405c8fbe85b93809509e5eac5cf73d73d553",
+        "origin_path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/f2f1832e4776-cellType2sharedCellType",
+        "verified_sha256": "f2f1832e477624e1b1f563c85415405c8fbe85b93809509e5eac5cf73d73d553"
+      },
+      "sharedCellType2BELtype file": {
+        "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/ff49d19d6fac-sharedCellType2BELtype",
+        "size": 779,
+        "sha256": "ff49d19d6fac348d39e23ceb1fcd5b678e01f7ff32f60e9d13448bed30d64781",
+        "origin_path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/ff49d19d6fac-sharedCellType2BELtype",
+        "verified_sha256": "ff49d19d6fac348d39e23ceb1fcd5b678e01f7ff32f60e9d13448bed30d64781"
+      },
+      "mergedSharedCellType2sharedCellType": {
+        "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/164948971004-mergedSharedCellType2sharedCellType",
+        "size": 143,
+        "sha256": "1649489710040b2425f5f508c241101e37bbf62eae60f8eb4fd736ff1079c982",
+        "origin_path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/164948971004-mergedSharedCellType2sharedCellType",
+        "verified_sha256": "1649489710040b2425f5f508c241101e37bbf62eae60f8eb4fd736ff1079c982"
+      },
+      "physical boundary model file": {
+        "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/d1116390e6bc-physical_structure.tsv",
+        "size": 10640664,
+        "sha256": "d1116390e6bce6e879fb40ee50c9f3cef80645e77d7d6b0bc94b271bd8a645fa",
+        "origin_path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/d1116390e6bc-physical_structure.tsv",
+        "verified_sha256": "d1116390e6bce6e879fb40ee50c9f3cef80645e77d7d6b0bc94b271bd8a645fa"
+      },
+      "clock resource capacity file": {
+        "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/39e34938d3ed-clock_capacity.tsv",
+        "size": 4163,
+        "sha256": "39e34938d3edb29f928b1e35e805fe5738a1c44a895cffff57b6a511067d27d4",
+        "origin_path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/39e34938d3ed-clock_capacity.tsv",
+        "verified_sha256": "39e34938d3edb29f928b1e35e805fe5738a1c44a895cffff57b6a511067d27d4"
+      },
+      "SRL control metadata file": {
+        "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/srl-controls.tsv",
+        "size": 6878730,
+        "sha256": "8edcd83b969707c19737358cee7f3e8f7cf9dff227f45d886147649e4295bd79",
+        "origin_path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261011-srl-share4/validation/srl-controls.tsv",
+        "verified_sha256": "8edcd83b969707c19737358cee7f3e8f7cf9dff227f45d886147649e4295bd79"
+      },
+      "SllTraceNetList": {
+        "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/common-nets.txt",
+        "size": 12135,
+        "sha256": "f5697e5e70ed0e45be3675be1876c93d70e9cd49f58beb010e241f5247c89469",
+        "origin_path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261024-sll-dynamic-tau/repo/experiments/comparisons/sll-adaptive-tau-10ns-20261024/common-nets.txt",
+        "verified_sha256": "f5697e5e70ed0e45be3675be1876c93d70e9cd49f58beb010e241f5247c89469"
+      },
+      "DSP timing properties file": {
+        "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/dsp-timing.tsv",
+        "size": 960239,
+        "sha256": "f4eddecc99f6dcb933750703ff2f5a215186192483126e04af42ff0cf7ca2123",
+        "origin_path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261023-dsp-coordinate-preg-fix/repo/experiments/evidence/dsp-timing-input/dsp-timing.tsv",
+        "verified_sha256": "f4eddecc99f6dcb933750703ff2f5a215186192483126e04af42ff0cf7ca2123"
+      },
+      "post_opt.dcp": {
+        "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/post_opt.dcp",
+        "size": 314541880,
+        "sha256": "6283aa4874b42d939a2b00e53cce77574fa03a26f45914364ab9ca632b42c031",
+        "origin_path": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261010-dual-host-macro-study-01/inputs/post_opt.dcp",
+        "verified_sha256": "6283aa4874b42d939a2b00e53cce77574fa03a26f45914364ab9ca632b42c031"
+      }
+    },
+    "template": {
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-sll-strategy-identification-01/inputs/template-timed-unrouted.dcp",
+      "sha256": "7b84b0f364ef498d57fd5f08cbf0271b301c9a4a8ed2cd613db16aad2cfb844d"
+    },
+    "config": {
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/repo/configs/experiments/e2-sll-planning-10ns.json",
+      "sha256": "e755811608ba13e3c1c11bd4a373af05697ec4dfa1466df38eab02f545268aca"
+    }
+  },
+  "tool": {
+    "vivado": "2026.1 build6511674",
+    "part": "xcu250-figd2104-2L-e"
+  },
+  "limitations": [
+    "工艺/布线模型提取，不是硅片实测。",
+    "完整 IMUX→RXD 出口段使用逐 node/PIP 的工艺转变包络，是保守代理；不把寄存器间0.658ns直接作为该完整段。",
+    "普通线沿用原多项式；本样例跨die路径仍低估约0.012至0.408ns，尚未完成完整设计误差标定。",
+    "本轮未运行完整GETRF布局/布线，也未证明频率或QoR改善。",
+    "精确通道分配为有界候选与贪心/局部改进，不保证全局最优或在任何可行设计上都找到分配。",
+    "DFX/静态壳增量流程不在E2本轮支持范围。"
+  ],
+  "retained_failures": [
+    "build-01: archive AppleDouble metadata compiled as source; metadata removed only from new E2 checkout, failed build retained.",
+    "validation-01/02: legacy STA graph requires register endpoints; original spreading-only LUT fixtures were unsuitable. Replaced only new test input by four FDREs; E1 fixture/source preserved.",
+    "local_remote route-01: net hierarchy query rejected before route_design; backend corrected, route-02 reopened original template independently.",
+    "First post-save physical recheck session ended unexpectedly after all routes were saved. New read-only session completed verification; no rerouting."
+  ],
+  "dcp_storage": "server-only",
+  "final_dcps": [
+    {
+      "case": "sll_0_1_c275",
+      "kind": "direct_sll_delay",
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/delay-cases/sll_0_1_c275/routed.dcp",
+      "sha256": "4713c57ae2ad898b7007dda81e016df0ce2be0ace0876bd370410c3e1422fbbe"
+    },
+    {
+      "case": "sll_0_1_c515",
+      "kind": "direct_sll_delay",
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/delay-cases/sll_0_1_c515/routed.dcp",
+      "sha256": "056faf9706501f044945b3c093ab17b4dfbbd9dbf18f00c53bc762f03f8d623b"
+    },
+    {
+      "case": "sll_1_0_c275",
+      "kind": "direct_sll_delay",
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/delay-cases/sll_1_0_c275/routed.dcp",
+      "sha256": "31c5a338646f85af6dd441cd936e390706df4a5dcb60c732b9e950998240ab34"
+    },
+    {
+      "case": "sll_1_0_c515",
+      "kind": "direct_sll_delay",
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/delay-cases/sll_1_0_c515/routed.dcp",
+      "sha256": "75a4332737de26cfa6e59e180bfceb7cbfab26cd9ce2bc1e949b33f7cf3a79e0"
+    },
+    {
+      "case": "sll_1_2_c275",
+      "kind": "direct_sll_delay",
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/delay-cases/sll_1_2_c275/routed.dcp",
+      "sha256": "689f2a37996a5a9c007400d987e5e43be48344b42ecfc29a732f9d4e5b604eac"
+    },
+    {
+      "case": "sll_1_2_c515",
+      "kind": "direct_sll_delay",
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/delay-cases/sll_1_2_c515/routed.dcp",
+      "sha256": "93597cb232d1c926c9f2c324e1cf9e4739cdf72c7711467f3807ca71f622ad14"
+    },
+    {
+      "case": "sll_2_1_c275",
+      "kind": "direct_sll_delay",
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/delay-cases/sll_2_1_c275/routed.dcp",
+      "sha256": "9af241aa366f4bbfcc9a03ea6f6398bd46a1f235173ab3380d3f2a78b39da40c"
+    },
+    {
+      "case": "sll_2_1_c515",
+      "kind": "direct_sll_delay",
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/delay-cases/sll_2_1_c515/routed.dcp",
+      "sha256": "51f2f91f34e73bebe7c51e2135576c6986cdd231ef50e8c061f8488c633963ae"
+    },
+    {
+      "case": "sll_2_3_c275",
+      "kind": "direct_sll_delay",
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/delay-cases/sll_2_3_c275/routed.dcp",
+      "sha256": "8b7d4844572ee6a6d9a0e2c8b7dcaee5b8348ef9b9b460c49994b3be09eb2efd"
+    },
+    {
+      "case": "sll_2_3_c515",
+      "kind": "direct_sll_delay",
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/delay-cases/sll_2_3_c515/routed.dcp",
+      "sha256": "3ddb6fa131db77ca9d2b2c205e277acbdaf3d407b2e72e99b24b8d553554dd64"
+    },
+    {
+      "case": "sll_3_2_c275",
+      "kind": "direct_sll_delay",
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/delay-cases/sll_3_2_c275/routed.dcp",
+      "sha256": "79d5244e3f9c5a597a36636a03ec85ba254101e65a2acfdc1c0dc44acc0a3e76"
+    },
+    {
+      "case": "sll_3_2_c515",
+      "kind": "direct_sll_delay",
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/delay-cases/sll_3_2_c515/routed.dcp",
+      "sha256": "8361cfd44bc81cebbe0716b4e4299bc4230856c110bd17c759b78f63cddfd662"
+    },
+    {
+      "case": "local_remote",
+      "kind": "receiver_tree",
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/physical-fixtures/local_remote/route-02/routed.dcp",
+      "sha256": "c22fb9515b48a2c92dca533253a6f60986dedc5e48e4d069cdd14859a7889190"
+    },
+    {
+      "case": "lower_local_upper",
+      "kind": "receiver_tree",
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/physical-fixtures/lower_local_upper/route-01/routed.dcp",
+      "sha256": "4ae22039271716c1272f8114969355d96dfbb72aec966e6fead1afb3d657a5b5"
+    },
+    {
+      "case": "local_near_far",
+      "kind": "receiver_tree",
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/physical-fixtures/local_near_far/route-01/routed.dcp",
+      "sha256": "efd001d4b86520e2e0efe8acfe8cebaeed3ee78db728102f0506b01ad4fb1b4e"
+    }
+  ],
+  "finished": "2026-10-27T10:18:26.792596+00:00"
+}

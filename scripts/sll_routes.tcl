@@ -67,8 +67,8 @@ proc e2_sll::apply {planFile out} {
   set driver [dict get $record driver];set loads {};set segments {}
   set root [terminal $driver [dict get $record source_slr]]
   set tail [children [dict get $record tree] {} loads segments]
-  set actual [lsort -unique [get_property NAME [get_pins -leaf -of_objects [get_nets -segments -of_objects $net] -filter {DIRECTION == IN}]]]
-  if {$actual ne [lsort [dict keys $loads]] || [get_property NAME [get_pins -leaf -of_objects [get_nets -segments -of_objects $net] -filter {DIRECTION == OUT}]] ne $driver} {error "E2 net connectivity changed: $name"}
+  set actual [lsort -unique [get_property NAME [get_pins -leaf -of_objects [get_nets -segments -of_objects $dp] -filter {DIRECTION == IN}]]]
+  if {$actual ne [lsort [dict keys $loads]] || [get_property NAME [get_pins -leaf -of_objects [get_nets -segments -of_objects $dp] -filter {DIRECTION == OUT}]] ne $driver} {error "E2 net connectivity changed: $name"}
   dict for {resource segment} $segments {
    foreach n $segment {if {[dict exists $used $n]} {error "E2 selected routing resource collision $n"};dict set used $n $name}
   }
