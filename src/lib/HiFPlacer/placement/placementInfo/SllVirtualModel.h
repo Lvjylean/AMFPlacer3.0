@@ -14,6 +14,14 @@
 // Physical optimization objects only: no DesignCell, register, or CLB area.
 namespace amf_sll_plan {
 struct Point { double x=0,y=0; };
+// Bounding box of the fixed terminals adjacent to one virtual endpoint.
+struct TileBox {
+    bool empty=true;double x0=0,x1=0,y0=0,y1=0;
+    void add(Point p){if(empty){x0=x1=p.x;y0=y1=p.y;empty=false;}else{
+        x0=std::min(x0,p.x);x1=std::max(x1,p.x);y0=std::min(y0,p.y);y1=std::max(y1,p.y);}}
+    double with(Point p,double ratio)const{return empty?0:
+        std::max(x1,p.x)-std::min(x0,p.x)+ratio*(std::max(y1,p.y)-std::min(y0,p.y));}
+};
 struct Channel {
     std::string resource,segment;
     int from=-1,to=-1,column=-1;
@@ -50,6 +58,7 @@ public:
     std::vector<Channel> channels;
     std::vector<Tile> tiles;
     std::map<std::pair<int,int>,std::vector<int>> availableTiles;
+    std::map<std::pair<int,int>,std::map<double,std::vector<int>>> tileColumns;
     std::map<TileKey,size_t> tileCapacity;
     std::vector<Plan> plans;
     std::map<std::pair<int,int>,std::vector<int>> available;
@@ -57,6 +66,10 @@ public:
     std::map<std::string,int> previous;
     std::set<std::string> reserved;
     double ratio=.4,timingWeight=1,extraCrossingCost=24,switchCost=.1;
+    // Initialization only. The density price is in equivalent layout-length
+    // units per occupancy penalty, not a delay or a fraction of the QP weight.
+    double initialTargetUtilization=.8,initialDensityWeight=256;
+    mutable size_t initialTileEvaluations=0;
     bool allowSplit=true;
     // Joint mode preserves optimized channels at refresh. Only newborn
     // crossings are seeded near the source; proximity is not a permanent lock.
@@ -66,6 +79,9 @@ public:
 
     void indexTiles();
     void rebuildTiles(std::vector<Net>);
+    int initialTile(int from,int to,Point root,const TileBox&input,const TileBox&output,
+                    double weight,const std::map<TileKey,size_t>&occupied,
+                    int incumbent=-1,int fixedColumn=-1)const;
     void legalizeChannels();
     const Channel& geometry(const Crossing&e)const {
         if(e.channel>=0)return channels.at(e.channel);

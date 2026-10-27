@@ -37,6 +37,10 @@ struct SllPlanner::Impl {
         density.targetUtilization=number(cfg,"SllDensityTargetUtilization",.8);
         density.weight=number(cfg,"SllDensityWeight",256);
         densityAnchorWeight=number(cfg,"SllDensityAnchorWeight",.05);
+        m.initialTargetUtilization=density.targetUtilization;
+        m.initialDensityWeight=density.weight;
+        if(cfg.count("SllInitializationPolicy")&&cfg.at("SllInitializationPolicy")!="local-wire-capacity")
+            throw std::invalid_argument("This E2 copy requires SllInitializationPolicy=local-wire-capacity");
         if(m.jointPlacement && cfg.count("SllQpAuditCellsFile"))throw std::invalid_argument("Legacy frozen real-PU replay audit does not support joint SLL variables; use E2 joint diagnostics");
         if(cfg.count("SllPlanningAllowSplit")){const auto&s=cfg.at("SllPlanningAllowSplit");if(s!="true"&&s!="false")throw std::invalid_argument("SllPlanningAllowSplit must be boolean");m.allowSplit=s=="true";}
         std::ifstream in(cfg.at("SllChannelFile"));if(!in)throw std::invalid_argument("Cannot read SllChannelFile");

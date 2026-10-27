@@ -4,6 +4,7 @@
 #include "simpleJSON.h"
 #include "SllDensityModel.h"
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 static void check(bool ok,const char*s){if(!ok)throw std::runtime_error(s);}
 int main(int argc,char**argv){try{
@@ -25,7 +26,16 @@ int main(int argc,char**argv){try{
     const size_t cells=design.getCells().size(),real=pi.getPlacementUnits().size();check(real==4,"four-register fixture");
     for(auto u:pi.getPlacementUnits())u->setAnchorLocationAndForgetTheOriginalOne(50,u->getId()%2?510:270);
     pi.updateCells2PlacementUnits();pi.reloadNets();pi.setBELTypeForCells(&design);pi.createGridBins(5,5);pi.getTimingInfo()->buildSimpleTimingGraph();
-    PlacementTimingOptimizer timing(&pi,cfg);pi.sllPlanner->refresh();pi.sllPlanner->prepareDensityTargets();
+    PlacementTimingOptimizer timing(&pi,cfg);pi.sllPlanner->refresh();
+    {
+        std::ofstream out(root/"initial-tile-selection.tsv");
+        out<<"net\tfrom\tto\tcolumn\tin_x\tin_y\tout_x\tout_y\tchannel\n";
+        for(const auto&p:pi.sllPlanner->model().plans)for(const auto&e:p.crossings){
+            const auto&t=pi.sllPlanner->model().geometry(e);
+            out<<p.net.name<<'\t'<<t.from<<'\t'<<t.to<<'\t'<<t.column<<'\t'<<t.in.x<<'\t'<<t.in.y<<'\t'<<t.out.x<<'\t'<<t.out.y<<'\t'<<e.channel<<'\n';
+        }
+    }
+    pi.sllPlanner->prepareDensityTargets();
     check(pi.sllPlanner->variableCount()==3,"one shared QP variable per crossing");
     amf_sll_plan::DensityModel tileInventory;tileInventory.index(pi.sllPlanner->model());
     check(tileInventory.capacity.size()==2880,"U250 has 3 boundaries times 16 columns times 60 tile bins");

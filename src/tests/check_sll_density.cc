@@ -33,6 +33,10 @@ int main(){try{
         check(e.channel==-1,"no exact lane during global placement");
         check(m.tiles[e.tile].column==20,"source-near initial X");
     }
+    // The simplified initializer already balances equal-cost Y rows. Force a
+    // legal hotspot explicitly so this remains a post-QP density regression.
+    const int hotspot=m.plans[0].crossings[0].tile;
+    for(auto&p:m.plans)for(auto&e:p.crossings){e.tile=hotspot;m.previous[e.key]=hotspot;}
     const auto hot=d.bin(m.geometry(m.plans[0].crossings[0]));
     check(d.penalty(hot,19)==0&&d.penalty(hot,20)>0,"80 percent tile target");
     std::vector<Point> desired(24,{20,90});auto spread=d.assign(m,desired);
@@ -40,24 +44,24 @@ int main(){try{
     check(d.assign(m,std::vector<Point>(24,{-1000,9000})).tiles==spread.tiles,"QP displacement is not candidate cost");
     DensityModel coarse;coarse.rowHeight=15;coarse.index(m);auto control=coarse.assign(m,desired);
     check(control.moved==0&&control.energyBefore==0,"coarse density misses single-tile hotspot");
-    commit(m,spread);auto before=d.current(m);m.legalizeChannels();std::set<std::string> used;
+    commit(m,spread);m.legalizeChannels();std::set<std::string> used;
     for(const auto&p:m.plans)for(const auto&e:p.crossings){
         check(e.channel>=0,"final legalization selects exact lane");
         check(!Model::conflicts(m.channels[e.channel],used),"final exact paths are disjoint");
         Model::occupy(m.channels[e.channel],used);
         check(m.channels[e.channel].in.y==m.tiles[e.tile].in.y,"lane legalization preserves tile");
     }
-    m.rebuild(nets);check(d.current(m)==before,"refresh retains tiles");
+    m.rebuild(nets);check(m.retained==24&&m.created==0,"refresh retains crossing identities");
     for(const auto&p:m.plans)for(const auto&e:p.crossings)check(e.channel==-1,"refresh releases lane choice");
     Model y=inventory();y.timingWeight=0;y.switchCost=1e12;
     Net n;n.id=1;n.source=pin(1,0,20,92);n.sinks={pin(2,1,80,110)};
     y.rebuild({n});auto old=y.plans[0].crossings[0].tile;
-    check(y.tiles[old].in.y==90,"initial receiver-side Y");
+    check(y.tiles[old].in.y==91,"initial receiver-side Y uses tied interval midpoint");
     y.plans[0].net.sinks[0].p.y=114;DensityModel yd;yd.index(y);auto move=yd.assign(y,{y.tiles[old].in});
     check(y.tiles[move.tiles[0]].in.y==92,"receiver Y changes tile choice at fixed source");
     check(y.tiles[move.tiles[0]].column==20,"source-side favorable X retained");
     y.previous.clear();n.sinks[0].p.y=114;y.rebuild({n});
-    check(y.geometry(y.plans[0].crossings[0]).in.y==92,"newborn Y includes output side");
+    check(y.geometry(y.plans[0].crossings[0]).in.y==93,"newborn Y includes output side and tied interval midpoint");
     Model shared;shared.jointPlacement=true;shared.allowSplit=false;
     for(int lane=0;lane<2;++lane)for(bool down:{false,true})shared.channels.push_back(channel(20,90,lane,down));
     shared.index();Net up{1,"up",pin(1,0,20,50),{pin(2,1,20,150)},1},down{2,"down",pin(3,1,20,150),{pin(4,0,20,50)},1};

@@ -2,7 +2,7 @@
 // Definitions follow Model in SllVirtualModel.h.
 namespace amf_sll_plan {
 inline void Model::indexTiles() {
-    tiles.clear();availableTiles.clear();tileCapacity.clear();
+    tiles.clear();availableTiles.clear();tileCapacity.clear();tileColumns.clear();
     std::map<TileKey,std::set<std::string>> supply;
     std::map<std::string,TileKey> identities;
     for(const auto&range:geometryBuckets)for(const auto&group:range.second){
@@ -22,11 +22,63 @@ inline void Model::indexTiles() {
             t.slowMin=std::min(t.slowMin,c.slowMin);t.fastMin=std::min(t.fastMin,c.fastMin);
         }
         if(t.members.empty())continue;
+        tileColumns[range.first][t.in.x].push_back(int(tiles.size()));
         availableTiles[range.first].push_back(int(tiles.size()));tiles.push_back(std::move(t));
     }
     for(const auto&v:supply)tileCapacity[v.first]=v.second.size();
 }
+inline int Model::initialTile(int from,int to,Point root,const TileBox&input,const TileBox&output,
+                             double weight,const std::map<TileKey,size_t>&occupied,
+                             int incumbent,int fixedColumn)const {
+    if(!(initialTargetUtilization>0&&initialTargetUtilization<=1)||
+       !std::isfinite(initialTargetUtilization)||!(initialDensityWeight>=0)||!std::isfinite(initialDensityWeight))
+        throw std::invalid_argument("Invalid SLL initialization density parameters");
+    auto load=[&](const Tile&t){auto i=occupied.find(t.key);return i==occupied.end()?size_t(0):i->second;};
+    auto feasible=[&](int ti){const auto&t=tiles[ti];return load(t)<tileCapacity.at(t.key);};
+    std::vector<int> candidates;
+    const auto&columns=tileColumns.at({from,to});
+    if(fixedColumn>=0){
+        // A retained crossing keeps its optimized column; only its Y is seeded.
+        for(const auto&column:columns)for(int ti:column.second)
+            if(tiles[ti].column==fixedColumn&&feasible(ti))candidates.push_back(ti);
+    } else {
+        std::vector<std::pair<double,double>> order;
+        for(const auto&column:columns)order.push_back({std::abs(root.x-column.first),column.first});
+        std::sort(order.begin(),order.end());double nearest=INFINITY;
+        for(const auto&column:order){
+            if(sourceNearInitialization&&column.first>nearest+1e-9)break;
+            for(int ti:columns.at(column.second))if(feasible(ti)){
+                candidates.push_back(ti);nearest=column.first;
+            }
+        }
+    }
+    if(candidates.empty())return -1;
+    double best=INFINITY,bestUtilization=INFINITY;std::vector<int> equal;
+    for(int ti:candidates){
+        ++initialTileEvaluations;const auto&t=tiles[ti];const double n=load(t),c=tileCapacity.at(t.key);
+        auto penalty=[&](double count){const double e=std::max(0.,count-initialTargetUtilization*c);return e*e/c;};
+        const double score=weight*(input.with(t.in,ratio)+output.with(t.out,ratio))+
+                           initialDensityWeight*(penalty(n+1)-penalty(n));
+        const double utilization=(n+1)/c;
+        if(score<best-1e-9 || (std::abs(score-best)<=1e-9&&utilization<bestUtilization-1e-12)){
+            best=score;bestUtilization=utilization;equal={ti};
+        }else if(std::abs(score-best)<=1e-9&&std::abs(utilization-bestUtilization)<=1e-12)equal.push_back(ti);
+    }
+    if(equal.empty())throw std::runtime_error("Non-finite SLL initialization score");
+    if(std::find(equal.begin(),equal.end(),incumbent)!=equal.end())return incumbent;
+    double lo=INFINITY,hi=-INFINITY;
+    for(int ti:equal){lo=std::min(lo,tiles[ti].in.y);hi=std::max(hi,tiles[ti].in.y);}
+    const double middle=(lo+hi)*.5;
+    // Physical coordinates provide a stable final order even if inventory input
+    // order changes. An even-sized interval uses its lower middle row.
+    return *std::min_element(equal.begin(),equal.end(),[&](int a,int b){
+        const auto&x=tiles[a];const auto&y=tiles[b];
+        return std::make_tuple(std::abs(x.in.y-middle),x.in.y,x.column,x.in.x,x.out.x,x.out.y)<
+               std::make_tuple(std::abs(y.in.y-middle),y.in.y,y.column,y.in.x,y.out.x,y.out.y);
+    });
+}
 inline void Model::rebuildTiles(std::vector<Net> nets) {
+    initialTileEvaluations=0;
     for(auto&n:nets){n.sinkLookup.clear();for(size_t i=0;i<n.sinks.size();++i)n.sinkLookup[n.sinks[i].id]=i;}
     std::stable_sort(nets.begin(),nets.end(),[](const Net&a,const Net&b){
         double wa=1,wb=1;for(auto&s:a.sinks)wa=std::max(wa,s.criticality);for(auto&s:b.sinks)wb=std::max(wb,s.criticality);
@@ -49,23 +101,19 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
                     std::vector<int> downstream;for(int id:partition[g])
                         if(dir>0?pin(n,id).slr>=from+dir:pin(n,id).slr<=from+dir)downstream.push_back(id);
                     const std::string key=std::to_string(n.id)+":"+std::to_string(g)+":"+std::to_string(from)+":"+std::to_string(from+dir);
-                    auto old=previous.find(key);int selected=-1;double best=INFINITY,nearest=INFINITY;
-                    for(int ti:availableTiles.at({from,from+dir})){
-                        const auto&t=tiles[ti];if(used[t.key]>=tileCapacity.at(t.key))continue;
-                        double x0=t.out.x,x1=t.out.x,y0=t.out.y,y1=t.out.y,td=0;
-                        for(int id:downstream){const auto&s=pin(n,id);x0=std::min(x0,s.p.x);x1=std::max(x1,s.p.x);
-                            if(s.slr==t.to){y0=std::min(y0,s.p.y);y1=std::max(y1,s.p.y);
-                                td=std::max(td,s.criticality*(delay(root,t.in)+t.slowMax+delay(t.out,s.p)));}
-                        }
-                        const double score=n.weight*(length(root,t.in,ratio)+x1-x0+ratio*(y1-y0))+timingWeight*td;
-                        const double sx=std::abs(root.x-t.in.x);
-                        if(sourceNearInitialization && old==previous.end()){
-                            if(sx<nearest || (sx==nearest && score<best)){nearest=sx;best=score;selected=ti;}
-                        }else if(score<best){best=score;selected=ti;}
-                    }
+                    auto old=previous.find(key);int selected=-1;
                     if(old!=previous.end()){
                         const auto&t=tiles.at(old->second);
                         if(t.from==from&&t.to==from+dir&&used[t.key]<tileCapacity.at(t.key))selected=old->second;
+                    }
+                    if(selected<0){
+                        // Cache both local endpoint boxes once, not once per
+                        // candidate or receiver. No timing model is consulted.
+                        TileBox input,output;input.add(root);
+                        if(parent<0){for(const auto&s:n.sinks)if(s.slr==from)input.add(s.p);}
+                        else {for(int id:partition[g])if(pin(n,id).slr==from)input.add(pin(n,id).p);}
+                        for(int id:downstream)if(pin(n,id).slr==from+dir)output.add(pin(n,id).p);
+                        selected=initialTile(from,from+dir,root,input,output,n.weight,used);
                     }
                     if(selected<0)throw std::runtime_error("SLL tile allocator exhausted capacity");
                     Crossing e;e.key=key;e.parent=parent;e.sinks=downstream;e.tile=selected;
@@ -74,17 +122,20 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
                     parent=k;root=tiles[selected].out;
                 }
             }
-            // Once the whole tree exists, include both adjacent local trees and
-            // all downstream timing paths when choosing newborn Y positions.
+            // With the complete topology available, score the two adjacent
+            // local hyperedges. Other trees are constant for this tile move.
+            // Keep the selected X column; ties use utilization, incumbent, then
+            // the midpoint of the remaining equivalent legal Y coordinates.
             for(size_t k=0;k<p.crossings.size();++k){
-                auto&e=p.crossings[k];if(previous.count(e.key))continue;
-                const auto base=tiles[e.tile];--used[base.key];int selected=e.tile;double best=cost(p);
-                for(int ti:availableTiles.at({base.from,base.to})){
-                    const auto&t=tiles[ti];
-                    if(sourceNearInitialization && t.column!=base.column)continue;
-                    if(used[t.key]>=tileCapacity.at(t.key))continue;
-                    e.tile=ti;double value=cost(p);if(value<best-1e-9){best=value;selected=ti;}
-                }
+                auto&e=p.crossings[k];const auto base=tiles[e.tile];--used[base.key];
+                const auto trees=localTrees(p);TileBox input,output;
+                auto fill=[&](TileBox&box,const std::vector<Terminal>&tree){for(const auto&t:tree)
+                    if(t.crossing!=int(k))box.add(t.isFixed?t.fixed:pin(n,t.pin).p);};
+                fill(input,trees.at(e.parent+1));fill(output,trees.at(k+1));
+                const auto old=previous.find(e.key);const int incumbent=old==previous.end()?-1:old->second;
+                Point root=e.parent<0?n.source.p:tiles[p.crossings[e.parent].tile].out;
+                int selected=initialTile(base.from,base.to,root,input,output,n.weight,used,incumbent,base.column);
+                if(selected<0)throw std::runtime_error("SLL initialization lost a feasible tile");
                 e.tile=selected;++used[tiles[selected].key];
             }
             return p;
