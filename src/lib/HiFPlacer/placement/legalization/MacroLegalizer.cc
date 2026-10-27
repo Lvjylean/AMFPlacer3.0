@@ -977,7 +977,8 @@ void MacroLegalizer::findPossibleLegalLocation(bool fixedColumn)
         print_status("searching sites for " + std::to_string(numMacroCells) + " macroCells with displacement<" +
                      std::to_string(displacementThreshold));
     }
-#pragma omp parallel for
+    SllPlanner::WireLengthBatch sllWireBatch(timingDrivenLegalize?nullptr:placementInfo->sllPlanner.get());
+#pragma omp parallel for schedule(dynamic, 16)
     for (int i = 0; i < numMacroCells; i++)
     {
         auto curCell = macroCellsToLegalize[i];

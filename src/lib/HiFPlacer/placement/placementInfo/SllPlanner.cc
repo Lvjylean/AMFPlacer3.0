@@ -1,6 +1,9 @@
 #include "SllPlanner.h"
 #include "SllDensityModel.h"
 #include "SllQpMotion.h"
+#include "SllWireCache.h"
+#include <chrono>
+#include <omp.h>
 #include "PlacementInfo.h"
 #include "../../../utils/RuntimeProfiler.h"
 #include <filesystem>
@@ -15,7 +18,7 @@ std::string quote(const std::string&s){std::string v="\"";for(char c:s){if(c=='\
 double number(const std::map<std::string,std::string>&cfg,const std::string&key,double fallback){auto i=cfg.find(key);if(i==cfg.end())return fallback;size_t used=0;double x=std::stod(i->second,&used);if(used!=i->second.size()||!std::isfinite(x)||x<0)throw std::invalid_argument("Invalid "+key);return x;}
 }
 struct SllPlanner::Impl {
-    PlacementInfo*pi;Model m;std::map<int,size_t> netIndex;
+    PlacementInfo*pi;Model m;std::vector<int> netIndex;
     std::map<int,std::pair<size_t,int>> sinkIndex;
     std::map<std::pair<int,int>,std::vector<int>> cellPairs;
     std::vector<PhysicalBoundaryModel::Region> regions;
@@ -24,6 +27,14 @@ struct SllPlanner::Impl {
     DensityModel density;double densityAnchorWeight=.05;
     std::map<int,size_t> virtualBase;
     std::vector<Point> densityTargets;
+    bool wireCacheEnabled=true,wireBatchActive=false;
+    size_t wireAuditStride=0,wireBatches=0,wireTerminals=0;
+    struct alignas(64) WireAudit {size_t calls=0,samples=0,failures=0;double maxError=0;};
+    mutable std::vector<WireAudit> wireAudits;
+    std::vector<WireSnapshotNet> wireSnapshots;
+    std::chrono::steady_clock::time_point wireBatchStart;
+    double wirePrepareSeconds=0;
+    std::ofstream wireLog;
     explicit Impl(PlacementInfo*placement,const std::map<std::string,std::string>&cfg):pi(placement) {
         if(pi->getIncrementalContext().enabled)throw std::invalid_argument("E2 SLL planning currently requires full-design placement");
         auto physical=pi->getDeviceInfo()->getPhysicalBoundaryModel();if(!physical)throw std::invalid_argument("SLL planner requires physical boundary metadata");
@@ -32,6 +43,10 @@ struct SllPlanner::Impl {
         m.ratio=number(cfg,"y2xRatio",.4);m.timingWeight=number(cfg,"SllPlanningTimingWeight",16);
         m.extraCrossingCost=number(cfg,"SllPlanningExtraCrossingCost",24);m.switchCost=number(cfg,"SllPlanningSwitchCost",.1);
         auto boolean=[&](const std::string&key,bool fallback){auto it=cfg.find(key);if(it==cfg.end())return fallback;if(it->second!="true"&&it->second!="false")throw std::invalid_argument(key+" must be boolean");return it->second=="true";};
+        wireCacheEnabled=boolean("SllWireCacheEnable",true);
+        const double stride=number(cfg,"SllWireCacheAuditStride",0);
+        if(stride!=std::floor(stride)||stride>1000000000)throw std::invalid_argument("Invalid SllWireCacheAuditStride");
+        wireAuditStride=static_cast<size_t>(stride);
         m.jointPlacement=boolean("SllJointPlacementEnable",false);
         m.sourceNearInitialization=boolean("SllSourceNearInitialization",m.jointPlacement);
         density.rowHeight=number(cfg,"SllDensityRowHeight",1);
@@ -75,6 +90,10 @@ struct SllPlanner::Impl {
         }
         if(cfg.count("SllPlanningReportDirectory")) {
             std::filesystem::create_directories(cfg.at("SllPlanningReportDirectory"));
+            const auto cachePath=cfg.at("SllPlanningReportDirectory")+"/sll-wire-cache.tsv";
+            if(std::filesystem::exists(cachePath))throw std::runtime_error("Refusing to overwrite SLL wire cache diagnostics");
+            wireLog.open(cachePath);wireLog<<std::setprecision(17);
+            wireLog<<"batch\tprepared_nets\tterminals\tprepare_seconds\tsearch_seconds\taudit_samples\taudit_mismatches\tmax_abs_error\n";
             const auto path=cfg.at("SllPlanningReportDirectory")+"/sll-planning.tsv";
             if(std::filesystem::exists(path))throw std::runtime_error("Refusing to overwrite SLL planner diagnostics");
             log.open(path);log<<"generation\tnets\tvirtual_cells\tcreated\tretained\tdeleted\tlocal_hpwl\n";
@@ -142,6 +161,7 @@ void SllPlanner::addDensityModel(std::vector<float>&diag,Eigen::VectorXd&rhs,boo
     for(size_t i=0;i<p->densityTargets.size();++i){diag.at(offset+i)+=w;rhs[offset+i]-=w*(x?p->densityTargets[i].x:p->densityTargets[i].y);}
 }
 void SllPlanner::projectQp(const Eigen::VectorXd&x,const Eigen::VectorXd&y,double displacementLimit) {
+    if(p->wireBatchActive)throw std::logic_error("Cannot project SLL coordinates during a wire batch");
     if(!jointPlacement())return;const size_t offset=p->pi->getPlacementUnits().size(),n=variableCount();
     if(x.size()!=offset+n||y.size()!=offset+n)throw std::runtime_error("SLL QP dimension mismatch");
     const auto origins=virtualPositions();
@@ -168,9 +188,10 @@ void SllPlanner::projectQp(const Eigen::VectorXd&x,const Eigen::VectorXd&y,doubl
     if(p->jointLog)p->jointLog<<p->qpGeneration<<'\t'<<n<<'\t'<<assigned.moved<<'\t'<<assigned.energyBefore<<'\t'<<assigned.energyAfter<<'\t'<<maxMove<<std::endl;
     if(p->projectionLog)p->projectionLog.flush();
 }
-bool SllPlanner::handles(int id)const{return p->netIndex.count(id);}
+bool SllPlanner::handles(int id)const{return id>=0&&size_t(id)<p->netIndex.size()&&p->netIndex[id]>=0;}
 bool SllPlanner::crosses(Point a,Point b)const{return p->slr(a)!=p->slr(b);}
 void SllPlanner::refresh() {
+    if(p->wireBatchActive)throw std::logic_error("Cannot refresh SLL topology during a wire batch");
     AMF_PROFILE_SCOPE("sll_position_planning","virtual SLL lifecycle and capacity allocation");
     std::vector<Net> nets;auto&di=*p->pi->getDesignInfo();
     auto graph=p->pi->getTimingInfo()->getSimplePlacementTimingGraph();
@@ -191,7 +212,7 @@ void SllPlanner::refresh() {
         }
         if(crossing)nets.push_back(std::move(n));
     }
-    p->m.rebuild(std::move(nets));p->netIndex.clear();p->sinkIndex.clear();p->cellPairs.clear();p->virtualBase.clear();
+    p->m.rebuild(std::move(nets));p->netIndex.assign(di.getNets().size(),-1);p->sinkIndex.clear();p->cellPairs.clear();p->virtualBase.clear();
     size_t cells=0;double wire=0;
     for(size_t i=0;i<p->m.plans.size();++i) {
         const auto&plan=p->m.plans[i];p->netIndex[plan.net.id]=i;p->virtualBase[plan.net.id]=cells;cells+=plan.crossings.size();wire+=p->m.wireCost(plan);
@@ -288,7 +309,60 @@ void SllPlanner::exportPlan(const std::string&path) {
     out<<"]\n";if(!out)throw std::runtime_error("SLL export failed");
 }
 
+
+void SllPlanner::beginWireLengthBatch() {
+    if (!p->wireCacheEnabled) return;
+    if (p->wireBatchActive) throw std::logic_error("Nested SLL wire-length batch");
+    p->wireBatchStart=std::chrono::steady_clock::now();
+    p->wireSnapshots.clear();p->wireSnapshots.resize(p->m.plans.size());
+    p->wireAudits.clear();p->wireAudits.resize(omp_get_max_threads());
+    size_t terminals=0;
+    // The caller guarantees stable coordinates/topology until the joined readers finish.
+    #pragma omp parallel for schedule(dynamic, 16) reduction(+:terminals)
+    for (size_t i=0;i<p->m.plans.size();++i) {
+        auto& snapshot=p->wireSnapshots[i];
+        for (const auto& tree:p->m.localTrees(p->m.plans[i])) {
+            std::vector<WireSnapshotPoint> points;points.reserve(tree.size());
+            for (const auto& terminal:tree) {
+                if (terminal.isFixed) points.push_back({terminal.fixed,{},-1});
+                else {
+                    auto pin=p->pi->getDesignInfo()->getPins().at(terminal.pin);
+                    auto pu=p->pi->getCellId2PlacementUnit().at(pin->getCell()->getCellId());
+                    points.push_back({p->position(pin),{pu->X(),pu->Y()},pu->getId()});
+                }
+            }
+            terminals+=points.size();snapshot.trees.emplace_back(points);
+        }
+    }
+    p->wireTerminals=terminals;
+    p->wirePrepareSeconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-p->wireBatchStart).count();
+    p->wireBatchActive=true; // Publish only after all builders join; queries never mutate the cache.
+}
+void SllPlanner::endWireLengthBatch() {
+    if (!p->wireBatchActive) return;
+    p->wireBatchActive=false;
+    const double seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-p->wireBatchStart).count();
+    size_t samples=0,failures=0;double error=0;
+    for(const auto&a:p->wireAudits){samples+=a.samples;failures+=a.failures;error=std::max(error,a.maxError);}
+    if(p->wireLog)p->wireLog<<++p->wireBatches<<'\t'<<p->wireSnapshots.size()<<'\t'<<p->wireTerminals<<'\t'
+        <<p->wirePrepareSeconds<<'\t'<<seconds<<'\t'<<samples<<'\t'<<failures<<'\t'<<error<<std::endl;
+    if(failures){std::cerr<<"SLL wire cache changed float candidate costs: "<<failures<<std::endl;std::abort();}
+}
 double SllPlanner::wireLength(int id,double ratio,int trialUnit,Point trial)const {
+    if (!p->wireBatchActive) return wireLengthUncached(id,ratio,trialUnit,trial);
+    const double value=p->wireSnapshots.at(p->netIndex.at(id)).length(ratio,trialUnit,trial);
+    if(p->wireAuditStride){
+        auto& audit=p->wireAudits[omp_in_parallel()?omp_get_thread_num():0];
+        if(++audit.calls%p->wireAuditStride==0){
+            const double original=wireLengthUncached(id,ratio,trialUnit,trial);
+            ++audit.samples;audit.maxError=std::max(audit.maxError,std::abs(value-original));
+            if(static_cast<float>(value)!=static_cast<float>(original))++audit.failures;
+        }
+    }
+    return value;
+}
+
+double SllPlanner::wireLengthUncached(int id,double ratio,int trialUnit,Point trial)const {
     const auto&plan=p->m.plans.at(p->netIndex.at(id));double total=0;
     for(const auto&tree:p->m.localTrees(plan)) {
         if(tree.size()<2)continue;double x0=INFINITY,x1=-INFINITY,y0=INFINITY,y1=-INFINITY;

@@ -1,0 +1,38 @@
+{
+  "base_commit": "d255281e2bbc1581e62eba20a2e0c8d86d391305",
+  "implementation": "Immutable shared-local-tree snapshots scoped to macro candidate search; per-PU grouped extrema preserve exact trial HPWL; dense net membership; dynamic 16-cell work scheduling",
+  "cache_lifetime": "Prepare from live pins before the read-only search; joined readers; disable on scope exit; refresh/project forbidden inside scope",
+  "runtime_target": "Matched GETRF U250 10 ns complete AMF placement <= 1.10 times E1",
+  "tests": [
+    {
+      "name": "wire-cache",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-wire-cache/repo/builds/build-20261028-005606-348019-d255281e/build/checkSllWireCache"
+      ],
+      "exit_code": 0,
+      "seconds": 0.19791263341903687
+    },
+    {
+      "name": "qp-projection",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-wire-cache/repo/builds/build-20261028-005606-348019-d255281e/build/checkSllQpProjection"
+      ],
+      "exit_code": 0,
+      "seconds": 0.0020508747547864914
+    },
+    {
+      "name": "joint-tile",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-wire-cache/repo/builds/build-20261028-005606-348019-d255281e/build/checkSllJointIntegration",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-qp-displacement/validation-01/joint-config.json",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-wire-cache/validation-01/joint-tile",
+        "tile"
+      ],
+      "exit_code": 0,
+      "seconds": 9.091568308882415
+    }
+  ],
+  "formal_runtime_status": "pending",
+  "reference_algorithm_unchanged": true,
+  "no_routing": true
+}

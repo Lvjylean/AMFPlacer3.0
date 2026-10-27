@@ -320,3 +320,5 @@ target_link_libraries(checkSllPlannerIntegration GlobalPlacer DesignInfo DeviceI
 
 add_executable(checkSllPhysicalFixture EXCLUDE_FROM_ALL tests/check_sll_physical_fixture.cc)
 target_link_libraries(checkSllPhysicalFixture GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkSllWireCache EXCLUDE_FROM_ALL tests/check_sll_wire_cache.cc)

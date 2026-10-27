@@ -9,6 +9,17 @@ class SllPlanner {
 public:
     SllPlanner(PlacementInfo*,const std::map<std::string,std::string>&);
     ~SllPlanner();
+    // Scoped, immutable coordinates for parallel candidate scoring only.
+    void beginWireLengthBatch();
+    void endWireLengthBatch();
+    class WireLengthBatch {
+        SllPlanner* planner;
+    public:
+        explicit WireLengthBatch(SllPlanner* owner):planner(owner){if(planner)planner->beginWireLengthBatch();}
+        ~WireLengthBatch(){if(planner)planner->endWireLengthBatch();}
+        WireLengthBatch(const WireLengthBatch&)=delete;
+        WireLengthBatch& operator=(const WireLengthBatch&)=delete;
+    };
     void refresh(); // Serial outer-step boundary, never inside parallel readers.
     bool jointPlacement()const;
     size_t variableCount()const;
@@ -28,6 +39,7 @@ public:
     void exportPlan(const std::string&);
     const amf_sll_plan::Model& model()const;
 private:
+    double wireLengthUncached(int,double,int,amf_sll_plan::Point)const;
     struct Impl;std::unique_ptr<Impl> p;
 };
 #endif

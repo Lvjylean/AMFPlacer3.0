@@ -13,6 +13,7 @@ int main(int argc,char**argv){try{
     const bool tileMode=argc==4;
     std::filesystem::path root=argv[2];check(std::filesystem::create_directory(root),"refuse overwrite");
     auto cfg=parseJSONFile(argv[1]);cfg["SllPlanningReportDirectory"]=(root/"planning").string();
+    cfg["SllWireCacheAuditStride"]="1";
     cfg["SllPlanningAllowSplit"]="false";cfg["SllJointPlacementEnable"]="true";cfg["SllSourceNearInitialization"]="true";
     // Deliberately small target utilization exposes density pressure using a
     // four-register fixture on the actual full U250 resource table.
@@ -36,6 +37,27 @@ int main(int argc,char**argv){try{
             out<<p.net.name<<'\t'<<t.from<<'\t'<<t.to<<'\t'<<t.column<<'\t'<<t.in.x<<'\t'<<t.in.y<<'\t'<<t.out.x<<'\t'<<t.out.y<<'\t'<<e.channel<<'\n';
         }
     }
+
+    auto checkWireBatch=[&] {
+        struct Query {int net,unit;amf_sll_plan::Point trial;double expected;};std::vector<Query> queries;
+        for(const auto&plan:pi.sllPlanner->model().plans){
+            queries.push_back({plan.net.id,-1,{},pi.sllPlanner->wireLength(plan.net.id,.4)});
+            for(auto u:pi.getPlacementUnits())for(double delta:{-13.0,0.0,19.0}){
+                amf_sll_plan::Point trial{u->X()+delta,u->Y()-delta};
+                queries.push_back({plan.net.id,u->getId(),trial,pi.sllPlanner->wireLength(plan.net.id,.4,u->getId(),trial)});
+            }
+        }
+        {SllPlanner::WireLengthBatch batch(pi.sllPlanner.get());
+            for(const auto&q:queries)check(float(q.expected)==float(pi.sllPlanner->wireLength(q.net,.4,q.unit,q.trial)),"cached candidate cost equals live reference");
+            bool rejected=false;try{pi.sllPlanner->refresh();}catch(const std::logic_error&){rejected=true;}
+            check(rejected,"topology mutation rejected inside read-only candidate batch");
+        }
+    };
+    checkWireBatch();
+    {auto u=pi.getPlacementUnits()[0];const auto x=u->X(),y=u->Y();
+        u->setAnchorLocationAndForgetTheOriginalOne(x+3.25,y);checkWireBatch();
+        u->setAnchorLocationAndForgetTheOriginalOne(x,y);checkWireBatch();}
+
     pi.sllPlanner->prepareDensityTargets();
     check(pi.sllPlanner->variableCount()==3,"one shared QP variable per crossing");
     amf_sll_plan::DensityModel tileInventory;tileInventory.index(pi.sllPlanner->model());
@@ -149,6 +171,7 @@ int main(int argc,char**argv){try{
         }
         check(checked>0,"cross-die STA edges audited");
     }
+    checkWireBatch();
     const auto finalTiles=tileInventory.current(pi.sllPlanner->model());
     pi.sllPlanner->exportPlan((root/"sll-plan.tcl").string());
     check(tileInventory.current(pi.sllPlanner->model())==finalTiles,"export preserves final QP tiles");
