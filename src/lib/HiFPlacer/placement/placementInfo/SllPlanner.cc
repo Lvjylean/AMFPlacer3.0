@@ -19,7 +19,7 @@ struct SllPlanner::Impl {
     std::map<std::pair<int,int>,std::vector<int>> cellPairs;
     std::vector<PhysicalBoundaryModel::Region> regions;
     std::map<std::pair<int,int>,std::vector<int>> timingCandidates;
-    std::ofstream log,jointLog;size_t generation=0,qpGeneration=0;
+    std::ofstream log,jointLog,projectionLog;size_t generation=0,qpGeneration=0;
     DensityModel density;double densityAnchorWeight=.05;
     std::map<int,size_t> virtualBase;
     std::vector<Point> densityTargets;
@@ -41,6 +41,8 @@ struct SllPlanner::Impl {
         m.initialDensityWeight=density.weight;
         if(cfg.count("SllInitializationPolicy")&&cfg.at("SllInitializationPolicy")!="local-wire-capacity")
             throw std::invalid_argument("This E2 copy requires SllInitializationPolicy=local-wire-capacity");
+        if(cfg.count("SllProjectionPolicy")&&cfg.at("SllProjectionPolicy")!="qp-nearest-capacity")
+            throw std::invalid_argument("This E2 copy requires SllProjectionPolicy=qp-nearest-capacity");
         if(m.jointPlacement && cfg.count("SllQpAuditCellsFile"))throw std::invalid_argument("Legacy frozen real-PU replay audit does not support joint SLL variables; use E2 joint diagnostics");
         if(cfg.count("SllPlanningAllowSplit")){const auto&s=cfg.at("SllPlanningAllowSplit");if(s!="true"&&s!="false")throw std::invalid_argument("SllPlanningAllowSplit must be boolean");m.allowSplit=s=="true";}
         std::ifstream in(cfg.at("SllChannelFile"));if(!in)throw std::invalid_argument("Cannot read SllChannelFile");
@@ -77,6 +79,10 @@ struct SllPlanner::Impl {
                 const auto jpath=cfg.at("SllPlanningReportDirectory")+"/sll-joint-qp.tsv";
                 if(std::filesystem::exists(jpath))throw std::runtime_error("Refusing to overwrite SLL joint diagnostics");
                 jointLog.open(jpath);jointLog<<"qp\tvirtual_pairs\tmoved_tiles\tdensity_before\tdensity_after\tmax_projection_distance\n";
+                const auto ppath=cfg.at("SllPlanningReportDirectory")+"/sll-qp-projection.tsv";
+                if(std::filesystem::exists(ppath))throw std::runtime_error("Refusing to overwrite SLL projection diagnostics");
+                projectionLog.open(ppath);projectionLog<<std::setprecision(17);
+                projectionLog<<"qp\tkey\tfrom\tto\told_column\told_x\told_y\tqp_x\tqp_y\tcolumn\tx\ty\tweighted_distance\n";
             }
         }
     }
@@ -123,7 +129,7 @@ std::vector<Point> SllPlanner::virtualPositions()const {
 }
 void SllPlanner::prepareDensityTargets() {
     if(!jointPlacement())return;
-    const auto spread=p->density.assign(p->m,virtualPositions());p->densityTargets.clear();
+    const auto spread=p->density.spread(p->m,virtualPositions());p->densityTargets.clear();
     for(int ti:spread.tiles)p->densityTargets.push_back(p->m.tiles[ti].in);
 }
 void SllPlanner::addDensityModel(std::vector<float>&diag,Eigen::VectorXd&rhs,bool x)const {
@@ -136,19 +142,23 @@ void SllPlanner::projectQp(const Eigen::VectorXd&x,const Eigen::VectorXd&y) {
     if(!jointPlacement())return;const size_t offset=p->pi->getPlacementUnits().size(),n=variableCount();
     if(x.size()!=offset+n||y.size()!=offset+n)throw std::runtime_error("SLL QP dimension mismatch");
     std::vector<Point> desired;for(size_t i=0;i<n;++i)desired.push_back({x[offset+i],y[offset+i]});
-    // Real cells have already been written back. Score both sides using their
-    // current coordinates; topology stays frozen until the next refresh.
+    // Refresh real coordinates for subsequent timing queries. Tile legalization
+    // uses the solved virtual coordinates, not another net-cost optimization.
     for(auto&plan:p->m.plans){
         plan.net.source.p=p->position(p->pi->getDesignInfo()->getPins().at(plan.net.source.id));
         for(auto&s:plan.net.sinks)s.p=p->position(p->pi->getDesignInfo()->getPins().at(s.id));
     }
     auto assigned=p->density.assign(p->m,desired);size_t i=0;double maxMove=0;
     for(auto&plan:p->m.plans)for(auto&e:plan.crossings){
+        const auto old=p->m.tiles[e.tile];
         e.tile=assigned.tiles[i];e.channel=-1;const auto&c=p->m.tiles[e.tile];
+        if(p->projectionLog)p->projectionLog<<p->qpGeneration+1<<'\t'<<e.key<<'\t'<<c.from<<'\t'<<c.to<<'\t'<<old.column<<'\t'<<old.in.x<<'\t'<<old.in.y<<'\t'<<desired[i].x<<'\t'<<desired[i].y<<'\t'<<c.column<<'\t'<<c.in.x<<'\t'<<c.in.y<<'\t'<<length(desired[i],c.in,p->m.ratio)<<'\n';
         maxMove=std::max(maxMove,std::hypot(desired[i].x-c.in.x,desired[i].y-c.in.y));
         p->m.previous[e.key]=e.tile;++i;
     }
-    if(p->jointLog)p->jointLog<<++p->qpGeneration<<'\t'<<n<<'\t'<<assigned.moved<<'\t'<<assigned.energyBefore<<'\t'<<assigned.energyAfter<<'\t'<<maxMove<<std::endl;
+    ++p->qpGeneration;
+    if(p->jointLog)p->jointLog<<p->qpGeneration<<'\t'<<n<<'\t'<<assigned.moved<<'\t'<<assigned.energyBefore<<'\t'<<assigned.energyAfter<<'\t'<<maxMove<<std::endl;
+    if(p->projectionLog)p->projectionLog.flush();
 }
 bool SllPlanner::handles(int id)const{return p->netIndex.count(id);}
 bool SllPlanner::crosses(Point a,Point b)const{return p->slr(a)!=p->slr(b);}
@@ -254,10 +264,8 @@ void SllPlanner::addTimingModel(std::vector<Eigen::Triplet<float>>&trip,std::vec
 void SllPlanner::exportPlan(const std::string&path) {
     refresh();
     if(jointPlacement()){
-        // Final tile optimization uses the final real-cell positions, then
-        // precise lane allocation validates access-node conflicts before export.
-        auto result=p->density.assign(p->m,virtualPositions());size_t i=0;
-        for(auto&plan:p->m.plans)for(auto&e:plan.crossings){e.tile=result.tiles[i++];e.channel=-1;p->m.previous[e.key]=e.tile;}
+        // Refresh retains surviving QP-selected tiles and initializes only new
+        // crossings. Export allocates exact lanes inside those committed tiles.
         p->m.legalizeChannels();
     }
     std::ofstream out(path);if(!out)throw std::runtime_error("Cannot export SLL plan");

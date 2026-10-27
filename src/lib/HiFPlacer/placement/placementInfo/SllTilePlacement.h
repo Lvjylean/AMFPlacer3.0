@@ -124,15 +124,18 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
             }
             // With the complete topology available, score the two adjacent
             // local hyperedges. Other trees are constant for this tile move.
-            // Keep the selected X column; ties use utilization, incumbent, then
-            // the midpoint of the remaining equivalent legal Y coordinates.
+            // Refine newborn/reallocated crossings only. Retained legal tiles
+            // are QP results and must not be reseeded on the next refresh.
             for(size_t k=0;k<p.crossings.size();++k){
-                auto&e=p.crossings[k];const auto base=tiles[e.tile];--used[base.key];
+                auto&e=p.crossings[k];
+                const auto old=previous.find(e.key);
+                if(old!=previous.end()&&old->second==e.tile)continue;
+                const auto base=tiles[e.tile];--used[base.key];
                 const auto trees=localTrees(p);TileBox input,output;
                 auto fill=[&](TileBox&box,const std::vector<Terminal>&tree){for(const auto&t:tree)
                     if(t.crossing!=int(k))box.add(t.isFixed?t.fixed:pin(n,t.pin).p);};
                 fill(input,trees.at(e.parent+1));fill(output,trees.at(k+1));
-                const auto old=previous.find(e.key);const int incumbent=old==previous.end()?-1:old->second;
+                const int incumbent=old==previous.end()?-1:old->second;
                 Point root=e.parent<0?n.source.p:tiles[p.crossings[e.parent].tile].out;
                 int selected=initialTile(base.from,base.to,root,input,output,n.weight,used,incumbent,base.column);
                 if(selected<0)throw std::runtime_error("SLL initialization lost a feasible tile");

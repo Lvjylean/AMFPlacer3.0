@@ -39,10 +39,11 @@ int main(){try{
     for(auto&p:m.plans)for(auto&e:p.crossings){e.tile=hotspot;m.previous[e.key]=hotspot;}
     const auto hot=d.bin(m.geometry(m.plans[0].crossings[0]));
     check(d.penalty(hot,19)==0&&d.penalty(hot,20)>0,"80 percent tile target");
-    std::vector<Point> desired(24,{20,90});auto spread=d.assign(m,desired);
+    std::vector<Point> desired(24,m.tiles[hotspot].in);auto spread=d.spread(m,desired);
     check(spread.moved==5&&spread.energyBefore>0&&spread.energyAfter==0,"tile hotspot spreads at default weights");
-    check(d.assign(m,std::vector<Point>(24,{-1000,9000})).tiles==spread.tiles,"QP displacement is not candidate cost");
-    DensityModel coarse;coarse.rowHeight=15;coarse.index(m);auto control=coarse.assign(m,desired);
+    auto projected=d.assign(m,desired);
+    check(projected.moved==0&&projected.energyAfter==projected.energyBefore,"QP projection does not repeat soft density optimization");
+    DensityModel coarse;coarse.rowHeight=15;coarse.index(m);auto control=coarse.spread(m,desired);
     check(control.moved==0&&control.energyBefore==0,"coarse density misses single-tile hotspot");
     commit(m,spread);m.legalizeChannels();std::set<std::string> used;
     for(const auto&p:m.plans)for(const auto&e:p.crossings){
@@ -58,7 +59,9 @@ int main(){try{
     y.rebuild({n});auto old=y.plans[0].crossings[0].tile;
     check(y.tiles[old].in.y==91,"initial receiver-side Y uses tied interval midpoint");
     y.plans[0].net.sinks[0].p.y=114;DensityModel yd;yd.index(y);auto move=yd.assign(y,{y.tiles[old].in});
-    check(y.tiles[move.tiles[0]].in.y==92,"receiver Y changes tile choice at fixed source");
+    check(y.tiles[move.tiles[0]].in.y==91,"receiver Y alone cannot override solved virtual coordinates");
+    move=yd.assign(y,{{20,92}});
+    check(y.tiles[move.tiles[0]].in.y==92,"QP Y changes tile choice");
     check(y.tiles[move.tiles[0]].column==20,"source-side favorable X retained");
     y.previous.clear();n.sinks[0].p.y=114;y.rebuild({n});
     check(y.geometry(y.plans[0].crossings[0]).in.y==93,"newborn Y includes output side and tied interval midpoint");
@@ -67,5 +70,5 @@ int main(){try{
     shared.index();Net up{1,"up",pin(1,0,20,50),{pin(2,1,20,150)},1},down{2,"down",pin(3,1,20,150),{pin(4,0,20,50)},1};
     shared.rebuild({up,down});shared.legalizeChannels();
     check(shared.channels[shared.plans[0].crossings[0].channel].resource!=shared.channels[shared.plans[1].crossings[0].channel].resource,"opposite directions share physical SLL supply");
-    std::cout<<"PASS tile planning: capacity=24, hotspot moved=5, receiver-side Y, no squared displacement or switching penalty, deferred exact legalization\n";
+    std::cout<<"PASS tile planning: capacity=24, density target moved=5, QP coordinates control projection, deferred exact legalization\n";
 }catch(const std::exception&e){std::cerr<<e.what()<<'\n';return 1;}}

@@ -61,7 +61,7 @@
   "DSP timing properties sha256": "f4eddecc99f6dcb933750703ff2f5a215186192483126e04af42ff0cf7ca2123",
   "DSP timing source DCP sha256": "6283aa4874b42d939a2b00e53cce77574fa03a26f45914364ab9ca632b42c031",
   "SllQuantityEnable": "true",
-  "SllReportDirectory": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-simple-initialization/not-started/quantity",
+  "SllReportDirectory": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-qp-projection/not-started/quantity",
   "SllDynamicTauEnable": "true",
   "SllShortSpanEnable": "true",
   "SllPlanningEnable": "true",
@@ -72,7 +72,7 @@
   "SllChannelFile": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/device/channels.tsv",
   "SllChannelFileSha256": "bc6ffb509d8733291aacf6eb296211c4f7975c50296c021fcd8c7e487268cfb5",
   "SllCoordinateMapSha256": "2ef92b1113f9e99fc8cfbe9b4db6407b703a768b8de14047e2edbb39656c6cff",
-  "SllPlanningReportDirectory": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-simple-initialization/not-started/planning",
+  "SllPlanningReportDirectory": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-qp-projection/not-started/planning",
   "SllJointPlacementEnable": "true",
   "SllSourceNearInitialization": "true",
   "SllDensityRowHeight": "1",
@@ -80,5 +80,6 @@
   "SllDensityWeight": "256",
   "SllDensityAnchorWeight": "0.05",
   "SllTilePlanningEnable": "true",
-  "SllInitializationPolicy": "local-wire-capacity"
+  "SllInitializationPolicy": "local-wire-capacity",
+  "SllProjectionPolicy": "qp-nearest-capacity"
 }

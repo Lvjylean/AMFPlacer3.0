@@ -1,0 +1,106 @@
+{
+  "variant": "E2: SLL quantity + die-first spreading + SLL planning/timing, QP-result projection correction",
+  "base_commit": "791d54cb032c1caac7ca88fd681fd82104c55c7b",
+  "changes": {
+    "newborn": "unchanged local wire/capacity source-near seed",
+    "pre_qp": "nearby capacity target using weighted L1 displacement plus existing density penalty",
+    "post_qp": "QP-nearest capacity-feasible tile assignment, no independent wire/timing score",
+    "refresh": "preserve existing legal tile X and Y",
+    "export": "exact lanes only; preserve surviving tile choices"
+  },
+  "projection": {
+    "metric": "abs(x_tile-x_qp) + y2xRatio * abs(y_tile-y_qp)",
+    "tie": "incumbent then prospective tile utilization then physical ordering",
+    "algorithm": "deterministic greedy assignment with augmenting-path capacity repair, no global min-cost claim",
+    "soft_density_only_before_qp": true,
+    "hard_capacity": "canonical paired tile shared by both directions",
+    "displacement_limit_for_virtual": "not added; the existing real-PU limit remains unchanged"
+  },
+  "source_sha256": {
+    "configs/experiments/e2-sll-planning-10ns.json": "51e86b5fdafbdb4eb45c3092a04fc9ae23fc96d78ecab798bd6361e86c5b715e",
+    "configs/placement/bases/e2-u250-sll-planning.json": "51e86b5fdafbdb4eb45c3092a04fc9ae23fc96d78ecab798bd6361e86c5b715e",
+    "scripts/sll_planning_inputs.py": "7634b413e27868c8c86134e98093b8dc81637b517bcefdc768616ce66186153a",
+    "src/CMakeLists.txt": "0f1cb96ac80ed8b78a119b025b59c2b5e57565ebaed9556d10f22b7442f71400",
+    "src/app/AMFPlacer/main.cc": "3d440d7fc5a5414ea8bd55adb14ebae3815497eb4c2fd55a9c4fa32702e5cea9",
+    "src/lib/HiFPlacer/placement/placementInfo/SllDensityModel.h": "15c395cfa056d6031cf8f96184d86ddb6441218f90d539179011253a7004e0f4",
+    "src/lib/HiFPlacer/placement/placementInfo/SllPlanner.cc": "3f3fb381932cecebf8a0a06169d49cff9815d381defba790b8710e0fb3b16780",
+    "src/lib/HiFPlacer/placement/placementInfo/SllTilePlacement.h": "cd1feb838b3d113ec154353934098b8617c35b778030aa1fbe44a37e58b2c124",
+    "src/tests/check_sll_density.cc": "c1822c34c33b90dbcc0f093abb343025df0c67225e2cf76b53588fbabf886e49",
+    "src/tests/check_sll_joint_integration.cc": "676be580daefb96b762611abda72af2ef2c4d076e35cf098f7ca6e167035592b",
+    "src/tests/check_sll_qp_projection.cc": "5dbc5f740b75eb665cd6e08b5d3e9b1ea69c4f4e24eaa761f6b09131b45b2020"
+  },
+  "precheck": {
+    "source_base": "791d54cb032c1caac7ca88fd681fd82104c55c7b",
+    "commands": [
+      {
+        "name": "projection-compile",
+        "args": [
+          "g++",
+          "-std=c++17",
+          "-O1",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-qp-projection/repo/src/tests/check_sll_qp_projection.cc",
+          "-o",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-qp-projection/precheck-01/projection"
+        ],
+        "seconds": 2.772485736757517,
+        "exit_code": 0
+      },
+      {
+        "name": "projection-run",
+        "args": [
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-qp-projection/precheck-01/projection"
+        ],
+        "seconds": 0.002500849775969982,
+        "exit_code": 0
+      },
+      {
+        "name": "density-compile",
+        "args": [
+          "g++",
+          "-std=c++17",
+          "-O1",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-qp-projection/repo/src/tests/check_sll_density.cc",
+          "-o",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-qp-projection/precheck-01/density"
+        ],
+        "seconds": 2.7548172138631344,
+        "exit_code": 0
+      },
+      {
+        "name": "density-run",
+        "args": [
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-qp-projection/precheck-01/density"
+        ],
+        "seconds": 0.005751306191086769,
+        "exit_code": 0
+      },
+      {
+        "name": "tile_initialization-compile",
+        "args": [
+          "g++",
+          "-std=c++17",
+          "-O1",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-qp-projection/repo/src/tests/check_sll_tile_initialization.cc",
+          "-o",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-qp-projection/precheck-01/tile_initialization"
+        ],
+        "seconds": 2.5013107927516103,
+        "exit_code": 0
+      },
+      {
+        "name": "tile_initialization-run",
+        "args": [
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-qp-projection/precheck-01/tile_initialization"
+        ],
+        "seconds": 0.00951622985303402,
+        "exit_code": 0
+      }
+    ],
+    "state": "passed"
+  },
+  "constraints": {
+    "ProPrimitiveTiming": false,
+    "SllRegionPolicy": "preserve",
+    "no_full_design_run_or_vivado_routing": true
+  }
+}

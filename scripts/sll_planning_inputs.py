@@ -15,6 +15,9 @@ def validate(config,binary):
     if config.get('SllInitializationPolicy') is not None:
         if config['SllInitializationPolicy']!='local-wire-capacity' or caps.get('simple_sll_initialization_schema')!=1:
             raise ValueError('SLL initialization policy requires the matching simple-initialization binary')
+    if config.get('SllProjectionPolicy') is not None:
+        if config['SllProjectionPolicy']!='qp-nearest-capacity' or caps.get('qp_sll_projection_schema')!=1:
+            raise ValueError('SLL projection policy requires the matching QP-projection binary')
     if config.get('SllTilePlanningEnable','false')=='true' and caps.get('tile_sll_global_schema')!=1:
         raise ValueError('Binary lacks tile-global SLL planning capability')
     table=Path(config['SllChannelFile'])
