@@ -80,10 +80,13 @@ inline int Model::initialTile(int from,int to,Point root,const TileBox&input,con
 inline void Model::rebuildTiles(std::vector<Net> nets) {
     initialTileEvaluations=0;
     // The priority is immutable during this sort; compute it once per net.
-    std::vector<std::pair<double,size_t>> order;order.reserve(nets.size());
+    std::vector<std::pair<double,size_t>> order(nets.size());
+    // Each net owns its lookup and priority; the deterministic capacity pass
+    // below starts only after these independent preparations have joined.
+    #pragma omp parallel for schedule(dynamic,16)
     for(size_t k=0;k<nets.size();++k){auto&n=nets[k];n.sinkLookup.clear();n.sinkLookup.reserve(n.sinks.size());double priority=1;
         for(size_t i=0;i<n.sinks.size();++i){n.sinkLookup[n.sinks[i].id]=i;priority=std::max(priority,n.sinks[i].criticality);}
-        order.emplace_back(priority,k);
+        order[k]={priority,k};
     }
     std::stable_sort(order.begin(),order.end(),[&](const auto&a,const auto&b){
         return a.first==b.first?nets[a.second].id<nets[b.second].id:a.first>b.first;

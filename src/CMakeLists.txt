@@ -328,3 +328,6 @@ target_include_directories(checkSllTimingIndex PRIVATE lib/HiFPlacer/placement/p
 
 add_executable(checkSllTimingCandidates EXCLUDE_FROM_ALL tests/check_sll_timing_candidates.cc)
 target_include_directories(checkSllTimingCandidates PRIVATE lib/HiFPlacer/placement/placementInfo)
+
+add_executable(checkSllDensityEquivalence EXCLUDE_FROM_ALL tests/check_sll_density_equivalence.cc)
+target_include_directories(checkSllDensityEquivalence PRIVATE lib/HiFPlacer/placement/placementInfo)

@@ -281,9 +281,12 @@ void SllPlanner::refresh() {
     const auto indexStart=Clock::now();p->netIndex.assign(di.getNets().size(),-1);p->virtualBase.clear();
     size_t indexedSinks=0;for(const auto&plan:p->m.plans)indexedSinks+=plan.net.sinks.size();
     p->timingIndex.reset(di.getPins().size(),indexedSinks);
+    std::vector<double> wireCosts(p->m.plans.size());
+    #pragma omp parallel for schedule(dynamic,16)
+    for(size_t i=0;i<p->m.plans.size();++i)wireCosts[i]=p->m.wireCost(p->m.plans[i]);
     size_t cells=0;double wire=0;
     for(size_t i=0;i<p->m.plans.size();++i) {
-        const auto&plan=p->m.plans[i];p->netIndex[plan.net.id]=i;p->virtualBase[plan.net.id]=cells;cells+=plan.crossings.size();wire+=p->m.wireCost(plan);
+        const auto&plan=p->m.plans[i];p->netIndex[plan.net.id]=i;p->virtualBase[plan.net.id]=cells;cells+=plan.crossings.size();wire+=wireCosts[i]; // Preserve the original summation order.
         const int sourceCell=di.getPins().at(plan.net.source.id)->getCell()->getCellId();
         for(size_t j=0;j<plan.net.sinks.size();++j){const auto&s=plan.net.sinks[j];
             int dest=di.getPins().at(s.id)->getCell()->getCellId();p->timingIndex.add(s.id,i,j,sourceCell,dest);}
