@@ -78,12 +78,14 @@ def run(root, args):
     config = normalize_incremental_config(json.loads(config_path.read_text()))
     if config.get("IncrementalCompilation") in (True, "true"):
         raise ValueError("Use amf3.py dfx-run for a locked static shell; full-run unplaces the whole design")
+    from sll_planning_inputs import validate as validate_sll_planning
+    validate_sll_planning(config,binary)
     inputs = {}
     for key in ('vivado extracted device information file', 'vivado extracted design information file',
                 'physical boundary model file', 'special pin offset info file', 'clock file', 'mergedSharedCellType2sharedCellType',
                 'cellType2fixedAmo file', 'cellType2sharedCellType file', 'sharedCellType2BELtype file',
                 'fixed units file', 'unpredictable macro file', 'designCluster', 'DSP registered outputs file',
-                'clock resource capacity file', 'external floorplan membership file',
+                'SllChannelFile', 'SllReservedResourceFile', 'clock resource capacity file', 'external floorplan membership file',
                 'external floorplan regions file', 'external floorplan manifest file',
                 'SRL control metadata file'):
         if config.get(key):
@@ -109,6 +111,9 @@ def run(root, args):
     if config.get('external floorplan membership file'):
         config['external floorplan report file'] = str(directory / 'reports/external_floorplan.json')
     configure_outputs(config, directory)
+    if config.get("SllPlanningEnable")=="true":
+        config["SllPlanningReportDirectory"]=str(directory/"reports/sll-planning")
+        if "SllReportDirectory" in config:config["SllReportDirectory"]=str(directory/"reports/sll-quantity")
     if config.get('physical boundary model file'):
         physical = directory/'reports/physical'
         physical.mkdir()

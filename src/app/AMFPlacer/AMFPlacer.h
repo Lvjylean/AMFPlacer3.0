@@ -514,6 +514,7 @@ class AMFPlacer
         placementInfo->dumpPlacementUnitInformation(JSON["dumpDirectory"] + "/PUInfoFinal");
         placementInfo->checkClockUtilization(true);
 
+        if(placementInfo->sllPlanner)placementInfo->sllPlanner->exportPlan(JSON["dumpDirectory"]+"/sll-plan.tcl");
         print_status("Placement Done");
         print_info("Current Total HPWL = " + std::to_string(placementInfo->updateB2BAndGetTotalHPWL()));
 

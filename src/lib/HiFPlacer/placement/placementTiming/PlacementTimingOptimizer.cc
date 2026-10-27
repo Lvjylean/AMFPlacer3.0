@@ -79,6 +79,7 @@ PlacementTimingOptimizer::PlacementTimingOptimizer(PlacementInfo *placementInfo,
                (deviceInfo->getDeviceName() == "U250" ? "u250-tile-columns-20260929 (near legacy, middle/far fitted)"
                                                       : "legacy-095"));
     initPois();
+    if(placementInfo->sllPlanner)placementInfo->sllPlanner->setLocalDelay([this](amf_sll_plan::Point a,amf_sll_plan::Point b){return getDelayByModel_conservative(a.x,a.y,b.x,b.y,true);});
 }
 
 void PlacementTimingOptimizer::setPinsLocation()
@@ -662,6 +663,7 @@ float PlacementTimingOptimizer::conductStaticTimingAnalysis(bool disableOptimist
     auto &pinLoc = placementInfo->getPinId2location();
     auto &cellLoc = placementInfo->getCellId2location();
 
+    if(placementInfo->sllPlanner)placementInfo->sllPlanner->refresh();
     auto &edges = timingGraph->getEdges();
     int numEdges = edges.size();
     chainTimingEnabled = effectFactor > 1;
@@ -677,7 +679,7 @@ float PlacementTimingOptimizer::conductStaticTimingAnalysis(bool disableOptimist
         if (pin2Loc.X < -5 && pin2Loc.Y < -5)
             continue;
 
-        float delay = getDelayByModel(edge->getSink(), edge->getSource(), pin1Loc.X, pin1Loc.Y, pin2Loc.X, pin2Loc.Y);
+        float delay = getDelayForPins(edge->getSourcePin(),edge->getSinkPin(),pin1Loc.X,pin1Loc.Y,pin2Loc.X,pin2Loc.Y);
         //  if (edge->getSink()->checkIsRegister() && edge->getSource()->getOutEdges().size() > 1 &&
         // isPackingTiming)
         //     edge->setDelay(delay + 0.15);
@@ -717,7 +719,7 @@ float PlacementTimingOptimizer::conductStaticTimingAnalysis(bool disableOptimist
                     continue;
                 if (pin2Loc.X < -5 && pin2Loc.Y < -5)
                     continue;
-                float delay = getDelayByModel(pin1Loc.X, pin1Loc.Y, pin2Loc.X, pin2Loc.Y);
+                float delay = getDelayForPins(edge->getSourcePin(),edge->getSinkPin(),pin1Loc.X,pin1Loc.Y,pin2Loc.X,pin2Loc.Y);
                 if (edge->getSink()->getId() == resPath[i - 1])
                 {
                     std::cout << designInfo->getCells()[id]
@@ -749,7 +751,7 @@ float PlacementTimingOptimizer::conductStaticTimingAnalysis(bool disableOptimist
     //     //     continue;
     //     // if (pin2Loc.X < -5 && pin2Loc.Y < -5)
     //     //     continue;
-    //     float delay = getDelayByModel(pin1Loc.X, pin1Loc.Y, pin2Loc.X, pin2Loc.Y);
+    //     float delay = getDelayForPins(edge->getSourcePin(),edge->getSinkPin(),pin1Loc.X,pin1Loc.Y,pin2Loc.X,pin2Loc.Y);
     //     int id = edge->getSource()->getDesignNode()->getCellId();
     //     if (id == targetCellId)
     //         continue;
@@ -777,7 +779,7 @@ float PlacementTimingOptimizer::conductStaticTimingAnalysis(bool disableOptimist
     //                 continue;
     //             if (pin2Loc.X < -5 && pin2Loc.Y < -5)
     //                 continue;
-    //             float delay = getDelayByModel(pin1Loc.X, pin1Loc.Y, pin2Loc.X, pin2Loc.Y);
+    //             float delay = getDelayForPins(edge->getSourcePin(),edge->getSinkPin(),pin1Loc.X,pin1Loc.Y,pin2Loc.X,pin2Loc.Y);
     //             if (edge->getSinkPin()->getCell()->getCellId() == similarPaths[p][i + 1])
     //             {
     //                 totalDelay += curNode->getInnerDelay() + delay;
@@ -843,7 +845,7 @@ float PlacementTimingOptimizer::conductStaticTimingAnalysis(bool disableOptimist
     //                 continue;
     //             if (pin2Loc.X < -5 && pin2Loc.Y < -5)
     //                 continue;
-    //             float delay = getDelayByModel(pin1Loc.X, pin1Loc.Y, pin2Loc.X, pin2Loc.Y);
+    //             float delay = getDelayForPins(edge->getSourcePin(),edge->getSinkPin(),pin1Loc.X,pin1Loc.Y,pin2Loc.X,pin2Loc.Y);
     //             if (edge->getSink()->getId() == resPathForward[i - 1])
     //             {
     //                 std::cout << designInfo->getCells()[id]
@@ -939,7 +941,7 @@ float PlacementTimingOptimizer::conductStaticTimingAnalysis(bool disableOptimist
     //             continue;
     //         if (pin2Loc.X < -5 && pin2Loc.Y < -5)
     //             continue;
-    //         float delay = getDelayByModel(pin1Loc.X, pin1Loc.Y, pin2Loc.X, pin2Loc.Y);
+    //         float delay = getDelayForPins(edge->getSourcePin(),edge->getSinkPin(),pin1Loc.X,pin1Loc.Y,pin2Loc.X,pin2Loc.Y);
     //         if (edge->getSinkPin()->getCell()->getName() == cellNameVec[i + 1])
     //         {
     //             totalDelay += curNode->getInnerDelay() + delay;
@@ -1320,7 +1322,7 @@ void PlacementTimingOptimizer::incrementalStaticTimingAnalysis(
     //                 continue;
     //             if (pin2Loc.X < -5 && pin2Loc.Y < -5)
     //                 continue;
-    //             float delay = getDelayByModel(pin1Loc.X, pin1Loc.Y, pin2Loc.X, pin2Loc.Y);
+    //             float delay = getDelayForPins(edge->getSourcePin(),edge->getSinkPin(),pin1Loc.X,pin1Loc.Y,pin2Loc.X,pin2Loc.Y);
     //             if (edge->getSink()->getId() == resPath[i - 1])
     //             {
     //                 std::cout << designInfo->getCells()[id]

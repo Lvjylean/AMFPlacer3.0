@@ -25,12 +25,14 @@ def inspect(root, args, resources=False, initial=False):
     binary = (root / args.binary).resolve()
     if not binary.is_file():
         raise ValueError('Missing AMF binary: ' + str(binary))
+    from sll_planning_inputs import validate as validate_sll_planning
+    validate_sll_planning(config,binary)
     inputs = {}
     for key in ('vivado extracted device information file', 'vivado extracted design information file',
                 'physical boundary model file', 'special pin offset info file', 'clock file', 'mergedSharedCellType2sharedCellType',
                 'cellType2fixedAmo file', 'cellType2sharedCellType file', 'sharedCellType2BELtype file',
                 'resource initial locations file', 'fixed units file', 'DSP registered outputs file',
-                'clock resource capacity file', 'external floorplan membership file',
+                'SllChannelFile', 'SllReservedResourceFile', 'clock resource capacity file', 'external floorplan membership file',
                 'external floorplan regions file', 'external floorplan manifest file'):
         if config.get(key):
             p = (root / config[key]).resolve()

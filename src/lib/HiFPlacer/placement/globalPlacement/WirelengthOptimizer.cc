@@ -138,6 +138,8 @@ void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool fir
     if (verbose)
         print_status("A QP Iteration Started.");
 
+    if(firstIteration && placementInfo->sllPlanner)placementInfo->sllPlanner->refresh();
+
     if (firstIteration)
     {
         if (timingOptimizer)
@@ -357,6 +359,10 @@ void WirelengthOptimizer::updateB2BNetWeight(float pesudoNetWeight, bool enableM
                                        pin2pinEnhance, timingOptimizer);
     }
 
+    if(placementInfo->sllPlanner && timingOptimizer) {
+        placementInfo->sllPlanner->addTimingModel(xSolver->solverData.objectiveMatrixTripletList,xSolver->solverData.objectiveMatrixDiag,xSolver->solverData.objectiveVector,generalTimingNetWeight,true);
+        placementInfo->sllPlanner->addTimingModel(ySolver->solverData.objectiveMatrixTripletList,ySolver->solverData.objectiveMatrixDiag,ySolver->solverData.objectiveVector,generalTimingNetWeight*y2xRatio,false);
+    }
     if(sllDiagnostics)sllDiagnostics->auditCheckpoint("timing_slack_and_pairing",*xSolver,*ySolver);
     updatePseudoNetsForClusters(pesudoNetWeight, enableUserDefinedClusterOpt, enableFFClusterOpt);
 
@@ -403,6 +409,10 @@ void WirelengthOptimizer::updateB2BNetWeightWorker(PlacementInfo *placementInfo,
         if (net->getDesignNet()->checkIsPowerNet()) // Power nets are on the entrie device. Ignore them.
             continue;
 
+        if (placementInfo->sllPlanner && placementInfo->sllPlanner->handles(net->getDesignNet()->getElementIdInType())) {
+            placementInfo->sllPlanner->addWireModel(net->getDesignNet()->getElementIdInType(),objectiveMatrixTripletList,objectiveMatrixDiag,objectiveVector,generalNetWeight,y2xRatio,updateX);
+            continue;
+        }
         if (net->updateNetBounds(updateX, updateY))
         {
             net->updateBound2BoundNetWeight(objectiveMatrixTripletList, objectiveMatrixDiag, objectiveVector,
@@ -539,6 +549,7 @@ void WirelengthOptimizer::addPseudoNet_SlackBased(float timingWeight, double sla
             assert(curNet);
             auto designNet = curNet->getDesignNet();
             assert(designNet);
+            if(placementInfo->sllPlanner && placementInfo->sllPlanner->handles(designNet->getElementIdInType()))continue;
             assert(curNet->getId() < PNetId2SlackEnhanceTuples.size());
             assert(curNet->getId() == PNetId);
             if (designNet->checkIsPowerNet() || designNet->checkIsGlobalClock())

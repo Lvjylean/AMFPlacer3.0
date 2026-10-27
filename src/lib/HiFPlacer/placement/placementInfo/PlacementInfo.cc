@@ -198,6 +198,11 @@ PlacementInfo::PlacementInfo(DesignInfo *designInfo, DeviceInfo *deviceInfo,
     simplePlacementTimingInfo = new PlacementTimingInfo(designInfo, deviceInfo, JSONCfg);
     PUsSkewRisky.clear();
 
+    if (JSONCfg.count("SllPlanningEnable")) {
+        const auto &enabled=JSONCfg.at("SllPlanningEnable");
+        if(enabled!="true" && enabled!="false")throw std::invalid_argument("SllPlanningEnable must be boolean");
+        if(enabled=="true")sllPlanner=std::make_shared<SllPlanner>(this,JSONCfg);
+    }
     print_status("New Placement Info Created.");
 }
 

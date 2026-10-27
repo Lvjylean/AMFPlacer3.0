@@ -35,6 +35,8 @@
 #include "Eigen/SparseCore"
 #include "PlacementTimingInfo.h"
 #include "GridUpdatePolicy.h"
+#include "SllPlanner.h"
+#include <memory>
 #include "dumpZip.h"
 #include <assert.h>
 #include <fstream>
@@ -62,6 +64,7 @@
 class PlacementInfo
 {
   public:
+    std::shared_ptr<SllPlanner> sllPlanner;
     /**
      * @brief Placement Instance Types
      *
@@ -2164,6 +2167,8 @@ class PlacementInfo
          */
         inline float getHPWL(float y2xRatio)
         {
+            if(placementInfo->sllPlanner && placementInfo->sllPlanner->handles(designNet->getElementIdInType()))
+                return placementInfo->sllPlanner->wireLength(designNet->getElementIdInType(),y2xRatio);
             return std::fabs(rightPinX - leftPinX) + y2xRatio * std::fabs(topPinY - bottomPinY);
         }
 
@@ -2181,6 +2186,8 @@ class PlacementInfo
          */
         inline float getNewHPWLByTrying(PlacementUnit *curPU, double targetPUX, double targetPUY, float y2xRatio) const
         {
+            if(placementInfo->sllPlanner && placementInfo->sllPlanner->handles(designNet->getElementIdInType()))
+                return placementInfo->sllPlanner->wireLength(designNet->getElementIdInType(),y2xRatio,curPU->getId(),{targetPUX,targetPUY});
             float tmp_leftX = 1e5;
             float tmp_rightX = -1e5;
             float tmp_topY = -1e5;

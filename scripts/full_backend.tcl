@@ -190,9 +190,14 @@ if {[catch {
     }
     timed place {place_design}
     timed place_audit {audit placed}
+    if {[file exists [file join $placement sll-plan.tcl]]} {
+        source [file join [file dirname [info script]] sll_routes.tcl]
+        timed sll_constraints {e2_sll::apply [file join $placement sll-plan.tcl] $out}
+    }
     timed placed_checkpoint {write_checkpoint [file join $out getrf_placed.dcp]}
     timed route {route_design}
     timed route_audit {audit routed}
+    if {[file exists [file join $placement sll-plan.tcl]]} {timed sll_path_audit {e2_sll::audit $out}}
     timed reports {
         report_route_status -file [file join $out route_status.rpt]
         report_drc -file [file join $out drc.rpt]

@@ -140,7 +140,8 @@ class PlacementTimingOptimizer
                                  PlacementTimingInfo::TimingGraph<DesignInfo::DesignCell>::TimingNode *node2, float X1,
                                  float Y1, float X2, float Y2)
     {
-        float delay = getDelayByModel_conservative(X1, Y1, X2, Y2);
+        double plannedDelay=0;
+        float delay = placementInfo->sllPlanner && placementInfo->sllPlanner->cellDelay(node2->getDesignNode()->getCellId(),node1->getDesignNode()->getCellId(),{X2,Y2},{X1,Y1},plannedDelay) ? plannedDelay : getDelayByModel_conservative(X1, Y1, X2, Y2);
         if (proPrimitiveTiming && !DSPCritical && isPackingTiming)
         {
             if (node1->getDesignNode()->isDSP() && node1->getForwardLevel() == 0)
@@ -160,6 +161,15 @@ class PlacementTimingOptimizer
     inline float getDelayByModel(float X1, float Y1, float X2, float Y2)
     {
         return getDelayByModel_conservative(X1, Y1, X2, Y2);
+    }
+
+    float getDelayForPins(DesignInfo::DesignPin *source, DesignInfo::DesignPin *sink, float sx,float sy,float tx,float ty) {
+        if(placementInfo->sllPlanner) {
+            double d=0;
+            if(placementInfo->sllPlanner->pinDelay(source->getElementIdInType(),sink->getElementIdInType(),{sx,sy},{tx,ty},d))return d;
+        }
+        auto &nodes=timingInfo->getSimplePlacementTimingInfo();
+        return getDelayByModel(nodes.at(sink->getCell()->getCellId()),nodes.at(source->getCell()->getCellId()),tx,ty,sx,sy);
     }
 
     float IOX6[6] = {7.5, 15.5, 33.5, 51.5, 69.5, 76.5};
@@ -211,8 +221,10 @@ class PlacementTimingOptimizer
     const std::array<float, 10> timingC1;
     const std::array<float, 10> timingC2;
 
-    inline float getDelayByModel_conservative(float X1, float Y1, float X2, float Y2)
+    inline float getDelayByModel_conservative(float X1, float Y1, float X2, float Y2, bool localOnly=false)
     {
+        if(!localOnly && placementInfo->sllPlanner && placementInfo->sllPlanner->crosses({X1,Y1},{X2,Y2}))
+            return placementInfo->sllPlanner->geometryDelay({X1,Y1},{X2,Y2});
         int clockRegionX0, clockRegionY0;
         deviceInfo->getClockRegionByLocation(X1, Y1, clockRegionX0, clockRegionY0);
         int clockRegionX1, clockRegionY1;
@@ -221,8 +233,8 @@ class PlacementTimingOptimizer
         float X = std::fabs(X1 - X2);
         float Y = std::fabs(Y1 - Y2);
         auto physical = deviceInfo->isPhysicalBoundaryTimingEnabled() ? deviceInfo->getPhysicalBoundaryModel() : nullptr;
-        const float slrDelay = physical ? physical->penalty(X1, Y1, X2, Y2, slrBoundaryDelayNs) :
-            slrBoundaryDelayNs * deviceInfo->getSLRBoundaryCount(clockRegionY0, clockRegionY1);
+        const float slrDelay = physical ? physical->penalty(X1, Y1, X2, Y2, localOnly?0:slrBoundaryDelayNs) :
+            (localOnly?0:slrBoundaryDelayNs) * deviceInfo->getSLRBoundaryCount(clockRegionY0, clockRegionY1);
 
         const bool ioCrossing = proLegacyIOBoundary && isPackingTiming && crossIOBank(X1, X2);
 

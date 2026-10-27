@@ -194,6 +194,14 @@ close $f
     for name in ('resources.json','resources.tsv','cascades.tsv'):
         if source.resolve()!=directory.resolve() and (source/'placement'/name).exists():
             shutil.copy2(source/'placement'/name,directory/'placement'/name)
+    if str(cfg.get('SllPlanningEnable','false')).lower()=='true':
+        planned=source/'placement/sll-plan.tcl'
+        if not planned.is_file():raise ValueError('E2 SLL plan missing from AMF output')
+        if planned.resolve()!=(directory/'placement/sll-plan.tcl').resolve():shutil.copy2(planned,directory/'placement/sll-plan.tcl')
+        helper=root/'scripts/sll_routes.tcl'
+        shutil.copy2(helper,directory/'inputs/sll_routes.tcl')
+        manifest['sll_plan_sha256']=digest(planned)
+        manifest['sll_route_helper_sha256']=digest(helper)
     script=directory/'inputs/full_backend.tcl';shutil.copy2(root/'scripts/full_backend.tcl',script)
     acceptance=root/'scripts/import_acceptance.tcl'
     if acceptance.is_file():
