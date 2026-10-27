@@ -33,7 +33,7 @@ struct SllPlanner::Impl {
         auto boolean=[&](const std::string&key,bool fallback){auto it=cfg.find(key);if(it==cfg.end())return fallback;if(it->second!="true"&&it->second!="false")throw std::invalid_argument(key+" must be boolean");return it->second=="true";};
         m.jointPlacement=boolean("SllJointPlacementEnable",false);
         m.sourceNearInitialization=boolean("SllSourceNearInitialization",m.jointPlacement);
-        density.rowHeight=number(cfg,"SllDensityRowHeight",15);
+        density.rowHeight=number(cfg,"SllDensityRowHeight",1);
         density.targetUtilization=number(cfg,"SllDensityTargetUtilization",.8);
         density.weight=number(cfg,"SllDensityWeight",256);
         densityAnchorWeight=number(cfg,"SllDensityAnchorWeight",.05);

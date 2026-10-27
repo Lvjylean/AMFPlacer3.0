@@ -1,0 +1,29 @@
+{
+  "label": "E2 single-tile SLL density revision",
+  "base_commit": "43a54d8079e4a37afd9a4f6bb6fcd28f467b59f6",
+  "change": "Default and E2 configurations set SllDensityRowHeight=1 AMF tile-row unit.",
+  "bin": "unordered SLR boundary, physical COLUMN, lower-side tile Y",
+  "u250_inventory": {
+    "bins": 2880,
+    "canonical_resources_per_unreserved_bin": 24,
+    "total": 69120
+  },
+  "density": {
+    "target_utilization": 0.8,
+    "first_penalized_unreserved_load": 20,
+    "weight": 256,
+    "anchor_weight": 0.05
+  },
+  "compatibility": "Explicit row heights remain supported for historical controls. Earlier E2 checkout and provenance retained.",
+  "scope": "Density aggregation only; continuous QP, candidate selection, exact channel projection, tree FIXED_ROUTE export, ordinary spreading and dynamic tau unchanged.",
+  "validation_plan": [
+    "24-crossing single-tile hotspot versus explicit 15-row control at default weights",
+    "actual U250 per-tile inventory and joint QP with tile pressure",
+    "existing column-pressure and virtual-model regression",
+    "physical fixture exact-route export after two joint QPs"
+  ],
+  "limitations": [
+    "24 is inventory capacity, not a guarantee of routability for arbitrary endpoints.",
+    "No full-design QoR claim; density weights are unchanged initial settings."
+  ]
+}

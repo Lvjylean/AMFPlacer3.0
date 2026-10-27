@@ -10,7 +10,52 @@ static Channel channel(int col,int lane,bool down=false){
     c.slowMax=.77;c.slowMin=.2;c.fastMax=.5;c.fastMin=.1;return c;
 }
 static Pin pin(int id,int slr,double x){Pin p;p.id=id;p.unit=id;p.slr=slr;p.p={x,slr?150.:50.};p.movable=true;return p;}
+
+static void checkTileDensity(){
+    Model m;m.jointPlacement=true;m.allowSplit=false;
+    // A full fifteen-row band, with 24 bidirectional canonical resources per tile.
+    for(int row=450;row<465;++row)for(int lane=0;lane<24;++lane)for(bool down:{false,true}){
+        Channel c=channel(0,lane,down);
+        c.resource="tile"+std::to_string(row)+"lane"+std::to_string(lane);
+        c.segment=c.resource+"_imux,"+c.resource+"_ubump,"+c.resource+"_egress";
+        c.in.y=down?row+60:row;c.out.y=down?row:row+60;
+        m.channels.push_back(c);
+    }
+    m.index();
+    // Twenty-four independent crossings concentrated on one tile. Each may
+    // have several downstream sinks; demand is still one per crossing.
+    for(int i=0;i<24;++i){Plan p;Crossing e;e.channel=2*i;e.sinks={0,1,2,3,4,5};p.crossings.push_back(e);m.plans.push_back(p);}
+    DensityModel tile;tile.index(m);
+    check(tile.rowHeight==1,"default density unit is one tile row");
+    check(tile.capacity.size()==15,"adjacent tile rows have distinct density bins");
+    for(auto&v:tile.capacity)check(v.second==24,"each paired tile has 24 channels, not 48");
+    auto hot=tile.channelBins[0];
+    check(tile.penalty(hot,19)==0 && tile.penalty(hot,20)>0,"default 80 percent target first penalizes the twentieth crossing");
+    check(tile.current(m).size()==24,"fanout does not multiply shared crossing demand");
+    std::vector<Point> desired(24,{0,450});
+    auto spread=tile.assign(m,desired);
+    std::map<DensityModel::Bin,size_t> loads;std::set<std::string> used;
+    for(int ci:spread.channels){
+        ++loads[tile.channelBins[ci]];
+        check(!Model::conflicts(m.channels[ci],used),"tile spreading preserves exact resource exclusivity");
+        Model::occupy(m.channels[ci],used);
+        check(m.channels[ci].out.y-m.channels[ci].in.y==60,"tile spreading preserves paired exit");
+    }
+    check(spread.moved>0 && loads.size()>1 && spread.energyAfter<spread.energyBefore,"default density responds to a single-tile hotspot");
+    for(auto&v:loads)check(v.second<=19,"single-tile hotspot spreads below default target");
+    DensityModel coarse;coarse.rowHeight=15;coarse.index(m);
+    check(coarse.capacity.size()==1 && coarse.capacity.begin()->second==360,"explicit old granularity remains available");
+    auto control=coarse.assign(m,desired);
+    check(control.moved==0 && control.energyBefore==0,"coarse control misses the same single-tile hotspot");
+    m.reserved.insert(m.channels[0].resource);DensityModel reserved;reserved.index(m);
+    check(reserved.capacity.at(hot)==23,"reserved physical channel reduces tile supply once");
+    std::cout<<"PASS tile-density: capacity=24; penalty starts at 20; moved="<<spread.moved
+             <<"; energy="<<spread.energyBefore<<"->"<<spread.energyAfter
+             <<"; coarse-control-moved="<<control.moved<<"\n";
+}
+
 int main(){try{
+    checkTileDensity();
     Model m;m.jointPlacement=true;m.sourceNearInitialization=true;m.allowSplit=false;
     for(int col=0;col<16;++col)for(int lane=0;lane<2;++lane)for(bool down:{false,true})m.channels.push_back(channel(col,lane,down));
     m.index();Net a{1,"a",pin(0,0,0),{pin(1,1,150)},1},b{2,"b",pin(2,0,0),{pin(3,1,150)},1};

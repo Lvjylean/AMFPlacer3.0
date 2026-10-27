@@ -8,7 +8,8 @@ namespace amf_sll_plan {
 class DensityModel {
 public:
     using Bin=std::tuple<int,int,int>;
-    double rowHeight=15,targetUtilization=.8,weight=256;
+    // One tile row by default; paired directions share the same lower-side bin.
+    double rowHeight=1,targetUtilization=.8,weight=256;
     std::map<Bin,size_t> capacity;
     std::vector<Bin> channelBins;
     struct Assignment {

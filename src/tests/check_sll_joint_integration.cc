@@ -2,17 +2,20 @@
 #include "PlacementTimingOptimizer.h"
 #include "WirelengthOptimizer.h"
 #include "simpleJSON.h"
+#include "SllDensityModel.h"
 #include <filesystem>
 #include <iostream>
 static void check(bool ok,const char*s){if(!ok)throw std::runtime_error(s);}
 int main(int argc,char**argv){try{
-    check(argc==3,"usage: checkSllJointIntegration config NEW_OUTPUT");
+    check(argc==3 || (argc==4 && std::string(argv[3])=="tile"),"usage: checkSllJointIntegration config NEW_OUTPUT [tile]");
+    const bool tileMode=argc==4;
     std::filesystem::path root=argv[2];check(std::filesystem::create_directory(root),"refuse overwrite");
     auto cfg=parseJSONFile(argv[1]);cfg["SllPlanningReportDirectory"]=(root/"planning").string();
     cfg["SllPlanningAllowSplit"]="false";cfg["SllJointPlacementEnable"]="true";cfg["SllSourceNearInitialization"]="true";
     // Deliberately small target utilization exposes density pressure using a
     // four-register fixture on the actual full U250 resource table.
-    cfg["SllDensityRowHeight"]="1000";cfg["SllDensityTargetUtilization"]="0.0001";
+    if(tileMode){cfg.erase("SllDensityRowHeight");cfg["SllDensityTargetUtilization"]="0.05";}
+    else {cfg["SllDensityRowHeight"]="1000";cfg["SllDensityTargetUtilization"]="0.0001";}
     cfg["SllDensityWeight"]="1000000";cfg["SllDensityAnchorWeight"]="0.05";
     cfg["SllQuantityEnable"]="true";cfg["SllQuantityDiagnostics"]="true";
     cfg["SllDynamicTauEnable"]="true";cfg["SllShortSpanEnable"]="true";
@@ -24,6 +27,9 @@ int main(int argc,char**argv){try{
     pi.updateCells2PlacementUnits();pi.reloadNets();pi.setBELTypeForCells(&design);pi.createGridBins(5,5);pi.getTimingInfo()->buildSimpleTimingGraph();
     PlacementTimingOptimizer timing(&pi,cfg);pi.sllPlanner->refresh();pi.sllPlanner->prepareDensityTargets();
     check(pi.sllPlanner->variableCount()==3,"one shared QP variable per crossing");
+    amf_sll_plan::DensityModel tileInventory;tileInventory.index(pi.sllPlanner->model());
+    check(tileInventory.capacity.size()==2880,"U250 has 3 boundaries times 16 columns times 60 tile bins");
+    for(const auto&b:tileInventory.capacity)check(b.second==24,"real U250 table gives 24 canonical channels per tile");
     const size_t n=real+pi.sllPlanner->variableCount();std::vector<Eigen::Triplet<float>> trip;std::vector<float> diag(n,0);Eigen::VectorXd rhs=Eigen::VectorXd::Zero(n);
     for(const auto&p:pi.sllPlanner->model().plans)pi.sllPlanner->addWireModel(p.net.id,trip,diag,rhs,1,.4,true);
     bool coupled=false;for(auto&e:trip)coupled|=e.row()<real&&e.col()>=real&&e.value()<0;
@@ -34,7 +40,12 @@ int main(int argc,char**argv){try{
     wl.GlobalPlacementQPSolve(.02,true,true,false,true,false,-10,nullptr,false);
     std::set<int> columns;std::set<std::string> used;
     for(const auto&p:pi.sllPlanner->model().plans)for(const auto&e:p.crossings){const auto&c=pi.sllPlanner->model().channels[e.channel];columns.insert(c.column);check(!amf_sll_plan::Model::conflicts(c,used),"unique exact channels");amf_sll_plan::Model::occupy(c,used);}
-    check(columns.size()>1,"density disperses virtual SLL cells while real endpoints are fixed");
+    if(tileMode){
+        std::set<amf_sll_plan::DensityModel::Bin> bins;
+        for(const auto&p:pi.sllPlanner->model().plans)for(const auto&e:p.crossings)
+            bins.insert(tileInventory.bin(pi.sllPlanner->model().channels[e.channel]));
+        check(bins.size()>1,"tile density disperses virtual cells while real endpoints remain fixed");
+    } else check(columns.size()>1,"density disperses virtual SLL cells while real endpoints are fixed");
     for(auto u:pi.getPlacementUnits())check(u->X()==50&&u->Y()==(u->getId()%2?510:270),"fixed real cells unchanged");
     wl.GlobalPlacementQPSolve(.02,false,true,false,true,false,-10,nullptr,false);
     wl.recordSllStage("ordinary",1,0,"after_legalization");
