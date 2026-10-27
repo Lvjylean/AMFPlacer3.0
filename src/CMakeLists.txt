@@ -310,6 +310,9 @@ target_link_libraries(checkDieFirstSpreadingIntegration GlobalPlacer DesignInfo 
 
 # E2 physical SLL planning: no logical cell or pipeline insertion.
 add_executable(checkSllVirtualModel EXCLUDE_FROM_ALL tests/check_sll_virtual_model.cc)
+add_executable(checkSllDensity EXCLUDE_FROM_ALL tests/check_sll_density.cc)
+add_executable(checkSllJointIntegration EXCLUDE_FROM_ALL tests/check_sll_joint_integration.cc)
+target_link_libraries(checkSllJointIntegration GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 add_executable(checkSllPlannerIntegration EXCLUDE_FROM_ALL tests/check_sll_planner_integration.cc)
 target_link_libraries(checkSllPlannerIntegration GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 

@@ -10,6 +10,8 @@ def validate(config,binary):
     caps=json.loads(subprocess.check_output([str(binary),'--capabilities'],text=True,timeout=15))
     for key in ('virtual_sll_resource_schema','paired_sll_timing_schema','receiver_group_fixed_route_schema'):
         if caps.get(key)!=1:raise ValueError('Binary lacks E2 capability '+key)
+    if config.get('SllJointPlacementEnable','false')=='true' and caps.get('joint_sll_qp_density_schema')!=1:
+        raise ValueError('Binary lacks joint SLL QP/density capability')
     table=Path(config['SllChannelFile'])
     with table.open() as f:header=[next(f).rstrip('\n') for _ in range(3)]
     if header[0]!='#part\t'+config['physical device part']:raise ValueError('SLL part mismatch')

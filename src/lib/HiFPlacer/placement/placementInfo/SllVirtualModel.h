@@ -35,7 +35,7 @@ struct Crossing {
     std::vector<int> sinks; // Pin IDs downstream, not resource multiplicity.
 };
 struct Plan { Net net;std::vector<Crossing> crossings;std::map<int,std::vector<int>> paths; };
-struct Terminal { int pin=-1;Point fixed;bool isFixed=true; };
+struct Terminal { int pin=-1;Point fixed;bool isFixed=true;int crossing=-1;bool exit=false; };
 using LocalDelay=std::function<double(Point,Point)>;
 inline double length(Point a,Point b,double ratio) {return std::abs(a.x-b.x)+ratio*std::abs(a.y-b.y);}
 
@@ -49,6 +49,9 @@ public:
     std::set<std::string> reserved;
     double ratio=.4,timingWeight=1,extraCrossingCost=24,switchCost=.1;
     bool allowSplit=true;
+    // Joint mode preserves optimized channels at refresh. Only newborn
+    // crossings are seeded near the source; proximity is not a permanent lock.
+    bool jointPlacement=false,sourceNearInitialization=false;
     size_t created=0,retained=0,deleted=0;
     LocalDelay local;
 
@@ -83,7 +86,16 @@ public:
         for(size_t i=0;i<groups.size();++i)order.push_back({rank(channels[groups[i][0]]),i});
         std::sort(order.begin(),order.end());std::vector<int> out;
         if(incumbent>=0&&!conflicts(channels[incumbent],used))out.push_back(incumbent);
-        for(const auto&g:order){for(int i:groups[g.second])if(!conflicts(channels[i],used)){if(i!=incumbent)out.push_back(i);break;}if(out.size()>=48)break;}
+        std::map<int,int> perColumn;
+        for(const auto&g:order){
+            const auto&bucket=groups[g.second];
+            if(jointPlacement && perColumn[channels[bucket[0]].column]>=3)continue;
+            for(int i:bucket)if(!conflicts(channels[i],used)){
+                if(i!=incumbent)out.push_back(i);
+                ++perColumn[channels[i].column];break;
+            }
+            if(!jointPlacement && out.size()>=48)break;
+        }
         return out;
     }
     double delay(Point a,Point b)const {return local?local(a,b):length(a,b,ratio)*.01;}
@@ -98,8 +110,8 @@ public:
         trees[0].push_back({p.net.source.id,{},false});
         for(size_t k=0;k<p.crossings.size();++k) {
             const auto&e=p.crossings[k];const auto&c=channels.at(e.channel);
-            trees.at(e.parent+1).push_back({-1,c.in,true});
-            trees[k+1].push_back({-1,c.out,true});
+            trees.at(e.parent+1).push_back({-1,c.in,true,int(k),false});
+            trees[k+1].push_back({-1,c.out,true,int(k),true});
         }
         for(const auto&s:p.net.sinks) {
             const auto&path=p.paths.at(s.id);
@@ -152,7 +164,7 @@ public:
                 auto rank=[&](const Channel&c){double v=length(root,c.in,ratio)+std::max(bx1,c.out.x)-std::min(bx0,c.out.x);if(std::isfinite(by0))v+=ratio*(std::max(by1,c.out.y)-std::min(by0,c.out.y));return v;};
                 auto oldSlot=previous.find(key);
                 auto eligible=candidates(from,to,used,rank,oldSlot==previous.end()?-1:oldSlot->second);
-                double best=INFINITY;int selected=-1;
+                double best=INFINITY,bestSource=INFINITY;int selected=-1;
                 for(int ci:eligible) {
                     const auto&c=channels[ci];if(conflicts(c,used))continue;
                     double x0=c.out.x,x1=c.out.x,y0=c.out.y,y1=c.out.y,td=0;
@@ -162,8 +174,17 @@ public:
                         td=std::max(td,s.criticality*(delay(root,c.in)+c.slowMax+(s.slr==to?delay(c.out,s.p):std::abs(c.out.x-s.p.x)*.01)));}
                     double score=n.weight*(length(root,c.in,ratio)+x1-x0+ratio*(y1-y0))+timingWeight*td;
                     auto old=previous.find(key);if(old!=previous.end()&&old->second!=ci)score+=switchCost;
-                    if(score<best){best=score;selected=ci;}
+                    const double sourceDistance=std::abs(root.x-c.in.x);
+                    const bool newborn=oldSlot==previous.end();
+                    if(sourceNearInitialization && newborn) {
+                        if(sourceDistance<bestSource || (sourceDistance==bestSource&&score<best)){
+                            bestSource=sourceDistance;best=score;selected=ci;
+                        }
+                    } else if(score<best){best=score;selected=ci;}
                 }
+                if(jointPlacement && oldSlot!=previous.end() &&
+                   channels[oldSlot->second].from==from && channels[oldSlot->second].to==to &&
+                   !conflicts(channels[oldSlot->second],used))selected=oldSlot->second;
                 if(selected<0)throw std::runtime_error("SLL allocator exhausted compatible channels");
                 int k=p.crossings.size();p.crossings.push_back({key,selected,parent,downstream});
                 occupy(channels[selected],used);
@@ -201,7 +222,7 @@ public:
             }
             // Coordinate descent measures the complete same-die tree and every
             // sink path, including connections between consecutive crossings.
-            for(int pass=0;pass<2;++pass)for(size_t k=0;k<p.crossings.size();++k) {
+            for(int pass=0;pass<(jointPlacement?0:2);++pass)for(size_t k=0;k<p.crossings.size();++k) {
                 auto&e=p.crossings[k];int old=e.channel;const auto base=channels[old];double best=cost(p);
                 std::set<std::string> other=occupied;for(size_t j=0;j<p.crossings.size();++j)if(j!=k)occupy(channels[p.crossings[j].channel],other);
                 // At most 48 inexpensive geometric candidates plus incumbent.

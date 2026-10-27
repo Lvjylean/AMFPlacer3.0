@@ -138,7 +138,17 @@ void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool fir
     if (verbose)
         print_status("A QP Iteration Started.");
 
-    if(firstIteration && placementInfo->sllPlanner)placementInfo->sllPlanner->refresh();
+    const bool jointSll=placementInfo->sllPlanner && placementInfo->sllPlanner->jointPlacement();
+    if((firstIteration || jointSll) && placementInfo->sllPlanner)placementInfo->sllPlanner->refresh();
+    if(jointSll){
+        placementInfo->sllPlanner->prepareDensityTargets();
+        const size_t n=placementInfo->getPlacementUnits().size()+placementInfo->sllPlanner->variableCount();
+        for(auto solver:{xSolver,ySolver}){
+            solver->solverData.oriSolution.resize(n);
+            solver->solverData.solution.resize(n);
+        }
+        solverLoadData();
+    }
 
     if (firstIteration)
     {
@@ -184,6 +194,14 @@ void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool fir
     // solverLoadFixedData();
     if(sllDiagnostics) sllDiagnostics->candidate(*xSolver,*ySolver);
     solverWriteBackData(displacementLimit);
+    if(jointSll){
+        placementInfo->sllPlanner->projectQp(
+            forwardSolutionToNextIteration?xSolver->solverData.oriSolution:xSolver->solverData.solution,
+            forwardSolutionToNextIteration?ySolver->solverData.oriSolution:ySolver->solverData.solution);
+        // Warm starts always use committed, legal paired SLL positions. The
+        // relaxed coordinates are proposals only, never placement state.
+        solverLoadData();
+    }
     if(sllDiagnostics) sllDiagnostics->written(*xSolver,*ySolver);
 
     if (verbose)
@@ -198,6 +216,14 @@ void WirelengthOptimizer::solverLoadData()
         auto tmpPU = placementInfo->getPlacementUnits()[tmpPUId];
         xSolver->solverData.oriSolution[tmpPUId] = tmpPU->X();
         ySolver->solverData.oriSolution[tmpPUId] = tmpPU->Y();
+    }
+    if(placementInfo->sllPlanner && placementInfo->sllPlanner->jointPlacement()){
+        const auto positions=placementInfo->sllPlanner->virtualPositions();
+        const size_t base=placementInfo->getPlacementUnits().size();
+        for(size_t i=0;i<positions.size();++i){
+            xSolver->solverData.oriSolution[base+i]=positions[i].x;
+            ySolver->solverData.oriSolution[base+i]=positions[i].y;
+        }
     }
 }
 
@@ -368,6 +394,10 @@ void WirelengthOptimizer::updateB2BNetWeight(float pesudoNetWeight, bool enableM
 
     if(sllDiagnostics)sllDiagnostics->auditCheckpoint("anchor_clusters",*xSolver,*ySolver);
     addPseudoNet2LoctionForAllPUs(pesudoNetWeight, considerNetNum);
+    if(placementInfo->sllPlanner){
+        placementInfo->sllPlanner->addDensityModel(xSolver->solverData.objectiveMatrixDiag,xSolver->solverData.objectiveVector,true);
+        placementInfo->sllPlanner->addDensityModel(ySolver->solverData.objectiveMatrixDiag,ySolver->solverData.objectiveVector,false);
+    }
     if(sllDiagnostics)sllDiagnostics->auditCheckpoint("anchor_self_position",*xSolver,*ySolver);
     updatePseudoNetForClockRegion(0.2 * pesudoNetWeight);
 
@@ -402,8 +432,9 @@ void WirelengthOptimizer::updateB2BNetWeightWorker(PlacementInfo *placementInfo,
     AMF_PROFILE_FUNCTION("qp_model");
     objectiveMatrixTripletList.clear();
     objectiveMatrixDiag.clear();
-    objectiveMatrixDiag.resize(placementInfo->getPlacementUnits().size(), 0);
-    objectiveVector = Eigen::VectorXd::Zero(placementInfo->getPlacementUnits().size());
+    const size_t n=placementInfo->getPlacementUnits().size()+(placementInfo->sllPlanner?placementInfo->sllPlanner->variableCount():0);
+    objectiveMatrixDiag.resize(n, 0);
+    objectiveVector = Eigen::VectorXd::Zero(n);
     for (auto net : placementInfo->getPlacementNets())
     {
         if (net->getDesignNet()->checkIsPowerNet()) // Power nets are on the entrie device. Ignore them.

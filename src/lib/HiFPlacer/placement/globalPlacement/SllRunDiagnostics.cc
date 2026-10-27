@@ -130,9 +130,21 @@ struct SllRunDiagnostics::Impl {
         haveRoundS=r.invalidNets==0;previousRoundS=r.discrete;
     }
     std::vector<double> coordinates(bool isY)const {
-        std::vector<double> a(model.units);for(auto pu:placement->getPlacementUnits())a.at(pu->getId())=isY?pu->Y():pu->X();return a;
+        std::vector<double> a(model.units);for(auto pu:placement->getPlacementUnits())a.at(pu->getId())=isY?pu->Y():pu->X();
+        if(placement->sllPlanner && placement->sllPlanner->jointPlacement()){
+            const auto positions=placement->sllPlanner->virtualPositions();const size_t base=placement->getPlacementUnits().size();
+            for(size_t i=0;i<positions.size();++i)a.at(base+i)=isY?positions[i].y:positions[i].x;
+        }
+        return a;
     }
-    void mask(){movable.assign(model.units,0);for(auto pu:placement->getPlacementUnits())movable.at(pu->getId())=!pu->isFixed()&&!pu->isLocked();}
+    void mask(){
+        const size_t real=placement->getPlacementUnits().size();
+        model.units=real+(placement->sllPlanner?placement->sllPlanner->variableCount():0);
+        movable.assign(model.units,0);for(auto pu:placement->getPlacementUnits())movable.at(pu->getId())=!pu->isFixed()&&!pu->isLocked();
+        // Full joint QP diagnostics include auxiliary displacements. Quantity
+        // gradients on them remain zero: original net pins reference real PUs.
+        for(size_t i=real;i<model.units;++i)movable[i]=1;
+    }
     double hpwl(size_t ni,const std::vector<double>&xx,const std::vector<double>&yy)const {
         const auto&n=model.nets[ni];double xmin=INFINITY,xmax=-INFINITY,ymin=INFINITY,ymax=-INFINITY;
         for(size_t j=n.begin;j<n.end;++j){auto&p=model.pins[j];double px=xx[p.unit]+xOffsets[j],py=yy[p.unit]+p.offsetY;xmin=std::min(xmin,px);xmax=std::max(xmax,px);ymin=std::min(ymin,py);ymax=std::max(ymax,py);}

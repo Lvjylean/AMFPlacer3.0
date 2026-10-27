@@ -1,4 +1,5 @@
 #include "SllPlanner.h"
+#include "SllDensityModel.h"
 #include "PlacementInfo.h"
 #include "../../../utils/RuntimeProfiler.h"
 #include <filesystem>
@@ -18,7 +19,10 @@ struct SllPlanner::Impl {
     std::map<std::pair<int,int>,std::vector<int>> cellPairs;
     std::vector<PhysicalBoundaryModel::Region> regions;
     std::map<std::pair<int,int>,std::vector<int>> timingCandidates;
-    std::ofstream log;size_t generation=0;
+    std::ofstream log,jointLog;size_t generation=0,qpGeneration=0;
+    DensityModel density;double densityAnchorWeight=.05;
+    std::map<int,size_t> virtualBase;
+    std::vector<Point> densityTargets;
     explicit Impl(PlacementInfo*placement,const std::map<std::string,std::string>&cfg):pi(placement) {
         if(pi->getIncrementalContext().enabled)throw std::invalid_argument("E2 SLL planning currently requires full-design placement");
         auto physical=pi->getDeviceInfo()->getPhysicalBoundaryModel();if(!physical)throw std::invalid_argument("SLL planner requires physical boundary metadata");
@@ -26,6 +30,14 @@ struct SllPlanner::Impl {
         if(cfg.count("ProPrimitiveTiming") && cfg.at("ProPrimitiveTiming")=="true")throw std::invalid_argument("E2 baseline requires ProPrimitiveTiming=false");
         m.ratio=number(cfg,"y2xRatio",.4);m.timingWeight=number(cfg,"SllPlanningTimingWeight",16);
         m.extraCrossingCost=number(cfg,"SllPlanningExtraCrossingCost",24);m.switchCost=number(cfg,"SllPlanningSwitchCost",.1);
+        auto boolean=[&](const std::string&key,bool fallback){auto it=cfg.find(key);if(it==cfg.end())return fallback;if(it->second!="true"&&it->second!="false")throw std::invalid_argument(key+" must be boolean");return it->second=="true";};
+        m.jointPlacement=boolean("SllJointPlacementEnable",false);
+        m.sourceNearInitialization=boolean("SllSourceNearInitialization",m.jointPlacement);
+        density.rowHeight=number(cfg,"SllDensityRowHeight",15);
+        density.targetUtilization=number(cfg,"SllDensityTargetUtilization",.8);
+        density.weight=number(cfg,"SllDensityWeight",256);
+        densityAnchorWeight=number(cfg,"SllDensityAnchorWeight",.05);
+        if(m.jointPlacement && cfg.count("SllQpAuditCellsFile"))throw std::invalid_argument("Legacy frozen real-PU replay audit does not support joint SLL variables; use E2 joint diagnostics");
         if(cfg.count("SllPlanningAllowSplit")){const auto&s=cfg.at("SllPlanningAllowSplit");if(s!="true"&&s!="false")throw std::invalid_argument("SllPlanningAllowSplit must be boolean");m.allowSplit=s=="true";}
         std::ifstream in(cfg.at("SllChannelFile"));if(!in)throw std::invalid_argument("Cannot read SllChannelFile");
         std::string row;bool part=false,coordinate=false,header=false;
@@ -45,6 +57,7 @@ struct SllPlanner::Impl {
             std::set<std::string> all;for(auto&c:m.channels)all.insert(c.resource);
             while(std::getline(r,row))if(!row.empty()&&row[0]!='#'){if(!all.count(row))throw std::invalid_argument("Unknown reserved SLL resource");m.reserved.insert(row);}
         }
+        if(m.jointPlacement)density.index(m);
         for(const auto&bucket:m.available) {
             std::map<std::tuple<double,double,double,double>,int> representatives;
             for(int ci:bucket.second) {if(m.reserved.count(m.channels[ci].resource))continue;const auto&c=m.channels[ci];auto key=std::make_tuple(c.in.x,c.in.y,c.out.x,c.out.y);auto it=representatives.find(key);if(it==representatives.end() || m.channels[it->second].slowMax<c.slowMax)representatives[key]=ci;}
@@ -55,6 +68,11 @@ struct SllPlanner::Impl {
             const auto path=cfg.at("SllPlanningReportDirectory")+"/sll-planning.tsv";
             if(std::filesystem::exists(path))throw std::runtime_error("Refusing to overwrite SLL planner diagnostics");
             log.open(path);log<<"generation\tnets\tvirtual_cells\tcreated\tretained\tdeleted\tlocal_hpwl\n";
+            if(m.jointPlacement){
+                const auto jpath=cfg.at("SllPlanningReportDirectory")+"/sll-joint-qp.tsv";
+                if(std::filesystem::exists(jpath))throw std::runtime_error("Refusing to overwrite SLL joint diagnostics");
+                jointLog.open(jpath);jointLog<<"qp\tvirtual_pairs\tmoved_channels\tdensity_before\tdensity_after\tmax_projection_distance\n";
+            }
         }
     }
     int slr(Point p)const {for(auto&r:regions)if(r.contains(p.x,p.y))return r.slr;throw std::runtime_error("SLL endpoint outside physical model");}
@@ -68,6 +86,12 @@ struct SllPlanner::Impl {
     Pin makePin(DesignInfo::DesignPin*pin)const {
         auto pu=pi->getCellId2PlacementUnit().at(pin->getCell()->getCellId());Pin p;
         p.id=pin->getElementIdInType();p.unit=pu->getId();p.name=pin->getName();p.p=position(pin);p.slr=slr(p.p);p.offset={p.p.x-pu->X(),p.p.y-pu->Y()};p.movable=!pu->isFixed();return p;
+    }
+    Pin virtualPin(const Plan&plan,int k,bool exit)const {
+        const auto&c=m.channels.at(plan.crossings.at(k).channel);Pin v;
+        v.unit=pi->getPlacementUnits().size()+virtualBase.at(plan.net.id)+k;
+        v.p=exit?c.out:c.in;v.offset=exit?Point{c.out.x-c.in.x,c.out.y-c.in.y}:Point{};
+        v.slr=exit?c.to:c.from;v.movable=true;return v;
     }
     void addPair(const Pin*a,Point av,const Pin*b,Point bv,double weight,std::vector<Eigen::Triplet<float>>&trip,std::vector<float>&diag,Eigen::VectorXd&rhs,bool x)const {
         double pa=x?av.x:av.y,pb=x?bv.x:bv.y;
@@ -83,6 +107,38 @@ SllPlanner::SllPlanner(PlacementInfo*pi,const std::map<std::string,std::string>&
 SllPlanner::~SllPlanner()=default;
 const Model&SllPlanner::model()const{return p->m;}
 void SllPlanner::setLocalDelay(LocalDelay f){p->m.local=std::move(f);}
+bool SllPlanner::jointPlacement()const{return p->m.jointPlacement;}
+size_t SllPlanner::variableCount()const {
+    if(!jointPlacement())return 0;size_t n=0;for(const auto&plan:p->m.plans)n+=plan.crossings.size();return n;
+}
+std::vector<Point> SllPlanner::virtualPositions()const {
+    std::vector<Point> result;if(!jointPlacement())return result;
+    for(const auto&plan:p->m.plans)for(const auto&e:plan.crossings)result.push_back(p->m.channels[e.channel].in);
+    return result;
+}
+void SllPlanner::prepareDensityTargets() {
+    if(!jointPlacement())return;
+    const auto spread=p->density.assign(p->m,virtualPositions());p->densityTargets.clear();
+    for(int ci:spread.channels)p->densityTargets.push_back(p->m.channels[ci].in);
+}
+void SllPlanner::addDensityModel(std::vector<float>&diag,Eigen::VectorXd&rhs,bool x)const {
+    if(!jointPlacement())return;const size_t offset=p->pi->getPlacementUnits().size();
+    if(p->densityTargets.size()!=variableCount())throw std::runtime_error("Unprepared SLL density targets");
+    const double w=std::max(1e-6,p->densityAnchorWeight)*(x?1:p->m.ratio);
+    for(size_t i=0;i<p->densityTargets.size();++i){diag.at(offset+i)+=w;rhs[offset+i]-=w*(x?p->densityTargets[i].x:p->densityTargets[i].y);}
+}
+void SllPlanner::projectQp(const Eigen::VectorXd&x,const Eigen::VectorXd&y) {
+    if(!jointPlacement())return;const size_t offset=p->pi->getPlacementUnits().size(),n=variableCount();
+    if(x.size()!=offset+n||y.size()!=offset+n)throw std::runtime_error("SLL QP dimension mismatch");
+    std::vector<Point> desired;for(size_t i=0;i<n;++i)desired.push_back({x[offset+i],y[offset+i]});
+    auto assigned=p->density.assign(p->m,desired);size_t i=0;double maxMove=0;
+    for(auto&plan:p->m.plans)for(auto&e:plan.crossings){
+        e.channel=assigned.channels[i];const auto&c=p->m.channels[e.channel];
+        maxMove=std::max(maxMove,std::hypot(desired[i].x-c.in.x,desired[i].y-c.in.y));
+        p->m.previous[e.key]=e.channel;++i;
+    }
+    if(p->jointLog)p->jointLog<<++p->qpGeneration<<'\t'<<n<<'\t'<<assigned.moved<<'\t'<<assigned.energyBefore<<'\t'<<assigned.energyAfter<<'\t'<<maxMove<<std::endl;
+}
 bool SllPlanner::handles(int id)const{return p->netIndex.count(id);}
 bool SllPlanner::crosses(Point a,Point b)const{return p->slr(a)!=p->slr(b);}
 void SllPlanner::refresh() {
@@ -106,10 +162,10 @@ void SllPlanner::refresh() {
         }
         if(crossing)nets.push_back(std::move(n));
     }
-    p->m.rebuild(std::move(nets));p->netIndex.clear();p->sinkIndex.clear();p->cellPairs.clear();
+    p->m.rebuild(std::move(nets));p->netIndex.clear();p->sinkIndex.clear();p->cellPairs.clear();p->virtualBase.clear();
     size_t cells=0;double wire=0;
     for(size_t i=0;i<p->m.plans.size();++i) {
-        const auto&plan=p->m.plans[i];p->netIndex[plan.net.id]=i;cells+=plan.crossings.size();wire+=p->m.wireCost(plan);
+        const auto&plan=p->m.plans[i];p->netIndex[plan.net.id]=i;p->virtualBase[plan.net.id]=cells;cells+=plan.crossings.size();wire+=p->m.wireCost(plan);
         const int sourceCell=di.getPins().at(plan.net.source.id)->getCell()->getCellId();
         for(auto&s:plan.net.sinks){p->sinkIndex[s.id]={i,plan.net.source.id};int dest=di.getPins().at(s.id)->getCell()->getCellId();p->cellPairs[{sourceCell,dest}].push_back(s.id);}
     }
@@ -124,7 +180,14 @@ void SllPlanner::addWireModel(int id,std::vector<Eigen::Triplet<float>>&trip,std
         for(size_t i=1;i<pts.size();++i){if(value(i)<value(lo))lo=i;if(value(i)>value(hi))hi=i;}
         if(lo==hi)hi=(lo+1)%pts.size();
         double w=2.0*general*plan.net.weight/(pts.size()-1)*(x?1:ratio);
-        auto edge=[&](size_t a,size_t b){const auto&ta=tree[a];const auto&tb=tree[b];p->addPair(ta.isFixed?nullptr:&p->m.pin(plan.net,ta.pin),pts[a],tb.isFixed?nullptr:&p->m.pin(plan.net,tb.pin),pts[b],w/std::max(.5,std::abs(value(a)-value(b))),trip,diag,rhs,x);};
+        auto edge=[&](size_t a,size_t b){
+            const auto&ta=tree[a];const auto&tb=tree[b];Pin va,vb;
+            const Pin*pa=ta.isFixed?nullptr:&p->m.pin(plan.net,ta.pin);
+            const Pin*pb=tb.isFixed?nullptr:&p->m.pin(plan.net,tb.pin);
+            if(jointPlacement()&&ta.crossing>=0){va=p->virtualPin(plan,ta.crossing,ta.exit);pa=&va;}
+            if(jointPlacement()&&tb.crossing>=0){vb=p->virtualPin(plan,tb.crossing,tb.exit);pb=&vb;}
+            p->addPair(pa,pts[a],pb,pts[b],w/std::max(.5,std::abs(value(a)-value(b))),trip,diag,rhs,x);
+        };
         edge(lo,hi);for(size_t i=0;i<pts.size();++i)if(i!=lo&&i!=hi){edge(i,lo);edge(i,hi);}
     }
 }
@@ -161,9 +224,20 @@ void SllPlanner::addTimingModel(std::vector<Eigen::Triplet<float>>&trip,std::vec
             if(path.empty()){p->addPair(&plan.net.source,plan.net.source.p,&s,s.p,strength/std::max(.5,length(plan.net.source.p,s.p,p->m.ratio)),trip,diag,rhs,x);continue;}
             shared[path.front()]=std::max(shared[path.front()],strength);
             Point root=p->m.channels[plan.crossings[path.back()].channel].out;
-            p->addPair(nullptr,root,&s,s.p,strength/std::max(.5,length(root,s.p,p->m.ratio)),trip,diag,rhs,x);
+            Pin v;if(jointPlacement())v=p->virtualPin(plan,path.back(),true);
+            p->addPair(jointPlacement()?&v:nullptr,root,&s,s.p,strength/std::max(.5,length(root,s.p,p->m.ratio)),trip,diag,rhs,x);
+            for(size_t j=1;j<path.size();++j)shared[path[j]]=std::max(shared[path[j]],strength);
         }
-        for(auto&v:shared){Point end=p->m.channels[plan.crossings[v.first].channel].in;p->addPair(&plan.net.source,plan.net.source.p,nullptr,end,v.second/std::max(.5,length(plan.net.source.p,end,p->m.ratio)),trip,diag,rhs,x);}
+        for(auto&v:shared){
+            const auto&e=plan.crossings[v.first];Point end=p->m.channels[e.channel].in;
+            if(e.parent<0){
+                Pin dest;if(jointPlacement())dest=p->virtualPin(plan,v.first,false);
+                p->addPair(&plan.net.source,plan.net.source.p,jointPlacement()?&dest:nullptr,end,v.second/std::max(.5,length(plan.net.source.p,end,p->m.ratio)),trip,diag,rhs,x);
+            }else if(jointPlacement()){
+                Pin a=p->virtualPin(plan,e.parent,true),b=p->virtualPin(plan,v.first,false);
+                p->addPair(&a,a.p,&b,b.p,v.second/std::max(.5,length(a.p,b.p,p->m.ratio)),trip,diag,rhs,x);
+            }
+        }
     }
 }
 void SllPlanner::exportPlan(const std::string&path) {

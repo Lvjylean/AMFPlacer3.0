@@ -10,6 +10,12 @@ public:
     SllPlanner(PlacementInfo*,const std::map<std::string,std::string>&);
     ~SllPlanner();
     void refresh(); // Serial outer-step boundary, never inside parallel readers.
+    bool jointPlacement()const;
+    size_t variableCount()const;
+    std::vector<amf_sll_plan::Point> virtualPositions()const;
+    void prepareDensityTargets();
+    void addDensityModel(std::vector<float>&,Eigen::VectorXd&,bool)const;
+    void projectQp(const Eigen::VectorXd&,const Eigen::VectorXd&);
     bool handles(int designNetId)const;
     void addWireModel(int designNetId,std::vector<Eigen::Triplet<float>>&,std::vector<float>&,Eigen::VectorXd&,float,float,bool)const;
     bool pinDelay(int sourcePin,int sinkPin,amf_sll_plan::Point,amf_sll_plan::Point,double&)const;

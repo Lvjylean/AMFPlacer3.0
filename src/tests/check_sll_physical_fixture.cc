@@ -1,6 +1,7 @@
 #include "PlacementInfo.h"
 #include "PlacementTimingOptimizer.h"
 #include "simpleJSON.h"
+#include "WirelengthOptimizer.h"
 #include <filesystem>
 #include <iostream>
 int main(int argc,char**argv){try {
@@ -16,7 +17,15 @@ int main(int argc,char**argv){try {
         auto site=inventory.at(sites.at(cell->getName()));u->setAnchorLocationAndForgetTheOriginalOne(site->X(),site->Y());u->setFixed();
         pi.getPlacementUnits().push_back(u);pi.getPlacementUnpackedCells().push_back(u);pi.getCellId2PlacementUnit()[cell->getCellId()]=u;
     }
-    pi.updateCells2PlacementUnits();pi.reloadNets();PlacementTimingOptimizer timing(&pi,cfg);
+    pi.updateCells2PlacementUnits();pi.reloadNets();
+    if(cfg.count("SllFixtureQpSteps"))pi.getTimingInfo()->buildSimpleTimingGraph();
+    PlacementTimingOptimizer timing(&pi,cfg);
+    if(cfg.count("SllFixtureQpSteps")){
+        // Fixed real endpoints isolate movement of the new auxiliary variables.
+        WirelengthOptimizer wl(&pi,cfg,false);
+        const int steps=std::stoi(cfg.at("SllFixtureQpSteps"));
+        for(int i=0;i<steps;++i)wl.GlobalPlacementQPSolve(.02,i==0,true,false,true,false,-10,nullptr,false);
+    }
     pi.sllPlanner->exportPlan((root/"sll-plan.tcl").string());
     const auto&m=pi.sllPlanner->model();std::ofstream out(root/"predicted.tsv");out<<"driver\tsink\tsll_count\tdelay_ns\n";
     size_t crossings=0;

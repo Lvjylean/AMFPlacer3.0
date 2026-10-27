@@ -1,0 +1,54 @@
+{
+  "label": "E2：SLL数量优化＋die内优先扩散（原动态τ）+SLL位置规划与跨die时序修正；虚拟SLL联合优化修订",
+  "base_commit": "29f77e5bb38b5aee5f2444870c900203f84f64f0",
+  "scope": "full-design placement; original E2 and E1 preserved in their own checkouts",
+  "qp": {
+    "unknowns": "real placement-unit coordinates plus one 2D auxiliary anchor per shared SLL crossing",
+    "paired_endpoints": "entry=anchor; exit=anchor+(out-in) from selected physical channel",
+    "coupling": "same-die B2B hyperedges and critical sink paths add symmetric real/virtual and virtual/virtual matrix terms",
+    "coordinates": "AMF common coordinate map; physical COLUMN kept separately",
+    "committed_legality": "continuous QP candidates are projected before writeback completion to actual channels in the resource table; endpoint pair is updated atomically",
+    "refresh": "before EVERY QP in joint mode, before STA and at final export; frozen while X/Y solvers run"
+  },
+  "birth_and_lifetime": {
+    "initialization": "lexicographically nearest feasible source-side entry X; secondary geometry/timing score",
+    "later": "retain previous feasible channel as warm start; allow QP/density to change it",
+    "grouping": "shared crossing tree; source-local leaves do not cross; remove or recreate according to current pin SLRs"
+  },
+  "density": {
+    "bins": "unordered SLR boundary, physical COLUMN, floor(min(entryY,exitY)/rowHeight)",
+    "supply": "unique unreserved canonical UBUMP resources, shared by opposite directions",
+    "demand": "one per shared crossing, not one per sink",
+    "energy": "sum max(0,load-targetUtilization*capacity)^2/capacity",
+    "optimizer": "derive legal density targets; add springs to auxiliary QP rows; projection minimizes proposal displacement plus marginal density energy and switching cost",
+    "hard_constraints": "canonical channel and fixed IMUX/TX/RX/egress footprint exclusivity",
+    "candidate_search": "incumbent plus up to three feasible geometry groups per available physical column; each available column considered",
+    "capacity_caveat": "bin supply counts UBUMPs; access-node conflicts can reduce usable combinations and are checked exactly during assignment"
+  },
+  "baseline": {
+    "ProPrimitiveTiming": "false",
+    "SllRegionPolicy": "preserve",
+    "dynamic_tau": "original schedule unchanged",
+    "die_first_spreading": "unchanged",
+    "ordinary_spreading": "unchanged",
+    "sll_quantity": "original real-net pin objective; zero gradients on auxiliary SLL variables",
+    "diagnostics": "joint QP objective and displacement include auxiliary coordinates; quantity model remains based on original net pins"
+  },
+  "parameters": {
+    "SllJointPlacementEnable": "true in revised E2 configs; false if omitted for old-config compatibility",
+    "SllSourceNearInitialization": "true",
+    "SllDensityRowHeight": 15,
+    "SllDensityTargetUtilization": 0.8,
+    "SllDensityWeight": 256,
+    "SllDensityAnchorWeight": 0.05
+  },
+  "existing_flow": "STA and optional timing local movement -> QP1 -> QP2 -> ordinary spreading -> region clipping -> conditional hard-resource legalization -> convergence/weight update; joint mode adds refresh and SLL projection within each QP call",
+  "limitations": [
+    "Projected continuous relaxation, not an exact mixed-integer global optimizer.",
+    "Heuristic density weights are initial engineering settings, not calibrated full-design QoR results.",
+    "Nearest-source is an initialization hypothesis, not a claim about Vivado internals or a permanent lock.",
+    "No ordinary CLB area assigned to virtual SLL cells; they use their own SLL capacity model.",
+    "Existing real-PU-only frozen replay audit is explicitly rejected in joint mode; joint diagnostic TSV remains supported.",
+    "DFX/incremental mode is not supported by E2."
+  ]
+}
