@@ -325,3 +325,6 @@ add_executable(checkSllWireCache EXCLUDE_FROM_ALL tests/check_sll_wire_cache.cc)
 
 add_executable(checkSllTimingIndex EXCLUDE_FROM_ALL tests/check_sll_timing_index.cc)
 target_include_directories(checkSllTimingIndex PRIVATE lib/HiFPlacer/placement/placementInfo)
+
+add_executable(checkSllTimingCandidates EXCLUDE_FROM_ALL tests/check_sll_timing_candidates.cc)
+target_include_directories(checkSllTimingCandidates PRIVATE lib/HiFPlacer/placement/placementInfo)

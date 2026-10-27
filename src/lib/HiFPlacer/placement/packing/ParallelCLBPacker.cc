@@ -141,16 +141,21 @@ ParallelCLBPacker::ParallelCLBPacker(DesignInfo *designInfo, DeviceInfo *deviceI
 void ParallelCLBPacker::packCLBsIteration(bool initial, bool debug)
 {
     AMF_PROFILE_FUNCTION("final_packing");
-    int numClockCols = clockColumns2PackingSites.size();
-#pragma omp parallel for schedule(dynamic, 16)
-    for (int i = 0; i < numClockCols; i++)
     {
-        for (unsigned int j = 0; j < clockColumns2PackingSites[i].size(); j++)
+        // updateStep changes candidate clusters, not real PU positions or SLL topology.
+        SllPlanner::WireLengthBatch sllWireBatch(placementInfo->sllPlanner.get());
+        int numClockCols = clockColumns2PackingSites.size();
+    #pragma omp parallel for schedule(dynamic, 16)
+        for (int i = 0; i < numClockCols; i++)
         {
-            auto tmpPackingSite = clockColumns2PackingSites[i][j];
-            tmpPackingSite->updateStep(initial, debug);
+            for (unsigned int j = 0; j < clockColumns2PackingSites[i].size(); j++)
+            {
+                auto tmpPackingSite = clockColumns2PackingSites[i][j];
+                tmpPackingSite->updateStep(initial, debug);
+            }
         }
-    }
+
+    } // Joined candidate readers end before packing assignments are updated.
 
     //     int numPackingSites = packingSites.size();
     // #pragma omp parallel for schedule(dynamic, 16)

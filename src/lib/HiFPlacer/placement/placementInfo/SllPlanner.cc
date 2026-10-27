@@ -3,6 +3,7 @@
 #include "SllQpMotion.h"
 #include "SllWireCache.h"
 #include "SllTimingIndex.h"
+#include "SllTimingCandidates.h"
 #include <chrono>
 #include <exception>
 #include <omp.h>
@@ -24,6 +25,7 @@ struct SllPlanner::Impl {
     TimingIndex timingIndex;
     std::vector<PhysicalBoundaryModel::Region> regions;
     std::map<std::pair<int,int>,std::vector<int>> timingCandidates;
+    std::map<std::pair<int,int>,TimingCandidates> timingSearch;
     std::ofstream log,jointLog,projectionLog;size_t generation=0,qpGeneration=0;
     DensityModel density;double densityAnchorWeight=.05;
     std::map<int,size_t> virtualBase;
@@ -96,6 +98,8 @@ struct SllPlanner::Impl {
             for(int ci:bucket.second) {if(m.reserved.count(m.channels[ci].resource))continue;const auto&c=m.channels[ci];auto key=std::make_tuple(c.in.x,c.in.y,c.out.x,c.out.y);auto it=representatives.find(key);if(it==representatives.end() || m.channels[it->second].slowMax<c.slowMax)representatives[key]=ci;}
             for(const auto&v:representatives)timingCandidates[bucket.first].push_back(v.second);
         }
+        // Representatives already exclude the immutable reserved-resource set.
+        for(const auto&bucket:timingCandidates)timingSearch[bucket.first].build(m.channels,bucket.second);
         if(cfg.count("SllPlanningReportDirectory")) {
             std::filesystem::create_directories(cfg.at("SllPlanningReportDirectory"));
             const auto cachePath=cfg.at("SllPlanningReportDirectory")+"/sll-wire-cache.tsv";
@@ -326,9 +330,8 @@ double SllPlanner::geometryDelay(Point a,Point b)const {
     int from=p->slr(a),to=p->slr(b);if(from==to)return p->m.delay(a,b);
     const int dir=to>from?1:-1;double d=0;Point cur=a;
     for(int s=from;s!=to;s+=dir){auto it=p->m.available.find({s,s+dir});if(it==p->m.available.end())throw std::runtime_error("Missing SLL timing direction");double best=INFINITY;int chosen=-1;
-        std::vector<std::pair<double,int>> near;
-        for(int ci:p->timingCandidates.at({s,s+dir})){const auto&c=p->m.channels[ci];if(!p->m.reserved.count(c.resource))near.push_back({length(cur,c.in,p->m.ratio)+std::abs(c.out.x-b.x),ci});}
-        size_t count=std::min(size_t(16),near.size());std::partial_sort(near.begin(),near.begin()+count,near.end());
+        auto near=p->timingSearch.at({s,s+dir}).nearest(cur,b.x,p->m.ratio,16);
+        const size_t count=near.size();
         for(size_t j=0;j<count;++j){int ci=near[j].second;const auto&c=p->m.channels[ci];double v=p->m.delay(cur,c.in)+c.slowMax+std::abs(c.out.x-b.x)*.01;if(v<best){best=v;chosen=ci;}}
         if(chosen<0)throw std::runtime_error("No SLL timing candidate");const auto&c=p->m.channels[chosen];d+=p->m.delay(cur,c.in)+c.slowMax;cur=c.out;
     }

@@ -81,7 +81,7 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
     initialTileEvaluations=0;
     // The priority is immutable during this sort; compute it once per net.
     std::vector<std::pair<double,size_t>> order;order.reserve(nets.size());
-    for(size_t k=0;k<nets.size();++k){auto&n=nets[k];n.sinkLookup.clear();double priority=1;
+    for(size_t k=0;k<nets.size();++k){auto&n=nets[k];n.sinkLookup.clear();n.sinkLookup.reserve(n.sinks.size());double priority=1;
         for(size_t i=0;i<n.sinks.size();++i){n.sinkLookup[n.sinks[i].id]=i;priority=std::max(priority,n.sinks[i].criticality);}
         order.emplace_back(priority,k);
     }
@@ -97,8 +97,23 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
         for(const auto&s:n.sinks)if(s.slr!=n.source.slr)groups[s.slr>n.source.slr?1:0].push_back(s.id);
         if(groups[0].empty()&&groups[1].empty())continue;
         auto constructTiles=[&](Plan&p,const std::vector<std::vector<int>>&partition){
-            const auto&n=p.net;for(const auto&s:n.sinks)p.paths[s.id]={};
-            auto used=occupied;
+            const auto&n=p.net;p.paths.reserve(n.sinks.size());for(const auto&s:n.sinks)p.paths[s.id]={};
+            // Candidate construction is serial. Record only its few changes
+            // and restore the baseline on both normal return and exceptions.
+            struct OccupancyUndo {
+                std::map<TileKey,size_t>&used;
+                struct Original {TileKey key;bool existed;size_t value;};
+                std::vector<Original> originals;
+                explicit OccupancyUndo(std::map<TileKey,size_t>&map):used(map){}
+                size_t value(const TileKey&key)const{auto i=used.find(key);return i==used.end()?0:i->second;}
+                void change(const TileKey&key,int delta){
+                    auto old=std::find_if(originals.begin(),originals.end(),[&](const Original&v){return v.key==key;});
+                    if(old==originals.end()){auto i=used.find(key);originals.push_back({key,i!=used.end(),i==used.end()?0:i->second});}
+                    auto&v=used[key];if(delta>0)++v;else --v;
+                }
+                ~OccupancyUndo(){for(const auto&v:originals)if(v.existed)used.at(v.key)=v.value;else used.erase(v.key);}
+            } undo(occupied);
+            auto&used=occupied;
             for(size_t g=0;g<partition.size();++g){
                 if(partition[g].empty())continue;
                 int dir=pin(n,partition[g][0]).slr>n.source.slr?1:-1,last=n.source.slr,parent=-1;
@@ -111,7 +126,7 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
                     auto old=previous.find(key);int selected=-1;
                     if(old!=previous.end()){
                         const auto&t=tiles.at(old->second);
-                        if(t.from==from&&t.to==from+dir&&used[t.key]<tileCapacity.at(t.key))selected=old->second;
+                        if(t.from==from&&t.to==from+dir&&undo.value(t.key)<tileCapacity.at(t.key))selected=old->second;
                     }
                     if(selected<0){
                         // Cache both local endpoint boxes once, not once per
@@ -124,7 +139,7 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
                     }
                     if(selected<0)throw std::runtime_error("SLL tile allocator exhausted capacity");
                     Crossing e;e.key=key;e.parent=parent;e.sinks=downstream;e.tile=selected;
-                    int k=p.crossings.size();p.crossings.push_back(e);++used[tiles[selected].key];
+                    int k=p.crossings.size();p.crossings.push_back(e);undo.change(tiles[selected].key,1);
                     for(int id:downstream)p.paths[id].push_back(k);
                     parent=k;root=tiles[selected].out;
                 }
@@ -137,7 +152,7 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
                 auto&e=p.crossings[k];
                 const auto old=previous.find(e.key);
                 if(old!=previous.end()&&old->second==e.tile)continue;
-                const auto base=tiles[e.tile];--used[base.key];
+                const auto base=tiles[e.tile];undo.change(base.key,-1);
                 const auto trees=localTrees(p);TileBox input,output;
                 auto fill=[&](TileBox&box,const std::vector<Terminal>&tree){for(const auto&t:tree)
                     if(t.crossing!=int(k))box.add(t.isFixed?t.fixed:pin(n,t.pin).p);};
@@ -146,10 +161,11 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
                 Point root=e.parent<0?n.source.p:tiles[p.crossings[e.parent].tile].out;
                 int selected=initialTile(base.from,base.to,root,input,output,n.weight,used,incumbent,base.column);
                 if(selected<0)throw std::runtime_error("SLL initialization lost a feasible tile");
-                e.tile=selected;++used[tiles[selected].key];
+                e.tile=selected;undo.change(tiles[selected].key,1);
             }
         };
         constructTiles(p,groups);
+        double retainedCost=0;bool hasRetainedCost=false;
         if(allowSplit)for(int dir=0;dir<2;++dir)if(groups[dir].size()>1){
             auto ids=groups[dir];std::stable_sort(ids.begin(),ids.end(),[&](int a,int b){return pin(n,a).p.x<pin(n,b).p.x;});
             std::vector<std::vector<int>> alternatives{std::vector<int>(ids.begin(),ids.begin()+ids.size()/2)};
@@ -162,10 +178,12 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
                 proposal.push_back(rest);
                 // Every proposal uses the same immutable net. Transfer its
                 // ownership temporarily instead of copying all receiver data.
-                const double incumbentCost=cost(p);Plan candidate;candidate.net=std::move(p.net);
+                if(!hasRetainedCost){retainedCost=cost(p);hasRetainedCost=true;}
+                Plan candidate;candidate.net=std::move(p.net);
                 try{
                     constructTiles(candidate,proposal);
-                    if(cost(candidate)<incumbentCost-1e-9)p=std::move(candidate);
+                    const double candidateCost=cost(candidate);
+                    if(candidateCost<retainedCost-1e-9){retainedCost=candidateCost;p=std::move(candidate);}
                     else p.net=std::move(candidate.net);
                 } catch(const std::runtime_error&){p.net=std::move(candidate.net);/* Preserve the feasible shared tree. */}
             }

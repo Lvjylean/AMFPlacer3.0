@@ -10,6 +10,7 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include <unordered_map>
 
 // Physical optimization objects only: no DesignCell, register, or CLB area.
 namespace amf_sll_plan {
@@ -41,14 +42,14 @@ struct Pin {
     bool movable=false;
     double criticality=1;
 };
-struct Net { int id=-1;std::string name;Pin source;std::vector<Pin> sinks;double weight=1;std::map<int,size_t> sinkLookup; };
+struct Net { int id=-1;std::string name;Pin source;std::vector<Pin> sinks;double weight=1;std::unordered_map<int,size_t> sinkLookup; };
 struct Crossing {
     std::string key;
     int channel=-1,parent=-1;
     std::vector<int> sinks; // Pin IDs downstream, not resource multiplicity.
     int tile=-1; // Joint placement selects a tile; channel stays -1 until final legalization.
 };
-struct Plan { Net net;std::vector<Crossing> crossings;std::map<int,std::vector<int>> paths; };
+struct Plan { Net net;std::vector<Crossing> crossings;std::unordered_map<int,std::vector<int>> paths; };
 struct Terminal { int pin=-1;Point fixed;bool isFixed=true;int crossing=-1;bool exit=false; };
 using LocalDelay=std::function<double(Point,Point)>;
 inline double length(Point a,Point b,double ratio) {return std::abs(a.x-b.x)+ratio*std::abs(a.y-b.y);}
@@ -179,7 +180,7 @@ public:
     // follows it. Failure is reported as this allocator's failure, not proof of
     // device infeasibility. Candidate groups never send local sinks off die.
     Plan construct(const Net&n,const std::vector<std::vector<int>>&groups,const std::set<std::string>&occupied)const {
-        Plan p;p.net=n;for(const auto&s:n.sinks)p.paths[s.id]={};
+        Plan p;p.net=n;p.paths.reserve(n.sinks.size());for(const auto&s:n.sinks)p.paths[s.id]={};
         std::set<std::string> used=occupied;
         for(size_t g=0;g<groups.size();++g) {
             if(groups[g].empty())continue;
@@ -230,7 +231,7 @@ public:
     }
     void rebuild(std::vector<Net> nets) {
         if(jointPlacement){rebuildTiles(std::move(nets));return;}
-        for(auto&n:nets){n.sinkLookup.clear();for(size_t i=0;i<n.sinks.size();++i)n.sinkLookup[n.sinks[i].id]=i;}
+        for(auto&n:nets){n.sinkLookup.clear();n.sinkLookup.reserve(n.sinks.size());for(size_t i=0;i<n.sinks.size();++i)n.sinkLookup[n.sinks[i].id]=i;}
         std::stable_sort(nets.begin(),nets.end(),[](const Net&a,const Net&b){double wa=1,wb=1;for(auto&s:a.sinks)wa=std::max(wa,s.criticality);for(auto&s:b.sinks)wb=std::max(wb,s.criticality);return wa==wb?a.id<b.id:wa>wb;});
         std::vector<Plan> next;std::set<std::string> occupied=reserved;
         std::map<std::string,int> nextIdentity;
