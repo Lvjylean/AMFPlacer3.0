@@ -1,4 +1,5 @@
 #include "../lib/HiFPlacer/placement/placementInfo/SllDensityModel.h"
+#include "../lib/HiFPlacer/placement/placementInfo/SllQpMotion.h"
 #include <iostream>
 using namespace amf_sll_plan;
 static void check(bool ok,const char*why){if(!ok)throw std::runtime_error(why);}
@@ -27,6 +28,29 @@ static void show(const char*name,const Model&m,Point q,int ti){
     const auto&t=m.tiles.at(ti);std::cout<<"RESULT\t"<<name<<'\t'<<q.x<<'\t'<<q.y<<'\t'<<t.in.x<<'\t'<<t.in.y<<'\n';
 }
 int main(){try{
+    for(int gap:{11,12})for(int direction:{1,-1}){
+        const double left=gap==11?14:42,right=left+gap;
+        const double start=direction>0?left:right,destination=direction>0?right:left;
+        Model bounded;bounded.jointPlacement=bounded.sourceNearInitialization=true;bounded.allowSplit=false;
+        bounded.channels={channel(int(left),90,0),channel(int(right),90,0)};bounded.index();
+        bounded.rebuild({net(1,start)});DensityModel bd;bd.index(bounded);
+        const Point origin=bounded.geometry(bounded.plans[0].crossings[0]).in;
+        const Point raw{start+direction*100,origin.y},limited=limitedQpPosition(origin,raw,10);
+        check(std::abs(std::hypot(limited.x-origin.x,limited.y-origin.y)-10)<1e-9,"continuous displacement clipped to 10");
+        const auto projected=bd.assign(bounded,{limited});const auto&tile=bounded.tiles[projected.tiles[0]];
+        check(tile.in.x==destination,"adjacent 11/12-gap column remains reachable after clipping");
+        check(std::abs(tile.in.x-origin.x)==gap,"no post-legalization displacement clipping");
+        std::cout<<"LIMIT_RESULT\t"<<gap<<'\t'<<direction<<'\t'<<origin.x<<'\t'<<raw.x<<'\t'<<limited.x<<'\t'<<tile.in.x<<'\n';
+    }
+    const Point origin{42,90};const auto diagonal=limitedQpPosition(origin,{72,130},10);
+    check(diagonal.x==48&&diagonal.y==98,"2D L2 displacement, not independent axis clipping");
+    const auto stationary=limitedQpPosition(origin,origin,10);
+    check(stationary.x==42&&stationary.y==90,"zero displacement is finite");
+    check(limitedQpPosition(origin,{48,98},10).x==48,"exact boundary unchanged");
+    check(limitedQpPosition(origin,{45,94},10).y==94,"small movement unchanged");
+    check(limitedQpPosition(origin,{142,90},-10).x==142&&limitedQpPosition(origin,{142,90},0).x==142,"disabled limit preserves legacy behavior");
+    bool invalid=false;try{limitedQpPosition(origin,{NAN,90},10);}catch(const std::runtime_error&){invalid=true;}
+    check(invalid,"non-finite movement rejected");
     auto m=inventory();Net n=net(1);m.rebuild({n});DensityModel d;d.index(m);
     // Ordinary wire/timing costs favor X=42, but legalization must obey QP.
     m.local=[](Point,Point)->double{throw std::runtime_error("projection queried timing");};

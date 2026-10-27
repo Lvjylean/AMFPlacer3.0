@@ -1,0 +1,79 @@
+{
+  "base_commit": "483a5adfc3e57678d4ddb6c39af02cfa4b129f4e",
+  "implementation": "Forward each QP round displacementLimit to SllPlanner; clip solved virtual entry with same unweighted 2D Euclidean bound as real PUs before tile assignment. Never clip the legalized tile move.",
+  "phase_semantics": "Positive limit active; existing GlobalPlacer uses 10 when timing effectFactor >= 1, otherwise -10 disables. Phase policy unchanged.",
+  "motion_policy": "shared-pre-projection",
+  "no_new_numeric_limit_parameter": true,
+  "regressions": {
+    "state": "passed",
+    "commands": [
+      {
+        "name": "compile",
+        "args": [
+          "g++",
+          "-std=c++17",
+          "-O1",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-qp-displacement/repo/src/tests/check_sll_qp_projection.cc",
+          "-o",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-qp-displacement/precheck-01/projection"
+        ],
+        "exit_code": 0,
+        "seconds": 3.1678523225709796
+      },
+      {
+        "name": "run",
+        "args": [
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-qp-displacement/precheck-01/projection"
+        ],
+        "exit_code": 0,
+        "seconds": 0.0026089223101735115
+      }
+    ]
+  },
+  "timing_audit": {
+    "scope": "Read-only audit of existing E2 setup STA; timing algorithm unchanged in this copy",
+    "source_files_sha256": {
+      "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc": "cd103b02d508c403bab14a6ca648125fe526a53a02ebf22e9f63731cf2c1d3b3",
+      "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.h": "751bd4ae8e9822db0e0ce5f7244fe1a0918b3a48b014f4367abb2271bb5b51f0",
+      "src/lib/HiFPlacer/placement/placementInfo/SllVirtualModel.h": "24197da5e5b53ba435561d6781facb6aa3cc8cb330f267072359494b05ebe806"
+    },
+    "chain": [
+      "conductStaticTimingAnalysis refreshes crossing topology",
+      "getDelayForPins asks pinDelay",
+      "pathDelay sums local polynomial segments and selected crossing slowMax",
+      "edge->setDelay updates the actual STA graph"
+    ],
+    "local_model": "existing conservative polynomial and device coordinates; localOnly=true suppresses legacy SLR penalty",
+    "crossing_model": "tile-wise maximum slowMax envelope before lane legalization; precise channel slowMax after explicit lane legalization",
+    "fallback": "geometry-only cross-die queries use candidate entry/exit + process delay, not the old blanket 1.5 ns",
+    "legacy": "SLRBoundaryDelayNs=1.5 remains for non-E2 mode; it is not added again to planned SLL paths",
+    "table": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/device/channels.tsv",
+    "table_sha256": "bc6ffb509d8733291aacf6eb296211c4f7975c50296c021fcd8c7e487268cfb5",
+    "delay_scope": "IMUX_to_RXD_egress; node_and_pip_speed_models; conservative_transition_envelope; ns",
+    "channel_slow_max_ns": [
+      0.7310000000000001,
+      0.789
+    ],
+    "tile_envelope_slow_max_ns": [
+      0.789,
+      0.789
+    ],
+    "limits": [
+      "placement estimate, not Vivado routed STA",
+      "setup path currently uses slowMax; this does not establish full hold/skew/multicorner STA",
+      "ordinary-wire congestion detours are not made exact by this change"
+    ]
+  },
+  "protected_sources": {
+    "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc": "cd103b02d508c403bab14a6ca648125fe526a53a02ebf22e9f63731cf2c1d3b3",
+    "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.h": "751bd4ae8e9822db0e0ce5f7244fe1a0918b3a48b014f4367abb2271bb5b51f0",
+    "src/lib/HiFPlacer/placement/placementInfo/SllVirtualModel.h": "24197da5e5b53ba435561d6781facb6aa3cc8cb330f267072359494b05ebe806",
+    "src/lib/HiFPlacer/placement/placementInfo/SllDensityModel.h": "15c395cfa056d6031cf8f96184d86ddb6441218f90d539179011253a7004e0f4",
+    "src/lib/HiFPlacer/placement/placementInfo/SllTilePlacement.h": "cd1feb838b3d113ec154353934098b8617c35b778030aa1fbe44a37e58b2c124",
+    "src/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc": "ff21e70ad26afae203a7310f3c5db746d882b542223b30a5481aa64cc4c2a3c6",
+    "src/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc": "f709a5d9c8d9242255f28f9e34005f230b7479d5ed506d84db3dd0d4636bcbfe",
+    "src/lib/HiFPlacer/placement/globalPlacement/SllQuantityModel.h": "4d84d39516dfa701bf260506b5bddd7ccd07faf3c02bb4bd09975bdf663da112",
+    "src/lib/HiFPlacer/placement/globalPlacement/SllAdaptivePolicy.h": "4e7df3c9be0ef7acb840c3106f518d92798735c043e00d01c77a05c7f9fb2e8b",
+    "scripts/sll_routes.tcl": "6e32086de6a7a9b39ab69fe7f250044fc17d61cd78f5dc0957a6cf524192f5fe"
+  }
+}

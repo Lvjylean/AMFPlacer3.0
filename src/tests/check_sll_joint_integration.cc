@@ -5,6 +5,7 @@
 #include "SllDensityModel.h"
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 static void check(bool ok,const char*s){if(!ok)throw std::runtime_error(s);}
 int main(int argc,char**argv){try{
@@ -61,6 +62,34 @@ int main(int argc,char**argv){try{
         check(pi.sllPlanner->model().initialTileEvaluations==0,"refresh does not initialize surviving crossings");
         pi.sllPlanner->prepareDensityTargets();
     }
+    {
+        std::ofstream out(root/"bounded-column-cases.tsv");
+        out<<"gap\tdirection\tfrom\tto\told_x\traw_x\tlimited_x\tlegal_x\told_y\tlegal_y\n";
+        auto proposals=[&](double wanted,double limit){
+            Eigen::VectorXd x=Eigen::VectorXd::Zero(real+pi.sllPlanner->variableCount()),y=x;
+            auto old=pi.sllPlanner->virtualPositions();
+            for(size_t i=0;i<old.size();++i){x[real+i]=wanted;y[real+i]=old[i].y;}
+            pi.sllPlanner->projectQp(x,y,limit);
+        };
+        for(const auto&pair:std::vector<std::pair<double,double>>{{14,25},{42,54}}){
+            proposals(pair.first,-10); // Place the test origin without clipping.
+            for(int direction:{1,-1}){
+                const double start=direction>0?pair.first:pair.second;
+                const double finish=direction>0?pair.second:pair.first;
+                const auto old=pi.sllPlanner->virtualPositions();
+                for(const auto&v:old)check(v.x==start,"real U250 11/12-gap starting column");
+                proposals(start+100*direction,10);
+                const auto now=pi.sllPlanner->virtualPositions();size_t k=0;
+                for(const auto&p:pi.sllPlanner->model().plans)for(const auto&e:p.crossings){
+                    const auto&t=pi.sllPlanner->model().geometry(e);
+                    check(now[k].x==finish&&now[k].y==old[k].y,"real U250 column switches after 10-unit clipping");
+                    check(std::abs(now[k].x-old[k].x)>10,"legalized displacement can exceed 10");
+                    out<<pair.second-pair.first<<'\t'<<direction<<'\t'<<t.from<<'\t'<<t.to<<'\t'<<start<<'\t'<<start+100*direction<<'\t'<<start+10*direction<<'\t'<<finish<<'\t'<<old[k].y<<'\t'<<now[k].y<<'\n';++k;
+                }
+            }
+        }
+        pi.sllPlanner->prepareDensityTargets();
+    }
     const size_t n=real+pi.sllPlanner->variableCount();std::vector<Eigen::Triplet<float>> trip;std::vector<float> diag(n,0);Eigen::VectorXd rhs=Eigen::VectorXd::Zero(n);
     for(const auto&p:pi.sllPlanner->model().plans)pi.sllPlanner->addWireModel(p.net.id,trip,diag,rhs,1,.4,true);
     bool coupled=false;for(auto&e:trip)coupled|=e.row()<real&&e.col()>=real&&e.value()<0;
@@ -98,6 +127,28 @@ int main(int argc,char**argv){try{
     check(std::hypot(source->X()-beforeX,source->Y()-beforeY)>1e-6,"real cell responds to joint virtual wire/timing/density model");
     pi.updateElementBinGrid(false);
     timing.conductStaticTimingAnalysis();
+    {
+        std::map<std::pair<int,int>,double> edgeDelays;
+        for(auto edge:pi.getTimingInfo()->getSimplePlacementTimingGraph()->getEdges())
+            edgeDelays[{edge->getSourcePin()->getElementIdInType(),edge->getSinkPin()->getElementIdInType()}]=edge->getDelay();
+        std::ofstream out(root/"sll-sta-audit.tsv");out<<std::setprecision(17);
+        out<<"net\tsink\tcrossings\tlocal_ns\tsll_ns\texpected_ns\tpin_api_ns\tsta_edge_ns\tlegacy_direct_plus_penalty_ns\n";
+        size_t checked=0;
+        for(const auto&p:pi.sllPlanner->model().plans)for(const auto&s:p.net.sinks){
+            const auto&path=p.paths.at(s.id);if(path.empty())continue;
+            double local=0,sll=0;auto cur=p.net.source.p;
+            for(int k:path){const auto&c=pi.sllPlanner->model().geometry(p.crossings[k]);
+                local+=timing.getDelayByModel_conservative(cur.x,cur.y,c.in.x,c.in.y,true);sll+=c.slowMax;cur=c.out;}
+            local+=timing.getDelayByModel_conservative(cur.x,cur.y,s.p.x,s.p.y,true);
+            const double actual=timing.getDelayForPins(design.getPins().at(p.net.source.id),design.getPins().at(s.id),p.net.source.p.x,p.net.source.p.y,s.p.x,s.p.y);
+            const double edge=edgeDelays.at({p.net.source.id,s.id});
+            check(std::abs(actual-local-sll)<1e-5,"joint STA pin API uses local polynomial plus process SLL delay");
+            check(std::abs(edge-local-sll)<1e-5,"actual STA graph uses selected crossing without legacy addition");
+            const double legacy=timing.getDelayByModel_conservative(p.net.source.p.x,p.net.source.p.y,s.p.x,s.p.y,true)+std::stod(cfg.at("SLRBoundaryDelayNs"))*path.size();
+            out<<p.net.name<<'\t'<<s.name<<'\t'<<path.size()<<'\t'<<local<<'\t'<<sll<<'\t'<<local+sll<<'\t'<<actual<<'\t'<<edge<<'\t'<<legacy<<'\n';++checked;
+        }
+        check(checked>0,"cross-die STA edges audited");
+    }
     const auto finalTiles=tileInventory.current(pi.sllPlanner->model());
     pi.sllPlanner->exportPlan((root/"sll-plan.tcl").string());
     check(tileInventory.current(pi.sllPlanner->model())==finalTiles,"export preserves final QP tiles");

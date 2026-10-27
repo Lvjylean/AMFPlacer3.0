@@ -197,7 +197,8 @@ void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool fir
     if(jointSll){
         placementInfo->sllPlanner->projectQp(
             forwardSolutionToNextIteration?xSolver->solverData.oriSolution:xSolver->solverData.solution,
-            forwardSolutionToNextIteration?ySolver->solverData.oriSolution:ySolver->solverData.solution);
+            forwardSolutionToNextIteration?ySolver->solverData.oriSolution:ySolver->solverData.solution,
+            displacementLimit);
         // Warm starts always use committed, legal paired SLL positions. The
         // relaxed coordinates are proposals only, never placement state.
         solverLoadData();

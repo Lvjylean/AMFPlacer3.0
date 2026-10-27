@@ -1,5 +1,6 @@
 #include "SllPlanner.h"
 #include "SllDensityModel.h"
+#include "SllQpMotion.h"
 #include "PlacementInfo.h"
 #include "../../../utils/RuntimeProfiler.h"
 #include <filesystem>
@@ -43,6 +44,8 @@ struct SllPlanner::Impl {
             throw std::invalid_argument("This E2 copy requires SllInitializationPolicy=local-wire-capacity");
         if(cfg.count("SllProjectionPolicy")&&cfg.at("SllProjectionPolicy")!="qp-nearest-capacity")
             throw std::invalid_argument("This E2 copy requires SllProjectionPolicy=qp-nearest-capacity");
+        if(cfg.count("SllQpDisplacementPolicy")&&cfg.at("SllQpDisplacementPolicy")!="shared-pre-projection")
+            throw std::invalid_argument("This E2 copy requires SllQpDisplacementPolicy=shared-pre-projection");
         if(m.jointPlacement && cfg.count("SllQpAuditCellsFile"))throw std::invalid_argument("Legacy frozen real-PU replay audit does not support joint SLL variables; use E2 joint diagnostics");
         if(cfg.count("SllPlanningAllowSplit")){const auto&s=cfg.at("SllPlanningAllowSplit");if(s!="true"&&s!="false")throw std::invalid_argument("SllPlanningAllowSplit must be boolean");m.allowSplit=s=="true";}
         std::ifstream in(cfg.at("SllChannelFile"));if(!in)throw std::invalid_argument("Cannot read SllChannelFile");
@@ -82,7 +85,7 @@ struct SllPlanner::Impl {
                 const auto ppath=cfg.at("SllPlanningReportDirectory")+"/sll-qp-projection.tsv";
                 if(std::filesystem::exists(ppath))throw std::runtime_error("Refusing to overwrite SLL projection diagnostics");
                 projectionLog.open(ppath);projectionLog<<std::setprecision(17);
-                projectionLog<<"qp\tkey\tfrom\tto\told_column\told_x\told_y\tqp_x\tqp_y\tcolumn\tx\ty\tweighted_distance\n";
+                projectionLog<<"qp\tkey\tfrom\tto\told_column\told_x\told_y\tqp_x\tqp_y\tlimited_x\tlimited_y\tdisplacement_limit\tcolumn\tx\ty\tweighted_distance\traw_displacement\tlimited_displacement\tlegal_displacement\n";
             }
         }
     }
@@ -138,10 +141,15 @@ void SllPlanner::addDensityModel(std::vector<float>&diag,Eigen::VectorXd&rhs,boo
     const double w=std::max(1e-6,p->densityAnchorWeight)*(x?1:p->m.ratio);
     for(size_t i=0;i<p->densityTargets.size();++i){diag.at(offset+i)+=w;rhs[offset+i]-=w*(x?p->densityTargets[i].x:p->densityTargets[i].y);}
 }
-void SllPlanner::projectQp(const Eigen::VectorXd&x,const Eigen::VectorXd&y) {
+void SllPlanner::projectQp(const Eigen::VectorXd&x,const Eigen::VectorXd&y,double displacementLimit) {
     if(!jointPlacement())return;const size_t offset=p->pi->getPlacementUnits().size(),n=variableCount();
     if(x.size()!=offset+n||y.size()!=offset+n)throw std::runtime_error("SLL QP dimension mismatch");
-    std::vector<Point> desired;for(size_t i=0;i<n;++i)desired.push_back({x[offset+i],y[offset+i]});
+    const auto origins=virtualPositions();
+    std::vector<Point> raw,desired;
+    for(size_t i=0;i<n;++i){
+        raw.push_back({x[offset+i],y[offset+i]});
+        desired.push_back(limitedQpPosition(origins[i],raw.back(),displacementLimit));
+    }
     // Refresh real coordinates for subsequent timing queries. Tile legalization
     // uses the solved virtual coordinates, not another net-cost optimization.
     for(auto&plan:p->m.plans){
@@ -152,7 +160,7 @@ void SllPlanner::projectQp(const Eigen::VectorXd&x,const Eigen::VectorXd&y) {
     for(auto&plan:p->m.plans)for(auto&e:plan.crossings){
         const auto old=p->m.tiles[e.tile];
         e.tile=assigned.tiles[i];e.channel=-1;const auto&c=p->m.tiles[e.tile];
-        if(p->projectionLog)p->projectionLog<<p->qpGeneration+1<<'\t'<<e.key<<'\t'<<c.from<<'\t'<<c.to<<'\t'<<old.column<<'\t'<<old.in.x<<'\t'<<old.in.y<<'\t'<<desired[i].x<<'\t'<<desired[i].y<<'\t'<<c.column<<'\t'<<c.in.x<<'\t'<<c.in.y<<'\t'<<length(desired[i],c.in,p->m.ratio)<<'\n';
+        if(p->projectionLog)p->projectionLog<<p->qpGeneration+1<<'\t'<<e.key<<'\t'<<c.from<<'\t'<<c.to<<'\t'<<old.column<<'\t'<<old.in.x<<'\t'<<old.in.y<<'\t'<<raw[i].x<<'\t'<<raw[i].y<<'\t'<<desired[i].x<<'\t'<<desired[i].y<<'\t'<<displacementLimit<<'\t'<<c.column<<'\t'<<c.in.x<<'\t'<<c.in.y<<'\t'<<length(desired[i],c.in,p->m.ratio)<<'\t'<<std::hypot(raw[i].x-old.in.x,raw[i].y-old.in.y)<<'\t'<<std::hypot(desired[i].x-old.in.x,desired[i].y-old.in.y)<<'\t'<<std::hypot(c.in.x-old.in.x,c.in.y-old.in.y)<<'\n';
         maxMove=std::max(maxMove,std::hypot(desired[i].x-c.in.x,desired[i].y-c.in.y));
         p->m.previous[e.key]=e.tile;++i;
     }
