@@ -322,3 +322,6 @@ add_executable(checkSllPhysicalFixture EXCLUDE_FROM_ALL tests/check_sll_physical
 target_link_libraries(checkSllPhysicalFixture GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 
 add_executable(checkSllWireCache EXCLUDE_FROM_ALL tests/check_sll_wire_cache.cc)
+
+add_executable(checkSllTimingIndex EXCLUDE_FROM_ALL tests/check_sll_timing_index.cc)
+target_include_directories(checkSllTimingIndex PRIVATE lib/HiFPlacer/placement/placementInfo)

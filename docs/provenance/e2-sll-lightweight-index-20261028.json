@@ -1,0 +1,12 @@
+{
+  "base_commit": "490b69fdffee4e033c9e111ff3bc6dc900d7d4df",
+  "changes": [
+    "Precompute exactly the existing criticality sort key once per net",
+    "Transfer common net data into tile proposals and restore it on rejected/failed proposals",
+    "Use a dense pin location table and a hash table that preserves ambiguous cell pairs"
+  ],
+  "model_validation": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-lightweight-index/model-equivalence-01/comparison.json",
+  "identical_model_frames": 100,
+  "timing_index_queries": 100000,
+  "full_runtime_validation": "pending"
+}

@@ -79,18 +79,25 @@ inline int Model::initialTile(int from,int to,Point root,const TileBox&input,con
 }
 inline void Model::rebuildTiles(std::vector<Net> nets) {
     initialTileEvaluations=0;
-    for(auto&n:nets){n.sinkLookup.clear();for(size_t i=0;i<n.sinks.size();++i)n.sinkLookup[n.sinks[i].id]=i;}
-    std::stable_sort(nets.begin(),nets.end(),[](const Net&a,const Net&b){
-        double wa=1,wb=1;for(auto&s:a.sinks)wa=std::max(wa,s.criticality);for(auto&s:b.sinks)wb=std::max(wb,s.criticality);
-        return wa==wb?a.id<b.id:wa>wb;
+    // The priority is immutable during this sort; compute it once per net.
+    std::vector<std::pair<double,size_t>> order;order.reserve(nets.size());
+    for(size_t k=0;k<nets.size();++k){auto&n=nets[k];n.sinkLookup.clear();double priority=1;
+        for(size_t i=0;i<n.sinks.size();++i){n.sinkLookup[n.sinks[i].id]=i;priority=std::max(priority,n.sinks[i].criticality);}
+        order.emplace_back(priority,k);
+    }
+    std::stable_sort(order.begin(),order.end(),[&](const auto&a,const auto&b){
+        return a.first==b.first?nets[a.second].id<nets[b.second].id:a.first>b.first;
     });
+    std::vector<Net> sorted;sorted.reserve(nets.size());
+    for(const auto&item:order)sorted.push_back(std::move(nets[item.second]));nets=std::move(sorted);
     std::map<TileKey,size_t> occupied;std::vector<Plan> next;std::map<std::string,int> nextIdentity;
-    for(const auto&n:nets){
+    for(auto&input:nets){
+        Plan p;p.net=std::move(input);const auto&n=p.net;
         std::vector<std::vector<int>> groups(2);
         for(const auto&s:n.sinks)if(s.slr!=n.source.slr)groups[s.slr>n.source.slr?1:0].push_back(s.id);
         if(groups[0].empty()&&groups[1].empty())continue;
-        auto constructTiles=[&](const std::vector<std::vector<int>>&partition){
-            Plan p;p.net=n;for(const auto&s:n.sinks)p.paths[s.id]={};
+        auto constructTiles=[&](Plan&p,const std::vector<std::vector<int>>&partition){
+            const auto&n=p.net;for(const auto&s:n.sinks)p.paths[s.id]={};
             auto used=occupied;
             for(size_t g=0;g<partition.size();++g){
                 if(partition[g].empty())continue;
@@ -141,9 +148,8 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
                 if(selected<0)throw std::runtime_error("SLL initialization lost a feasible tile");
                 e.tile=selected;++used[tiles[selected].key];
             }
-            return p;
         };
-        Plan p=constructTiles(groups);
+        constructTiles(p,groups);
         if(allowSplit)for(int dir=0;dir<2;++dir)if(groups[dir].size()>1){
             auto ids=groups[dir];std::stable_sort(ids.begin(),ids.end(),[&](int a,int b){return pin(n,a).p.x<pin(n,b).p.x;});
             std::vector<std::vector<int>> alternatives{std::vector<int>(ids.begin(),ids.begin()+ids.size()/2)};
@@ -154,8 +160,14 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
                 auto proposal=groups;proposal[dir]=first;std::vector<int> rest;
                 for(int id:ids)if(std::find(first.begin(),first.end(),id)==first.end())rest.push_back(id);
                 proposal.push_back(rest);
-                try{auto candidate=constructTiles(proposal);if(cost(candidate)<cost(p)-1e-9)p=std::move(candidate);}
-                catch(const std::runtime_error&){/* Preserve the feasible shared tree. */}
+                // Every proposal uses the same immutable net. Transfer its
+                // ownership temporarily instead of copying all receiver data.
+                const double incumbentCost=cost(p);Plan candidate;candidate.net=std::move(p.net);
+                try{
+                    constructTiles(candidate,proposal);
+                    if(cost(candidate)<incumbentCost-1e-9)p=std::move(candidate);
+                    else p.net=std::move(candidate.net);
+                } catch(const std::runtime_error&){p.net=std::move(candidate.net);/* Preserve the feasible shared tree. */}
             }
         }
         for(const auto&e:p.crossings){++occupied[tiles[e.tile].key];nextIdentity[e.key]=e.tile;}

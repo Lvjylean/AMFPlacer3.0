@@ -2,6 +2,7 @@
 #include "SllDensityModel.h"
 #include "SllQpMotion.h"
 #include "SllWireCache.h"
+#include "SllTimingIndex.h"
 #include <chrono>
 #include <exception>
 #include <omp.h>
@@ -20,8 +21,7 @@ double number(const std::map<std::string,std::string>&cfg,const std::string&key,
 }
 struct SllPlanner::Impl {
     PlacementInfo*pi;Model m;std::vector<int> netIndex;
-    std::map<int,std::pair<size_t,int>> sinkIndex;
-    std::map<std::pair<int,int>,std::vector<int>> cellPairs;
+    TimingIndex timingIndex;
     std::vector<PhysicalBoundaryModel::Region> regions;
     std::map<std::pair<int,int>,std::vector<int>> timingCandidates;
     std::ofstream log,jointLog,projectionLog;size_t generation=0,qpGeneration=0;
@@ -274,12 +274,15 @@ void SllPlanner::refresh() {
         audited=nets.size();auditSeconds=seconds(auditStart);
     }
     const auto rebuildStart=Clock::now();p->m.rebuild(std::move(nets));const double rebuildSeconds=seconds(rebuildStart);
-    const auto indexStart=Clock::now();p->netIndex.assign(di.getNets().size(),-1);p->sinkIndex.clear();p->cellPairs.clear();p->virtualBase.clear();
+    const auto indexStart=Clock::now();p->netIndex.assign(di.getNets().size(),-1);p->virtualBase.clear();
+    size_t indexedSinks=0;for(const auto&plan:p->m.plans)indexedSinks+=plan.net.sinks.size();
+    p->timingIndex.reset(di.getPins().size(),indexedSinks);
     size_t cells=0;double wire=0;
     for(size_t i=0;i<p->m.plans.size();++i) {
         const auto&plan=p->m.plans[i];p->netIndex[plan.net.id]=i;p->virtualBase[plan.net.id]=cells;cells+=plan.crossings.size();wire+=p->m.wireCost(plan);
         const int sourceCell=di.getPins().at(plan.net.source.id)->getCell()->getCellId();
-        for(auto&s:plan.net.sinks){p->sinkIndex[s.id]={i,plan.net.source.id};int dest=di.getPins().at(s.id)->getCell()->getCellId();p->cellPairs[{sourceCell,dest}].push_back(s.id);}
+        for(size_t j=0;j<plan.net.sinks.size();++j){const auto&s=plan.net.sinks[j];
+            int dest=di.getPins().at(s.id)->getCell()->getCellId();p->timingIndex.add(s.id,i,j,sourceCell,dest);}
     }
     if(p->refreshLog)p->refreshLog<<p->generation+1<<'\t'<<placementNets.size()<<'\t'<<selected<<'\t'
         <<collectSeconds<<'\t'<<rebuildSeconds<<'\t'<<seconds(indexStart)<<'\t'<<auditSeconds<<'\t'<<audited<<std::endl;
@@ -306,16 +309,18 @@ void SllPlanner::addWireModel(int id,std::vector<Eigen::Triplet<float>>&trip,std
     }
 }
 bool SllPlanner::pinDelay(int source,int sink,Point a,Point b,double&result)const {
-    auto it=p->sinkIndex.find(sink);if(it==p->sinkIndex.end()||it->second.second!=source)return false;
-    const auto&plan=p->m.plans.at(it->second.first);const auto&s=p->m.pin(plan.net,sink);
+    auto entry=p->timingIndex.findPin(sink);if(!entry)return false;
+    const auto&plan=p->m.plans.at(entry->plan);if(plan.net.source.id!=source)return false;
+    const auto&s=plan.net.sinks.at(entry->sink);
     if(p->slr(a)!=plan.net.source.slr||p->slr(b)!=s.slr)return false;
     result=p->m.pathDelay(plan,sink,a,b);return true;
 }
 bool SllPlanner::cellDelay(int source,int sink,Point a,Point b,double&result)const {
-    auto it=p->cellPairs.find({source,sink});if(it==p->cellPairs.end())return false;
     // Ambiguous cell pairs can have different pin-level trees. Caller must use
     // exact pin IDs; never select an arbitrary net between the two cells.
-    if(it->second.size()!=1)return false;int id=it->second[0];return pinDelay(p->sinkIndex.at(id).second,id,a,b,result);
+    int id=p->timingIndex.uniqueSink(source,sink);if(id<0)return false;
+    auto entry=p->timingIndex.findPin(id);if(!entry)return false;
+    return pinDelay(p->m.plans.at(entry->plan).net.source.id,id,a,b,result);
 }
 double SllPlanner::geometryDelay(Point a,Point b)const {
     int from=p->slr(a),to=p->slr(b);if(from==to)return p->m.delay(a,b);
