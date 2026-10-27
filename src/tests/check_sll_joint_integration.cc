@@ -14,7 +14,7 @@ int main(int argc,char**argv){try{
     std::filesystem::path root=argv[2];check(std::filesystem::create_directory(root),"refuse overwrite");
     auto cfg=parseJSONFile(argv[1]);cfg["SllPlanningReportDirectory"]=(root/"planning").string();
     cfg["SllWireCacheAuditStride"]="1";
-    cfg["SllPlanningAllowSplit"]="false";cfg["SllJointPlacementEnable"]="true";cfg["SllSourceNearInitialization"]="true";
+    cfg["SllPlanningAllowSplit"]="false";cfg["SllJointPlacementEnable"]="true";cfg["SllRefreshAuditStride"]="1";cfg["SllSourceNearInitialization"]="true";
     // Deliberately small target utilization exposes density pressure using a
     // four-register fixture on the actual full U250 resource table.
     if(tileMode){cfg.erase("SllDensityRowHeight");cfg["SllDensityTargetUtilization"]="0.05";}

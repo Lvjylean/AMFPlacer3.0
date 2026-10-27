@@ -1,0 +1,16 @@
+{
+  "base_commit": "f25f2fe9f46c5625758e584f81521811a66e02f9",
+  "scope": "Ordered parallel SLL data collection; original scoring and capacity allocation unchanged",
+  "changes": [
+    "Reject same-die nets before materializing names and criticality",
+    "Read the existing maintained dense cell-to-PU array",
+    "Parallel immutable collection with deterministic output order",
+    "Serial capacity-dependent rebuilding preserved",
+    "Optional exact legacy collection audit and per-stage timers"
+  ],
+  "config": {
+    "SllRefreshParallelEnable": true,
+    "SllRefreshAuditStride": 0
+  },
+  "validation": "Pending; not an accepted runtime result"
+}

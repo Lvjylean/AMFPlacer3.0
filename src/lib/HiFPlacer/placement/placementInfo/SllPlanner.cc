@@ -3,6 +3,7 @@
 #include "SllQpMotion.h"
 #include "SllWireCache.h"
 #include <chrono>
+#include <exception>
 #include <omp.h>
 #include "PlacementInfo.h"
 #include "../../../utils/RuntimeProfiler.h"
@@ -34,7 +35,9 @@ struct SllPlanner::Impl {
     std::vector<WireSnapshotNet> wireSnapshots;
     std::chrono::steady_clock::time_point wireBatchStart;
     double wirePrepareSeconds=0;
-    std::ofstream wireLog;
+    std::ofstream wireLog,refreshLog;
+    bool refreshParallel=true;
+    size_t refreshAuditStride=0,refreshCalls=0;
     explicit Impl(PlacementInfo*placement,const std::map<std::string,std::string>&cfg):pi(placement) {
         if(pi->getIncrementalContext().enabled)throw std::invalid_argument("E2 SLL planning currently requires full-design placement");
         auto physical=pi->getDeviceInfo()->getPhysicalBoundaryModel();if(!physical)throw std::invalid_argument("SLL planner requires physical boundary metadata");
@@ -47,6 +50,11 @@ struct SllPlanner::Impl {
         const double stride=number(cfg,"SllWireCacheAuditStride",0);
         if(stride!=std::floor(stride)||stride>1000000000)throw std::invalid_argument("Invalid SllWireCacheAuditStride");
         wireAuditStride=static_cast<size_t>(stride);
+        refreshParallel=boolean("SllRefreshParallelEnable",true);
+        const double refreshStride=number(cfg,"SllRefreshAuditStride",0);
+        if(refreshStride!=std::floor(refreshStride)||refreshStride>1000000000)
+            throw std::invalid_argument("Invalid SllRefreshAuditStride");
+        refreshAuditStride=static_cast<size_t>(refreshStride);
         m.jointPlacement=boolean("SllJointPlacementEnable",false);
         m.sourceNearInitialization=boolean("SllSourceNearInitialization",m.jointPlacement);
         density.rowHeight=number(cfg,"SllDensityRowHeight",1);
@@ -92,6 +100,10 @@ struct SllPlanner::Impl {
             std::filesystem::create_directories(cfg.at("SllPlanningReportDirectory"));
             const auto cachePath=cfg.at("SllPlanningReportDirectory")+"/sll-wire-cache.tsv";
             if(std::filesystem::exists(cachePath))throw std::runtime_error("Refusing to overwrite SLL wire cache diagnostics");
+            const auto refreshPath=cfg.at("SllPlanningReportDirectory")+"/sll-refresh.tsv";
+            if(std::filesystem::exists(refreshPath))throw std::runtime_error("Refusing to overwrite SLL refresh diagnostics");
+            refreshLog.open(refreshPath);refreshLog<<std::setprecision(17);
+            refreshLog<<"generation\tplacement_nets\tselected_nets\tcollect_seconds\trebuild_seconds\tindex_seconds\taudit_seconds\taudit_nets\n";
             wireLog.open(cachePath);wireLog<<std::setprecision(17);
             wireLog<<"batch\tprepared_nets\tterminals\tprepare_seconds\tsearch_seconds\taudit_samples\taudit_mismatches\tmax_abs_error\n";
             const auto path=cfg.at("SllPlanningReportDirectory")+"/sll-planning.tsv";
@@ -109,16 +121,20 @@ struct SllPlanner::Impl {
         }
     }
     int slr(Point p)const {for(auto&r:regions)if(r.contains(p.x,p.y))return r.slr;throw std::runtime_error("SLL endpoint outside physical model");}
-    Point position(DesignInfo::DesignPin*pin)const {
-        auto cell=pin->getCell();auto it=pi->getCellId2PlacementUnit().find(cell->getCellId());
-        if(it==pi->getCellId2PlacementUnit().end())throw std::runtime_error("SLL pin without placement unit");
-        auto pu=it->second;Point pos{pu->X()+pin->getOffsetXInCell(),pu->Y()+pin->getOffsetYInCell()};
+    Point position(DesignInfo::DesignPin*pin,bool dense=true)const {
+        auto cell=pin->getCell();
+        auto pu=dense?pi->getCellId2PlacementUnitVec().at(cell->getCellId()):
+                      pi->getCellId2PlacementUnit().at(cell->getCellId());
+        if(!pu)throw std::runtime_error("SLL pin without placement unit");
+        Point pos{pu->X()+pin->getOffsetXInCell(),pu->Y()+pin->getOffsetYInCell()};
         if(pu->getType()==PlacementInfo::PlacementUnitType_Macro){auto mac=static_cast<PlacementInfo::PlacementMacro*>(pu);pos.x+=mac->getCellOffsetXInMacro(cell);pos.y+=mac->getCellOffsetYInMacro(cell);}
         return pos;
     }
-    Pin makePin(DesignInfo::DesignPin*pin)const {
-        auto pu=pi->getCellId2PlacementUnit().at(pin->getCell()->getCellId());Pin p;
-        p.id=pin->getElementIdInType();p.unit=pu->getId();p.name=pin->getName();p.p=position(pin);p.slr=slr(p.p);p.offset={p.p.x-pu->X(),p.p.y-pu->Y()};p.movable=!pu->isFixed();return p;
+    Pin makePin(DesignInfo::DesignPin*pin,bool dense=true)const {
+        auto pu=dense?pi->getCellId2PlacementUnitVec().at(pin->getCell()->getCellId()):
+                      pi->getCellId2PlacementUnit().at(pin->getCell()->getCellId());
+        if(!pu)throw std::runtime_error("SLL pin without placement unit");Pin p;
+        p.id=pin->getElementIdInType();p.unit=pu->getId();p.name=pin->getName();p.p=position(pin,dense);p.slr=slr(p.p);p.offset={p.p.x-pu->X(),p.p.y-pu->Y()};p.movable=!pu->isFixed();return p;
     }
     Pin virtualPin(const Plan&plan,int k,bool exit)const {
         const auto&c=m.geometry(plan.crossings.at(k));Pin v;
@@ -193,32 +209,80 @@ bool SllPlanner::crosses(Point a,Point b)const{return p->slr(a)!=p->slr(b);}
 void SllPlanner::refresh() {
     if(p->wireBatchActive)throw std::logic_error("Cannot refresh SLL topology during a wire batch");
     AMF_PROFILE_SCOPE("sll_position_planning","virtual SLL lifecycle and capacity allocation");
-    std::vector<Net> nets;auto&di=*p->pi->getDesignInfo();
+    using Clock=std::chrono::steady_clock;
+    auto seconds=[](Clock::time_point start){return std::chrono::duration<double>(Clock::now()-start).count();};
+    auto&di=*p->pi->getDesignInfo();auto&placementNets=p->pi->getPlacementNets();
     auto graph=p->pi->getTimingInfo()->getSimplePlacementTimingGraph();
-    for(auto pn:p->pi->getPlacementNets()) {
-        auto dn=pn->getDesignNet();if(dn->checkIsPowerNet()||dn->checkIsGlobalClock()||dn->getDriverPins().size()!=1)continue;
-        auto driver=dn->getDriverPins()[0];if(!driver->getCell())continue;
-        Net n;n.id=dn->getElementIdInType();n.name=dn->getName();n.source=p->makePin(driver);n.weight=dn->getOverallEnhanceRatio();
-        bool crossing=false;
+    // Coordinates and the timing graph are stable until this joined phase ends.
+    // Keep the original pin arithmetic and pin/net order, including criticality.
+    auto buildNet=[&](PlacementInfo::PlacementNet*pn,bool fast)->std::unique_ptr<Net> {
+        auto dn=pn->getDesignNet();if(dn->checkIsPowerNet()||dn->checkIsGlobalClock()||dn->getDriverPins().size()!=1)return {};
+        auto driver=dn->getDriverPins()[0];if(!driver->getCell())return {};
+        if(fast) {
+            const int sourceSlr=p->slr(p->position(driver));bool crossing=false;
+            for(auto pin:dn->getPinsBeDriven())if(pin->getCell()&&p->slr(p->position(pin))!=sourceSlr){crossing=true;break;}
+            if(!crossing)return {}; // Nothing from a same-die net enters the SLL model.
+        }
+        std::unique_ptr<Net> result(new Net);auto&n=*result;
+        n.id=dn->getElementIdInType();n.name=dn->getName();n.source=p->makePin(driver,fast);n.weight=dn->getOverallEnhanceRatio();
+        n.sinks.reserve(dn->getPinsBeDriven().size());bool crossing=false;
         for(auto pin:dn->getPinsBeDriven()) {
-            if(!pin->getCell())continue;auto s=p->makePin(pin);
+            if(!pin->getCell())continue;auto sink=p->makePin(pin,fast);
             if(graph) {
                 const auto&timing=graph->getNodes();
                 auto a=timing.at(driver->getCell()->getCellId()),b=timing.at(pin->getCell()->getCellId());
                 const double budget=b->getRequiredArrivalTime()-a->getLatestOutputArrival();
-                if(std::isfinite(budget)&&budget<1e5){double d=geometryDelay(n.source.p,s.p);s.criticality=std::min(64.0,1.0+std::max(0.0,d-budget));}
+                if(std::isfinite(budget)&&budget<1e5){double d=geometryDelay(n.source.p,sink.p);sink.criticality=std::min(64.0,1.0+std::max(0.0,d-budget));}
             }
-            crossing|=s.slr!=n.source.slr;n.sinks.push_back(std::move(s));
+            crossing|=sink.slr!=n.source.slr;n.sinks.push_back(std::move(sink));
         }
-        if(crossing)nets.push_back(std::move(n));
+        return crossing?std::move(result):std::unique_ptr<Net>{};
+    };
+    auto collect=[&](bool fast) {
+        std::vector<std::unique_ptr<Net>> pending(placementNets.size());std::exception_ptr failure;
+        if(fast) {
+            #pragma omp parallel for schedule(dynamic,64)
+            for(size_t i=0;i<placementNets.size();++i) {
+                try{pending[i]=buildNet(placementNets[i],true);}
+                catch(...){
+                    #pragma omp critical(amf_sll_refresh_exception)
+                    {if(!failure)failure=std::current_exception();}
+                }
+            }
+            if(failure)std::rethrow_exception(failure);
+        } else for(size_t i=0;i<placementNets.size();++i)pending[i]=buildNet(placementNets[i],false);
+        std::vector<Net> nets;
+        // Capacity allocation below must see the same deterministic input order.
+        for(auto&net:pending)if(net)nets.push_back(std::move(*net));
+        return nets;
+    };
+    const auto collectStart=Clock::now();auto nets=collect(p->refreshParallel);
+    const double collectSeconds=seconds(collectStart);const size_t selected=nets.size();
+    double auditSeconds=0;size_t audited=0;
+    if(p->refreshAuditStride && ++p->refreshCalls%p->refreshAuditStride==0) {
+        const auto auditStart=Clock::now();auto reference=collect(!p->refreshParallel);
+        auto pinEqual=[](const Pin&a,const Pin&b){return
+            std::tie(a.id,a.unit,a.slr,a.name,a.p.x,a.p.y,a.offset.x,a.offset.y,a.movable,a.criticality)==
+            std::tie(b.id,b.unit,b.slr,b.name,b.p.x,b.p.y,b.offset.x,b.offset.y,b.movable,b.criticality);};
+        bool equal=nets.size()==reference.size();
+        for(size_t i=0;equal&&i<nets.size();++i) {
+            const auto&a=nets[i];const auto&b=reference[i];
+            equal=a.id==b.id&&a.name==b.name&&a.weight==b.weight&&pinEqual(a.source,b.source)&&a.sinks.size()==b.sinks.size();
+            for(size_t j=0;equal&&j<a.sinks.size();++j)equal=pinEqual(a.sinks[j],b.sinks[j]);
+        }
+        if(!equal)throw std::runtime_error("Parallel SLL collection changed the reference net data");
+        audited=nets.size();auditSeconds=seconds(auditStart);
     }
-    p->m.rebuild(std::move(nets));p->netIndex.assign(di.getNets().size(),-1);p->sinkIndex.clear();p->cellPairs.clear();p->virtualBase.clear();
+    const auto rebuildStart=Clock::now();p->m.rebuild(std::move(nets));const double rebuildSeconds=seconds(rebuildStart);
+    const auto indexStart=Clock::now();p->netIndex.assign(di.getNets().size(),-1);p->sinkIndex.clear();p->cellPairs.clear();p->virtualBase.clear();
     size_t cells=0;double wire=0;
     for(size_t i=0;i<p->m.plans.size();++i) {
         const auto&plan=p->m.plans[i];p->netIndex[plan.net.id]=i;p->virtualBase[plan.net.id]=cells;cells+=plan.crossings.size();wire+=p->m.wireCost(plan);
         const int sourceCell=di.getPins().at(plan.net.source.id)->getCell()->getCellId();
         for(auto&s:plan.net.sinks){p->sinkIndex[s.id]={i,plan.net.source.id};int dest=di.getPins().at(s.id)->getCell()->getCellId();p->cellPairs[{sourceCell,dest}].push_back(s.id);}
     }
+    if(p->refreshLog)p->refreshLog<<p->generation+1<<'\t'<<placementNets.size()<<'\t'<<selected<<'\t'
+        <<collectSeconds<<'\t'<<rebuildSeconds<<'\t'<<seconds(indexStart)<<'\t'<<auditSeconds<<'\t'<<audited<<std::endl;
     if(p->log)p->log<<++p->generation<<'\t'<<p->m.plans.size()<<'\t'<<cells<<'\t'<<p->m.created<<'\t'<<p->m.retained<<'\t'<<p->m.deleted<<'\t'<<std::setprecision(17)<<wire<<std::endl;
 }
 void SllPlanner::addWireModel(int id,std::vector<Eigen::Triplet<float>>&trip,std::vector<float>&diag,Eigen::VectorXd&rhs,float general,float ratio,bool x)const {
