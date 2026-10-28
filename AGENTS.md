@@ -1,3 +1,7 @@
+# 当前副本说明（2026-10-29）
+
+本副本为 E2 与增量编译集成分支，路径为 /Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261029-e2-incremental-merge/repo。当前工作以本副本及 docs/research/e2-incremental-integration-20261029.md 为准；以下历史路径保留供追溯，不能据此覆盖原副本。新增验证必须使用独立实验目录，DCP 只保留服务器。
+
 # AMFplacer3.0 开发约定
 
 - 2026-10-19 本 78 副本新增 BoundaryClusteringStrategy=cr-slr-hierarchical，与 slr-hierarchical 同级，默认不变。中间 SLR 使用整个 cluster 投票 cells 的平均 Y 选择一个边缘 CR 中心，统一方向保持至重建聚类；越过锚点不反拉。保留阶段、硬约束及 74q/77 修补；仅构建和小型验证，不启动完整实验。详见 docs/research/cr-slr-hierarchical.md。

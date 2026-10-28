@@ -19,8 +19,11 @@ proc main {} {
  e2_sll::usage $dfx(output)
  set used {}
  set nets [get_nets -hierarchical]
- foreach n [get_property NAME [get_nodes -quiet -of_objects $nets]] {
-  if {[dict exists $candidates $n]} {dict set used $n 1}
+ set routed [get_nodes -quiet -of_objects $nets]
+ if {[llength $routed]} {
+  foreach n [get_property NAME $routed] {
+   if {[dict exists $candidates $n]} {dict set used $n 1}
+  }
  }
  set f [open $dfx(output)/used_nodes.txt w]
  foreach n [lsort [dict keys $used]] {puts $f $n};close $f

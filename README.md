@@ -93,3 +93,7 @@ U250 已开放输入检查和独立硬资源分配/合法化，覆盖 URAM 与 C
 本副本新增 opt-in `IncremenralCompilation`。`scripts/amf3.py dfx-shell` 从 RTL 的 `bblock` 属性建立首个静态配置；`dfx-run` 在锁定静态区中调用 AMF 放置活动 RM，再经 Vivado 布线、`pr_verify -full_check` 生成完整与局部 bitstream。普通全量入口不自动启用此流程。
 
 设计范围、配置、分步计划和限制见 [DFX 实现说明](docs/research/dfx-incremental-compilation.md)，小型 U250 实际验收见 [DFX 验收报告](docs/research/dfx-u250-validation.md)。DCP/bitstream 留服务器。此副本不代表正式主仓库已经合并了 DFX 功能。
+
+## E2 与增量编译集成（2026-10-29）
+
+本副本分支为 `codex/e2-incremental-integrated-20261029`。合并范围、使用入口与验证边界见 [集成说明](docs/research/e2-incremental-integration-20261029.md)。

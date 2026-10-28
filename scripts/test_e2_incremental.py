@@ -44,4 +44,44 @@ class Leases(unittest.TestCase):
    copy_plan(p,p/'dest');self.assertEqual(digest(p/'sll-plan.tcl'),digest(p/'dest/sll-plan.tcl'))
    (p/'sll-plan.tcl').write_text('changed')
    with self.assertRaises(ValueError):copy_plan(p,p/'dest')
+class TclScope(unittest.TestCase):
+ def run_case(self,body):
+  import subprocess
+  helper=Path(__file__).resolve().parent/'dfx_sll.tcl'
+  with tempfile.TemporaryDirectory() as t:
+   script=Path(t)/'check.tcl'
+   script.write_text('source {'+str(helper)+'}\n'+
+       'proc get_nodes {args} {return [lindex $args end]}\n'+
+       'proc get_nets {args} {global occupied;return $occupied}\n'+
+       'set occupied {}\nset used {}\nset fp {T 1 U 1}\n'+body)
+   return subprocess.run(['tclsh',str(script)],capture_output=True,text=True)
+ def test_shared_tree_and_local_receiver(self):
+  body='set tree {{pin rm/local} {segment {T/A U/B} children {{pin rm/a} {pin rm/b}}}}\ndfx_sll::validate_tree $tree rm/ $fp used\n'
+  self.assertEqual(self.run_case(body).returncode,0)
+ def test_scope_footprint_occupancy_and_collisions_rejected(self):
+  cases=[
+   'set tree {{pin other/a}}',
+   'set tree {{segment {T/A Z/B} children {{pin rm/a}}}}',
+   'set occupied static_net;set tree {{segment {T/A U/B} children {{pin rm/a}}}}',
+   'dict set used T/A 1;set tree {{segment {T/A U/B} children {{pin rm/a}}}}']
+  for case in cases:
+   result=self.run_case(case+'\ndfx_sll::validate_tree $tree rm/ $fp used\n')
+   self.assertNotEqual(result.returncode,0)
+ def test_disabled_has_no_design_queries(self):
+  self.assertEqual(self.run_case('set dfx(e2_sll_enabled) 0\ndfx_sll::apply\n').returncode,0)
+class TclConnectivity(unittest.TestCase):
+ def test_actual_boundary_net_is_rejected(self):
+  import subprocess
+  helper=Path(__file__).resolve().parent/'dfx_sll.tcl'
+  for pins,ports,expected in [('rm/source/Q rm/sink/D','',0),('rm/source/Q static/D','',1),('rm/source/Q','top_port',1)]:
+   body='source {'+str(helper)+'}\n'
+   body+='proc get_pins {args} {if {[lsearch $args -leaf]>=0} {return {'+pins+'}};return rm/source/Q}\n'
+   body+='proc get_nets {args} {return rm/s}\n'
+   body+='proc get_ports {args} {return {'+ports+'}}\n'
+   body+='proc get_property {p objects} {return $objects}\n'
+   body+='dfx_sll::validate_internal_net rm/source/Q rm/\n'
+   with tempfile.TemporaryDirectory() as t:
+    f=Path(t)/'case.tcl';f.write_text(body)
+    result=subprocess.run(['tclsh',str(f)],capture_output=True,text=True)
+   self.assertEqual(bool(result.returncode),bool(expected),result.stderr)
 if __name__=='__main__':unittest.main()

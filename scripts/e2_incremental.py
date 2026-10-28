@@ -8,7 +8,7 @@ import csv, hashlib, json, os, shutil, subprocess, time
 from pathlib import Path
 
 HELPERS = ('sll_routes.tcl','sll_parallel.tcl','sll_parallel_worker.tcl',
-           'sll_parallel.py','dfx_sll.tcl')
+           'sll_parallel.py','sll_usage.tcl','dfx_sll.tcl')
 def enabled(cfg):
     return cfg.get('SllPlanningEnable','false') == 'true'
 def digest(p):

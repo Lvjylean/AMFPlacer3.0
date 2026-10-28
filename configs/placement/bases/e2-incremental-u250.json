@@ -53,7 +53,6 @@
   "SllQuantityTau": "10",
   "SllQuantityGamma": "0.02",
   "SllRegionPolicy": "preserve",
-  "SllTraceNetList": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/common-nets.txt",
   "DSP timing properties file": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/dsp-timing.tsv",
   "DSP timing properties sha256": "f4eddecc99f6dcb933750703ff2f5a215186192483126e04af42ff0cf7ca2123",
   "DSP timing source DCP sha256": "6283aa4874b42d939a2b00e53cce77574fa03a26f45914364ab9ca632b42c031",

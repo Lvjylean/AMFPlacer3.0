@@ -1,6 +1,7 @@
 # Apply worker trees only after all modules are assembled into the locked shell.
 source [file join [file dirname [info script]] sll_routes.tcl]
 source [file join [file dirname [info script]] sll_parallel.tcl]
+source [file join [file dirname [info script]] sll_usage.tcl]
 namespace eval dfx_sll {variable active 0}
 proc dfx_sll::validate_tree {tree prefix footprint usedVar} {
  upvar 1 $usedVar used
@@ -18,9 +19,23 @@ proc dfx_sll::validate_tree {tree prefix footprint usedVar} {
   }
  }
 }
+# Verify the real flattened connectivity, not just the reduced AMF plan.
+proc dfx_sll::validate_internal_net {driver prefix} {
+ set pin [get_pins -quiet [list $driver]]
+ if {[llength $pin]!=1} {error "Missing or ambiguous SLL driver: $driver"}
+ set nets [get_nets -quiet -segments -of_objects $pin]
+ if {![llength $nets]} {error "Missing SLL net: $driver"}
+ if {[llength [get_ports -quiet -of_objects $nets]]} {error "SLL plan touches a top-level interface: $driver"}
+ set pins [get_pins -quiet -leaf -of_objects $nets]
+ if {![llength $pins]} {error "Empty SLL connectivity: $driver"}
+ foreach name [get_property NAME $pins] {
+  if {[string first $prefix $name]!=0} {error "SLL plan touches frozen/interface connectivity: $name"}
+ }
+}
 proc dfx_sll::apply {} {
  global dfx
  variable active
+ if {![info exists dfx(e2_sll_enabled)] || !$dfx(e2_sll_enabled)} {return}
  set combined {};set used {}
  foreach row $dfx(rps) {
   lassign $row id rp pb
@@ -34,6 +49,7 @@ proc dfx_sll::apply {} {
   foreach tile [get_property NAME [get_dfx_footprint -route -of_objects [get_cells $rp]]] {dict set footprint $tile 1}
   foreach record $e2_sll_plan {
    if {[string first "$rp/" [dict get $record driver]]!=0} {error "SLL driver leaves active RP"}
+   validate_internal_net [dict get $record driver] "$rp/"
    validate_tree [dict get $record tree] "$rp/" $footprint used
    lappend combined $record
   }
@@ -56,7 +72,10 @@ proc dfx_sll::apply {} {
 proc dfx_sll::audit {} {
  global dfx
  variable active
- if {$active} {e2_sll::audit [file join $dfx(output) sll]}
+ if {$active} {
+  e2_sll::audit [file join $dfx(output) sll]
+  e2_sll::usage [file join $dfx(output) sll]
+ }
 }
 
 

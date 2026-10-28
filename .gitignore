@@ -1,3 +1,5 @@
 builds/
 experiments/
 __pycache__/
+
+*.py[cod]
