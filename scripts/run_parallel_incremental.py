@@ -43,6 +43,8 @@ def preflight(config):
         from native_cache_contract import verify_cache
         verify_cache(job['native_static_cache'],dict(job,static_checkpoint=str(common/'common_static_locked.dcp')),amf_configuration(job))
     cfg=amf_configuration(job)
+    from sll_planning_inputs import validate as validate_sll
+    validate_sll(cfg,binary)
     from incremental_config import validate_incremental_binary
     validate_incremental_binary(job,binary)
     from paper_boundary_config import validate_paper_boundary_binary
@@ -125,6 +127,13 @@ def run(config, output, workers_only=False):
         state['script_hashes']={p.name:sha(p) for p in frozen.iterdir()}
         environment=dict(os.environ)
         environment['LD_LIBRARY_PATH']=job['amf_runtime_lib']+(':'+environment['LD_LIBRARY_PATH'] if environment.get('LD_LIBRARY_PATH') else '')
+        from e2_incremental import prepare as prepare_sll, enabled as sll_enabled
+        sll_cfg=amf_configuration(job)
+        sll_contract=prepare_sll(job,sll_cfg,out/'sll-reservations',frozen)
+        if sll_contract:
+            job['e2_sll_enabled']=True
+            job['e2_sll_workers']=int(sll_cfg.get('SllConstraintWorkers','4'))
+            state['e2_sll_contract']=sll_contract
         if job.get('same_session_cache'):
             if workers_only:raise ValueError('Retained static session requires complete joint acceptance')
             from retained_joint_session import RetainedJointSession
@@ -197,6 +206,8 @@ def run(config, output, workers_only=False):
                            static_checkpoint=str(Path(job['common_static_shell_run'])/'common_static_locked.dcp'),
                            reference_checkpoint=str(Path(job['shell_run'])/'base_routed.dcp'),
                            rm_checkpoint=str(checkpoint),rm_optimization_manifest=str(optimization_manifest),backend_place_mode='amf-import-only')
+                if sll_contract:
+                    cfg['e2_sll_reservation']=sll_contract['reservations'][k]
                 worker_script='run_dfx.py'
                 if job.get('native_static_cache'):
                     cfg.update(native_static_cache=job['native_static_cache'],module_id=part['id'],
@@ -240,7 +251,8 @@ def run(config, output, workers_only=False):
         joint=out/'joint'
         if retained is None:
             (joint/'inputs').mkdir(parents=True)
-            for p in frozen.glob('*.tcl'):shutil.copy2(p,joint/'inputs'/p.name)
+            for p in frozen.iterdir():
+                if p.suffix in ('.tcl','.py'):shutil.copy2(p,joint/'inputs'/p.name)
         metadata=joint/'inputs/common_static'
         if retained is None:metadata.mkdir()
         common=Path(job['common_static_shell_run'])
@@ -256,6 +268,8 @@ def run(config, output, workers_only=False):
             names=['placement.tsv','blocked_sites.txt']
             if job.get('native_local_pin_access_policy','off')!='off':names.append('lut_pin_assignments.tsv')
             for name in names:shutil.copy2(Path(w['module'])/name,dest/name)
+            from e2_incremental import copy_plan
+            copy_plan(w['module'],dest)
             extra.update({ 'worker_'+k:str(dest),'rm_'+k+'_checkpoint':str(Path(w['module'])/'rm_amf_placed.dcp'),
                           'expected_cells_'+k:w['cells']})
         settings=retained.settings if retained is not None else flow.settings(native_job,joint,extra)

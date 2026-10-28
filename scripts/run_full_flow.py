@@ -113,7 +113,7 @@ def run(root, args):
     configure_outputs(config, directory)
     if config.get("SllPlanningEnable")=="true":
         config["SllPlanningReportDirectory"]=str(directory/"reports/sll-planning")
-        if "SllReportDirectory" in config:config["SllReportDirectory"]=str(directory/"reports/sll-quantity")
+        if "SllReportDirectory" in config or str(config.get("SllQuantityDiagnostics","false")).lower()=="true":config["SllReportDirectory"]=str(directory/"reports/sll-quantity")
     if config.get('physical boundary model file'):
         physical = directory/'reports/physical'
         physical.mkdir()

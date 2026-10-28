@@ -41,13 +41,22 @@ struct SllPlanner::Impl {
     bool refreshParallel=true;
     size_t refreshAuditStride=0,refreshCalls=0;
     explicit Impl(PlacementInfo*placement,const std::map<std::string,std::string>&cfg):pi(placement) {
-        if(pi->getIncrementalContext().enabled)throw std::invalid_argument("E2 SLL planning currently requires full-design placement");
+        if(pi->getIncrementalContext().enabled) {
+            if(!cfg.count("SllIncrementalScope") || cfg.at("SllIncrementalScope")!="internal-active-nets" ||
+               !cfg.count("SllReservedResourceFile"))
+                throw std::invalid_argument("Incremental E2 requires internal-active-nets scope and an audited SLL reservation file");
+        }
         auto physical=pi->getDeviceInfo()->getPhysicalBoundaryModel();if(!physical)throw std::invalid_argument("SLL planner requires physical boundary metadata");
         regions=physical->getRegions();
         if(cfg.count("ProPrimitiveTiming") && cfg.at("ProPrimitiveTiming")=="true")throw std::invalid_argument("E2 baseline requires ProPrimitiveTiming=false");
         m.ratio=number(cfg,"y2xRatio",.4);m.timingWeight=number(cfg,"SllPlanningTimingWeight",16);
         m.extraCrossingCost=number(cfg,"SllPlanningExtraCrossingCost",24);m.switchCost=number(cfg,"SllPlanningSwitchCost",.1);
         auto boolean=[&](const std::string&key,bool fallback){auto it=cfg.find(key);if(it==cfg.end())return fallback;if(it->second!="true"&&it->second!="false")throw std::invalid_argument(key+" must be boolean");return it->second=="true";};
+        m.outputLongDelayCorrection=boolean("SllOutputLongDelayCorrection",false);
+        m.outputLongDelayThresholdNs=number(cfg,"SllOutputLongDelayThresholdNs",1.5);
+        m.outputLongDelaySlope=number(cfg,"SllOutputLongDelaySlope",1.1430759607609453);
+        if(m.outputLongDelayCorrection && m.outputLongDelayThresholdNs<=0)
+            throw std::invalid_argument("SllOutputLongDelayThresholdNs must be positive");
         wireCacheEnabled=boolean("SllWireCacheEnable",true);
         const double stride=number(cfg,"SllWireCacheAuditStride",0);
         if(stride!=std::floor(stride)||stride>1000000000)throw std::invalid_argument("Invalid SllWireCacheAuditStride");
@@ -65,6 +74,14 @@ struct SllPlanner::Impl {
         densityAnchorWeight=number(cfg,"SllDensityAnchorWeight",.05);
         m.initialTargetUtilization=density.targetUtilization;
         m.initialDensityWeight=density.weight;
+        m.columnPolicy.enabled=boolean("SllColumnCapacityEnable",false);
+        m.columnPolicy.target=number(cfg,"SllColumnTargetUtilization",.75);
+        m.columnPolicy.maximum=number(cfg,"SllColumnMaxUtilization",.85);
+        m.columnPolicy.step=number(cfg,"SllColumnUtilizationStep",.01);
+        m.columnPolicy.validate();
+        m.initialColumnUtilizationLimit=number(cfg,"SllInitialColumnUtilizationLimit",.75);
+        if(!(m.initialColumnUtilizationLimit>0&&m.initialColumnUtilizationLimit<=1))
+            throw std::invalid_argument("SllInitialColumnUtilizationLimit must be in (0,1]");
         if(cfg.count("SllInitializationPolicy")&&cfg.at("SllInitializationPolicy")!="local-wire-capacity")
             throw std::invalid_argument("This E2 copy requires SllInitializationPolicy=local-wire-capacity");
         if(cfg.count("SllProjectionPolicy")&&cfg.at("SllProjectionPolicy")!="qp-nearest-capacity")
@@ -222,6 +239,14 @@ void SllPlanner::refresh() {
     auto buildNet=[&](PlacementInfo::PlacementNet*pn,bool fast)->std::unique_ptr<Net> {
         auto dn=pn->getDesignNet();if(dn->checkIsPowerNet()||dn->checkIsGlobalClock()||dn->getDriverPins().size()!=1)return {};
         auto driver=dn->getDriverPins()[0];if(!driver->getCell())return {};
+        // Static and partition-interface trees remain owned by the frozen shell.
+        // Do not treat synthetic interface endpoints as routable physical pins.
+        const auto&context=p->pi->getIncrementalContext();
+        if(context.enabled) {
+            if(!context.isActive(driver->getCell()->getName()))return {};
+            for(auto pin:dn->getPinsBeDriven())
+                if(!pin->getCell() || !context.isActive(pin->getCell()->getName()))return {};
+        }
         if(fast) {
             const int sourceSlr=p->slr(p->position(driver));bool crossing=false;
             for(auto pin:dn->getPinsBeDriven())if(pin->getCell()&&p->slr(p->position(pin))!=sourceSlr){crossing=true;break;}
@@ -236,7 +261,12 @@ void SllPlanner::refresh() {
                 const auto&timing=graph->getNodes();
                 auto a=timing.at(driver->getCell()->getCellId()),b=timing.at(pin->getCell()->getCellId());
                 const double budget=b->getRequiredArrivalTime()-a->getLatestOutputArrival();
-                if(std::isfinite(budget)&&budget<1e5){double d=geometryDelay(n.source.p,sink.p);sink.criticality=std::min(64.0,1.0+std::max(0.0,d-budget));}
+                sink.timingBudget=budget;
+                // Surviving plans can guide allocation order; newborns remain
+                // neutral until their initial local-wire/capacity tile exists.
+                double d=0;
+                if(std::isfinite(budget)&&budget<1e5&&pinDelay(n.source.id,sink.id,n.source.p,sink.p,d))
+                    sink.criticality=std::min(64.0,1.0+std::max(0.0,d-budget));
             }
             crossing|=sink.slr!=n.source.slr;n.sinks.push_back(std::move(sink));
         }
@@ -266,8 +296,8 @@ void SllPlanner::refresh() {
     if(p->refreshAuditStride && ++p->refreshCalls%p->refreshAuditStride==0) {
         const auto auditStart=Clock::now();auto reference=collect(!p->refreshParallel);
         auto pinEqual=[](const Pin&a,const Pin&b){return
-            std::tie(a.id,a.unit,a.slr,a.name,a.p.x,a.p.y,a.offset.x,a.offset.y,a.movable,a.criticality)==
-            std::tie(b.id,b.unit,b.slr,b.name,b.p.x,b.p.y,b.offset.x,b.offset.y,b.movable,b.criticality);};
+            std::tie(a.id,a.unit,a.slr,a.name,a.p.x,a.p.y,a.offset.x,a.offset.y,a.movable,a.criticality,a.timingBudget)==
+            std::tie(b.id,b.unit,b.slr,b.name,b.p.x,b.p.y,b.offset.x,b.offset.y,b.movable,b.criticality,b.timingBudget);};
         bool equal=nets.size()==reference.size();
         for(size_t i=0;equal&&i<nets.size();++i) {
             const auto&a=nets[i];const auto&b=reference[i];
@@ -278,6 +308,10 @@ void SllPlanner::refresh() {
         audited=nets.size();auditSeconds=seconds(auditStart);
     }
     const auto rebuildStart=Clock::now();p->m.rebuild(std::move(nets));const double rebuildSeconds=seconds(rebuildStart);
+    // Compute every timing spring from the plan that will enter this QP.
+    // No independent candidate search is used for these weights.
+    #pragma omp parallel for schedule(dynamic,16)
+    for(size_t i=0;i<p->m.plans.size();++i)p->m.updatePlannedCriticalities(p->m.plans[i]);
     const auto indexStart=Clock::now();p->netIndex.assign(di.getNets().size(),-1);p->virtualBase.clear();
     size_t indexedSinks=0;for(const auto&plan:p->m.plans)indexedSinks+=plan.net.sinks.size();
     p->timingIndex.reset(di.getPins().size(),indexedSinks);
@@ -338,7 +372,7 @@ double SllPlanner::geometryDelay(Point a,Point b)const {
         for(size_t j=0;j<count;++j){int ci=near[j].second;const auto&c=p->m.channels[ci];double v=p->m.delay(cur,c.in)+c.slowMax+std::abs(c.out.x-b.x)*.01;if(v<best){best=v;chosen=ci;}}
         if(chosen<0)throw std::runtime_error("No SLL timing candidate");const auto&c=p->m.channels[chosen];d+=p->m.delay(cur,c.in)+c.slowMax;cur=c.out;
     }
-    return d+p->m.delay(cur,b);
+    return d+p->m.outputDelay(cur,b);
 }
 void SllPlanner::addTimingModel(std::vector<Eigen::Triplet<float>>&trip,std::vector<float>&diag,Eigen::VectorXd&rhs,float w,bool x)const {
     for(const auto&plan:p->m.plans) {
@@ -366,22 +400,59 @@ void SllPlanner::addTimingModel(std::vector<Eigen::Triplet<float>>&trip,std::vec
     }
 }
 void SllPlanner::exportPlan(const std::string&path) {
-    refresh();
-    if(jointPlacement()){
-        // Refresh retains surviving QP-selected tiles and initializes only new
-        // crossings. Export allocates exact lanes inside those committed tiles.
-        p->m.legalizeChannels();
+    const auto exportStart=std::chrono::steady_clock::now();refresh();
+    const auto projectionStart=std::chrono::steady_clock::now();
+    if(jointPlacement()&&p->m.columnPolicy.enabled){
+        // Packing can add crossings after the last QP. Reconcile final capacity
+        // using the retained virtual coordinates, with the same nearest-tile
+        // legalizer as QP. Do not rerank by net wire/timing initialization cost.
+        const auto desired=virtualPositions();
+        const auto assigned=p->density.assign(p->m,desired);
+        std::ofstream finalProjection(path+".final-capacity.tsv");
+        finalProjection<<"key\told_column\told_x\told_y\tcolumn\tx\ty\n";
+        size_t i=0;
+        for(auto&plan:p->m.plans)for(auto&e:plan.crossings){
+            const auto old=p->m.tiles[e.tile];
+            e.tile=assigned.tiles.at(i++);e.channel=-1;p->m.previous[e.key]=e.tile;
+            const auto&now=p->m.tiles[e.tile];
+            finalProjection<<e.key<<'\t'<<old.column<<'\t'<<old.in.x<<'\t'<<old.in.y<<'\t'
+                <<now.column<<'\t'<<now.in.x<<'\t'<<now.in.y<<'\n';
+        }
+        for(auto&plan:p->m.plans)p->m.updatePlannedCriticalities(plan);
+        std::cout<<"E2_SLL_FINAL_CAPACITY moved="<<assigned.moved<<" total="<<desired.size()<<std::endl;
     }
+    const auto laneStart=std::chrono::steady_clock::now();
+    if(jointPlacement())p->m.legalizeChannels();
+    const auto serializeStart=std::chrono::steady_clock::now();
+    std::vector<std::string> serialized(p->m.plans.size()),errors(p->m.plans.size());
     std::ofstream out(path);if(!out)throw std::runtime_error("Cannot export SLL plan");
     out<<"# E2 physical-only SLL trees; apply after final placement.\nset e2_sll_plan [list";
-    for(const auto&plan:p->m.plans) {
+    #pragma omp parallel for schedule(dynamic,8)
+    for(size_t pi=0;pi<p->m.plans.size();++pi)try{
+        const auto&plan=p->m.plans[pi];
         std::function<std::string(int)> children=[&](int parent){std::string text="[list";
             for(const auto&s:plan.net.sinks){const auto&route=plan.paths.at(s.id);if((route.empty()?-1:route.back())==parent)text+=" [dict create pin "+quote(s.name)+" slr "+std::to_string(s.slr)+"]";}
             for(size_t k=0;k<plan.crossings.size();++k)if(plan.crossings[k].parent==parent){const auto&c=p->m.channels[plan.crossings[k].channel];text+=" [dict create resource "+quote(c.resource)+" from "+std::to_string(c.from)+" to "+std::to_string(c.to)+" segment [list";for(auto&node:split(c.segment,','))text+=" "+quote(node);text+="] children "+children(k)+"]";}
             return text+"]";};
-        out<<" \\\n [dict create net "<<quote(plan.net.name)<<" driver "<<quote(plan.net.source.name)<<" source_slr "<<plan.net.source.slr<<" tree "<<children(-1)<<"]";
-    }
+        std::ostringstream record;
+        record<<" \\\n [dict create net "<<quote(plan.net.name)<<" driver "<<quote(plan.net.source.name)<<" source_slr "<<plan.net.source.slr<<" tree "<<children(-1)<<"]";
+        serialized[pi]=record.str();
+    }catch(const std::exception&e){errors[pi]=e.what();}
+    for(const auto&e:errors)if(!e.empty())throw std::runtime_error(e);
+    const auto writeStart=std::chrono::steady_clock::now();
+    for(const auto&record:serialized)out<<record;
     out<<"]\n";if(!out)throw std::runtime_error("SLL export failed");
+    out.close();
+    const auto finished=std::chrono::steady_clock::now();
+    auto seconds=[](auto a,auto b){return std::chrono::duration<double>(b-a).count();};
+    std::ofstream metrics(path+".metrics.tsv");
+    metrics<<"stage\tseconds\nrefresh\t"<<seconds(exportStart,projectionStart)
+        <<"\nfinal_capacity_projection\t"<<seconds(projectionStart,laneStart)
+        <<"\nparallel_lane_assignment\t"<<seconds(laneStart,serializeStart)
+        <<"\nparallel_tree_serialization\t"<<seconds(serializeStart,writeStart)
+        <<"\nordered_write\t"<<seconds(writeStart,finished)<<"\n";
+    std::cout<<"E2_SLL_PARALLEL_EXPORT nets="<<serialized.size()<<" workers="<<omp_get_max_threads()
+        <<" seconds="<<seconds(exportStart,finished)<<std::endl;
 }
 
 

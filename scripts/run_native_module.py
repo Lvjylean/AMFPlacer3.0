@@ -15,7 +15,12 @@ def _run(config,output,binary,started_epoch):
     for p in Path(__file__).parent.glob('*.tcl'):shutil.copy2(p,frozen/p.name)
     native=job['native_static_cache'];cache=Path(native['path']);contract=Path(native['contract'])
     expected={str(cache):native['sha256'],str(contract):native['contract_sha256']}
-    cfg=amf_configuration(job);c=verify_cache(native,job,cfg)
+    cfg=amf_configuration(job)
+    from e2_incremental import bind, publish
+    bind(job,cfg)
+    from sll_planning_inputs import validate as validate_sll
+    validate_sll(cfg,binary)
+    c=verify_cache(native,job,cfg)
     from incremental_config import validate_incremental_binary
     validate_incremental_binary(dict(job, IncrementalCompilation=True),binary)
     from paper_boundary_config import validate_paper_boundary_binary
@@ -95,6 +100,7 @@ def _run(config,output,binary,started_epoch):
         env=dict(os.environ,AMF_PROFILE_OUTPUT=str(out/'amf_profile.tsv'),AMF_GRID_UPDATE_MODE='batched')
         result=command([binary,str(out/'amf_config.json')],out/'amf-exec',env=env)
         m['stages'].append(dict(name='amf',**result));save(out/'manifest.json',m)
+        publish(cfg,out)
         for name in ('cells.tsv','allowed_sites.txt','blocked_sites.txt','static_placement.tsv','input_scope.tsv','interface_endpoints.tsv','interface_buffers.tsv'):
             shutil.copy2(out/'native'/name,out/name)
         with (out/'cells.tsv').open() as f:active={r['cell'] for r in csv.DictReader(f,delimiter='\t') if r['active']=='1'}

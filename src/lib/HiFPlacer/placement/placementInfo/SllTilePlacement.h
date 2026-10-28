@@ -2,7 +2,8 @@
 // Definitions follow Model in SllVirtualModel.h.
 namespace amf_sll_plan {
 inline void Model::indexTiles() {
-    tiles.clear();availableTiles.clear();tileCapacity.clear();tileColumns.clear();
+    columnPolicy.validate();
+    tiles.clear();availableTiles.clear();tileCapacity.clear();columnCapacity.clear();tileColumns.clear();
     std::map<TileKey,std::set<std::string>> supply;
     std::map<std::string,TileKey> identities;
     for(const auto&range:geometryBuckets)for(const auto&group:range.second){
@@ -25,29 +26,53 @@ inline void Model::indexTiles() {
         tileColumns[range.first][t.in.x].push_back(int(tiles.size()));
         availableTiles[range.first].push_back(int(tiles.size()));tiles.push_back(std::move(t));
     }
-    for(const auto&v:supply)tileCapacity[v.first]=v.second.size();
+    for(const auto&v:supply){
+        tileCapacity[v.first]=v.second.size();
+        columnCapacity[physicalColumn(v.first)]+=v.second.size();
+    } // Count physical lanes once; upward/downward views share this supply.
 }
 inline int Model::initialTile(int from,int to,Point root,const TileBox&input,const TileBox&output,
                              double weight,const std::map<TileKey,size_t>&occupied,
-                             int incumbent,int fixedColumn)const {
+                             int incumbent,int fixedColumn,const std::map<ColumnKey,size_t>*occupiedColumns)const {
     if(!(initialTargetUtilization>0&&initialTargetUtilization<=1)||
        !std::isfinite(initialTargetUtilization)||!(initialDensityWeight>=0)||!std::isfinite(initialDensityWeight))
         throw std::invalid_argument("Invalid SLL initialization density parameters");
+    if(!(initialColumnUtilizationLimit>0&&initialColumnUtilizationLimit<=1)||!std::isfinite(initialColumnUtilizationLimit))
+        throw std::invalid_argument("SllInitialColumnUtilizationLimit must be in (0,1]");
     auto load=[&](const Tile&t){auto i=occupied.find(t.key);return i==occupied.end()?size_t(0):i->second;};
     auto feasible=[&](int ti){const auto&t=tiles[ti];return load(t)<tileCapacity.at(t.key);};
+    std::map<ColumnKey,size_t> computedColumnLoads;
+    if(fixedColumn<0&&!occupiedColumns){
+        for(const auto&v:occupied)computedColumnLoads[physicalColumn(v.first)]+=v.second;
+        occupiedColumns=&computedColumnLoads;
+    }
+    int preferredTier=ColumnPolicy::unavailable;
+    auto tier=[&](int ti){
+        const auto key=physicalColumn(tiles[ti].key);
+        const auto load=occupiedColumns->find(key);
+        const size_t count=load==occupiedColumns->end()?0:load->second;
+        if(columnPolicy.enabled)return columnPolicy.tier(count+1,columnCapacity.at(key));
+        return double(count)+1<=initialColumnUtilizationLimit*columnCapacity.at(key)+1e-9?0:ColumnPolicy::unavailable;
+    };
     std::vector<int> candidates;
     const auto&columns=tileColumns.at({from,to});
     if(fixedColumn>=0){
-        // A retained crossing keeps its optimized column; only its Y is seeded.
+        // Refining Y consumes no additional column slot. Keep the already
+        // admitted column, without applying admission a second time.
         for(const auto&column:columns)for(int ti:column.second)
             if(tiles[ti].column==fixedColumn&&feasible(ti))candidates.push_back(ti);
     } else {
         std::vector<std::pair<double,double>> order;
         for(const auto&column:columns)order.push_back({std::abs(root.x-column.first),column.first});
+        for(const auto&col:columns)for(int ti:col.second)if(feasible(ti)){
+            preferredTier=std::min(preferredTier,tier(ti));break;
+        }
         std::sort(order.begin(),order.end());double nearest=INFINITY;
         for(const auto&column:order){
             if(sourceNearInitialization&&column.first>nearest+1e-9)break;
-            for(int ti:columns.at(column.second))if(feasible(ti)){
+            const auto&rows=columns.at(column.second);
+            if(rows.empty()||preferredTier==ColumnPolicy::unavailable||tier(rows.front())!=preferredTier)continue;
+            for(int ti:rows)if(feasible(ti)){
                 candidates.push_back(ti);nearest=column.first;
             }
         }
@@ -93,7 +118,8 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
     });
     std::vector<Net> sorted;sorted.reserve(nets.size());
     for(const auto&item:order)sorted.push_back(std::move(nets[item.second]));nets=std::move(sorted);
-    std::map<TileKey,size_t> occupied;std::vector<Plan> next;std::map<std::string,int> nextIdentity;
+    std::map<TileKey,size_t> occupied;std::map<ColumnKey,size_t> occupiedColumns;
+    std::vector<Plan> next;std::map<std::string,int> nextIdentity;
     for(auto&input:nets){
         Plan p;p.net=std::move(input);const auto&n=p.net;
         std::vector<std::vector<int>> groups(2);
@@ -105,17 +131,22 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
             // and restore the baseline on both normal return and exceptions.
             struct OccupancyUndo {
                 std::map<TileKey,size_t>&used;
+                std::map<ColumnKey,size_t>&columns;
                 struct Original {TileKey key;bool existed;size_t value;};
                 std::vector<Original> originals;
-                explicit OccupancyUndo(std::map<TileKey,size_t>&map):used(map){}
+                explicit OccupancyUndo(std::map<TileKey,size_t>&map,std::map<ColumnKey,size_t>&columnMap):used(map),columns(columnMap){}
                 size_t value(const TileKey&key)const{auto i=used.find(key);return i==used.end()?0:i->second;}
                 void change(const TileKey&key,int delta){
                     auto old=std::find_if(originals.begin(),originals.end(),[&](const Original&v){return v.key==key;});
                     if(old==originals.end()){auto i=used.find(key);originals.push_back({key,i!=used.end(),i==used.end()?0:i->second});}
-                    auto&v=used[key];if(delta>0)++v;else --v;
+                    auto&v=used[key];auto&c=columns[physicalColumn(key)];
+                    if(delta>0){++v;++c;}else{--v;--c;}
                 }
-                ~OccupancyUndo(){for(const auto&v:originals)if(v.existed)used.at(v.key)=v.value;else used.erase(v.key);}
-            } undo(occupied);
+                ~OccupancyUndo(){for(const auto&v:originals){
+                    auto&c=columns[physicalColumn(v.key)];c-=used.at(v.key);c+=v.value;
+                    if(v.existed)used.at(v.key)=v.value;else used.erase(v.key);
+                }}
+            } undo(occupied,occupiedColumns);
             auto&used=occupied;
             for(size_t g=0;g<partition.size();++g){
                 if(partition[g].empty())continue;
@@ -129,7 +160,9 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
                     auto old=previous.find(key);int selected=-1;
                     if(old!=previous.end()){
                         const auto&t=tiles.at(old->second);
-                        if(t.from==from&&t.to==from+dir&&undo.value(t.key)<tileCapacity.at(t.key))selected=old->second;
+                        const auto ck=physicalColumn(t.key);
+                        if(t.from==from&&t.to==from+dir&&undo.value(t.key)<tileCapacity.at(t.key)&&
+                           columnPolicy.tier(occupiedColumns[ck]+1,columnCapacity.at(ck))!=ColumnPolicy::unavailable)selected=old->second;
                     }
                     if(selected<0){
                         // Cache both local endpoint boxes once, not once per
@@ -138,9 +171,9 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
                         if(parent<0){for(const auto&s:n.sinks)if(s.slr==from)input.add(s.p);}
                         else {for(int id:partition[g])if(pin(n,id).slr==from)input.add(pin(n,id).p);}
                         for(int id:downstream)if(pin(n,id).slr==from+dir)output.add(pin(n,id).p);
-                        selected=initialTile(from,from+dir,root,input,output,n.weight,used);
+                        selected=initialTile(from,from+dir,root,input,output,n.weight,used,-1,-1,&occupiedColumns);
                     }
-                    if(selected<0)throw std::runtime_error("SLL tile allocator exhausted capacity");
+                    if(selected<0)throw std::runtime_error("SLL initialization found no admissible column/tile: column utilization limit or physical tile capacity exhausted");
                     Crossing e;e.key=key;e.parent=parent;e.sinks=downstream;e.tile=selected;
                     int k=p.crossings.size();p.crossings.push_back(e);undo.change(tiles[selected].key,1);
                     for(int id:downstream)p.paths[id].push_back(k);
@@ -162,7 +195,7 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
                 fill(input,trees.at(e.parent+1));fill(output,trees.at(k+1));
                 const int incumbent=old==previous.end()?-1:old->second;
                 Point root=e.parent<0?n.source.p:tiles[p.crossings[e.parent].tile].out;
-                int selected=initialTile(base.from,base.to,root,input,output,n.weight,used,incumbent,base.column);
+                int selected=initialTile(base.from,base.to,root,input,output,n.weight,used,incumbent,base.column,&occupiedColumns);
                 if(selected<0)throw std::runtime_error("SLL initialization lost a feasible tile");
                 e.tile=selected;undo.change(tiles[selected].key,1);
             }
@@ -191,7 +224,7 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
                 } catch(const std::runtime_error&){p.net=std::move(candidate.net);/* Preserve the feasible shared tree. */}
             }
         }
-        for(const auto&e:p.crossings){++occupied[tiles[e.tile].key];nextIdentity[e.key]=e.tile;}
+        for(const auto&e:p.crossings){const auto&key=tiles[e.tile].key;++occupied[key];++occupiedColumns[physicalColumn(key)];nextIdentity[e.key]=e.tile;}
         next.push_back(std::move(p));
     }
     created=retained=deleted=0;
@@ -200,6 +233,50 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
     plans=std::move(next);previous=std::move(nextIdentity);
 }
 inline void Model::legalizeChannels() {
+    if(!jointPlacement)return;
+    struct Item {size_t plan,crossing;std::vector<int> candidates;};
+    std::map<TileKey,std::vector<Item>> grouped;
+    std::map<std::string,TileKey> owner;
+    for(size_t pi=0;pi<plans.size();++pi)for(size_t k=0;k<plans[pi].crossings.size();++k){
+        const auto&t=tiles.at(plans[pi].crossings[k].tile);
+        grouped[t.key].push_back({pi,k,t.members});
+        for(int ci:t.members)for(const auto&r:footprint(channels[ci])){
+            const auto added=owner.emplace(r,t.key);
+            if(!added.second&&added.first->second!=t.key){legalizeChannelsSerial();return;}
+        }
+    }
+    // Proven disjoint physical footprints allow independent tile searches.
+    std::vector<std::vector<Item>> groups;
+    for(auto&g:grouped){groups.push_back(std::move(g.second));auto&items=groups.back();
+        std::stable_sort(items.begin(),items.end(),[](const Item&a,const Item&b){return a.candidates.size()<b.candidates.size();});}
+    std::vector<std::vector<int>> choices(groups.size());
+    std::vector<std::string> errors(groups.size());
+    #pragma omp parallel for schedule(dynamic,1)
+    for(size_t g=0;g<groups.size();++g)try{
+        const auto&items=groups[g];auto&chosen=choices[g];chosen.assign(items.size(),-1);
+        std::set<std::string> used=reserved;size_t visits=0;
+        std::function<bool(size_t)> search=[&](size_t i){
+            if(i==items.size())return true;
+            if(++visits>100000)throw std::runtime_error("SLL parallel lane search limit");
+            for(int ci:items[i].candidates)if(!conflicts(channels[ci],used)){
+                occupy(channels[ci],used);chosen[i]=ci;if(search(i+1))return true;
+                for(const auto&r:footprint(channels[ci]))used.erase(r);chosen[i]=-1;
+            }return false;
+        };
+        if(!search(0))throw std::runtime_error("No compatible lane assignment");
+    }catch(const std::exception&e){errors[g]=e.what();}
+    for(const auto&e:errors)if(!e.empty())throw std::runtime_error(e);
+    std::set<std::string> used=reserved;
+    for(size_t g=0;g<groups.size();++g)for(int ci:choices[g]){
+        if(conflicts(channels[ci],used))throw std::runtime_error("Parallel lane result resource collision");
+        occupy(channels[ci],used);
+    }
+    for(size_t g=0;g<groups.size();++g)for(size_t i=0;i<groups[g].size();++i){
+        const auto&item=groups[g][i];plans[item.plan].crossings[item.crossing].channel=choices[g][i];
+    }
+}
+
+inline void Model::legalizeChannelsSerial() {
     if(!jointPlacement)return;
     // Exact channels are assigned only here, after tile planning. Group by the
     // physical pair so upward/downward crossings compete for the same lanes.

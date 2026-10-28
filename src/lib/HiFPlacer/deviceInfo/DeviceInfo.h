@@ -25,6 +25,7 @@
 #include <memory>
 #include "PhysicalBoundaryModel.h"
 #include "ClockResourceCapacity.h"
+#include "DevicePlacementPolicy.h"
 
 /**
  * @brief Information class related to FPGA device, including the details of BEL/Site/Tile/ClockRegion.
@@ -982,7 +983,12 @@ class DeviceInfo
     }
     void addTile(std::string &tileName, std::string &tileType);
 
-    inline std::string &getDeviceName()
+    amf_device::PlacementPolicy getPlacementPolicy() const
+    {
+        return amf_device::resolve(JSONCfg, deviceName);
+    }
+
+    std::string &getDeviceName()
     {
         return deviceName;
     }

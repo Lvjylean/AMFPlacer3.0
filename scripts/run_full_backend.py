@@ -202,7 +202,20 @@ close $f
         shutil.copy2(helper,directory/'inputs/sll_routes.tcl')
         manifest['sll_plan_sha256']=digest(planned)
         manifest['sll_route_helper_sha256']=digest(helper)
+        manifest['sll_parallel_files_sha256']={}
+        for name in ('sll_parallel.py','sll_parallel.tcl','sll_parallel_worker.tcl'):
+            helper=root/'scripts'/name
+            shutil.copy2(helper,directory/'inputs'/name)
+            manifest['sll_parallel_files_sha256'][name]=digest(helper)
+
     script=directory/'inputs/full_backend.tcl';shutil.copy2(root/'scripts/full_backend.tcl',script)
+    if str(cfg.get('SllPlanningEnable','false')).lower()=='true':
+        workers=int(cfg.get('SllConstraintWorkers',4))
+        if not 1<=workers<=8:raise ValueError('SllConstraintWorkers must be in [1,8]')
+        script.write_text('set ::env(AMF_SLL_CONSTRAINT_WORKERS) '+str(workers)+'\n'+script.read_text())
+        manifest['sll_constraint_workers']=workers
+    shutil.copy2(root/'scripts/sll_usage.tcl',directory/'inputs/sll_usage.tcl')
+    manifest['sll_usage_helper_sha256']=digest(root/'scripts/sll_usage.tcl')
     acceptance=root/'scripts/import_acceptance.tcl'
     if acceptance.is_file():
         shutil.copy2(acceptance,directory/'inputs/import_acceptance.tcl')

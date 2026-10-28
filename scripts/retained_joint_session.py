@@ -11,7 +11,8 @@ class RetainedJointSession:
         self.directory=self.out/'retained_session';self.directory.mkdir()
         self.token=uuid.uuid4().hex;self.process=None;self.worker=None;self.log=None
         self.record={'state':'preparing','token':self.token,'ordinary_open_count':1,'added_budget_seconds':180}
-        for p in self.scripts.glob('*.tcl'):shutil.copy2(p,self.inputs/p.name)
+        for p in self.scripts.iterdir():
+            if p.suffix in ('.tcl','.py'):shutil.copy2(p,self.inputs/p.name)
         metadata=self.inputs/'common_static';metadata.mkdir()
         common=Path(job['common_static_shell_run'])
         for p in job['partitions']:

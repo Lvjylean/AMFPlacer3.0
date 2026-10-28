@@ -1,0 +1,156 @@
+{
+  "variant": "E2 SLL quantity + die-first spreading + SLL location planning + output long-distance timing correction",
+  "repository": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo",
+  "base_repository": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-planned-timing-capacity/repo",
+  "source_commit": "64a4660c8fd628af6864a8594a90f3773cee7d86",
+  "binary": {
+    "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/build/AMFPlacer",
+    "sha256": "191faeec7a0859da91881da1af0bee52705711f14a80e48d1fd5b9ffdbd3cc4a"
+  },
+  "build_manifest": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/manifest.json",
+  "config": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/configs/experiments/getrf-u250-e2-output-tail-10ns.json",
+  "parameters": {
+    "SllOutputLongDelayCorrection": true,
+    "SllOutputLongDelayThresholdNs": 1.5,
+    "SllOutputLongDelaySlope": 1.1430759607609453
+  },
+  "formula": "t_new = t + 1.1430759607609453 * max(0, t - 1.5 ns), t = original terminal SLL exit-to-receiver delay",
+  "scope": "terminal SLL exit -> actual sink only; source input leg, transit between crossings, SLL intrinsic delays and ordinary nets unchanged",
+  "original_delay_model_hashes": {
+    "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.h": "751bd4ae8e9822db0e0ce5f7244fe1a0918b3a48b014f4367abb2271bb5b51f0",
+    "src/lib/HiFPlacer/placement/placementTiming/PlacementTimingOptimizer.cc": "cd103b02d508c403bab14a6ca648125fe526a53a02ebf22e9f63731cf2c1d3b3"
+  },
+  "calibration": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/experiments/evidence/getrf-e2-sll-output-tail-calibration-20261028-232754/reports/calibration.json",
+  "validation": {
+    "unit_tests": [
+      {
+        "test": "checkSllOutputTail",
+        "exit_code": 0
+      },
+      {
+        "test": "checkSllVirtualModel",
+        "exit_code": 0
+      },
+      {
+        "test": "checkSllPlannedTimingCapacity",
+        "exit_code": 0
+      }
+    ],
+    "sta_integration": {
+      "production_build": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c",
+      "test_source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/src/tests/check_sll_joint_integration.cc",
+      "test_source_sha256": "a2db65d231fd459d0bce755b512b1b40eb8f16bcc0571d341bc13a855bfe4de6",
+      "stages": [
+        {
+          "stage": "compile_fixture",
+          "argv": [
+            "/usr/bin/c++",
+            "-DBOOST_LOG_DYN_LINK",
+            "-I/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/src/lib/3rdParty/eigen3-src",
+            "-I/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/src/./lib",
+            "-I/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/src/./lib/HiFPlacer/designInfo",
+            "-I/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/src/./lib/HiFPlacer/deviceInfo",
+            "-I/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/src/./lib/utils",
+            "-I/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/src/./lib/HiFPlacer/placement/placementInfo",
+            "-I/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/src/./lib/HiFPlacer/placement/globalPlacement",
+            "-I/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/src/./lib/HiFPlacer/placement/legalization",
+            "-I/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/src/./lib/HiFPlacer/placement/packing",
+            "-I/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/src/./lib/HiFPlacer/placement/placementTiming",
+            "-I/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/src/./lib/3rdParty",
+            "-I/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/src/./lib/HiFPlacer/problemSolvers",
+            "-I/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/src/lib/3rdParty/abseil-cpp-src",
+            "-I/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/src/lib/3rdParty/osqp++/include",
+            "-g",
+            "-O3",
+            "-fopenmp",
+            "-std=c++17",
+            "-O3",
+            "-fopenmp",
+            "-Wall",
+            "-MD",
+            "-MT",
+            "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/validation/long-fixture-build/fixture.o",
+            "-MF",
+            "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/validation/long-fixture-build/fixture.d",
+            "-o",
+            "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/validation/long-fixture-build/fixture.o",
+            "-c",
+            "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/src/tests/check_sll_joint_integration.cc"
+          ],
+          "exit_code": 0
+        },
+        {
+          "stage": "link_fixture",
+          "argv": [
+            "/usr/bin/c++",
+            "-g",
+            "-O3",
+            "-fopenmp",
+            "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/validation/long-fixture-build/fixture.o",
+            "-o",
+            "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/validation/long-fixture-build/checkSllOutputTailIntegration",
+            "-L/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/src/lib/3rdParty/PaToH",
+            "-Wl,-rpath,/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/src/lib/3rdParty/PaToH",
+            "lib/HiFPlacer/placement/globalPlacement/libGlobalPlacer.a",
+            "lib/HiFPlacer/designInfo/libDesignInfo.a",
+            "lib/HiFPlacer/deviceInfo/libDeviceInfo.a",
+            "lib/HiFPlacer/placement/placementInfo/libPlacementInfo.a",
+            "lib/HiFPlacer/placement/placementTiming/libPlacementTiming.a",
+            "lib/HiFPlacer/placement/packing/libPacking.a",
+            "lib/HiFPlacer/placement/legalization/libLegalization.a",
+            "lib/HiFPlacer/problemSolvers/libProblemSolvers.a",
+            "lib/utils/libUtils.a",
+            "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-output-tail-232754/repo/builds/build-20261028-233413-460875-64a4660c/src/lib/3rdParty/PaToH/libpatoh.a",
+            "-lpthread",
+            "/usr/lib/x86_64-linux-gnu/libz.so",
+            "/usr/lib/x86_64-linux-gnu/libboost_filesystem.so",
+            "/usr/lib/x86_64-linux-gnu/libboost_program_options.so",
+            "/usr/lib/x86_64-linux-gnu/libboost_system.so",
+            "/usr/lib/x86_64-linux-gnu/libboost_log.so",
+            "/usr/lib/x86_64-linux-gnu/libboost_thread.so",
+            "/usr/lib/x86_64-linux-gnu/libboost_unit_test_framework.so",
+            "/usr/lib/x86_64-linux-gnu/libboost_date_time.so",
+            "/usr/lib/x86_64-linux-gnu/libboost_log_setup.so",
+            "/usr/lib/x86_64-linux-gnu/libboost_regex.so",
+            "/usr/lib/x86_64-linux-gnu/libboost_chrono.so",
+            "/usr/lib/x86_64-linux-gnu/libboost_atomic.so",
+            "lib/3rdParty/MaximalCardinalityMatching/libMaximalCardinalityMatching.a",
+            "lib/3rdParty/osqp++/libosqp-cpp.a",
+            "_deps/abseil-cpp-build/absl/status/libabsl_status.a",
+            "_deps/abseil-cpp-build/absl/debugging/libabsl_stacktrace.a",
+            "_deps/abseil-cpp-build/absl/debugging/libabsl_symbolize.a",
+            "_deps/abseil-cpp-build/absl/debugging/libabsl_debugging_internal.a",
+            "_deps/abseil-cpp-build/absl/debugging/libabsl_demangle_internal.a",
+            "_deps/abseil-cpp-build/absl/base/libabsl_malloc_internal.a",
+            "_deps/abseil-cpp-build/absl/strings/libabsl_cord.a",
+            "_deps/abseil-cpp-build/absl/strings/libabsl_str_format_internal.a",
+            "_deps/abseil-cpp-build/absl/strings/libabsl_strings.a",
+            "_deps/abseil-cpp-build/absl/strings/libabsl_strings_internal.a",
+            "_deps/abseil-cpp-build/absl/base/libabsl_base.a",
+            "_deps/abseil-cpp-build/absl/base/libabsl_spinlock_wait.a",
+            "-lrt",
+            "_deps/abseil-cpp-build/absl/numeric/libabsl_int128.a",
+            "_deps/abseil-cpp-build/absl/base/libabsl_throw_delegate.a",
+            "_deps/abseil-cpp-build/absl/types/libabsl_bad_optional_access.a",
+            "_deps/abseil-cpp-build/absl/base/libabsl_raw_logging_internal.a",
+            "_deps/abseil-cpp-build/absl/base/libabsl_log_severity.a",
+            "_deps/osqp-build/out/libosqp.a",
+            "-ldl"
+          ],
+          "exit_code": 0
+        },
+        {
+          "stage": "run_fixture",
+          "exit_code": 0
+        }
+      ]
+    },
+    "sta_crossings_checked": 3,
+    "sta_active_corrections_checked": 2,
+    "prior_short_fixture": "preserved as insufficient-coverage fixture; no active long tail existed"
+  },
+  "full_placement_executed": false,
+  "routing_executed": false,
+  "build_note": "extended integration fixture is compiled separately against the recorded production build; production source hashes match the frozen build",
+  "capability": "sll_output_long_delay_schema=1"
+}

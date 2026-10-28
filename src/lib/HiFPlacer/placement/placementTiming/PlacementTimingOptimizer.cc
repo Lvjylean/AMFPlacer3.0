@@ -1721,14 +1721,19 @@ void PlacementTimingOptimizer::clusterLongPathInOneClockRegion(int pathLenThr, f
     }
     initialClustering = false;
     dumpClockRegionClusters();
-    // if (!placementInfo->isDensePlacement())
-    // Isolated ablation71: retain clustering; skip only column stretching.
-    print_info("ABLATION71 stretchClockRegionColumns skipped");
+    stretchClockRegionColumns();
 }
 
 void PlacementTimingOptimizer::stretchClockRegionColumns()
 {
     AMF_PROFILE_FUNCTION("timing");
+    const auto policy = deviceInfo->getPlacementPolicy();
+    if (!policy.shouldStretch(placementInfo->boundaryClusteringEnabled(), noBlockAware))
+    {
+        print_info("stretchClockRegionColumns skipped by device/config/clustering policy");
+        return;
+    }
+    // Keep the original AMF2 Pro stretching algorithm below unchanged.
     auto &binGrid = placementInfo->getGlobalBinGrid();
     auto &PU2ClockRegionColumn = placementInfo->getPU2ClockRegionColumn();
     auto YX2ClockRegion = deviceInfo->getClockRegions();

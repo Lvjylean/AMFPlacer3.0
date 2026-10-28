@@ -1,6 +1,7 @@
 """Validate the canonical SLR hierarchy and explicit legacy compatibility."""
 import json
 import subprocess
+from device_placement_config import validate_device_placement_binary
 
 def boundary_clustering_strategy(config):
     strategy = config.get('BoundaryClusteringStrategy', 'slr-hierarchical')
@@ -11,6 +12,7 @@ def boundary_clustering_strategy(config):
     return strategy
 
 def validate_paper_boundary_binary(config, binary):
+    validate_device_placement_binary(config, binary)
     # Retain the Python function name for existing import sites.
     stage_mode = config.get('BoundaryStageMode', 'independent-max2')
     if stage_mode not in ('independent-max2', 'merged'):

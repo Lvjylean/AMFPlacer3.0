@@ -47,7 +47,7 @@ public:
     // A fresh compact view keeps capacity/configuration changes observable.
     // Sorted bin IDs preserve the legacy floating-point energy summation order.
     struct DenseUsage {
-        std::vector<size_t> tileKey, tileBin, supply, binSupply;
+        std::vector<size_t> tileKey, tileBin, supply, binSupply, tileColumn, columnSupply;
         DenseUsage(const Model&m,const DensityModel&d) {
             std::map<TileKey,size_t> tileIds;
             for(const auto&entry:m.tileCapacity){tileIds.emplace(entry.first,supply.size());supply.push_back(entry.second);}
@@ -56,6 +56,9 @@ public:
             for(const auto&t:m.tiles)binIds.emplace(d.bin(t),0);
             for(auto&entry:binIds){entry.second=binSupply.size();auto found=d.capacity.find(entry.first);
                 binSupply.push_back(found==d.capacity.end()?0:found->second);}
+            std::map<ColumnKey,size_t> columnIds;
+            for(const auto&entry:m.columnCapacity){columnIds.emplace(entry.first,columnSupply.size());columnSupply.push_back(entry.second);}
+            for(const auto&t:m.tiles)tileColumn.push_back(columnIds.at(physicalColumn(t.key)));
             tileKey.reserve(m.tiles.size());tileBin.reserve(m.tiles.size());
             for(const auto&t:m.tiles){tileKey.push_back(tileIds.at(t.key));tileBin.push_back(binIds.at(d.bin(t)));}
         }
@@ -76,8 +79,8 @@ public:
         Assignment result;result.tiles=current(m);
         if(desired.size()!=result.tiles.size())throw std::invalid_argument("SLL proposal dimension mismatch");
         const DenseUsage usage(m,*this);
-        std::vector<size_t> loads(usage.binSupply.size()),tileLoads(usage.supply.size());
-        for(int ti:result.tiles){++loads[usage.tileBin.at(ti)];const auto key=usage.tileKey.at(ti);
+        std::vector<size_t> loads(usage.binSupply.size()),tileLoads(usage.supply.size()),columnLoads(usage.columnSupply.size());
+        for(int ti:result.tiles){++columnLoads[usage.tileColumn.at(ti)];++loads[usage.tileBin.at(ti)];const auto key=usage.tileKey.at(ti);
             if(++tileLoads[key]>usage.supply[key])throw std::runtime_error("Overfull incumbent SLL tile");}
         result.energyBefore=usage.energy(loads,targetUtilization);
         // Only the selected tile changes in this coordinate-descent pass.
@@ -85,22 +88,25 @@ public:
         for(size_t i=0;i<result.tiles.size();++i){
             if(!std::isfinite(desired[i].x)||!std::isfinite(desired[i].y))throw std::runtime_error("Non-finite virtual SLL QP proposal");
             const int old=result.tiles[i];const auto&base=m.tiles[old];
-            --loads[usage.tileBin[old]];--tileLoads[usage.tileKey[old]];
+            --loads[usage.tileBin[old]];--tileLoads[usage.tileKey[old]];--columnLoads[usage.tileColumn[old]];
             auto score=[&](int ti){const auto&t=m.tiles[ti];const size_t b=usage.tileBin[ti],n=loads[b];
                 return length(desired[i],t.in,m.ratio)+weight*(usage.penalty(b,n+1,targetUtilization)-usage.penalty(b,n,targetUtilization));};
-            int selected=old;double best=score(old);
+            int selected=-1,bestTier=ColumnPolicy::unavailable;double best=INFINITY;
             for(int ti:m.availableTiles.at({base.from,base.to})){
                 const auto key=usage.tileKey[ti];if(tileLoads[key]>=usage.supply[key])continue;
+                const size_t col=usage.tileColumn[ti];const int tier=m.columnPolicy.tier(columnLoads[col]+1,usage.columnSupply[col]);
+                if(tier==ColumnPolicy::unavailable)continue;
                 const double value=score(ti);
-                if(value<best-1e-9){best=value;selected=ti;}
+                if(tier<bestTier||(tier==bestTier&&(value<best-1e-9||(std::abs(value-best)<=1e-9&&ti==old)))){
+                    bestTier=tier;best=value;selected=ti;}
             }
             if(!std::isfinite(best))throw std::runtime_error("No legal SLL tile assignment");
             result.tiles[i]=selected;result.moved+=selected!=old;
-            ++tileLoads[usage.tileKey[selected]];++loads[usage.tileBin[selected]];
+            ++tileLoads[usage.tileKey[selected]];++loads[usage.tileBin[selected]];++columnLoads[usage.tileColumn[selected]];
         }
         result.energyAfter=usage.energy(loads,targetUtilization);return result;
     }
-    // After QP, legalize the solved coordinates using displacement ONLY. Soft
+    // After QP, prefer the lowest feasible column tier, then nearest solved coordinates. Soft
     // density pressure has already entered QP through spread()/the anchor.
     // Assign from scratch so full tiles can exchange occupants in one round.
     // This is deterministic greedy legalization with augmenting-path repair,
@@ -119,12 +125,16 @@ public:
                 throw std::runtime_error("Overfull incumbent SLL tile");
         }
         Assignment result;result.tiles.assign(count,-1);result.energyBefore=usage.energy(before,targetUtilization);
-        std::vector<std::vector<size_t>> occupants(usage.supply.size());
+        std::vector<std::vector<size_t>> occupants(usage.supply.size()),columnOccupants(usage.columnSupply.size());
+        std::vector<size_t> columnLoads(usage.columnSupply.size());
+        auto tier=[&](int ti){const auto c=usage.tileColumn[ti];return m.columnPolicy.tier(columnLoads[c]+1,usage.columnSupply[c]);};
         auto candidates=[&](size_t i)->const std::vector<int>&{
             const auto&t=m.tiles[old[i]];return m.availableTiles.at({t.from,t.to});};
         auto distance=[&](size_t i,int ti){return length(desired[i],m.tiles[ti].in,m.ratio);};
         auto prefer=[&](size_t i,int a,int b){
             if(b<0)return true;
+            const int taTier=tier(a),tbTier=tier(b);
+            if(taTier!=tbTier)return taTier<tbTier;
             const double da=distance(i,a),db=distance(i,b);
             if(da<db-1e-9)return true;
             if(db<da-1e-9)return false;
@@ -139,14 +149,17 @@ public:
             if(result.tiles[i]>=0){
                 auto&v=occupants[usage.tileKey[result.tiles[i]]];
                 v.erase(std::find(v.begin(),v.end(),i));
+                const auto c=usage.tileColumn[result.tiles[i]];--columnLoads[c];
+                auto&cv=columnOccupants[c];cv.erase(std::find(cv.begin(),cv.end(),i));
             }
             result.tiles[i]=ti;occupants[usage.tileKey[ti]].push_back(i);
+            ++columnLoads[usage.tileColumn[ti]];columnOccupants[usage.tileColumn[ti]].push_back(i);
         };
         for(size_t i=0;i<count;++i){
             int chosen=-1;
             for(int ti:candidates(i)){
                 const auto&t=m.tiles[ti];
-                if(occupants[usage.tileKey[ti]].size()<usage.supply[usage.tileKey[ti]]&&prefer(i,ti,chosen))chosen=ti;
+                if(occupants[usage.tileKey[ti]].size()<usage.supply[usage.tileKey[ti]]&&tier(ti)!=ColumnPolicy::unavailable&&prefer(i,ti,chosen))chosen=ti;
             }
             if(chosen>=0){move(i,chosen);continue;}
             // Rare asymmetric candidate domains can strand a greedy assignment.
@@ -164,7 +177,7 @@ public:
                 });
                 for(int ti:ranked){
                     const size_t key=usage.tileKey[ti];if(visited[key])continue;visited[key]=true;
-                    if(occupants[usage.tileKey[ti]].size()<usage.supply[usage.tileKey[ti]]){
+                    if(occupants[usage.tileKey[ti]].size()<usage.supply[usage.tileKey[ti]]&&tier(ti)!=ColumnPolicy::unavailable){
                         size_t node=cur;int target=ti;
                         while(true){
                             move(node,target);if(node==i)break;
@@ -172,7 +185,8 @@ public:
                         }
                         repaired=true;break;
                     }
-                    for(size_t next:occupants[usage.tileKey[ti]])if(parent[next]<0){
+                    const auto&blocked=occupants[key].size()>=usage.supply[key]?occupants[key]:columnOccupants[usage.tileColumn[ti]];
+                    for(size_t next:blocked)if(parent[next]<0){
                         parent[next]=int(cur);via[next]=ti;queue.push_back(next);
                     }
                 }
@@ -181,6 +195,9 @@ public:
         }
         std::vector<size_t> after(usage.binSupply.size());
         for(size_t i=0;i<count;++i){++after[usage.tileBin[result.tiles[i]]];result.moved+=result.tiles[i]!=old[i];}
+        for(size_t c=0;c<columnLoads.size();++c)
+            if(columnLoads[c]&&m.columnPolicy.tier(columnLoads[c],usage.columnSupply[c])==ColumnPolicy::unavailable)
+                throw std::runtime_error("SLL column hard utilization ceiling violated");
         result.energyAfter=usage.energy(after,targetUtilization);return result;
     }
 };

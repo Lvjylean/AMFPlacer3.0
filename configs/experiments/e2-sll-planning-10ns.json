@@ -65,7 +65,7 @@
   "SllDynamicTauEnable": "true",
   "SllShortSpanEnable": "true",
   "SllPlanningEnable": "true",
-  "SllPlanningAllowSplit": "true",
+  "SllPlanningAllowSplit": "false",
   "SllPlanningTimingWeight": "16",
   "SllPlanningExtraCrossingCost": "24",
   "SllPlanningSwitchCost": "0",
@@ -82,5 +82,9 @@
   "SllTilePlanningEnable": "true",
   "SllInitializationPolicy": "local-wire-capacity",
   "SllProjectionPolicy": "qp-nearest-capacity",
-  "SllQpDisplacementPolicy": "shared-pre-projection"
+  "SllQpDisplacementPolicy": "shared-pre-projection",
+  "SllInitialColumnUtilizationLimit": "0.75",
+  "SllOutputLongDelayCorrection": "true",
+  "SllOutputLongDelayThresholdNs": "1.5",
+  "SllOutputLongDelaySlope": "1.1430759607609453"
 }

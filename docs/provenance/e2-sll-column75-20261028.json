@@ -1,0 +1,163 @@
+{
+  "source_repository": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/repo",
+  "source_commit": "64a4660c8fd628af6864a8594a90f3773cee7d86",
+  "binary": {
+    "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/repo/builds/build-20261028-164425-629455-64a4660c/build/AMFPlacer",
+    "sha256": "2d04a77d7636da8171e7a0bfaeb03c21378adfd601e316e0156f7ae35ea8938d"
+  },
+  "build_manifest": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/repo/builds/build-20261028-164425-629455-64a4660c/manifest.json",
+  "config": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/repo/configs/experiments/getrf-u250-e2-column75-10ns.json",
+  "required_environment": {
+    "AMF_GRID_UPDATE_MODE": "parallel",
+    "AMF_GRID_UPDATE_VERIFY": "0",
+    "OMP_NUM_THREADS": "12",
+    "OMP_DYNAMIC": "FALSE",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12"
+  },
+  "policy": {
+    "SllInitialColumnUtilizationLimit": "0.75",
+    "scope": "initial column admission only; post-admission utilization <= 0.75; retained tiles and QP projection keep physical-capacity rules",
+    "SllPlanningAllowSplit": "false",
+    "meaning": "One crossing per net per required SLR boundary; local receivers do not cross."
+  },
+  "checks": [
+    {
+      "name": "build-tests",
+      "command": [
+        "cmake",
+        "--build",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/repo/builds/build-20261028-164425-629455-64a4660c/build",
+        "--target",
+        "checkSllColumnInitialization",
+        "checkSllNoSplit",
+        "checkSllTileInitialization",
+        "checkSllQpProjection",
+        "checkSllDensity",
+        "checkSllVirtualModel",
+        "checkSllJointIntegration",
+        "--parallel",
+        "4"
+      ],
+      "exit_code": 0,
+      "seconds": 13.947791684418917
+    },
+    {
+      "name": "checkSllColumnInitialization",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/repo/builds/build-20261028-164425-629455-64a4660c/build/checkSllColumnInitialization"
+      ],
+      "exit_code": 0,
+      "seconds": 0.022333654575049877
+    },
+    {
+      "name": "checkSllNoSplit",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/repo/builds/build-20261028-164425-629455-64a4660c/build/checkSllNoSplit"
+      ],
+      "exit_code": 0,
+      "seconds": 0.012614373117685318
+    },
+    {
+      "name": "checkSllTileInitialization",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/repo/builds/build-20261028-164425-629455-64a4660c/build/checkSllTileInitialization"
+      ],
+      "exit_code": 0,
+      "seconds": 0.008546086959540844
+    },
+    {
+      "name": "checkSllQpProjection",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/repo/builds/build-20261028-164425-629455-64a4660c/build/checkSllQpProjection"
+      ],
+      "exit_code": 0,
+      "seconds": 0.0029111895710229874
+    },
+    {
+      "name": "checkSllDensity",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/repo/builds/build-20261028-164425-629455-64a4660c/build/checkSllDensity"
+      ],
+      "exit_code": 0,
+      "seconds": 0.005467602051794529
+    },
+    {
+      "name": "checkSllVirtualModel",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/repo/builds/build-20261028-164425-629455-64a4660c/build/checkSllVirtualModel"
+      ],
+      "exit_code": 0,
+      "seconds": 0.0014219935983419418
+    },
+    {
+      "name": "joint-tile",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/repo/builds/build-20261028-164425-629455-64a4660c/build/checkSllJointIntegration",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/validation/joint-config.json",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/validation/joint-tile",
+        "tile"
+      ],
+      "exit_code": 0,
+      "seconds": 8.949655429460108
+    }
+  ],
+  "validation_scope": "75% column admission, no-split, density, projection regressions and four-register integration on the actual U250 resource inventory.",
+  "full_placement_executed": false,
+  "routing_executed": false,
+  "test_input_hashes": {
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/5cc26c1cc8b7-exportSiteLocation.zip": "5cc26c1cc8b74ca1f32945c77d48058b8a04d2c9fdc40fcf5e82fe6c552f6a25",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/synthetic-e2-registers.zip": "ea5a0671c74963456fd18217a47b88533cc8ff460791415fd6b59013b14d354a",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/07a841cee796-clocks": "07a841cee796403bb14a3659b2c4a5c09a79047f0bdf6662b2c64c8bb9801a27",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/f3e4d2bbe26b-cellType2fixedAmo": "f3e4d2bbe26b45c0eb562b7fb8249524dc7f01c0be9595ffeb722cc572ed4e33",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/f2f1832e4776-cellType2sharedCellType": "f2f1832e477624e1b1f563c85415405c8fbe85b93809509e5eac5cf73d73d553",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/ff49d19d6fac-sharedCellType2BELtype": "ff49d19d6fac348d39e23ceb1fcd5b678e01f7ff32f60e9d13448bed30d64781",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/d1116390e6bc-physical_structure.tsv": "d1116390e6bce6e879fb40ee50c9f3cef80645e77d7d6b0bc94b271bd8a645fa",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/39e34938d3ed-clock_capacity.tsv": "39e34938d3edb29f928b1e35e805fe5738a1c44a895cffff57b6a511067d27d4",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/device/channels.tsv": "bc6ffb509d8733291aacf6eb296211c4f7975c50296c021fcd8c7e487268cfb5"
+  },
+  "variant": "E2 no-split + initial column utilization 75%",
+  "source_file_hashes": {
+    "src/lib/HiFPlacer/placement/placementInfo/SllVirtualModel.h": "9e6b8a6314fd4cad784902466010a2b13cc0b06feb7fdaed3b9a83415823d999",
+    "src/lib/HiFPlacer/placement/placementInfo/SllTilePlacement.h": "6a93703d65a0b8cf4e2ba55c21e7b843a9099dfd8a0e8085b531356235a0c023",
+    "src/lib/HiFPlacer/placement/placementInfo/SllPlanner.cc": "bff7213abdbfa8d3ede3898bb379bf698da12afa93d23f0d7834e5b12e9bc1a7",
+    "src/lib/HiFPlacer/placement/placementInfo/SllDensityModel.h": "f99757247e679a0cf81f003889b110f19f8dc0ed8d47a73b4952f7823640aedf",
+    "src/lib/HiFPlacer/placement/globalPlacement/SllRunDiagnostics.cc": "3847e59b486cee8a0a6d6f7203a307ee0f95be6c47af5ff4de4a222f6576351e",
+    "src/lib/HiFPlacer/placement/globalPlacement/SllDiagnosticMath.h": "e10c207ce1ffb766fb58a1c4061ea09c9eb68378f4ded542e4973e7c44dc06bd",
+    "src/lib/HiFPlacer/placement/globalPlacement/WirelengthOptimizer.cc": "72019a05ef002fafb23a84df0d934ad2d08b0aca5432daab08e16d9520aeb454",
+    "src/lib/HiFPlacer/placement/placementInfo/PlacementInfo.h": "436ad9307fb5d720272057a1cdf38fd4d48f8ab4a934453b1d247153ebd1236c",
+    "src/tests/check_sll_column_initialization.cc": "b95f478ad17640f8670df09d9dfff1c638e9ad353877d3e0f1edade421ee6e53",
+    "src/tests/check_sll_no_split.cc": "568f820a07512792d840643a846140d273d8ec4c783c0a1057b5be53bc97cec6",
+    "src/tests/check_sll_qp_projection.cc": "c5de4897ba3f921e65b8d0b6e893cd55f10d4bc06c6b80f7fc9deca030dda89f",
+    "src/tests/check_sll_density.cc": "22af61f18e99c6388faaad158fc53c83964b0418cb60ccc0dc2c9340f685d26f",
+    "src/CMakeLists.txt": "cbde7dc0a960133a34685e4126115178ee552d07afaf0010b8ac9092c19054fb",
+    "configs/experiments/getrf-u250-e2-column75-10ns.json": "7518e0b1d4a0e9442b164cc70082eb860a1127300d7b680f7c14c4b3e2466742",
+    "configs/experiments/e2-sll-planning-10ns.json": "7644b3fbab4a7c5f9e4605eb806e4cfd2f0d3484462be445e11b1a1ce690bedb",
+    "configs/placement/bases/e2-u250-sll-planning.json": "7644b3fbab4a7c5f9e4605eb806e4cfd2f0d3484462be445e11b1a1ce690bedb"
+  },
+  "initialization_policy": {
+    "parameter": "SllInitialColumnUtilizationLimit",
+    "value": 0.75,
+    "admission": "(column_load + 1) / column_usable_capacity <= 0.75",
+    "capacity_identity": "(lower SLR boundary, physical COLUMN); up/down share physical lanes; reserved resources excluded from usable capacity",
+    "scope": "Newborn or reallocated crossing initialization only; retained QP locations and post-QP projection keep physical-capacity rules.",
+    "all_columns_exhausted": "Explicit allocator failure; no silent threshold relaxation.",
+    "tile_density_target": 0.8,
+    "allow_split": false,
+    "accounting": "Incrementally updated per-column map in the serial allocation pass; no per-crossing whole-inventory scan."
+  },
+  "diff_from_previous_copy": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/column75-only.patch",
+  "full_source_patch": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/final-source.patch",
+  "build_log": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/build.log",
+  "build_metadata": [
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/repo/builds/build-20261028-164425-629455-64a4660c/configure.log",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/repo/builds/build-20261028-164425-629455-64a4660c/compile.log",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/repo/builds/build-20261028-164425-629455-64a4660c/working_tree.patch",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/repo/builds/build-20261028-164425-629455-64a4660c/source_hashes.json",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/repo/builds/build-20261028-164425-629455-64a4660c/manifest.json"
+  ],
+  "timing_and_qp_changes_this_turn": "None; only initial column admission and accounting changed.",
+  "profile": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-column75/repo/docs/provenance/e2-sll-column75-20261028.json",
+  "prior_profile": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-no-split/repo/docs/provenance/e2-sll-no-split-20261028.json",
+  "launch_config_note": "Use this named config with the recorded binary; no full experiment was launched."
+}

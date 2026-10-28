@@ -1,0 +1,98 @@
+{
+  "IncremenralCompilation": true,
+  "part": "xcu250-figd2104-2L-e",
+  "top": "getrf_dfx_top",
+  "clock_name": "dfx_clk",
+  "clock_period_ns": 12,
+  "experiment_clock_period_ns": 12,
+  "vivado": "/Orion/jinyang/amd/2026.1/Vivado/bin/vivado",
+  "vivado_threads": 4,
+  "max_parallel": 2,
+  "require_distinct_slrs": true,
+  "amf_config": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/configs/amf-12ns.json",
+  "partitions": [
+    {
+      "id": "a",
+      "active_partition": "kernel/grp_getrf_core_double_2_512_256_s_fu_1411/grp_subUpdate_double_2_512_s_fu_5268",
+      "pblock": "pblock_a",
+      "expected_slr": "SLR0",
+      "pblock_ranges": [
+        "CLOCKREGION_X1Y2:CLOCKREGION_X3Y2"
+      ]
+    },
+    {
+      "id": "b",
+      "active_partition": "kernel/grp_getrf_core_double_2_512_256_s_fu_1411/grp_subUpdate_double_2_512_s_fu_6548",
+      "pblock": "pblock_b",
+      "expected_slr": "SLR1",
+      "pblock_ranges": [
+        "CLOCKREGION_X1Y5:CLOCKREGION_X3Y5"
+      ]
+    }
+  ],
+  "assembly_xdc_files": [],
+  "xdc_files": [
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/configs/clock-12ns.xdc"
+  ],
+  "static_placement_audit": "skip",
+  "static_routing_containment": false,
+  "scan_cross_slr_nets": false,
+  "prepare_worker_shells": false,
+  "amf_binary": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/builds/getrf-12ns-runtime-bundle-36/build/AMFPlacer",
+  "amf_binary_sha256": "0d0c0ab8e16940b21f74b1f1fe6456fcc138542fefb34d6db9e2dd6cebd13036",
+  "amf_runtime_lib": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261015-native-static-cache-27/build-dependencies-05",
+  "native_dfx_edge_policy": "clock-region-slice-dsp-v1",
+  "native_dfx_edge_side_policy": "interior-prohibit",
+  "srl_control_metadata_semantics": "raw-available-empty-v1",
+  "full_edge_policy": true,
+  "boundary_policy_tool": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/tools/full_edge_policy",
+  "fresh_rtl_required": true,
+  "experiment_id": "getrf-12ns-right3-35",
+  "rtl_sources": [
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/getrf_dfx_rm.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/getrf_dfx_top.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_control_s_axi.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_dcmp_64ns_64ns_1_2_no_dsp_1.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_ddiv_64ns_64ns_64_22_no_dsp_1.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_dmul_64ns_64ns_64_5_max_dsp_1.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_dsub_64ns_64ns_64_5_full_dsp_1.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_flow_control_loop_pipe_sequential_init.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_getrf_core_double_2_512_256_Pipeline_LoopDiv.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_getrf_core_double_2_512_256_Pipeline_LoopPivot.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_getrf_core_double_2_512_256_Pipeline_LoopRows.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_getrf_core_double_2_512_256_s.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_getrf_core_double_2_512_256_s_rows_RAM_2P_BRAM_1R1W.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_gmem0_m_axi.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_kernel_getrf_0_Pipeline_LoopRead_VITIS_LOOP_165_1.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_kernel_getrf_0_Pipeline_LoopWrite_VITIS_LOOP_181_3.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_kernel_getrf_0_Pipeline_VITIS_LOOP_172_2.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_kernel_getrf_0_Pipeline_VITIS_LOOP_187_4.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_matA_XPM_MEMORY_URAM_1R1W.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_mul_9ns_2ns_10_1_1.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_pivot_RAM_AUTO_1R1W.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_sparsemux_513_8_64_1_1.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_subUpdate_double_2_512_Pipeline_LoopMulSub.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_subUpdate_double_2_512_s.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_udiv_10ns_9ns_9_14_1.v",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_urem_10ns_9ns_9_14_1.v"
+  ],
+  "ip_scripts": [
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_dcmp_64ns_64ns_1_2_no_dsp_1_ip.tcl",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_ddiv_64ns_64ns_64_22_no_dsp_1_ip.tcl",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_dmul_64ns_64ns_64_5_max_dsp_1_ip.tcl",
+    "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/deployments/getrf-12ns-right3-35/sources/v0/kernel_getrf_0_dsub_64ns_64ns_64_5_full_dsp_1_ip.tcl"
+  ],
+  "shell_run": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v0-full-36",
+  "prepare_common_static_shell": true,
+  "native_cache_capture": true,
+  "backend_place_mode": "full-default",
+  "comparison_role": "v0_full_fresh_rtl",
+  "native_static_identity": "getrf-12ns-right3-v0-2d2705ed2daa1dcb85727dcdcdab56d6f98fab576c9e6fbcc86b76a2927be254",
+  "native_coordinate_map": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/preflight/20261015-native-static-cache-27/device-coordinate-map.json",
+  "runtime_helper_sha256": "6b0b1a2832e4065b78f32471a93ea439afda4e842aa902e4c30d505514147058",
+  "recover_exact_preparation": {
+    "parent": "/Orion/jinyang/workspace/AMFplacer3/experiments/preflight/20261014-getrf-static-containment/repo/experiments/runs/getrf-12ns-right3-099-v0-full-35",
+    "manifest_sha256": "c87f177d8dfa62426c1cc4eaa734f06646f86f621cc80360756f85fa084df5ac"
+  }
+}

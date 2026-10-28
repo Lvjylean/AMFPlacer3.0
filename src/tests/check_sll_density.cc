@@ -65,7 +65,7 @@ int main(){try{
     check(y.tiles[move.tiles[0]].column==20,"source-side favorable X retained");
     y.previous.clear();n.sinks[0].p.y=114;y.rebuild({n});
     check(y.geometry(y.plans[0].crossings[0]).in.y==93,"newborn Y includes output side and tied interval midpoint");
-    Model shared;shared.jointPlacement=true;shared.allowSplit=false;
+    Model shared;shared.jointPlacement=true;shared.allowSplit=false;shared.initialColumnUtilizationLimit=1;
     for(int lane=0;lane<2;++lane)for(bool down:{false,true})shared.channels.push_back(channel(20,90,lane,down));
     shared.index();Net up{1,"up",pin(1,0,20,50),{pin(2,1,20,150)},1},down{2,"down",pin(3,1,20,150),{pin(4,0,20,50)},1};
     shared.rebuild({up,down});shared.legalizeChannels();

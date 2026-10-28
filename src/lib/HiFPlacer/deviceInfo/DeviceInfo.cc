@@ -99,7 +99,7 @@ DeviceInfo::DeviceInfo(std::map<std::string, std::string> &JSONCfg, std::string 
     {
         loadBELType2FalseBELType(JSONCfg["mergedSharedCellType2sharedCellType"]);
     }
-    deviceName = _deviceName;
+    deviceName = amf_device::canonicalDeviceName(_deviceName);
 
     std::string unzipCmnd = "unzip -p " + deviceArchievedTextFileName;
     FILEbuf sbuf(popen(unzipCmnd.c_str(), "r"));

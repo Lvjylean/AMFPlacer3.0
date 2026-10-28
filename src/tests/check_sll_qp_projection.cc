@@ -16,7 +16,7 @@ static Net net(int id,double x=42,bool down=false){
     n.sinks={pin(id*10+1,down?0:1,x,down?50:150)};return n;
 }
 static Model inventory(int lanes=24){
-    Model m;m.jointPlacement=true;m.sourceNearInitialization=true;m.allowSplit=false;
+    Model m;m.jointPlacement=true;m.sourceNearInitialization=true;m.allowSplit=false;m.initialColumnUtilizationLimit=1;
     for(int col:{42,54,62})for(int row:{90,91,92})for(int k=0;k<lanes;++k)for(bool down:{false,true})
         m.channels.push_back(channel(col,row,k,down));
     m.index();return m;
@@ -31,7 +31,7 @@ int main(){try{
     for(int gap:{11,12})for(int direction:{1,-1}){
         const double left=gap==11?14:42,right=left+gap;
         const double start=direction>0?left:right,destination=direction>0?right:left;
-        Model bounded;bounded.jointPlacement=bounded.sourceNearInitialization=true;bounded.allowSplit=false;
+        Model bounded;bounded.jointPlacement=bounded.sourceNearInitialization=true;bounded.allowSplit=false;bounded.initialColumnUtilizationLimit=1;
         bounded.channels={channel(int(left),90,0),channel(int(right),90,0)};bounded.index();
         bounded.rebuild({net(1,start)});DensityModel bd;bd.index(bounded);
         const Point origin=bounded.geometry(bounded.plans[0].crossings[0]).in;
@@ -81,13 +81,13 @@ int main(){try{
     for(const auto&p:cap.plans)for(const auto&e:p.crossings){check(!Model::conflicts(cap.channels[e.channel],paths),"no exact lane conflict");Model::occupy(cap.channels[e.channel],paths);}
     std::cout<<"PASS full capacity, mixed directions and precise lanes\n";
     // A full two-slot inventory must allow both crossings to exchange columns.
-    Model swap;swap.jointPlacement=swap.sourceNearInitialization=true;swap.allowSplit=false;
+    Model swap;swap.jointPlacement=swap.sourceNearInitialization=true;swap.allowSplit=false;swap.initialColumnUtilizationLimit=1;
     swap.channels={channel(42,90,0),channel(54,90,0)};swap.index();swap.rebuild({net(1,42),net(2,54)});
     DensityModel sd;sd.index(swap);auto exchanged=sd.assign(swap,{{54,90},{42,90}});
     check(swap.tiles[exchanged.tiles[0]].in.x==54&&swap.tiles[exchanged.tiles[1]].in.x==42,"simultaneous full-tile swap is possible");
     std::cout<<"PASS simultaneous full-tile exchange\n";
     // Up can use A/B; down can use only A. A greedy early choice needs repair.
-    Model asym;asym.jointPlacement=asym.sourceNearInitialization=true;asym.allowSplit=false;
+    Model asym;asym.jointPlacement=asym.sourceNearInitialization=true;asym.allowSplit=false;asym.initialColumnUtilizationLimit=1;
     asym.channels={channel(42,90,0),channel(42,90,0,true),channel(54,90,0)};asym.index();
     asym.rebuild({net(1,54),net(2,42,true)});DensityModel ad;ad.index(asym);
     auto repair=ad.assign(asym,{{42,90},{42,110}});

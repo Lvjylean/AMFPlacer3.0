@@ -1,0 +1,122 @@
+{
+  "status": "completed",
+  "task": "E2 multiple physical exits and grouped SLL FIXED_ROUTE exporter/audit repair",
+  "user_authorization": "Vivado may choose source output during FIXED_ROUTE import; AMF must not pick it. No GETRF route_design.",
+  "source_repository": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo",
+  "base_commit": "64a4660c8fd628af6864a8594a90f3773cee7d86",
+  "branch": "codex/e2-sll-free-terminal",
+  "source_snapshot": "experiments/evidence/20261028-e2-sll-free-terminal/results/source-snapshot-v4.json",
+  "tracked_diff": "experiments/evidence/20261028-e2-sll-free-terminal/results/source-v4.diff",
+  "cpp_changes": false,
+  "amf_rebuilt": false,
+  "amf_rerun": false,
+  "clock_period_ns": 10.0,
+  "placement_frozen": true,
+  "dcp_storage": "server-only",
+  "sll_plan_counts": {
+    "nets": 8442,
+    "crossings": 8467,
+    "logical_receivers": 280438,
+    "local_receivers": 156106,
+    "remote_receivers": 124332
+  },
+  "current_getrf_run": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-sll-terminal-import-20261028-06",
+  "small_validation_runs": [
+    "validation-02",
+    "validation-03",
+    "validation-05",
+    "validation-06",
+    "validation-08",
+    "validation-09",
+    "validation-10"
+  ],
+  "qualifications": [
+    "validation-09 contains a corrected audit false rejection; use per-case results, not all-pass summary.",
+    "Small OOC target-net routes validated; full design I/O signoff is outside scope.",
+    "GETRF full routing, WNS and actual routed SLL counts are outside scope."
+  ],
+  "helper_sha256": "e8e22debe587214ec6ba965f4a2fa4ed4fede880a73bc83d126fda97474510ee",
+  "getrf_validation": {
+    "qualification": "Full constraint import and DCP persistence passed; GETRF routing was not executed.",
+    "run": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-sll-terminal-import-20261028-06",
+    "status": {
+      "state": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1278.2085820194334
+    },
+    "tools": {
+      "vivado_version": "2026.1",
+      "part": "xcu250-figd2104-2L-e",
+      "max_threads": 4
+    },
+    "clock_period_ns": 10.0,
+    "fixed_route_nets": 8442,
+    "planned_sll_crossings": 8467,
+    "logical_receiver_records": 280438,
+    "checkpoint_fixed_routes_verified": 8442,
+    "source_modes": {
+      "unique_physical_access": 7606,
+      "vivado_implicit_source": 831,
+      "vivado_import_selected_source": 5
+    },
+    "multi_output_drivers": 836,
+    "route_status_after_import": {
+      "ANTENNAS": 8442
+    },
+    "placement_before_and_after_identical": true,
+    "placement_readback": {
+      "requested": 856998,
+      "present": 856998,
+      "placed": 856998,
+      "exact_loc_bel_matches": 856998,
+      "site_matches": 856998,
+      "exact_original_loc_bel_matches": 856998,
+      "primary_bel_matches": 856998,
+      "composite_bel_alias_matches": 0,
+      "design_primitive_cells": 934775,
+      "unrequested_primitive_cells": 77777
+    },
+    "input_hashes_unchanged": true,
+    "routing_executed": false,
+    "stages_seconds": {
+      "open": 102.158,
+      "place_audit": 22.681,
+      "sll_constraints": 890.689,
+      "placed_checkpoint": 57.024,
+      "placement_reports": 42.294,
+      "checkpoint_constraint_readback": 131.6,
+      "checkpoint_placement_readback": 23.317
+    },
+    "checkpoint": {
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-sll-terminal-import-20261028-06/reports/getrf_placed.dcp",
+      "sha256": "9ccb0d061876d493aada21aae90ef7f17aaac7a1052d41e8a6597afc19df5521",
+      "bytes": 329237417,
+      "zip_members": 23,
+      "crc_passed": true,
+      "storage": "server-only"
+    }
+  },
+  "report": "docs/research/e2-sll-free-terminal-20261028.md",
+  "export_replay_validation": {
+    "status": {
+      "state": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 203.90772019233555
+    },
+    "counts": {
+      "inherited_fixed_routes": "0",
+      "fixed_routes_before": "0",
+      "fixed_routes_after": "8442",
+      "source_xdc_seconds": "74.716",
+      "routing_executed": "0",
+      "clock_period_ns": "10.000"
+    },
+    "input_hashes_unchanged": true,
+    "corrected_xdc": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/corrected-export-01/sll-fixed-route.xdc",
+    "corrected_xdc_sha256": "26050c09f8b36878401c1fe93c2494faccc23cf6e6b3f340d767509ff8939183",
+    "helper_sha256": "e8e22debe587214ec6ba965f4a2fa4ed4fede880a73bc83d126fda97474510ee",
+    "scope": "Actual exported XDC replayed from zero target FIXED_ROUTE properties on frozen GETRF placement, 10 ns; no routing and no DCP overwrite."
+  },
+  "main_import_source_snapshot": "experiments/evidence/20261028-e2-sll-free-terminal/results/source-snapshot-v3.json",
+  "post_import_code_change": "Only serialized XDC command now explicitly resolves get_nets. Route values and native import/audit logic unchanged; full exported-file replay passed."
+}

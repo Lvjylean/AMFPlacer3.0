@@ -312,6 +312,8 @@ target_link_libraries(checkDieFirstSpreadingIntegration GlobalPlacer DesignInfo 
 add_executable(checkSllVirtualModel EXCLUDE_FROM_ALL tests/check_sll_virtual_model.cc)
 add_executable(checkSllDensity EXCLUDE_FROM_ALL tests/check_sll_density.cc)
 add_executable(checkSllTileInitialization EXCLUDE_FROM_ALL tests/check_sll_tile_initialization.cc)
+add_executable(checkSllColumnInitialization EXCLUDE_FROM_ALL tests/check_sll_column_initialization.cc)
+add_executable(checkSllNoSplit EXCLUDE_FROM_ALL tests/check_sll_no_split.cc)
 add_executable(checkSllQpProjection EXCLUDE_FROM_ALL tests/check_sll_qp_projection.cc)
 add_executable(checkSllJointIntegration EXCLUDE_FROM_ALL tests/check_sll_joint_integration.cc)
 target_link_libraries(checkSllJointIntegration GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
@@ -331,3 +333,15 @@ target_include_directories(checkSllTimingCandidates PRIVATE lib/HiFPlacer/placem
 
 add_executable(checkSllDensityEquivalence EXCLUDE_FROM_ALL tests/check_sll_density_equivalence.cc)
 target_include_directories(checkSllDensityEquivalence PRIVATE lib/HiFPlacer/placement/placementInfo)
+
+add_executable(checkSllPlannedTimingCapacity EXCLUDE_FROM_ALL tests/check_sll_planned_timing_capacity.cc)
+
+add_executable(checkSllOutputTail EXCLUDE_FROM_ALL tests/check_sll_output_tail.cc)
+
+# Device policies retained from the incremental development branch.
+add_executable(checkDevicePlacementPolicy EXCLUDE_FROM_ALL tests/check_device_placement_policy.cc)
+add_executable(checkDevicePolicyStretch EXCLUDE_FROM_ALL tests/check_device_policy_stretch.cc)
+target_link_libraries(checkDevicePolicyStretch GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkIncrementalSllIntegration EXCLUDE_FROM_ALL tests/check_incremental_sll_integration.cc)
+target_link_libraries(checkIncrementalSllIntegration GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})

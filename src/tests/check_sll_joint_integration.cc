@@ -147,6 +147,12 @@ int main(int argc,char**argv){try{
     wl.GlobalPlacementQPSolve(.02,true,true,false,true,false,10,&timing,false);
     check(std::isfinite(source->X())&&std::isfinite(source->Y()),"joint timing QP returns finite real coordinates");
     check(std::hypot(source->X()-beforeX,source->Y()-beforeY)>1e-6,"real cell responds to joint virtual wire/timing/density model");
+    // Retain the selected SLL tiles, but exercise a long receiver leg inside
+    // the same SLR. The original density fixture ended with only short tails.
+    if(cfg.count("SllOutputLongDelayCorrection") && cfg.at("SllOutputLongDelayCorrection")=="true")
+        for(auto u:pi.getPlacementUnits())if(u->Y()>=480 && u->Y()<720)
+            u->setAnchorLocationAndForgetTheOriginalOne(u->X(),700);
+
     pi.updateElementBinGrid(false);
     timing.conductStaticTimingAnalysis();
     {
@@ -155,13 +161,18 @@ int main(int argc,char**argv){try{
             edgeDelays[{edge->getSourcePin()->getElementIdInType(),edge->getSinkPin()->getElementIdInType()}]=edge->getDelay();
         std::ofstream out(root/"sll-sta-audit.tsv");out<<std::setprecision(17);
         out<<"net\tsink\tcrossings\tlocal_ns\tsll_ns\texpected_ns\tpin_api_ns\tsta_edge_ns\tlegacy_direct_plus_penalty_ns\n";
-        size_t checked=0;
+        size_t checked=0,corrected=0;
         for(const auto&p:pi.sllPlanner->model().plans)for(const auto&s:p.net.sinks){
             const auto&path=p.paths.at(s.id);if(path.empty())continue;
             double local=0,sll=0;auto cur=p.net.source.p;
             for(int k:path){const auto&c=pi.sllPlanner->model().geometry(p.crossings[k]);
                 local+=timing.getDelayByModel_conservative(cur.x,cur.y,c.in.x,c.in.y,true);sll+=c.slowMax;cur=c.out;}
-            local+=timing.getDelayByModel_conservative(cur.x,cur.y,s.p.x,s.p.y,true);
+            const double outputBase=timing.getDelayByModel_conservative(cur.x,cur.y,s.p.x,s.p.y,true);
+            local+=outputBase;
+            if(cfg.count("SllOutputLongDelayCorrection") && cfg.at("SllOutputLongDelayCorrection")=="true") {
+                const double threshold=std::stod(cfg.at("SllOutputLongDelayThresholdNs"));
+                if(outputBase>threshold){local+=std::stod(cfg.at("SllOutputLongDelaySlope"))*(outputBase-threshold);++corrected;}
+            }
             const double actual=timing.getDelayForPins(design.getPins().at(p.net.source.id),design.getPins().at(s.id),p.net.source.p.x,p.net.source.p.y,s.p.x,s.p.y);
             const double edge=edgeDelays.at({p.net.source.id,s.id});
             check(std::abs(actual-local-sll)<1e-5,"joint STA pin API uses local polynomial plus process SLL delay");
@@ -170,6 +181,9 @@ int main(int argc,char**argv){try{
             out<<p.net.name<<'\t'<<s.name<<'\t'<<path.size()<<'\t'<<local<<'\t'<<sll<<'\t'<<local+sll<<'\t'<<actual<<'\t'<<edge<<'\t'<<legacy<<'\n';++checked;
         }
         check(checked>0,"cross-die STA edges audited");
+        if(cfg.count("SllOutputLongDelayCorrection") && cfg.at("SllOutputLongDelayCorrection")=="true")
+            check(corrected>0,"fixture must exercise active long SLL output correction");
+        std::cout<<"SLL_OUTPUT_TAIL_STA checked="<<checked<<" corrected="<<corrected<<"\n";
     }
     checkWireBatch();
     const auto finalTiles=tileInventory.current(pi.sllPlanner->model());

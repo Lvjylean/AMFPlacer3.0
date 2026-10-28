@@ -179,11 +179,15 @@ def amf_configuration(job):
     if any(k.startswith('external floorplan') for k in cfg):
         raise ValueError('Initialization-only external floorplan is not a hard DFX Pblock')
     for key, value in list(cfg.items()):
-        if 'file' in key or key == 'mergedSharedCellType2sharedCellType':
+        if 'file' in key or key in ('mergedSharedCellType2sharedCellType','SllChannelFile','SllReservedResourceFile'):
             if key in ('vivado extracted design information file', 'clock file'): continue
             cfg[key] = str((path.parent / value).resolve())
             if not Path(cfg[key]).is_file(): raise ValueError('Missing AMF model: ' + cfg[key])
     if cfg.get('ProPrimitiveTiming') != 'false': raise ValueError('DFX work baseline is ordinary Pro')
+    # Reservation binding is explicit; ordinary/full templates remain unchanged.
+    if job.get('e2_sll_reservation'):
+        from e2_incremental import bind
+        bind(job,cfg)
     return cfg
 
 
@@ -303,7 +307,11 @@ def run(args):
         manifest['model_input_hashes'] = {k:sha(v) for k,v in cfg.items() if ('file' in k or k=='mergedSharedCellType2sharedCellType') and Path(v).is_file()}
         with zipfile.ZipFile(out/'netlist.zip', 'w', zipfile.ZIP_DEFLATED) as z:
             z.write(out/'netlist.txt', 'netlist')
-        cfg.update({'IncrementalCompilation':'true', 'DFX input scope':'rm-boundary-cone-v1', 'DFX active partition':job['active_partition'],
+        from e2_incremental import bind, publish
+        bind(job,cfg)
+        from sll_planning_inputs import validate as validate_sll
+        validate_sll(cfg,binary)
+        cfg.update({'IncrementalCompilation':'true' , 'DFX input scope':'rm-boundary-cone-v1', 'DFX active partition':job['active_partition'],
                     'DFX allowed sites file':str(out/'allowed_sites.txt'), 'DFX blocked sites file':str(out/'blocked_sites.txt'),
                     'DFX static placement file':str(out/'static_placement.tsv'),
                     'SRL control metadata file':str(out/'srl_controls.tsv'),
@@ -314,6 +322,7 @@ def run(args):
         save(out/'amf_config.json', cfg)
         environment = dict(os.environ, AMF_PROFILE_OUTPUT=str(out/'amf_profile.tsv'), AMF_GRID_UPDATE_MODE='batched')
         stage('amf', [str(binary), str(out/'amf_config.json')], cwd=out/'placement', env=environment)
+        publish(cfg,out)
         with (out/'cells.tsv').open() as f:
             active = {r['cell'] for r in csv.DictReader(f, delimiter='\t') if r['active']=='1'}
         rows = placement_rows(out/'placement/DumpCLBPacking-first-0.tcl', active,

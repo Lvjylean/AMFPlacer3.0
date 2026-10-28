@@ -7,6 +7,7 @@ source [file join [file dirname [info script]] dfx_joint_checks.tcl]
 source [file join [file dirname [info script]] dfx_clock_guidance.tcl]
 source [file join [file dirname [info script]] dfx_pin_owner_overlay.tcl]
 source [file join [file dirname [info script]] dfx_same_session.tcl]
+source [file join [file dirname [info script]] dfx_sll.tcl]
 proc main {} {
  global dfx
  set out $dfx(output)
@@ -52,8 +53,10 @@ proc main {} {
  puts $f {User route-only contract: AMF provides complete placement; no Vivado placement executed}
  close $f
  dfx_clock_guidance::apply
+ amf_dfx::timed incremental_sll_import {dfx_sll::apply}
  # The only route_design in this workflow routes both new RMs together.
  amf_dfx::timed vivado_route {route_design}
+ amf_dfx::timed incremental_sll_audit {dfx_sll::audit}
  amf_dfx::timed write_joint_routed {write_checkpoint $out/joint_routed.dcp}
  puts AMF_JOINT_ROUTE_COMPLETED
 }

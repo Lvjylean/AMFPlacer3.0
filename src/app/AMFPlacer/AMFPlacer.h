@@ -57,6 +57,9 @@ class AMFPlacer
     {
         AMF_PROFILE_FUNCTION("initialization");
         JSON = parseJSONFile(JSONFileName);
+        const auto devicePolicy = amf_device::resolve(JSON, JSON.count("device") ? JSON.at("device") : "VCU108");
+        print_info("Device placement policy=" + devicePolicy.name + " ClockRegionColumnStretch=" +
+                   (devicePolicy.clockRegionColumnStretch ? "true" : "false"));
         visualization_trace::configure(JSON, JSONFileName);
 
         assert(JSON.find("vivado extracted device information file") != JSON.end());

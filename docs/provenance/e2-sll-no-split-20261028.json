@@ -1,0 +1,139 @@
+{
+  "source_repository": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-no-split/repo",
+  "source_commit": "64a4660c8fd628af6864a8594a90f3773cee7d86",
+  "binary": {
+    "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-no-split/repo/builds/build-20261028-160442-003607-64a4660c/build/AMFPlacer",
+    "sha256": "20919e013f6e45c315d4fb6c1a24b9bc24e7782de7b8f15d6fbacac1273e8eb1"
+  },
+  "build_manifest": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-no-split/repo/builds/build-20261028-160442-003607-64a4660c/manifest.json",
+  "config": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-no-split/repo/configs/experiments/getrf-u250-e2-no-split-10ns.json",
+  "required_environment": {
+    "AMF_GRID_UPDATE_MODE": "parallel",
+    "AMF_GRID_UPDATE_VERIFY": "0",
+    "OMP_NUM_THREADS": "12",
+    "OMP_DYNAMIC": "FALSE",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12"
+  },
+  "policy": {
+    "SllPlanningAllowSplit": "false",
+    "meaning": "One crossing per net per required SLR boundary; local receivers do not cross."
+  },
+  "checks": [
+    {
+      "name": "build-tests",
+      "command": [
+        "cmake",
+        "--build",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-no-split/repo/builds/build-20261028-160442-003607-64a4660c/build",
+        "--target",
+        "checkSllNoSplit",
+        "checkSllTileInitialization",
+        "checkSllQpProjection",
+        "checkSllDensity",
+        "checkSllVirtualModel",
+        "checkSllJointIntegration",
+        "--parallel",
+        "4"
+      ],
+      "exit_code": 0,
+      "seconds": 13.638458673842251
+    },
+    {
+      "name": "checkSllNoSplit",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-no-split/repo/builds/build-20261028-160442-003607-64a4660c/build/checkSllNoSplit"
+      ],
+      "exit_code": 0,
+      "seconds": 0.010721204802393913
+    },
+    {
+      "name": "checkSllTileInitialization",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-no-split/repo/builds/build-20261028-160442-003607-64a4660c/build/checkSllTileInitialization"
+      ],
+      "exit_code": 0,
+      "seconds": 0.007345620542764664
+    },
+    {
+      "name": "checkSllQpProjection",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-no-split/repo/builds/build-20261028-160442-003607-64a4660c/build/checkSllQpProjection"
+      ],
+      "exit_code": 0,
+      "seconds": 0.0028283679857850075
+    },
+    {
+      "name": "checkSllDensity",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-no-split/repo/builds/build-20261028-160442-003607-64a4660c/build/checkSllDensity"
+      ],
+      "exit_code": 0,
+      "seconds": 0.006343318149447441
+    },
+    {
+      "name": "checkSllVirtualModel",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-no-split/repo/builds/build-20261028-160442-003607-64a4660c/build/checkSllVirtualModel"
+      ],
+      "exit_code": 0,
+      "seconds": 0.0014495635405182838
+    },
+    {
+      "name": "joint-tile",
+      "command": [
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-no-split/repo/builds/build-20261028-160442-003607-64a4660c/build/checkSllJointIntegration",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-no-split/validation/joint-config.json",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-no-split/validation/joint-tile",
+        "tile"
+      ],
+      "exit_code": 0,
+      "seconds": 8.839995975606143
+    }
+  ],
+  "validation_scope": "Synthetic no-split regression and four-register integration on the actual U250 resource inventory.",
+  "full_placement_executed": false,
+  "routing_executed": false,
+  "test_input_hashes": {
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/5cc26c1cc8b7-exportSiteLocation.zip": "5cc26c1cc8b74ca1f32945c77d48058b8a04d2c9fdc40fcf5e82fe6c552f6a25",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/synthetic-e2-registers.zip": "ea5a0671c74963456fd18217a47b88533cc8ff460791415fd6b59013b14d354a",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/07a841cee796-clocks": "07a841cee796403bb14a3659b2c4a5c09a79047f0bdf6662b2c64c8bb9801a27",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/f3e4d2bbe26b-cellType2fixedAmo": "f3e4d2bbe26b45c0eb562b7fb8249524dc7f01c0be9595ffeb722cc572ed4e33",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/f2f1832e4776-cellType2sharedCellType": "f2f1832e477624e1b1f563c85415405c8fbe85b93809509e5eac5cf73d73d553",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/ff49d19d6fac-sharedCellType2BELtype": "ff49d19d6fac348d39e23ceb1fcd5b678e01f7ff32f60e9d13448bed30d64781",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/d1116390e6bc-physical_structure.tsv": "d1116390e6bce6e879fb40ee50c9f3cef80645e77d7d6b0bc94b271bd8a645fa",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261026-pu-direct-spreading/inputs/39e34938d3ed-clock_capacity.tsv": "39e34938d3edb29f928b1e35e805fe5738a1c44a895cffff57b6a511067d27d4",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261027-e2-sll-planning/device/channels.tsv": "bc6ffb509d8733291aacf6eb296211c4f7975c50296c021fcd8c7e487268cfb5"
+  },
+  "changed_files_sha256": {
+    "src/lib/HiFPlacer/placement/placementInfo/SllVirtualModel.h": "7ee7e023d818ca519bd0bb4bb7f2fb0abaed26cfa54323b00012fc8eab46c098",
+    "src/CMakeLists.txt": "cb76cb0525512b64e79a8b683e2e433ebe65ddd79d45536b71bb90e1540d5bbc",
+    "src/tests/check_sll_no_split.cc": "568f820a07512792d840643a846140d273d8ec4c783c0a1057b5be53bc97cec6",
+    "configs/experiments/e2-sll-planning-10ns.json": "f59a8d5fcafee542469e21da59fb3f5946d10175addc24abb94721da638b0283",
+    "configs/placement/bases/e2-u250-sll-planning.json": "f59a8d5fcafee542469e21da59fb3f5946d10175addc24abb94721da638b0283",
+    "configs/experiments/getrf-u250-e2-no-split-10ns.json": "953d590e42a0adca5378c0360e3b542088570e055f548a185cdd39c5c91d4c4d"
+  },
+  "inherited_exporter_sha256": "e8e22debe587214ec6ba965f4a2fa4ed4fede880a73bc83d126fda97474510ee",
+  "source_status": " M configs/experiments/e2-sll-planning-10ns.json\n M configs/placement/bases/e2-u250-sll-planning.json\n M scripts/sll_routes.tcl\n M src/CMakeLists.txt\n M src/lib/HiFPlacer/placement/placementInfo/SllVirtualModel.h\n?? docs/provenance/e2-sll-free-terminal-20261028.json\n?? docs/provenance/e2-sll-no-split-20261028.json\n?? docs/provenance/getrf-e2-sll-route-pair-20261028.json\n?? docs/research/e2-sll-free-terminal-20261028.md\n?? docs/research/getrf-e2-sll-route-pair-20261028.md\n?? scripts/diagnostics/audit_existing_sll_dcp.tcl\n?? scripts/diagnostics/collect_route_pair_results.py\n?? scripts/diagnostics/finalize_getrf_sll_import.py\n?? scripts/diagnostics/inspect_audit_receiver.tcl\n?? scripts/diagnostics/inspect_sll_dsp_access.tcl\n?? scripts/diagnostics/inspect_sll_internal_access.tcl\n?? scripts/diagnostics/probe_sll_free_root.tcl\n?? scripts/diagnostics/probe_sll_free_root_v2.tcl\n?? scripts/diagnostics/probe_sll_logical_driver.tcl\n?? scripts/diagnostics/profile_sll_import_queries.tcl\n?? scripts/diagnostics/regenerate_sll_export.tcl\n?? scripts/diagnostics/route_existing_sll_dcp.tcl\n?? scripts/diagnostics/run_existing_sll_dcp_pair.py\n?? scripts/diagnostics/run_sll_terminal_validation.py\n?? scripts/diagnostics/sll_routes-bidirectional-audit.tcl\n?? scripts/diagnostics/test_sll_route_graph.tcl\n?? scripts/diagnostics/validate_sll_export_replay.tcl\n?? scripts/diagnostics/validate_sll_getrf_import.tcl\n?? scripts/diagnostics/validate_sll_terminal_access.tcl\n?? src/tests/check_sll_no_split.cc\n",
+  "run_command": [
+    "env",
+    "AMF_GRID_UPDATE_MODE=parallel",
+    "AMF_GRID_UPDATE_VERIFY=0",
+    "OMP_NUM_THREADS=12",
+    "OMP_DYNAMIC=FALSE",
+    "MKL_NUM_THREADS=12",
+    "OPENBLAS_NUM_THREADS=12",
+    "python3",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-no-split/repo/scripts/amf3.py",
+    "full-run",
+    "--amf-only",
+    "--binary",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-no-split/repo/builds/build-20261028-160442-003607-64a4660c/build/AMFPlacer",
+    "--config",
+    "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-no-split/repo/configs/experiments/getrf-u250-e2-no-split-10ns.json",
+    "--dcp",
+    "/Projects/jinyang/workspace/AMFplacer3.0/data/reference/getrf-u250/post_opt.dcp",
+    "--run-prefix",
+    "getrf-u250-e2-no-split-10ns"
+  ]
+}

@@ -1554,6 +1554,7 @@ void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
 
     if (PU2ClockRegionCenter.size() <= 0)
         return;
+    const auto devicePolicy = placementInfo->getDeviceInfo()->getPlacementPolicy();
 
     for (auto PUXY : PU2ClockRegionCenter)
     {
@@ -1563,7 +1564,7 @@ void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
         {
             int clockRegionX = PU2ClockRegionColumn[curPU];
 
-            if (JSONCfg["experimental multi-SLR placement"] == "true")
+            if (devicePolicy.selectedColumnAttraction(JSONCfg["experimental multi-SLR placement"] == "true"))
             {
                 // Use the actual selected column on U250; VCU108's column-2
                 // special case must not pull an eight-column device toward 1/3.

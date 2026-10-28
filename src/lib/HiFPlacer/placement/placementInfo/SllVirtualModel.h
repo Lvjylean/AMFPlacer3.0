@@ -11,6 +11,7 @@
 #include <tuple>
 #include <vector>
 #include <unordered_map>
+#include "SllColumnPolicy.h"
 
 // Physical optimization objects only: no DesignCell, register, or CLB area.
 namespace amf_sll_plan {
@@ -31,6 +32,8 @@ struct Channel {
     std::vector<std::string> resources;
 };
 using TileKey=std::tuple<int,int,double>;
+using ColumnKey=std::pair<int,int>; // Lower SLR boundary and physical COLUMN.
+inline ColumnKey physicalColumn(const TileKey&key){return {std::get<0>(key),std::get<1>(key)};}
 struct Tile : Channel {
     TileKey key;
     std::vector<int> members; // Inventory only; no lane is selected in global placement.
@@ -40,7 +43,7 @@ struct Pin {
     std::string name;
     Point p,offset;
     bool movable=false;
-    double criticality=1;
+    double criticality=1,timingBudget=INFINITY;
 };
 struct Net { int id=-1;std::string name;Pin source;std::vector<Pin> sinks;double weight=1;std::unordered_map<int,size_t> sinkLookup; };
 struct Crossing {
@@ -61,6 +64,7 @@ public:
     std::map<std::pair<int,int>,std::vector<int>> availableTiles;
     std::map<std::pair<int,int>,std::map<double,std::vector<int>>> tileColumns;
     std::map<TileKey,size_t> tileCapacity;
+    std::map<ColumnKey,size_t> columnCapacity;
     std::vector<Plan> plans;
     std::map<std::pair<int,int>,std::vector<int>> available;
     std::map<std::pair<int,int>,std::vector<std::vector<int>>> geometryBuckets;
@@ -70,20 +74,32 @@ public:
     // Initialization only. The density price is in equivalent layout-length
     // units per occupancy penalty, not a delay or a fraction of the QP weight.
     double initialTargetUtilization=.8,initialDensityWeight=256;
+    // Admission threshold for newborn/reallocated crossings only. Existing QP
+    // tiles and post-QP projection retain their physical-capacity semantics.
+    double initialColumnUtilizationLimit=.75;
+    ColumnPolicy columnPolicy;
     mutable size_t initialTileEvaluations=0;
-    bool allowSplit=true;
+    // Default: one shared crossing per net and SLR boundary.
+    bool allowSplit=false;
     // Joint mode preserves optimized channels at refresh. Only newborn
     // crossings are seeded near the source; proximity is not a permanent lock.
     bool jointPlacement=false,sourceNearInitialization=false;
     size_t created=0,retained=0,deleted=0;
     LocalDelay local;
+    // Calibrated only for the terminal SLL exit -> real receiver segment.
+    // Ordinary local wires, first input leg, transit legs and SLL arcs retain
+    // their original models. No intercept: all values <= threshold are exact.
+    bool outputLongDelayCorrection=false;
+    double outputLongDelayThresholdNs=1.5,outputLongDelaySlope=1.1430759607609453;
 
     void indexTiles();
     void rebuildTiles(std::vector<Net>);
     int initialTile(int from,int to,Point root,const TileBox&input,const TileBox&output,
                     double weight,const std::map<TileKey,size_t>&occupied,
-                    int incumbent=-1,int fixedColumn=-1)const;
+                    int incumbent=-1,int fixedColumn=-1,
+                    const std::map<ColumnKey,size_t>*occupiedColumns=nullptr)const;
     void legalizeChannels();
+    void legalizeChannelsSerial();
     const Channel& geometry(const Crossing&e)const {
         if(e.channel>=0)return channels.at(e.channel);
         return tiles.at(e.tile);
@@ -134,6 +150,11 @@ public:
         return out;
     }
     double delay(Point a,Point b)const {return local?local(a,b):length(a,b,ratio)*.01;}
+    double outputDelay(Point a,Point b)const {
+        const double base=delay(a,b);
+        return outputLongDelayCorrection && base>outputLongDelayThresholdNs ?
+            base+outputLongDelaySlope*(base-outputLongDelayThresholdNs) : base;
+    }
     const Pin& pin(const Net&n,int id)const {
         if(n.source.id==id)return n.source;
         auto it=n.sinkLookup.find(id);if(it!=n.sinkLookup.end())return n.sinks.at(it->second);
@@ -165,9 +186,16 @@ public:
         return p.net.weight*value; // Shared local hyperedges counted once.
     }
     double pathDelay(const Plan&p,int sink,Point sourcePoint,Point sinkPoint)const {
-        Point cur=sourcePoint;double d=0;
-        for(int k:p.paths.at(sink)){const auto&c=geometry(p.crossings.at(k));d+=delay(cur,c.in)+c.slowMax;cur=c.out;}
-        return d+delay(cur,sinkPoint);
+        Point cur=sourcePoint;double d=0;const auto&path=p.paths.at(sink);
+        for(int k:path){const auto&c=geometry(p.crossings.at(k));d+=delay(cur,c.in)+c.slowMax;cur=c.out;}
+        return d+(path.empty()?delay(cur,sinkPoint):outputDelay(cur,sinkPoint));
+    }
+    void updatePlannedCriticalities(Plan&p)const {
+        for(auto&s:p.net.sinks){
+            const double d=pathDelay(p,s.id,p.net.source.p,s.p);
+            s.criticality=std::isfinite(s.timingBudget)&&s.timingBudget<1e5?
+                std::min(64.,1.+std::max(0.,d-s.timingBudget)):1.;
+        }
     }
     double cost(const Plan&p)const {
         double worst=0,sum=0;

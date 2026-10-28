@@ -1,0 +1,9 @@
+{
+  "case": "faceDetect",
+  "mode": "benchmark",
+  "reference_dcp": "data/reference/faceDetect/reference.dcp",
+  "benchmark_config": "benchmarks/testConfig/faceDetect.json",
+  "part": "xcvu095-ffva2104-2-e",
+  "scope": "Full AMF placement plus Vivado placement/routing; no incremental compilation, RTL synthesis or bitstream generation",
+  "dcp_storage": "server-only"
+}

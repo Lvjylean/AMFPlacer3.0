@@ -192,12 +192,14 @@ if {[catch {
     timed place_audit {audit placed}
     if {[file exists [file join $placement sll-plan.tcl]]} {
         source [file join [file dirname [info script]] sll_routes.tcl]
-        timed sll_constraints {e2_sll::apply [file join $placement sll-plan.tcl] $out}
+        source [file join [file dirname [info script]] sll_parallel.tcl]
+        set sllWorkers 4
+        if {[info exists ::env(AMF_SLL_CONSTRAINT_WORKERS)]} {set sllWorkers $::env(AMF_SLL_CONSTRAINT_WORKERS)}
+        timed sll_constraints {e2_sll::apply_parallel [file join $placement sll-plan.tcl] $out $sllWorkers}
     }
     timed placed_checkpoint {write_checkpoint [file join $out getrf_placed.dcp]}
     timed route {route_design}
     timed route_audit {audit routed}
-    if {[file exists [file join $placement sll-plan.tcl]]} {timed sll_path_audit {e2_sll::audit $out}}
     timed reports {
         report_route_status -file [file join $out route_status.rpt]
         report_drc -file [file join $out drc.rpt]
@@ -209,6 +211,11 @@ if {[catch {
         puts $f [format {{"errors":%d,"critical_warnings":%d}} $errors $critical];close $f
     }
     timed checkpoint {write_checkpoint [file join $out getrf_routed.dcp]}
+    source [file join [file dirname [info script]] sll_usage.tcl]
+    timed sll_inventory {e2_sll::usage $out}
+    if {[file exists [file join $placement sll-plan.tcl]]} {
+        timed sll_path_audit {e2_sll::audit_parallel [file join $out getrf_routed.dcp] $out $sllWorkers}
+    }
     if {$physicalAudit} {
         source [file join [file dirname [info script]] export_boundary_timing_samples.tcl]
         timed boundary_samples {export_boundary_timing_samples [file join $out physical]}

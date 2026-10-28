@@ -1,0 +1,716 @@
+{
+  "finished_at": "2026-10-28T14:55:35.847063+08:00",
+  "report": "/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/docs/research/getrf-e2-sll-route-pair-20261028.md",
+  "comparison": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/comparisons/getrf-e2-sll-route-pair-20261028-130616-093346",
+  "source_commit": "64a4660c8fd628af6864a8594a90f3773cee7d86",
+  "route_command": "route_design",
+  "attempts_per_case": 1,
+  "incremental": false,
+  "clock_period_ns": 10,
+  "dcp_storage": "server-only",
+  "cases": {
+    "sll-fixed": {
+      "status": {
+        "state": "completed",
+        "exit_code": 0,
+        "elapsed_seconds": 2051.913383876905,
+        "finished": "2026-10-28T13:40:28.856923+08:00",
+        "mode": "sll-fixed",
+        "run": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-e2-sll-route-pair-20261028-130616-093346-sll-fixed",
+        "observations": {
+          "mode": "sll-fixed",
+          "input_dcp": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-sll-terminal-import-20261028-06/reports/getrf_placed.dcp",
+          "vivado_version": "2026.1",
+          "part": "xcu250-figd2104-2L-e",
+          "max_threads": "4",
+          "clock_period_ns": "10.000",
+          "before.primitive_cells": "934775",
+          "before.loc_fixed": "879526",
+          "before.bel_fixed": "879391",
+          "before.luts_with_lock_pins": "76516",
+          "route_return_code": "0",
+          "route_message": "",
+          "routing_executed": "1",
+          "route_design_invocations": "1",
+          "route_status.return_code": "0",
+          "timing.return_code": "0",
+          "drc.return_code": "0",
+          "after.primitive_cells": "934775",
+          "after.loc_fixed": "879526",
+          "after.bel_fixed": "879391",
+          "after.luts_with_lock_pins": "76516",
+          "placement_changed": "0",
+          "cells_added": "0",
+          "cells_missing": "0",
+          "placement_after.return_code": "0",
+          "checkpoint.return_code": "0",
+          "sll_unique_nodes": "8467",
+          "sll_net_objects": "8442",
+          "sll_nodes_with_multiple_net_objects": "0",
+          "sll_inventory_scope": "Current route graph; partial data only when route_design failed or routing is incomplete.",
+          "sll_usage.return_code": "0",
+          "receiver_group_audit.return_code": "1",
+          "receiver_group_audit.message": "E2 receiver disconnected grp_getrf_core_double_2_512_256_s_fu_1395/grp_getrf_core_double_2_512_256_Pipeline_LoopRows_fu_3713/sparsemux_513_8_64_1_1_U525/dout[43]_INST_0_i_93/I2",
+          "state": "route_command_completed"
+        },
+        "checkpoint": {
+          "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-e2-sll-route-pair-20261028-130616-093346-sll-fixed/reports/route_attempt.dcp",
+          "sha256": "018f04273dfdca764bbe975b7b252589300a70fdef71555f7b6a08456106afb0",
+          "bytes": 413495246,
+          "crc_passed": true
+        },
+        "input_hash_unchanged": true
+      },
+      "timing": {
+        "wns_ns": -0.499,
+        "tns_ns": -7.606,
+        "setup_failing_endpoints": 65,
+        "setup_total_endpoints": 607963,
+        "whs_ns": 0.02,
+        "ths_ns": 0.0,
+        "hold_failing_endpoints": 0,
+        "hold_total_endpoints": 607963,
+        "wpws_ns": 4.3
+      },
+      "route_status": {
+        "logical nets": 3257293,
+        "nets not needing routing": 2335473,
+        "internally routed nets": 2049474,
+        "nets with no loads": 285696,
+        "implicitly routed ports": 303,
+        "routable nets": 921820,
+        "nets with fixed routing": 8442,
+        "fully routed nets": 921820,
+        "nets with routing errors": 0
+      },
+      "drc": [
+        {
+          "rule": "DPIP-2",
+          "severity": "Warning",
+          "description": "Input pipelining",
+          "count": 5376
+        },
+        {
+          "rule": "DPOP-3",
+          "severity": "Warning",
+          "description": "PREG Output pipelining",
+          "count": 2560
+        },
+        {
+          "rule": "DPOP-4",
+          "severity": "Warning",
+          "description": "MREG Output pipelining",
+          "count": 2048
+        },
+        {
+          "rule": "RTSTAT-10",
+          "severity": "Warning",
+          "description": "No routable loads",
+          "count": 1
+        },
+        {
+          "rule": "AVAL-155",
+          "severity": "Advisory",
+          "description": "enum_AMULTSEL_BMULTSEL_enum_DREG_ADREG_0_connects_CED_CEAD_RSTD_GND",
+          "count": 2816
+        },
+        {
+          "rule": "AVAL-156",
+          "severity": "Advisory",
+          "description": "enum_USE_MULT_NONE__enum_DREG_ADREG_0_connects_CED_CEAD_RSTD_GND",
+          "count": 1280
+        }
+      ],
+      "stages": {
+        "open": {
+          "seconds": 111.71,
+          "return_code": 0
+        },
+        "initial_placement": {
+          "seconds": 34.918,
+          "return_code": 0
+        },
+        "route": {
+          "seconds": 1626.873,
+          "return_code": 0
+        },
+        "route_status": {
+          "seconds": 29.078,
+          "return_code": 0
+        },
+        "timing": {
+          "seconds": 40.295,
+          "return_code": 0
+        },
+        "drc": {
+          "seconds": 51.048,
+          "return_code": 0
+        },
+        "placement_after": {
+          "seconds": 31.67,
+          "return_code": 0
+        },
+        "checkpoint": {
+          "seconds": 54.272,
+          "return_code": 0
+        },
+        "sll_usage": {
+          "seconds": 20.521,
+          "return_code": 0
+        },
+        "receiver_group_audit": {
+          "seconds": 39.057,
+          "return_code": 1
+        }
+      },
+      "columns": [
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 71,
+          "used_sll_nodes": 175
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 110,
+          "used_sll_nodes": 788
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 156,
+          "used_sll_nodes": 497
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 189,
+          "used_sll_nodes": 112
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 228,
+          "used_sll_nodes": 353
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 275,
+          "used_sll_nodes": 575
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 310,
+          "used_sll_nodes": 1155
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 349,
+          "used_sll_nodes": 1324
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 438,
+          "used_sll_nodes": 710
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 476,
+          "used_sll_nodes": 634
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 515,
+          "used_sll_nodes": 412
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 549,
+          "used_sll_nodes": 214
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 595,
+          "used_sll_nodes": 247
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 629,
+          "used_sll_nodes": 171
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 673,
+          "used_sll_nodes": 386
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 713,
+          "used_sll_nodes": 115
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 156,
+          "used_sll_nodes": 18
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 189,
+          "used_sll_nodes": 35
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 228,
+          "used_sll_nodes": 115
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 275,
+          "used_sll_nodes": 90
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 310,
+          "used_sll_nodes": 55
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 349,
+          "used_sll_nodes": 11
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 438,
+          "used_sll_nodes": 24
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 476,
+          "used_sll_nodes": 124
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 515,
+          "used_sll_nodes": 57
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 549,
+          "used_sll_nodes": 45
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 595,
+          "used_sll_nodes": 25
+        }
+      ],
+      "sll_rows_by_net_type": {
+        "SIGNAL": 8467
+      },
+      "sll_rows_by_route_status": {
+        "ROUTED": 8467
+      },
+      "actual_sll_net_count": 8442,
+      "sll_per_net_histogram": {
+        "1": 8417,
+        "2": 25
+      },
+      "output_hash_rechecked": true
+    },
+    "sll-free": {
+      "status": {
+        "state": "completed",
+        "exit_code": 0,
+        "elapsed_seconds": 2141.991482156329,
+        "finished": "2026-10-28T14:16:12.978953+08:00",
+        "mode": "sll-free",
+        "run": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-e2-sll-route-pair-20261028-130616-093346-sll-free",
+        "observations": {
+          "mode": "sll-free",
+          "input_dcp": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-sll-terminal-import-20261028-01/reports/getrf_before_sll.dcp",
+          "vivado_version": "2026.1",
+          "part": "xcu250-figd2104-2L-e",
+          "max_threads": "4",
+          "clock_period_ns": "10.000",
+          "before.primitive_cells": "934775",
+          "before.loc_fixed": "879526",
+          "before.bel_fixed": "878879",
+          "before.luts_with_lock_pins": "0",
+          "route_return_code": "0",
+          "route_message": "",
+          "routing_executed": "1",
+          "route_design_invocations": "1",
+          "route_status.return_code": "0",
+          "timing.return_code": "0",
+          "drc.return_code": "0",
+          "after.primitive_cells": "934775",
+          "after.loc_fixed": "879526",
+          "after.bel_fixed": "878879",
+          "after.luts_with_lock_pins": "0",
+          "placement_changed": "0",
+          "cells_added": "0",
+          "cells_missing": "0",
+          "placement_after.return_code": "0",
+          "checkpoint.return_code": "0",
+          "sll_unique_nodes": "8463",
+          "sll_net_objects": "8442",
+          "sll_nodes_with_multiple_net_objects": "0",
+          "sll_inventory_scope": "Current route graph; partial data only when route_design failed or routing is incomplete.",
+          "sll_usage.return_code": "0",
+          "receiver_group_audit.skipped": "No planned-path requirement for free routing; skip proof on failed fixed routing.",
+          "state": "route_command_completed"
+        },
+        "checkpoint": {
+          "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-e2-sll-route-pair-20261028-130616-093346-sll-free/reports/route_attempt.dcp",
+          "sha256": "78c526a79d5e775beb7730de37ac0a61243534ed38c72a52478fef71e181b819",
+          "bytes": 410624623,
+          "crc_passed": true
+        },
+        "input_hash_unchanged": true
+      },
+      "timing": {
+        "wns_ns": 0.06,
+        "tns_ns": 0.0,
+        "setup_failing_endpoints": 0,
+        "setup_total_endpoints": 607963,
+        "whs_ns": 0.02,
+        "ths_ns": 0.0,
+        "hold_failing_endpoints": 0,
+        "hold_total_endpoints": 607963,
+        "wpws_ns": 4.3
+      },
+      "route_status": {
+        "logical nets": 3257293,
+        "nets not needing routing": 2335473,
+        "internally routed nets": 2049474,
+        "nets with no loads": 285696,
+        "implicitly routed ports": 303,
+        "routable nets": 921820,
+        "fully routed nets": 921820,
+        "nets with routing errors": 0
+      },
+      "drc": [
+        {
+          "rule": "DPIP-2",
+          "severity": "Warning",
+          "description": "Input pipelining",
+          "count": 5376
+        },
+        {
+          "rule": "DPOP-3",
+          "severity": "Warning",
+          "description": "PREG Output pipelining",
+          "count": 2560
+        },
+        {
+          "rule": "DPOP-4",
+          "severity": "Warning",
+          "description": "MREG Output pipelining",
+          "count": 2048
+        },
+        {
+          "rule": "RTSTAT-10",
+          "severity": "Warning",
+          "description": "No routable loads",
+          "count": 1
+        },
+        {
+          "rule": "AVAL-155",
+          "severity": "Advisory",
+          "description": "enum_AMULTSEL_BMULTSEL_enum_DREG_ADREG_0_connects_CED_CEAD_RSTD_GND",
+          "count": 2816
+        },
+        {
+          "rule": "AVAL-156",
+          "severity": "Advisory",
+          "description": "enum_USE_MULT_NONE__enum_DREG_ADREG_0_connects_CED_CEAD_RSTD_GND",
+          "count": 1280
+        }
+      ],
+      "stages": {
+        "open": {
+          "seconds": 102.346,
+          "return_code": 0
+        },
+        "initial_placement": {
+          "seconds": 30.185,
+          "return_code": 0
+        },
+        "route": {
+          "seconds": 1725.547,
+          "return_code": 0
+        },
+        "route_status": {
+          "seconds": 30.882,
+          "return_code": 0
+        },
+        "timing": {
+          "seconds": 77.702,
+          "return_code": 0
+        },
+        "drc": {
+          "seconds": 54.567,
+          "return_code": 0
+        },
+        "placement_after": {
+          "seconds": 32.052,
+          "return_code": 0
+        },
+        "checkpoint": {
+          "seconds": 55.124,
+          "return_code": 0
+        },
+        "sll_usage": {
+          "seconds": 20.383,
+          "return_code": 0
+        }
+      },
+      "columns": [
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 71,
+          "used_sll_nodes": 246
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 110,
+          "used_sll_nodes": 724
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 156,
+          "used_sll_nodes": 424
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 189,
+          "used_sll_nodes": 109
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 228,
+          "used_sll_nodes": 218
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 275,
+          "used_sll_nodes": 542
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 310,
+          "used_sll_nodes": 1298
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 349,
+          "used_sll_nodes": 1267
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 438,
+          "used_sll_nodes": 852
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 476,
+          "used_sll_nodes": 644
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 515,
+          "used_sll_nodes": 508
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 549,
+          "used_sll_nodes": 185
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 595,
+          "used_sll_nodes": 228
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 629,
+          "used_sll_nodes": 129
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 673,
+          "used_sll_nodes": 381
+        },
+        {
+          "crossing_slrs": "SLR0,SLR1",
+          "physical_column": 713,
+          "used_sll_nodes": 109
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 156,
+          "used_sll_nodes": 19
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 189,
+          "used_sll_nodes": 40
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 228,
+          "used_sll_nodes": 128
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 275,
+          "used_sll_nodes": 90
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 310,
+          "used_sll_nodes": 38
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 349,
+          "used_sll_nodes": 6
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 438,
+          "used_sll_nodes": 24
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 476,
+          "used_sll_nodes": 130
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 515,
+          "used_sll_nodes": 53
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 549,
+          "used_sll_nodes": 55
+        },
+        {
+          "crossing_slrs": "SLR1,SLR2",
+          "physical_column": 595,
+          "used_sll_nodes": 16
+        }
+      ],
+      "sll_rows_by_net_type": {
+        "SIGNAL": 8463
+      },
+      "sll_rows_by_route_status": {
+        "ROUTED": 8463
+      },
+      "actual_sll_net_count": 8442,
+      "sll_per_net_histogram": {
+        "1": 8421,
+        "2": 21
+      },
+      "output_hash_rechecked": true
+    }
+  },
+  "net_comparison": {
+    "common": 8442,
+    "fixed_only": [],
+    "free_only": [],
+    "same_exact_sll_set": 43,
+    "same_seam_column_set": 5864,
+    "free_uses_more_sll": 0,
+    "free_uses_fewer_sll": 4
+  },
+  "supplemental_audit": {
+    "run": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-e2-route-bidirectional-audit-20261028-134926",
+    "status": {
+      "exit_code": 0,
+      "elapsed_seconds": 3848.1801622882485,
+      "finished": "2026-10-28T14:53:35.371602"
+    },
+    "counts": {
+      "rows": 280438,
+      "remote": 124332,
+      "local": 156106
+    },
+    "nets": 8442,
+    "mismatches": 0,
+    "audit_status": {
+      "return_code": "0",
+      "audit_seconds": "3692.876",
+      "message": ""
+    },
+    "manifest": {
+      "started": "2026-10-28T13:49:26.800222",
+      "command": [
+        "/Projects/Xilinx26/2026.1/Vivado/bin/vivado",
+        "-mode",
+        "batch",
+        "-notrace",
+        "-nojournal",
+        "-log",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-e2-route-bidirectional-audit-20261028-134926/internal.log",
+        "-source",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-e2-route-bidirectional-audit-20261028-134926/inputs/audit_existing_sll_dcp.tcl",
+        "-tclargs",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-e2-sll-route-pair-20261028-130616-093346-sll-fixed/reports/route_attempt.dcp",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-e2-route-bidirectional-audit-20261028-134926/inputs/sll_routes-bidirectional-audit.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-dense-density/repo/experiments/runs/getrf-u250-e2-placement-only-20261028-045411-729709/placement/sll-plan.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-e2-route-bidirectional-audit-20261028-134926/reports"
+      ],
+      "read_only": true,
+      "route_design_invocations": 0,
+      "input_sha256": "018f04273dfdca764bbe975b7b252589300a70fdef71555f7b6a08456106afb0",
+      "inputs": {
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-e2-route-bidirectional-audit-20261028-134926/inputs/sll_routes-bidirectional-audit.tcl": "1fc73e291cf48e319a9ccfb157b8f7c6cd479872381d1dac6aaad9b264e4d7d8",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-e2-route-bidirectional-audit-20261028-134926/inputs/audit_existing_sll_dcp.tcl": "037611fad2552d8a71748223a7dd7316c02c1a587845a74a336d388fc98667bd",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-dense-density/repo/experiments/runs/getrf-u250-e2-placement-only-20261028-045411-729709/placement/sll-plan.tcl": "febdec84d35f8547d659c7f454f3bb7d8492c0a11dde4d0fb33f6c46d378ec2d"
+      }
+    },
+    "graph_diagnosis": {
+      "target": "INT_X24Y67/IMUX_E25",
+      "route_node_count": 13319,
+      "reached_nodes": 13319,
+      "target_path_edges": 50,
+      "target_sll_nodes": [],
+      "reverse_pips_on_target_path": [
+        {
+          "from": "INT_X24Y66/BYPASS_E14",
+          "to": "INT_X24Y66/INT_NODE_IMUX_18_INT_OUT0",
+          "pip": "INT_X24Y66/INT.INT_NODE_IMUX_18_INT_OUT0<<->>BYPASS_E14",
+          "reverse": true
+        }
+      ],
+      "used_bidirectional_pips": 4
+    },
+    "report_files": {
+      "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-e2-route-bidirectional-audit-20261028-134926/reports/sll-path-audit.tsv": {
+        "sha256": "a0a8e635b52c81a560779f09ff8e17060755ddb790b6da2af4a5153a52c88914",
+        "bytes": 57657408
+      },
+      "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-e2-route-bidirectional-audit-20261028-134926/reports/sll-source-access-audit.tsv": {
+        "sha256": "aca648474ab28aac8183452221e8157fa2a4ea284febc369c32ebc9add5b63f6",
+        "bytes": 1960804
+      },
+      "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261028-e2-sll-free-terminal/repo/experiments/runs/getrf-e2-route-bidirectional-audit-20261028-134926/reports/audit-status.tsv": {
+        "sha256": "0be31929eac66be462dbfc659c46b8d5a5f54d63a3987c6410dc3980e5d1b4cd",
+        "bytes": 46
+      }
+    }
+  },
+  "helper_sha256_after": "e8e22debe587214ec6ba965f4a2fa4ed4fede880a73bc83d126fda97474510ee",
+  "limitations": [
+    "Input checkpoints are OOC; external ports/clock source are not fully constrained.",
+    "Input endpoint locking attributes differ; this is an as-is DCP comparison.",
+    "Read-only diagnostics/audit overlapped the free route; elapsed time is not an isolated performance benchmark.",
+    "Each DCP ran route_design once; no incremental routing or retry.",
+    "Supplemental helper changes only read-only graph traversal, not production exporter, constraints or DCP."
+  ],
+  "local_files": {
+    "/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/docs/research/getrf-e2-sll-route-pair-20261028.md": "2f08577b30b93acc03702d9702308c8a4226a5e7c4ed75747f3c95994c4a1dda",
+    "/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/experiments/evidence/20261028-getrf-e2-route-pair/primary-results.tar.gz": "efd357d8a7ce5ecaabef91d61a3d7ca110715761ca93dcb42cf21cc55bff0fa8",
+    "/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/experiments/evidence/20261028-getrf-e2-route-pair/supplemental-results.tar.gz": "af8f49b41496db840277ff5d34373ca2e9ebd5f9078c1f07766b59eb26f268f3",
+    "/Users/jinyanglyu/Documents/ChatGPT/增量编译器和布尔处理器/AMFplacer3.0/experiments/evidence/20261028-getrf-e2-route-pair/results/aggregate-results.json": "68f42071bdf0ee06320bdc52eb88e185c6211e0ab987a53a0582e8bddfc95aa5"
+  },
+  "tracking_tool_note": "Vivado todo MCP transport closed while updating completion; SSH execution and all experiment validations completed normally."
+}
