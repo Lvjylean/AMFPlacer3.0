@@ -58,3 +58,31 @@ proc dfx_sll::audit {} {
  variable active
  if {$active} {e2_sll::audit [file join $dfx(output) sll]}
 }
+
+
+# Full-design DFX has no frozen route owner yet; Vivado still enforces its
+# existing routing containment. Endpoint SLR/connectivity and final trees are
+# audited by the same exporter as ordinary E2 full placement.
+proc dfx_sll::apply_full {} {
+ global dfx
+ variable active
+ if {![info exists dfx(e2_sll_enabled)] || !$dfx(e2_sll_enabled)} {return}
+ set plan [file join $dfx(output) placement sll-plan.tcl]
+ if {![file exists $plan]} {error "E2 full DFX plan missing"}
+ set active 1
+ set dir [file join $dfx(output) sll];file mkdir $dir
+ set ::e2_sll::allowDfxRouting 1
+ set ::env(AMF_SLL_DFX_ROUTING) 1
+ set ::env(AMF_SLL_VIVADO) $dfx(vivado)
+ e2_sll::apply_parallel $plan $dir $dfx(e2_sll_workers)
+ set f [open [file join $dir records.tcl] w];puts $f [list set ::e2_sll::records $::e2_sll::records];close $f
+}
+proc dfx_sll::restore_full_audit {} {
+ global dfx
+ variable active
+ if {![info exists dfx(e2_sll_enabled)] || !$dfx(e2_sll_enabled)} {return}
+ set records [file join $dfx(output) sll records.tcl]
+ if {![file exists $records]} {error "Resumed E2 routing lacks its original SLL audit records"}
+ source $records
+ set active 1
+}

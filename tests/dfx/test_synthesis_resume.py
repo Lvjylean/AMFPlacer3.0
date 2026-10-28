@@ -53,7 +53,7 @@ class SynthesisResume(unittest.TestCase):
 
     def test_tcl_defines_main_without_executing_design_commands(self):
         script = (Path(__file__).resolve().parents[2] / 'scripts/dfx_multi_shell.tcl').read_text()
-        definition = '\n'.join(script.split('if {[catch {main}')[0].splitlines()[2:])
+        definition = 'proc main {}' + script.split('proc main {}', 1)[1].split('if {[catch {main}', 1)[0]
         path = self.path / 'scope_check.tcl'
         path.write_text(definition + '\nputs [expr {[llength [info procs main]] == 1}]\n')
         self.assertEqual(subprocess.check_output(['tclsh', str(path)], text=True), '1\n')

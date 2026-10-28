@@ -5,7 +5,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from native_cache_contract import partition_coordinates, validate_coordinate_map, verify_cache, model_identity, validate_full_capture, verify_export_scripts
 from run_dfx import sha
 

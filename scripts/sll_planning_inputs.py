@@ -23,6 +23,12 @@ def validate(config,binary):
             raise ValueError('SLL displacement policy requires the matching bounded-projection binary')
     if config.get('SllTilePlanningEnable','false')=='true' and caps.get('tile_sll_global_schema')!=1:
         raise ValueError('Binary lacks tile-global SLL planning capability')
+
+    if config.get('SllIncrementalScope'):
+        if config['SllIncrementalScope']!='internal-active-nets' or caps.get('incremental_sll_planning_schema')!=1:
+            raise ValueError('Binary lacks scoped incremental SLL planning')
+        if not Path(config.get('SllReservedResourceFile','')).is_file():
+            raise ValueError('Incremental SLL reservation file missing')
     table=Path(config['SllChannelFile'])
     with table.open() as f:header=[next(f).rstrip('\n') for _ in range(3)]
     if header[0]!='#part\t'+config['physical device part']:raise ValueError('SLL part mismatch')

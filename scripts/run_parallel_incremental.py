@@ -45,6 +45,9 @@ def preflight(config):
     cfg=amf_configuration(job)
     from sll_planning_inputs import validate as validate_sll
     validate_sll(cfg,binary)
+    if cfg.get('SllPlanningEnable','false')=='true' and any(p.get('reuse_completed_module') for p in job['partitions']):
+        raise ValueError('E2 incremental requires fresh module plans bound to the current SLL resource leases')
+
     from incremental_config import validate_incremental_binary
     validate_incremental_binary(job,binary)
     from paper_boundary_config import validate_paper_boundary_binary
@@ -134,6 +137,8 @@ def run(config, output, workers_only=False):
             job['e2_sll_enabled']=True
             job['e2_sll_workers']=int(sll_cfg.get('SllConstraintWorkers','4'))
             state['e2_sll_contract']=sll_contract
+            proof['input_hashes'][sll_contract['channel_file']]=sll_contract['channel_sha256']
+            for entry in sll_contract['reservations'].values():proof['input_hashes'][entry['path']]=entry['sha256']
         if job.get('same_session_cache'):
             if workers_only:raise ValueError('Retained static session requires complete joint acceptance')
             from retained_joint_session import RetainedJointSession

@@ -20,8 +20,12 @@ class ConfigTest(unittest.TestCase):
     def test_accept_capable_binary(self):
         with patch('paper_boundary_config.subprocess.run',return_value=SimpleNamespace(returncode=0,stdout=json.dumps({'paper_hierarchical_boundaries_schema':2}))):
             validate_paper_boundary_binary(self.cfg,'/new')
+    def test_disabled_clustering_preserves_legacy_path(self):
+        with patch('paper_boundary_config.subprocess.run') as run:
+            validate_paper_boundary_binary(dict(self.cfg,BoundaryAwareClustering='false'),'/unused')
+            run.assert_not_called()
     def test_reject_disabled_mode_or_misspelled_strategy(self):
-        for cfg in (dict(self.cfg,PhysicalBoundaryMode='false'),dict(self.cfg,BoundaryAwareClustering='false'),dict(self.cfg,BoundaryClusteringStrategy='paper')):
+        for cfg in (dict(self.cfg,PhysicalBoundaryMode='false'),dict(self.cfg,BoundaryClusteringStrategy='paper')):
             with self.assertRaises(ValueError):validate_paper_boundary_binary(cfg,'/unused')
 
 if __name__ == '__main__': unittest.main()

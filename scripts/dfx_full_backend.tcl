@@ -7,6 +7,7 @@ source [file join [file dirname [info script]] dfx_site_import.tcl]
 source [file join [file dirname [info script]] dfx_full_audit.tcl]
 source [file join [file dirname [info script]] dfx_boundary_compatibility.tcl]
 source [file join [file dirname [info script]] dfx_common_static_shell.tcl]
+source [file join [file dirname [info script]] dfx_sll.tcl]
 proc main {} {
     global dfx
     set out $dfx(output);set_param general.maxThreads $dfx(vivado_threads)
@@ -48,9 +49,12 @@ proc main {} {
         amf_dfx::timed write_membership_placed_dcp {write_checkpoint $out/base_membership_placed.dcp}
         amf_dfx::timed audit_placed {full_region_audit [array get requested] placed}
         report_timing_summary -delay_type min_max -file $out/base_placed_timing.rpt
+        amf_dfx::timed full_sll_import {dfx_sll::apply_full}
         amf_dfx::timed vivado_route {route_design}
         amf_dfx::timed write_routed_dcp {write_checkpoint $out/base_routed.dcp}
     }
+    if {$resumeStage eq "routed"} {dfx_sll::restore_full_audit}
+    amf_dfx::timed full_sll_audit {dfx_sll::audit}
     amf_dfx::timed static_membership_routed {amf_static_membership::enforce routed 0}
     amf_dfx::timed audit_routed {full_region_audit [array get requested] routed}
     amf_dfx::timed reports {amf_multi::reports $out/base}

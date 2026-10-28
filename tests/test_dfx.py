@@ -58,7 +58,7 @@ class DfxContractTests(unittest.TestCase):
             p=Path(tmp)/'job.json'
             for value in (False, 'false', None):
                 p.write_text(json.dumps({'IncremenralCompilation':value}))
-                with self.assertRaisesRegex(ValueError, 'explicit'): dfx.load_job(p)
+                with self.assertRaisesRegex(ValueError, 'explicit' if value is not None else 'true or false'): dfx.load_job(p)
 
 
 if __name__ == '__main__': unittest.main()

@@ -223,7 +223,10 @@ class PlacementTimingOptimizer
 
     inline float getDelayByModel_conservative(float X1, float Y1, float X2, float Y2, bool localOnly=false)
     {
-        if(!localOnly && placementInfo->sllPlanner && placementInfo->sllPlanner->crosses({X1,Y1},{X2,Y2}))
+        // Incremental interface/static arcs have no new crossing plan. Keep
+        // their original model; an RM lease is not a legal candidate pool for them.
+        if(!localOnly && !placementInfo->getIncrementalContext().enabled &&
+           placementInfo->sllPlanner && placementInfo->sllPlanner->crosses({X1,Y1},{X2,Y2}))
             return placementInfo->sllPlanner->geometryDelay({X1,Y1},{X2,Y2});
         int clockRegionX0, clockRegionY0;
         deviceInfo->getClockRegionByLocation(X1, Y1, clockRegionX0, clockRegionY0);

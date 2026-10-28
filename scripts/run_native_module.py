@@ -60,6 +60,7 @@ def _run(config,output,binary,started_epoch):
     m['optimization']=optimization
     expected.update({str(Path(binary)):sha(binary),job['rm_checkpoint']:sha(job['rm_checkpoint'])})
     expected.update({cfg[k]:sha(cfg[k]) for k in MODEL_KEYS if k in cfg})
+    expected.update({cfg[k]:sha(cfg[k]) for k in ('SllChannelFile','SllReservedResourceFile') if k in cfg})
     expected[job['static_checkpoint']]=c['static_shell_sha256']
     expected[job['rm_optimization_manifest']]=optimization['manifest_sha256']
     m['script_hashes']={p.name:sha(p) for p in frozen.iterdir() if p.is_file()}

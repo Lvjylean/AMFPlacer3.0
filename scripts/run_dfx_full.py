@@ -28,6 +28,12 @@ def run(args):
     validate_incremental_binary(job,binary)
     from paper_boundary_config import validate_paper_boundary_binary
     validate_paper_boundary_binary(cfg,binary)
+    from sll_planning_inputs import validate as validate_sll
+    validate_sll(cfg,binary)
+    if cfg.get('SllPlanningEnable','false')=='true':
+        job['e2_sll_enabled']=1
+        job['e2_sll_workers']=int(cfg.get('SllConstraintWorkers','4'))
+
     helper=binary.parent/'partitionHyperGraph'
     if sha(helper)!=job['runtime_helper_sha256'] or not os.access(helper,os.X_OK):raise ValueError('Graph partition helper absent/changed/not executable')
     capability=json.loads(subprocess.check_output([str(binary),'--capabilities'],text=True))

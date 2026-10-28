@@ -42,6 +42,7 @@ int main(int argc,char**argv){try {
  pi.createGridBins(5,5);pi.getTimingInfo()->buildSimpleTimingGraph();
  PlacementTimingOptimizer timing(&pi,cfg);pi.sllPlanner->refresh();
  require(pi.getIncrementalContext().enabled,"real incremental context enabled");
+ require(std::isfinite(timing.getDelayByModel_conservative(50,30,50,270)),"unplanned interface STA must not search the leased SLL pool");
  require(pi.sllPlanner->model().plans.size()==1,"only wholly active internal net planned");
  require(pi.sllPlanner->variableCount()==1,"fanout shares one virtual crossing");
  const auto&plan=pi.sllPlanner->model().plans.front();

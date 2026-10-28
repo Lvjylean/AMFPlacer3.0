@@ -10,7 +10,7 @@ from run_dfx_multi import validate, settings, check_shell
 
 class MultiContract(unittest.TestCase):
     def setUp(self):
-        self.job=dict(IncremenralCompilation=True,clock_period_ns=10,require_distinct_slrs=True,part='p',clock_name='clk',
+        self.job=dict(IncremenralCompilation=True,static_routing_containment=False,clock_period_ns=10,require_distinct_slrs=True,part='p',clock_name='clk',
             partitions=[dict(id='a',active_partition='top/a',pblock='pa',pblock_ranges=['CLOCKREGION_X1Y1:CLOCKREGION_X1Y1'],expected_slr='SLR0'),
                         dict(id='b',active_partition='top/b',pblock='pb',pblock_ranges=['CLOCKREGION_X1Y5:CLOCKREGION_X1Y5'],expected_slr='SLR1')])
     def test_valid(self): self.assertIs(validate(self.job),self.job)

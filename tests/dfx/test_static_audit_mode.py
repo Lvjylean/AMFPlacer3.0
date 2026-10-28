@@ -63,7 +63,7 @@ puts $msg
 set dfx(static_placement_audit) skip
 if {![catch {amf_dfx::assert_same {port IN} {port OUT} interface}]} {error "interface check bypassed"}
 ''')
-        for name in ('dfx_backend.tcl', 'dfx_multi_assemble.tcl'):
+        for name in ('dfx_parallel_verify.tcl', 'dfx_multi_assemble.tcl'):
             text = (ROOT / 'scripts' / name).read_text()
             self.assertIn('pr_verify -full_check', text)
         prepare = (ROOT / 'scripts/dfx_prepare.tcl').read_text()
