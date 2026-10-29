@@ -54,7 +54,21 @@ proc main {} {
         amf_dfx::timed write_routed_dcp {write_checkpoint $out/base_routed.dcp}
     }
     if {$resumeStage eq "routed"} {dfx_sll::restore_full_audit}
-    amf_dfx::timed full_sll_audit {dfx_sll::audit}
+    set policy strict
+    if {[info exists dfx(e2_sll_audit_policy)]} {set policy $dfx(e2_sll_audit_policy)}
+    if {$policy ni {strict record-failure}} {error "Unknown full SLL audit policy: $policy"}
+    set rc [catch {amf_dfx::timed full_sll_audit {dfx_sll::audit}} msg opts]
+    set checked [expr {[info exists dfx(e2_sll_enabled)] && $dfx(e2_sll_enabled)}]
+    set f [open $out/sll-audit-status.tsv w]
+    puts $f "checked\t$checked";puts $f "passed\t[expr {!$rc}]";puts $f "policy\t$policy"
+    if {$rc} {puts $f "error\t[string map [list \t { } \n { } \r { }] $msg]"}
+    close $f
+    if {$rc} {
+        if {$policy eq "strict"} {return -options $opts $msg}
+        puts "EXPERIMENTAL_BASELINE_SLL_AUDIT_FAILED: $msg"
+        # Keep the failed stage exit code and measure real occupancy separately.
+        amf_dfx::timed full_sll_usage {e2_sll::usage [file join $out sll]}
+    }
     amf_dfx::timed static_membership_routed {amf_static_membership::enforce routed 0}
     amf_dfx::timed audit_routed {full_region_audit [array get requested] routed}
     amf_dfx::timed reports {amf_multi::reports $out/base}

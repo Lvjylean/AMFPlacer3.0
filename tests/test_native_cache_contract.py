@@ -6,7 +6,7 @@ import unittest
 import zipfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from native_cache_contract import partition_coordinates, validate_coordinate_map, verify_cache, model_identity, validate_full_capture, verify_export_scripts
+from native_cache_contract import partition_coordinates, validate_coordinate_map, verify_cache, model_identity, validate_full_capture, verify_export_scripts, baseline_quality
 from run_dfx import sha
 
 
@@ -87,6 +87,23 @@ class NativeCacheContractTest(unittest.TestCase):
             self.nodes.write_text(text)
             with self.assertRaises(ValueError):partition_coordinates(self.nodes, self.ports, self.mapping, self.root/'bad.tsv')
 
+    def test_experimental_quality_never_waives_structural_checks(self):
+        common = {'state': 'verified_empty_rps_after_reopen'}
+        failed = dict(implementation_verified=True, timing_met=False,
+                      timing={'wns_ns': -1.5}, sll_audit={'checked': True, 'passed': False})
+        policy = {'native_cache_baseline_quality_policy': 'allow-failed-for-experiment'}
+        with self.assertRaisesRegex(ValueError, 'explicit experimental'):baseline_quality({}, failed, common)
+        result = baseline_quality(policy, failed, common)
+        self.assertTrue(result['experimental_baseline'])
+        self.assertFalse(result['timing_met'])
+        self.assertFalse(result['sll_audit']['passed'])
+        self.assertEqual(result['timing']['wns_ns'], -1.5)
+        for acc, shell in ((dict(failed, implementation_verified=False), common), (failed, {})):
+            with self.assertRaises(ValueError):baseline_quality(policy, acc, shell)
+        with self.assertRaises(ValueError):baseline_quality({'native_cache_baseline_quality_policy': 'typo'}, failed, common)
+        with self.assertRaises(ValueError):baseline_quality({}, dict(failed, timing_met=True), common)
+        self.assertFalse(baseline_quality({}, dict(implementation_verified=True, timing_met=True), common)['experimental_baseline'])
+
     def test_cache_bound_to_shell_and_resource_models(self):
         cache = self.root/'cache.bin';cache.write_bytes(b'synthetic immutable database')
         shell = self.root/'shell.dcp';shell.write_bytes(b'synthetic shell identity, not a DCP')
@@ -106,6 +123,12 @@ class NativeCacheContractTest(unittest.TestCase):
         c['resource_policy'] = {'version':'clock-region-slice-dsp-v1','cache_format':3}
         contract.write_text(json.dumps(c)); native['contract_sha256'] = sha(contract)
         self.assertEqual(verify_cache(native, dict(job, native_dfx_edge_policy='clock-region-slice-dsp-v1'), cfg)['resource_policy']['cache_format'], 3)
+        c['baseline_quality'] = dict(experimental_baseline=True, timing_met=False, sll_audit={'passed': False})
+        contract.write_text(json.dumps(c)); native['contract_sha256'] = sha(contract)
+        with self.assertRaisesRegex(ValueError, 'explicit consumer'):verify_cache(native, job, cfg)
+        explicit = dict(native, baseline_quality_policy='allow-failed-for-experiment')
+        self.assertFalse(verify_cache(explicit, job, cfg)['baseline_quality']['timing_met'])
+        with self.assertRaises(ValueError):verify_cache(dict(native, baseline_quality_policy='typo'), job, cfg)
         shell.write_bytes(b'other static routes')
         with self.assertRaises(ValueError):verify_cache(native, job, cfg)
 

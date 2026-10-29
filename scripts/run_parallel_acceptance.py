@@ -14,6 +14,17 @@ from timing_coverage import verify as verify_timing_coverage
 SCRIPTS = Path(__file__).resolve().parent
 
 
+def require_qor_acceptance(job, acceptance):
+    policy = job.get('native_static_cache', {}).get('baseline_quality_policy', 'strict')
+    if policy not in ('strict', 'allow-failed-for-experiment'):
+        raise ValueError('Unknown experimental baseline quality policy')
+    if not acceptance['implementation_verified']:
+        raise RuntimeError('Final default DRC/route acceptance failed')
+    if not acceptance['timing_met'] and policy != 'allow-failed-for-experiment':
+        raise RuntimeError('Final timing acceptance failed')
+    return dict(policy=policy, timing_failure_retained=not acceptance['timing_met'])
+
+
 def source_contract(source):
     source = Path(source).resolve()
     m = json.loads((source/'manifest.json').read_text())
@@ -86,8 +97,7 @@ def run(source, output):
                 acceptance=flow.acceptance(branch, 'joint')
                 if job.get('clock_contract_enabled'):
                     acceptance['timing_coverage']=verify_timing_coverage(branch/'joint_timing.rpt',job['clock_timing_baseline'])
-                if not acceptance['implementation_verified'] or not acceptance['timing_met']:
-                    raise RuntimeError('Final QoR/default DRC/route acceptance failed')
+                result['quality_policy'] = require_qor_acceptance(job, acceptance)
                 result['acceptance']=acceptance
             elif mode == 'static':
                 if (branch/'pr_verify_passed.txt').read_text().strip()!='full_check_passed':
@@ -103,7 +113,10 @@ def run(source, output):
         state['native_process_span_seconds']=max(v['ended_epoch'] for v in results.values())-min(v['started_epoch'] for v in results.values())
         state['native_process_overlap_seconds']=max(0,min(v['ended_epoch'] for v in results.values())-max(v['started_epoch'] for v in results.values()))
         verify_hashes(hashes)
-        state['state']='verified_bitstreams'; state['all_checks_passed_epoch']=time.time(); save(out/'manifest.json',state)
+        state['state']='verified_bitstreams'; state['structural_checks_passed_epoch']=time.time()
+        state['quality_passed']=bool(results['qor']['acceptance']['timing_met'])
+        if state['quality_passed']:state['all_checks_passed_epoch']=time.time()
+        save(out/'manifest.json',state)
         state['bitstreams']=native('bitstreams','dfx_verified_bitstream.tcl')
         mapping={}
         for line in (out/'bitstreams/partial_mapping.tsv').read_text().splitlines():

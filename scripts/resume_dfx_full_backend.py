@@ -72,6 +72,9 @@ def run(a):
             shutil.copy2(f, out / 'inputs' / f.name)
     job = copy.deepcopy(pm['job'])
     job.setdefault('static_routing_containment', True)  # Historical deployments enabled it.
+    if a.allow_failed_baseline_for_experiment:
+        job['e2_sll_audit_policy'] = 'record-failure'
+        job['native_cache_baseline_quality_policy'] = 'allow-failed-for-experiment'
     cfg = json.loads((parent / 'amf_config.json').read_text())
     inherited = ['base_opt.dcp', 'placement.tsv', 'modeled_sites.txt',
                  'hard_regions.tsv', 'hard_region_sites.tsv', 'amf_config.json']
@@ -156,6 +159,15 @@ def run(a):
                    str(out/'inputs/dfx_full_backend.tcl'), '-tclargs', str(sp)]
         stage('backend',command)
         m['acceptance']=acceptance(out,'base')
+        audit = out/'sll-audit-status.tsv'
+        if audit.exists():
+            status = dict(line.split('\t', 1) for line in audit.read_text().splitlines())
+            m['acceptance']['sll_audit'] = dict(checked=status['checked']=='1',
+                passed=status['passed']=='1' if status['checked']=='1' else None,
+                policy=status['policy'], error=status.get('error', ''), status_sha256=sha(audit))
+        m['experimental_baseline'] = bool(a.allow_failed_baseline_for_experiment)
+        m['quality_passed'] = bool(m['acceptance']['timing_met'] and
+            m['acceptance'].get('sll_audit', {}).get('passed') is not False)
         if not m['acceptance']['implementation_verified']:
             raise RuntimeError('Recovered routing/DRC acceptance failed')
         outputs=['base_imported.dcp','base_placed.dcp','base_routed.dcp','base_full.bit']
@@ -183,4 +195,6 @@ if __name__ == '__main__':
     p.add_argument('--from-stage', choices=['auto','opt','imported','placed','routed'], default='auto')
     p.add_argument('--reason', default='Resume from latest saved checkpoint after repairing backend diagnostics')
     p.add_argument('--preflight-only', action='store_true')
+    p.add_argument('--allow-failed-baseline-for-experiment', action='store_true',
+                   help='Record SLL audit/timing failures but retain structural certification gates')
     raise SystemExit(run(p.parse_args()))

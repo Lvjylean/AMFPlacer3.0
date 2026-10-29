@@ -43,6 +43,22 @@ def model_identity(cfg):
             'policy': {k: cfg.get(k) for k in POLICY_KEYS}}
 
 
+def baseline_quality(job, acceptance, common):
+    """Experimental QoR failures never waive structural/cache certification."""
+    policy = job.get('native_cache_baseline_quality_policy', 'strict')
+    if policy not in ('strict', 'allow-failed-for-experiment'):
+        raise ValueError('Unknown native baseline quality policy')
+    if not acceptance.get('implementation_verified') or common.get('state') != 'verified_empty_rps_after_reopen':
+        raise ValueError('Native cache requires routing/DRC acceptance and empty static shell validation')
+    sll = acceptance.get('sll_audit', {'checked': False})
+    failed = not acceptance.get('timing_met') or sll.get('passed') is False
+    if failed and policy == 'strict':
+        raise ValueError('Native cache cannot seal a failed timing/SLL baseline without explicit experimental policy')
+    return dict(experimental_baseline=failed, policy=policy,
+                implementation_verified=True, timing_met=bool(acceptance.get('timing_met')),
+                timing=acceptance.get('timing', {}), sll_audit=sll)
+
+
 def verify_cache(native, job, cfg):
     from parallel_runtime import verify_hashes
     verify_hashes({native['path']: native['sha256'], native['contract']: native['contract_sha256']})
@@ -52,6 +68,12 @@ def verify_cache(native, job, cfg):
             or float(c['clock_period_ns']) != float(job['clock_period_ns']) or c['device'] != cfg['device']
             or c['model_identity'] != model_identity(cfg)):
         raise ValueError('Native cache does not match static shell, clock, device or AMF model files/policy')
+    quality_policy = native.get('baseline_quality_policy', 'strict')
+    if quality_policy not in ('strict', 'allow-failed-for-experiment'):
+        raise ValueError('Unknown native baseline consumer quality policy')
+    quality = c.get('baseline_quality', {})
+    if quality.get('experimental_baseline') and quality_policy != 'allow-failed-for-experiment':
+        raise ValueError('Experimental failed baseline requires explicit consumer opt-in')
     policy = job.get('native_dfx_edge_policy', 'off')
     if policy not in ('off', 'clock-region-slice-dsp-v1'):
         raise ValueError('Unknown native DFX edge policy')
@@ -160,8 +182,7 @@ def verify_export_scripts(previous, current):
 
 def seal_full(job, out, binary, cfg, stage, acceptance, common):
     out = Path(out); native = out/'native_cache'; cert = native/'certified'
-    if not acceptance.get('implementation_verified') or not acceptance.get('timing_met') or common.get('state') != 'verified_empty_rps_after_reopen':
-        raise ValueError('Native cache cannot be sealed before full acceptance and empty static shell validation')
+    quality = baseline_quality(job, acceptance, common)
     verified = dict(line.split('\t') for line in (cert/'verification.tsv').read_text().splitlines())
     if verified.get('static_context_connectivity_exact') != '1' or verified.get('interfaces_exact') != '1' or int(verified.get('pins_checked', '0')) <= 0:
         raise ValueError('Missing actual native static-context certification')
@@ -219,7 +240,7 @@ def seal_full(job, out, binary, cfg, stage, acceptance, common):
                     cache_sha256=sha(native/'sealed.bin'), static_shell_sha256=config['Native static shell sha256'],
                     full_reference_sha256=full_sha, producer_binary_sha256=sha(binary),
                     proposal_sha256=sha(native/'proposed.bin'), model_identity=model_identity(cfg),
-                    geometry=geometry, endpoints=endpoints, verification=verified,
+                    geometry=geometry, endpoints=endpoints, verification=verified, baseline_quality=quality,
                     evidence_hashes={str(p): sha(p) for p in proof},
                     final_positions_corrected_once=True, old_dynamic_cells_retained=False,
                     other_rm_policy='fixed actual partition-pin endpoints; no old internal cells or internal delays',
