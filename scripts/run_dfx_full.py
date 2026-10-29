@@ -6,6 +6,7 @@ import csv
 from collections import Counter
 import json
 import os
+from placement_features import route_enabled
 from pathlib import Path
 import re
 import shutil
@@ -30,8 +31,8 @@ def run(args):
     validate_paper_boundary_binary(cfg,binary)
     from sll_planning_inputs import validate as validate_sll
     validate_sll(cfg,binary)
-    if cfg.get('SllPlanningEnable','false')=='true':
-        job['e2_sll_enabled']=1
+    job['e2_sll_enabled']=int(route_enabled(cfg))
+    if route_enabled(cfg):
         job['e2_sll_workers']=int(cfg.get('SllConstraintWorkers','4'))
 
     helper=binary.parent/'partitionHyperGraph'

@@ -207,6 +207,7 @@ def receive(request, catalog):
         (Path(target["root"])/case["provenance"], "input-provenance.json"),
         (Path(__file__), "launch_placement.py"),
         (Path(__file__).with_name("export_placement_config.py"), "export_placement_config.py"),
+        (Path(__file__).with_name("placement_features.py"), "placement_features.py"),
     ]:
         shutil.copy2(source, job/dest)
     save(job/"status.json", {"state": "submitted", "submitted": now(), "experiment_started": False})

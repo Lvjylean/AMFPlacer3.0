@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 import math
+from placement_features import CHOICES as FEATURE_CHOICES, resolve as resolve_features
 from pathlib import Path
 
 CHOICES = {
@@ -36,7 +37,9 @@ TRACE_KEYS = {
     "DumpDSPCoordTrace", "DumpCARRYCoordTrace", "DumpFFCoordTrace",
     "DumpLUTFFCoordTrace", "DumpBRAMCoordTrace",
 }
-PROFILES = ("78", "83", "099-visualization")
+PROFILES = ("78", "83", "099-visualization", "integrated")
+FEATURE_NUMERIC = {"SllQuantityTau", "SllQuantityGamma", "SllDensityTargetUtilization",
+ "SllColumnTargetUtilization", "SllColumnMaxUtilization", "SllColumnUtilizationStep", "SllConstraintWorkers"}
 
 
 def unique_object(pairs):
@@ -63,9 +66,11 @@ def canonical_device(value):
 def resolve(primary, base, profile):
     if profile not in PROFILES:
         raise ValueError("Unknown source profile; expected " + ", ".join(PROFILES))
-    if set(primary) != KEYS:
+    required=KEYS | (set(FEATURE_CHOICES) if profile=="integrated" else set())
+    allowed=required | (FEATURE_NUMERIC if profile=="integrated" else set())
+    if not required.issubset(primary) or set(primary)-allowed:
         raise ValueError("Primary config keys differ: missing=%s unknown=%s" %
-                         (sorted(KEYS-set(primary)), sorted(set(primary)-KEYS)))
+                         (sorted(required-set(primary)), sorted(set(primary)-allowed)))
     if any(not isinstance(v, str) for v in primary.values()):
         raise ValueError('Use AMF string values, for example "true", "10", "12"')
     if any(not isinstance(v, str) for v in base.values()):
@@ -126,7 +131,7 @@ def resolve(primary, base, profile):
             result.get("PhysicalBoundaryAudit") == "true"):
         raise ValueError("ProLegacyIOBoundary=true requires VCU108/VU095 without the physical boundary model/audit")
     visual = primary["visualization"] == "true"
-    if visual and profile != "099-visualization":
+    if visual and profile not in {"099-visualization","integrated"}:
         raise ValueError("visualization=true requires the 099-visualization source profile and its actual binary")
     # The explicit main switch owns all old coordinate trace options. Keep
     # algorithm/placement result exports (e.g. DumpCLBPacking) untouched.
@@ -138,7 +143,7 @@ def resolve(primary, base, profile):
             "reason": "Explicit visualization switch overrides legacy trace options",
             "removed_keys": cleared,
         }
-    if profile != "099-visualization":
+    if profile not in {"099-visualization","integrated"}:
         result.pop("visualization")
         inactive["visualization"] = "False: trace options cleared without injecting an unsupported key"
     elif visual:
@@ -176,7 +181,22 @@ def resolve(primary, base, profile):
         notes.append("legacy matching can change task grouping/layout when jobs changes.")
     if result["ClockPeriod"] != base.get("ClockPeriod"):
         notes.append("Only the AMF target changed. Vivado XDC and per-driver ClockPeriod overrides were not changed.")
-    notes.append("SllRegionPolicy is not parsed by these profiles; no SLL options are injected.")
+    if profile=="integrated":
+        result, feature_inactive=resolve_features(result)
+        inactive.update(feature_inactive)
+        if result['SllPlanningEnable']=='true':
+            result['SllColumnCapacityEnable']=result['SllCapacityOptimizationEnable']
+            result['SllPlanningAllowSplit']='false'
+            result['SllInitializationPolicy']='local-wire-capacity'
+            result['SllProjectionPolicy']='qp-nearest-capacity'
+            result['SllQpDisplacementPolicy']='shared-pre-projection'
+        if result['SllDynamicTauEnable']=='true': result['SllQuantityTau']='10'
+        if result['DetailedDiagnosticsEnable']=='false':
+            for key in ('SllQpAuditCellsFile','SllWireCacheAuditStride','SllRefreshAuditStride'):
+                result.pop(key,None)
+        notes.append('Requires placement_feature_switch_schema=1. Final legalization and static-resource protection remain mandatory.')
+    else:
+        notes.append("SllRegionPolicy is not parsed by these profiles; no SLL options are injected.")
     notes.append("Source profile is declared, not a live binary/remote input verification.")
     changes = {k: {"before": base.get(k), "after": result.get(k)}
                for k in sorted(set(base) | set(result)) if base.get(k) != result.get(k)}
@@ -213,7 +233,12 @@ def main():
         if unmanaged:
             raise ValueError("Base has absolute diagnostic output prefixes; choose fresh relative prefixes first: " +
                              ", ".join(unmanaged))
-        for key in ("SllReportDirectory", "Native static cache sealed output"):
+        if args.profile=="integrated":
+            outputs.update(SllReportDirectory="reports/sll-quantity", SllPlanningReportDirectory="reports/sll-planning")
+            # Each run owns its generated trace sample; an explicit existing sample stays read-only.
+            if result.get('SllTraceNetList') and not Path(result['SllTraceNetList']).is_file():
+                result['SllTraceNetList']=str(out/'reports/sll-quantity/sample-nets.txt')
+        for key in (("Native static cache sealed output",) if args.profile=="integrated" else ("SllReportDirectory", "Native static cache sealed output")):
             if key in result:
                 raise ValueError("Base contains output/action fields outside this placement-only exporter: " + key)
         report["output_relocations"] = {}

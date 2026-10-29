@@ -1,3 +1,4 @@
+#include "../../../utils/PlacementFeatureConfig.h"
 #include "../placementTiming/HierarchicalBoundaryPolicy.h"
 #include "../../../utils/RuntimeProfiler.h"
 /**
@@ -134,6 +135,7 @@ void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool fir
                                                  float displacementLimit, PlacementTimingOptimizer *timingOptimizer,
                                                  bool enableFFClusterOpt)
 {
+    if(!amf_config::feature(JSONCfg,"TimingDrivenPlacementEnable",true)) timingOptimizer=nullptr;
     AMF_PROFILE_FUNCTION("qp_model");
     if (verbose)
         print_status("A QP Iteration Started.");

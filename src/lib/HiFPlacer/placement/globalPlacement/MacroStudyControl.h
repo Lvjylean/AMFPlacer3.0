@@ -11,6 +11,7 @@
 #include <stdexcept>
 namespace macro_study {
 inline int round=0;
+inline bool diagnostics=true;
 inline std::set<int> carryEligible;
 inline std::vector<std::array<double,12>> spread;
 inline const std::string &mode() {
@@ -23,11 +24,13 @@ inline int startRound() {
 }
 inline bool active(const char *name) {return round>=startRound() && mode()==name;}
 inline void begin(PlacementInfo *pi, MacroLegalizer *carry, const char *phase, int iteration, float weight) {
+ diagnostics=pi->detailedDiagnostics();
  ++round;carryEligible.clear();
+ if(!diagnostics && mode()=="control")return;
  for(const auto &p:carry->diagnosticMatching())carryEligible.insert(p.first->getId());
  spread.assign(pi->getPlacementUnits().size(),{});
  print_info("AMF_STUDY_ROUND round="+std::to_string(round)+" mode="+mode()+" eligible="+std::to_string(carryEligible.size()));
- if(round==startRound()) {
+ if(diagnostics && round==startRound()) {
   std::string dir=std::getenv("AMF_MACRO_STUDY_OUTPUT")?std::getenv("AMF_MACRO_STUDY_OUTPUT"):".";
   std::ofstream out(dir+"/pre-intervention-state.tsv");
   if(!out)throw std::runtime_error("Cannot write study pre-intervention state");
@@ -46,7 +49,7 @@ inline void begin(PlacementInfo *pi, MacroLegalizer *carry, const char *phase, i
  }
 }
 inline void workerStep(PlacementInfo *pi, PlacementInfo::PlacementUnit *pu, float x0,float y0,float xb,float yb,float xe,float ye,float xc,float yc) {
- if(!pu->checkHasCARRY())return;
+ if(!diagnostics || !pu->checkHasCARRY())return;
  auto &a=spread.at(pu->getId());++a[0];
  a[1]+=std::fabs(xb-x0);a[2]+=std::fabs(yb-y0);
  a[3]+=std::fabs(xe-xb);a[4]+=std::fabs(ye-yb);
@@ -61,6 +64,7 @@ inline void workerStep(PlacementInfo *pi, PlacementInfo::PlacementUnit *pu, floa
  a[11]+=active("carry-spread-y-half") && carryEligible.count(pu->getId());
 }
 inline void summarize() {
+ if(!diagnostics)return;
  std::array<double,12>a{};size_t n=0;
  for(const auto &b:spread)if(b[0]){++n;for(size_t i=0;i<a.size();++i)a[i]+=b[i];}
  std::ostringstream out;out<<std::setprecision(12)<<"AMF_STUDY_SPREAD round="<<round<<" carry_pus="<<n;

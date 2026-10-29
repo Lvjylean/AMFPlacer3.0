@@ -1,3 +1,4 @@
+#include "../../../utils/PlacementFeatureConfig.h"
 #include "FfQPinMask.h"
 /**
  * @file ParallelCLBPacker.h
@@ -1803,6 +1804,7 @@ class ParallelCLBPacker
              */
             inline float getPlacementUnitMaxPathNegativeSlack(PlacementInfo::PlacementUnit *curPU)
             {
+                if(!parentPackingCLB->getPlacementInfo()->timingDrivenPlacement()) return 0;
 
                 auto &timingNodes =
                     parentPackingCLB->getPlacementInfo()->getTimingInfo()->getSimplePlacementTimingInfo();
@@ -2730,7 +2732,7 @@ class ParallelCLBPacker
 
         inline bool isTimingPathLenFactorDisabled()
         {
-            return noTimingPathLenFactor;
+            return noTimingPathLenFactor || !placementInfo->timingDrivenPlacement();
         }
 
         inline void setTimingPathLenFactorTo(bool enable)

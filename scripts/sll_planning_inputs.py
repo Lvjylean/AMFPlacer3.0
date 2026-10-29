@@ -5,6 +5,13 @@ import subprocess
 from pathlib import Path
 
 def validate(config,binary):
+    from placement_features import validate as validate_features, CHOICES
+    validate_features(config)
+    new_keys=set(CHOICES)-{'SllQuantityEnable','SllDynamicTauEnable','SllPlanningEnable','SllRegionPolicy'}
+    if new_keys.intersection(config):
+        caps=json.loads(subprocess.check_output([str(binary),'--capabilities'],text=True,timeout=15))
+        if caps.get('placement_feature_switch_schema')!=1:
+            raise ValueError('Binary lacks decoupled placement feature switches')
     if config.get('SllPlanningEnable','false')!='true':return
     if config.get('ProPrimitiveTiming','false')!='false':raise ValueError('E2 requires ordinary Pro')
     caps=json.loads(subprocess.check_output([str(binary),'--capabilities'],text=True,timeout=15))

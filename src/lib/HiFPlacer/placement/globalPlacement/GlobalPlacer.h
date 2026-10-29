@@ -208,6 +208,8 @@ class GlobalPlacer
         return std::abs(x0 - x1) + y2xRatio * std::abs(y0 - y1);
     }
 
+    void finalizeMacroLegalization();
+
   private:
     // A complete GP phase with its own iteration/convergence counters. The
     // public driver can prepend an SLR phase without consuming HPIO's budget.

@@ -1,3 +1,4 @@
+#include "../../../utils/PlacementFeatureConfig.h"
 #include "../packing/FfQPinMask.h"
 #include "../placementTiming/BoundaryClusteringStrategy.h"
 #include "../placementTiming/ClockRegionAnchorPolicy.h"
@@ -2603,6 +2604,15 @@ void PlacementInfo::refreshRegionPreferences()
     std::unordered_set<PlacementUnit *> live(placementUnits.begin(),placementUnits.end());
     for(auto it=regionPreferences.begin();it!=regionPreferences.end();)
         if(!live.count(it->first))it=regionPreferences.erase(it);else ++it;
+    if(JSONCfg.count("SllRegionPolicy") && JSONCfg.at("SllRegionPolicy")=="release-single") {
+        for(auto it=regionPreferences.begin();it!=regionPreferences.end();) {
+            auto pu=it->first;
+            const bool release=!pu->isFixed() && !pu->isLocked() &&
+                dynamic_cast<PlacementUnpackedCell*>(pu) &&
+                (pu->checkHasLUT() || pu->checkHasFF()) && !pu->checkHasLUTRAM();
+            if(release) it=regionPreferences.erase(it); else ++it;
+        }
+    }
     if (paperBoundaryClusteringEnabled())
     {
         RegionCapacityTracker budget(this);

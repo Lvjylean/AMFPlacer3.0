@@ -5,6 +5,7 @@ are planned. Parallel RMs receive disjoint physical channel/entrance components
 inside their actual DFX routing footprints, after subtracting routed shell use.
 """
 import csv, hashlib, json, os, shutil, subprocess, time
+from placement_features import route_enabled
 from pathlib import Path
 
 HELPERS = ('sll_routes.tcl','sll_parallel.tcl','sll_parallel_worker.tcl',
@@ -92,7 +93,7 @@ def bind(job,cfg):
     cfg['SllReservedResourceFile']=entry['path']
     return cfg
 def publish(cfg,out):
-    if not enabled(cfg):return
+    if not route_enabled(cfg):return
     out=Path(out);plan=out/'placement/sll-plan.tcl'
     if not plan.is_file():raise ValueError('E2 enabled but AMF SLL plan is missing')
     shutil.copy2(plan,out/'sll-plan.tcl')

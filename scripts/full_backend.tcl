@@ -190,7 +190,7 @@ if {[catch {
     }
     timed place {place_design}
     timed place_audit {audit placed}
-    if {[file exists [file join $placement sll-plan.tcl]]} {
+    if {[info exists ::env(AMF_SLL_ROUTE_CONSTRAINTS)] && $::env(AMF_SLL_ROUTE_CONSTRAINTS)} {
         source [file join [file dirname [info script]] sll_routes.tcl]
         source [file join [file dirname [info script]] sll_parallel.tcl]
         set sllWorkers 4
@@ -213,7 +213,7 @@ if {[catch {
     timed checkpoint {write_checkpoint [file join $out getrf_routed.dcp]}
     source [file join [file dirname [info script]] sll_usage.tcl]
     timed sll_inventory {e2_sll::usage $out}
-    if {[file exists [file join $placement sll-plan.tcl]]} {
+    if {[info exists ::env(AMF_SLL_ROUTE_CONSTRAINTS)] && $::env(AMF_SLL_ROUTE_CONSTRAINTS)} {
         timed sll_path_audit {e2_sll::audit_parallel [file join $out getrf_routed.dcp] $out $sllWorkers}
     }
     if {$physicalAudit} {

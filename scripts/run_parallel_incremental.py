@@ -9,6 +9,7 @@ import copy
 import datetime
 import json
 import os
+from placement_features import route_enabled
 from pathlib import Path
 import shutil
 import sys
@@ -132,9 +133,9 @@ def run(config, output, workers_only=False):
         environment['LD_LIBRARY_PATH']=job['amf_runtime_lib']+(':'+environment['LD_LIBRARY_PATH'] if environment.get('LD_LIBRARY_PATH') else '')
         from e2_incremental import prepare as prepare_sll, enabled as sll_enabled
         sll_cfg=amf_configuration(job)
+        job['e2_sll_enabled']=route_enabled(sll_cfg)
         sll_contract=prepare_sll(job,sll_cfg,out/'sll-reservations',frozen)
         if sll_contract:
-            job['e2_sll_enabled']=True
             job['e2_sll_workers']=int(sll_cfg.get('SllConstraintWorkers','4'))
             state['e2_sll_contract']=sll_contract
             proof['input_hashes'][sll_contract['channel_file']]=sll_contract['channel_sha256']

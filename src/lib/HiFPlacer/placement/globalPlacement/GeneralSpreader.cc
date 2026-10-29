@@ -1,3 +1,4 @@
+#include "../../../utils/PlacementFeatureConfig.h"
 #include "../../../utils/RuntimeProfiler.h"
 /**
  * @file GeneralSpreader.cc
@@ -45,13 +46,14 @@ GeneralSpreader::GeneralSpreader(PlacementInfo *placementInfo, std::map<std::str
     if (auto physical=placementInfo->getDeviceInfo()->getPhysicalBoundaryModel())
         for (const auto &b:physical->getBoundaries())
             if (b.active && b.kind=="SLR" && b.orientation=='Y') seams.push_back(b.coordinate);
-    if (!seams.empty()) {
+    if (!seams.empty() && amf_config::feature(JSONCfg,"DieFirstSpreadingEnable",true)) {
         auto &original=placementInfo->getBinGrid(placementInfo->getSharedBELTypeId(sharedCellType));
         dieView.reset(new die_spread::GridView(original,placementInfo->getCompatiblePlacementTable(),seams,
             placementInfo->getCellId2location().size(),
             [&](int id){return placementInfo->getCellId2location().at(id);},
             [&](int id){return int(placementInfo->getCellId2CellBinInfo().at(id).occupation);}));
         binGrid=dieView->rows;
+        if(amf_config::feature(JSONCfg,"DetailedDiagnosticsEnable",true)) {
         auto dir=JSONCfg.find("SllReportDirectory");
         const std::filesystem::path output=dir==JSONCfg.end()?std::filesystem::path("."):std::filesystem::path(dir->second);
         std::filesystem::create_directories(output);
@@ -63,6 +65,7 @@ GeneralSpreader::GeneralSpreader(PlacementInfo *placementInfo, std::map<std::str
         open(regionLog,"spreading-regions.tsv","resource\tcall\titeration\tinner\tseed_x\tseed_y\tdie\tphase\treason\tlocal_stop\tlocal_bins\tlocal_demand\tlocal_capacity\tdie_demand\tdie_nominal_capacity\tdie_effective_capacity\tbins\tleft\tright\tbottom\ttop\tremaining_overflow\tseed_remaining_overflow\tpu_count\tmoved_pus\tmax_displacement\tmean_displacement\tmax_abs_dy\tmax_move_pu\tcrossing_cells");
         open(passLog,"spreading-passes.tsv","resource\tcall\titeration\tinner\tremaining_bins\tremaining_overflow\tregions\tcross_search_regions");
         open(crossingLog,"spreading-crossings.tsv","resource\tcall\titeration\tinner\tpu_id\tpu_name\told_x\told_y\tnew_x\tnew_y\tdx\tdy\tcrossing_cells\tlocal_guard");
+        }
     }
 
 }
@@ -1613,6 +1616,14 @@ void GeneralSpreader::finishDieFirstIteration(int call,int inner,const std::vect
             <<pu->X()-old.X<<'\t'<<pu->Y()-old.Y<<'\t'<<cross<<'\t'<<local.count(pu->getId())<<'\n';
         if(cross && local.count(pu->getId()))throw std::logic_error("Die-local spreading crossed a physical seam");
     }
+    if(!amf_config::feature(JSONCfg,"DetailedDiagnosticsEnable",true)) {
+        for(auto r:expandedRegions)for(auto b:r->getBinsInRegion()) {
+            const auto key=std::make_pair(b->X(),b->Y());
+            if(r->decision.local && b->isOverflow(capacityShrinkRatio)) localFailures[key]={true,r->decision.boundedLocal};
+            else localFailures.erase(key);
+        }
+        return;
+    }
     size_t crossRegions=0;
     for(auto r:expandedRegions) {
         const auto &d=r->decision;double residual=0,maxMove=0,sumMove=0,maxDy=0;int maxId=-1,moved=0,cross=0;
@@ -1640,5 +1651,5 @@ void GeneralSpreader::finishDieFirstIteration(int call,int inner,const std::vect
     for(auto &row:binGrid)for(auto b:row){remaining+=b->isOverflow(capacityShrinkRatio);residual+=spreadOverflow(b,capacityShrinkRatio);}
     passLog<<sharedCellType<<'\t'<<call<<'\t'<<currentIteration<<'\t'<<inner<<'\t'<<remaining<<'\t'<<residual<<'\t'<<expandedRegions.size()<<'\t'<<crossRegions<<'\n';
     regionLog.flush();passLog.flush();crossingLog.flush();
-    if(!regionLog||!passLog||!crossingLog)throw std::runtime_error("Failed to write spreading diagnostics");
+    if(amf_config::feature(JSONCfg,"DetailedDiagnosticsEnable",true) && (!regionLog||!passLog||!crossingLog))throw std::runtime_error("Failed to write spreading diagnostics");
 }

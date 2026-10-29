@@ -13,6 +13,7 @@ public:
     void reload();
     void stage(const char*, int, int, const char*);
     void endPhase();
+    bool readyForPacking() const;
     void beginModelAudit(QPSolverWrapper&, QPSolverWrapper&, float, float);
     bool auditTarget(int) const;
     void auditTimingAnchor(int,bool,const QPSolverWrapper&,const QPSolverWrapper&);

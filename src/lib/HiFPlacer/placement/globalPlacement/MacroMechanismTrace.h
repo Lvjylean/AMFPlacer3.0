@@ -13,6 +13,7 @@ static int round=0;
 static std::map<int,std::array<double,4>> previous;
 static std::string previousStep;
 inline void snapshot(PlacementInfo *pi, MacroLegalizer *carry, const char *phase, int iteration, const char *step) {
+ if(!pi->detailedDiagnostics())return;
  AMF_PROFILE_SCOPE("diagnostics", "macro position snapshots");
  static std::map<int,std::array<double,4>> mPrevious;
  std::map<int,std::array<double,4>> mCurrent;

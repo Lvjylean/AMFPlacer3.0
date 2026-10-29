@@ -1,3 +1,4 @@
+#include "../../../utils/PlacementFeatureConfig.h"
 #include "SllPlanner.h"
 #include "SllDensityModel.h"
 #include "SllQpMotion.h"
@@ -23,6 +24,7 @@ double number(const std::map<std::string,std::string>&cfg,const std::string&key,
 struct SllPlanner::Impl {
     PlacementInfo*pi;Model m;std::vector<int> netIndex;
     TimingIndex timingIndex;
+    LocalDelay referenceDelay;
     std::vector<PhysicalBoundaryModel::Region> regions;
     std::map<std::pair<int,int>,std::vector<int>> timingCandidates;
     std::map<std::pair<int,int>,TimingCandidates> timingSearch;
@@ -38,7 +40,7 @@ struct SllPlanner::Impl {
     std::chrono::steady_clock::time_point wireBatchStart;
     double wirePrepareSeconds=0;
     std::ofstream wireLog,refreshLog;
-    bool refreshParallel=true;
+    bool refreshParallel=true, capacityOptimization=true;
     size_t refreshAuditStride=0,refreshCalls=0;
     explicit Impl(PlacementInfo*placement,const std::map<std::string,std::string>&cfg):pi(placement) {
         if(pi->getIncrementalContext().enabled) {
@@ -50,6 +52,8 @@ struct SllPlanner::Impl {
         regions=physical->getRegions();
         if(cfg.count("ProPrimitiveTiming") && cfg.at("ProPrimitiveTiming")=="true")throw std::invalid_argument("E2 baseline requires ProPrimitiveTiming=false");
         m.ratio=number(cfg,"y2xRatio",.4);m.timingWeight=number(cfg,"SllPlanningTimingWeight",16);
+        m.plannedTimingCriticalities=amf_config::sllTiming(cfg) && pi->timingDrivenPlacement();
+        if(!m.plannedTimingCriticalities)m.timingWeight=0;
         m.extraCrossingCost=number(cfg,"SllPlanningExtraCrossingCost",24);m.switchCost=number(cfg,"SllPlanningSwitchCost",.1);
         auto boolean=[&](const std::string&key,bool fallback){auto it=cfg.find(key);if(it==cfg.end())return fallback;if(it->second!="true"&&it->second!="false")throw std::invalid_argument(key+" must be boolean");return it->second=="true";};
         m.outputLongDelayCorrection=boolean("SllOutputLongDelayCorrection",false);
@@ -60,12 +64,14 @@ struct SllPlanner::Impl {
         wireCacheEnabled=boolean("SllWireCacheEnable",true);
         const double stride=number(cfg,"SllWireCacheAuditStride",0);
         if(stride!=std::floor(stride)||stride>1000000000)throw std::invalid_argument("Invalid SllWireCacheAuditStride");
-        wireAuditStride=static_cast<size_t>(stride);
+        wireAuditStride=amf_config::feature(cfg,"DetailedDiagnosticsEnable",true)?static_cast<size_t>(stride):0;
         refreshParallel=boolean("SllRefreshParallelEnable",true);
         const double refreshStride=number(cfg,"SllRefreshAuditStride",0);
         if(refreshStride!=std::floor(refreshStride)||refreshStride>1000000000)
             throw std::invalid_argument("Invalid SllRefreshAuditStride");
-        refreshAuditStride=static_cast<size_t>(refreshStride);
+        refreshAuditStride=amf_config::feature(cfg,"DetailedDiagnosticsEnable",true)?static_cast<size_t>(refreshStride):0;
+        amf_config::validatePlacementFeatures(cfg);
+        capacityOptimization=boolean("SllCapacityOptimizationEnable",true);
         m.jointPlacement=boolean("SllJointPlacementEnable",false);
         m.sourceNearInitialization=boolean("SllSourceNearInitialization",m.jointPlacement);
         density.rowHeight=number(cfg,"SllDensityRowHeight",1);
@@ -79,10 +85,16 @@ struct SllPlanner::Impl {
         m.columnPolicy.maximum=number(cfg,"SllColumnMaxUtilization",.85);
         m.columnPolicy.step=number(cfg,"SllColumnUtilizationStep",.01);
         m.columnPolicy.validate();
-        m.allowTransientOverflow=boolean("SllPlanningAllowTransientOverflow",false);
+        m.allowTransientOverflow=capacityOptimization && boolean("SllPlanningAllowTransientOverflow",false);
         if(m.allowTransientOverflow&&(!m.jointPlacement||!m.columnPolicy.enabled))
             throw std::invalid_argument("Transient SLL capacity requires joint tile placement and column capacity");
         m.initialColumnUtilizationLimit=number(cfg,"SllInitialColumnUtilizationLimit",.75);
+        if(!capacityOptimization) {
+            // Disable soft balancing, never physical capacity or static reservations.
+            density.weight=0; densityAnchorWeight=0; m.initialDensityWeight=0;
+            m.columnPolicy.enabled=false; m.allowTransientOverflow=false;
+            m.initialColumnUtilizationLimit=1;
+        }
         if(!(m.initialColumnUtilizationLimit>0&&m.initialColumnUtilizationLimit<=1))
             throw std::invalid_argument("SllInitialColumnUtilizationLimit must be in (0,1]");
         if(cfg.count("SllInitializationPolicy")&&cfg.at("SllInitializationPolicy")!="local-wire-capacity")
@@ -91,7 +103,7 @@ struct SllPlanner::Impl {
             throw std::invalid_argument("This E2 copy requires SllProjectionPolicy=qp-nearest-capacity");
         if(cfg.count("SllQpDisplacementPolicy")&&cfg.at("SllQpDisplacementPolicy")!="shared-pre-projection")
             throw std::invalid_argument("This E2 copy requires SllQpDisplacementPolicy=shared-pre-projection");
-        if(m.jointPlacement && cfg.count("SllQpAuditCellsFile"))throw std::invalid_argument("Legacy frozen real-PU replay audit does not support joint SLL variables; use E2 joint diagnostics");
+        if(amf_config::feature(cfg,"DetailedDiagnosticsEnable",true) && m.jointPlacement && cfg.count("SllQpAuditCellsFile"))throw std::invalid_argument("Legacy frozen real-PU replay audit does not support joint SLL variables; use E2 joint diagnostics");
         if(cfg.count("SllPlanningAllowSplit")){const auto&s=cfg.at("SllPlanningAllowSplit");if(s!="true"&&s!="false")throw std::invalid_argument("SllPlanningAllowSplit must be boolean");m.allowSplit=s=="true";}
         std::ifstream in(cfg.at("SllChannelFile"));if(!in)throw std::invalid_argument("Cannot read SllChannelFile");
         std::string row;bool part=false,coordinate=false,header=false;
@@ -120,7 +132,7 @@ struct SllPlanner::Impl {
         }
         // Representatives already exclude the immutable reserved-resource set.
         for(const auto&bucket:timingCandidates)timingSearch[bucket.first].build(m.channels,bucket.second);
-        if(cfg.count("SllPlanningReportDirectory")) {
+        if(amf_config::feature(cfg,"DetailedDiagnosticsEnable",true) && cfg.count("SllPlanningReportDirectory")) {
             std::filesystem::create_directories(cfg.at("SllPlanningReportDirectory"));
             const auto cachePath=cfg.at("SllPlanningReportDirectory")+"/sll-wire-cache.tsv";
             if(std::filesystem::exists(cachePath))throw std::runtime_error("Refusing to overwrite SLL wire cache diagnostics");
@@ -180,6 +192,7 @@ SllPlanner::SllPlanner(PlacementInfo*pi,const std::map<std::string,std::string>&
 SllPlanner::~SllPlanner()=default;
 const Model&SllPlanner::model()const{return p->m;}
 void SllPlanner::setLocalDelay(LocalDelay f){p->m.local=std::move(f);}
+void SllPlanner::setReferenceDelay(LocalDelay f){p->referenceDelay=std::move(f);}
 bool SllPlanner::jointPlacement()const{return p->m.jointPlacement;}
 size_t SllPlanner::variableCount()const {
     if(!jointPlacement())return 0;size_t n=0;for(const auto&plan:p->m.plans)n+=plan.crossings.size();return n;
@@ -190,12 +203,12 @@ std::vector<Point> SllPlanner::virtualPositions()const {
     return result;
 }
 void SllPlanner::prepareDensityTargets() {
-    if(!jointPlacement())return;
+    if(!jointPlacement() || !p->capacityOptimization)return;
     const auto spread=p->density.spread(p->m,virtualPositions());p->densityTargets.clear();
     for(int ti:spread.tiles)p->densityTargets.push_back(p->m.tiles[ti].in);
 }
 void SllPlanner::addDensityModel(std::vector<float>&diag,Eigen::VectorXd&rhs,bool x)const {
-    if(!jointPlacement())return;const size_t offset=p->pi->getPlacementUnits().size();
+    if(!jointPlacement() || !p->capacityOptimization)return;const size_t offset=p->pi->getPlacementUnits().size();
     if(p->densityTargets.size()!=variableCount())throw std::runtime_error("Unprepared SLL density targets");
     const double w=std::max(1e-6,p->densityAnchorWeight)*(x?1:p->m.ratio);
     for(size_t i=0;i<p->densityTargets.size();++i){diag.at(offset+i)+=w;rhs[offset+i]-=w*(x?p->densityTargets[i].x:p->densityTargets[i].y);}
@@ -260,7 +273,7 @@ void SllPlanner::refresh() {
         n.sinks.reserve(dn->getPinsBeDriven().size());bool crossing=false;
         for(auto pin:dn->getPinsBeDriven()) {
             if(!pin->getCell())continue;auto sink=p->makePin(pin,fast);
-            if(graph) {
+            if(graph && p->pi->timingDrivenPlacement()) {
                 const auto&timing=graph->getNodes();
                 auto a=timing.at(driver->getCell()->getCellId()),b=timing.at(pin->getCell()->getCellId());
                 const double budget=b->getRequiredArrivalTime()-a->getLatestOutputArrival();
@@ -268,7 +281,10 @@ void SllPlanner::refresh() {
                 // Surviving plans can guide allocation order; newborns remain
                 // neutral until their initial local-wire/capacity tile exists.
                 double d=0;
-                if(std::isfinite(budget)&&budget<1e5&&pinDelay(n.source.id,sink.id,n.source.p,sink.p,d))
+                bool haveDelay=false;
+                if(p->m.plannedTimingCriticalities) haveDelay=pinDelay(n.source.id,sink.id,n.source.p,sink.p,d);
+                else if(p->referenceDelay){d=p->referenceDelay(n.source.p,sink.p);haveDelay=true;}
+                if(std::isfinite(budget)&&budget<1e5&&haveDelay)
                     sink.criticality=std::min(64.0,1.0+std::max(0.0,d-budget));
             }
             crossing|=sink.slr!=n.source.slr;n.sinks.push_back(std::move(sink));
@@ -409,7 +425,7 @@ void SllPlanner::addTimingModel(std::vector<Eigen::Triplet<float>>&trip,std::vec
         }
     }
 }
-void SllPlanner::exportPlan(const std::string&path) {
+void SllPlanner::exportPlan(const std::string&path, bool writeConstraints) {
     const auto exportStart=std::chrono::steady_clock::now();refresh();
     const auto projectionStart=std::chrono::steady_clock::now();
     if(jointPlacement()&&(p->m.columnPolicy.enabled||p->m.allowTransientOverflow)){
@@ -433,6 +449,7 @@ void SllPlanner::exportPlan(const std::string&path) {
     }
     const auto laneStart=std::chrono::steady_clock::now();
     if(jointPlacement())p->m.legalizeChannels();
+    if(!writeConstraints) { std::cout<<"E2_SLL_FINAL_LEGALIZATION constraints=disabled"<<std::endl; return; }
     const auto serializeStart=std::chrono::steady_clock::now();
     std::vector<std::string> serialized(p->m.plans.size()),errors(p->m.plans.size());
     std::ofstream out(path);if(!out)throw std::runtime_error("Cannot export SLL plan");

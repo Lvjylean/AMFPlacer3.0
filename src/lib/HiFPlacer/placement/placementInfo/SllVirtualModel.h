@@ -70,6 +70,7 @@ public:
     std::map<std::pair<int,int>,std::vector<std::vector<int>>> geometryBuckets;
     std::map<std::string,int> previous;
     std::set<std::string> reserved;
+    bool plannedTimingCriticalities=true;
     double ratio=.4,timingWeight=1,extraCrossingCost=24,switchCost=.1;
     // Initialization only. The density price is in equivalent layout-length
     // units per occupancy penalty, not a delay or a fraction of the QP weight.
@@ -211,6 +212,7 @@ public:
         return d+(path.empty()?delay(cur,sinkPoint):outputDelay(cur,sinkPoint));
     }
     void updatePlannedCriticalities(Plan&p)const {
+        if(!plannedTimingCriticalities)return;
         for(auto&s:p.net.sinks){
             const double d=pathDelay(p,s.id,p.net.source.p,s.p);
             s.criticality=std::isfinite(s.timingBudget)&&s.timingBudget<1e5?

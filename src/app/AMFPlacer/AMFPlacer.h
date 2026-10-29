@@ -1,3 +1,4 @@
+#include "../../lib/utils/PlacementFeatureConfig.h"
 #include "VisualizationTrace.h"
 #include "VisualizationConfig.h"
 /**
@@ -448,6 +449,10 @@ class AMFPlacer
         // print_info("Current Total HPWL = " + std::to_string(placementInfo->updateB2BAndGetTotalHPWL()));
 
         timingOptimizer->conductStaticTimingAnalysis();
+        if(!amf_config::feature(JSON,"IterativeMacroLegalizationEnable",true)) {
+            globalPlacer->finalizeMacroLegalization();
+            timingOptimizer->conductStaticTimingAnalysis();
+        }
         timingOptimizer->auditPhysicalBoundaries("amf-before-pack");
         if (!globalReport.empty())
         {
@@ -517,7 +522,7 @@ class AMFPlacer
         placementInfo->dumpPlacementUnitInformation(JSON["dumpDirectory"] + "/PUInfoFinal");
         placementInfo->checkClockUtilization(true);
 
-        if(placementInfo->sllPlanner)placementInfo->sllPlanner->exportPlan(JSON["dumpDirectory"]+"/sll-plan.tcl");
+        if(placementInfo->sllPlanner) placementInfo->sllPlanner->exportPlan(JSON["dumpDirectory"]+"/sll-plan.tcl",amf_config::sllRoute(JSON));
         print_status("Placement Done");
         print_info("Current Total HPWL = " + std::to_string(placementInfo->updateB2BAndGetTotalHPWL()));
 

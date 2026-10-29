@@ -2797,6 +2797,8 @@ class PlacementInfo
      * @param JSONCfg user-defined placement configuration
      */
     PlacementInfo(DesignInfo *designInfo, DeviceInfo *deviceInfo, std::map<std::string, std::string> &JSONCfg);
+    bool detailedDiagnostics() const { auto i=JSONCfg.find("DetailedDiagnosticsEnable"); return i==JSONCfg.end() || i->second=="true"; }
+    bool timingDrivenPlacement() const { auto i=JSONCfg.find("TimingDrivenPlacementEnable"); return i==JSONCfg.end() || i->second=="true"; }
     ~PlacementInfo()
     {
         delete compatiblePlacementTable;

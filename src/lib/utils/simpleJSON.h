@@ -1,3 +1,4 @@
+#include "PlacementFeatureConfig.h"
 /**
  * @file simpleJSON.h
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -78,6 +79,7 @@ std::map<std::string, std::string> parseJSONFile(std::string JSONFileName)
     }
 
     amf_config::normalizeIncrementalCompilation(res);
+    amf_config::validatePlacementFeatures(res);
 
     if (res.find("dumpDirectory") == res.end())
     {

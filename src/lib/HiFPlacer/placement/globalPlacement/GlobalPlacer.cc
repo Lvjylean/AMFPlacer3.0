@@ -1,3 +1,4 @@
+#include "../../../utils/PlacementFeatureConfig.h"
 #include "../legalization/LegalizationTrace.h"
 #include "../../../utils/RuntimeProfiler.h"
 /**
@@ -238,7 +239,10 @@ void GlobalPlacer::GlobalPlacement_CLBPhase(int iterNum, bool continuePreviousIt
 
 
     // global placement iterations
-    for (int i = 0; i < iterNum || (!stopStrictly); i++)
+    const bool iterativeLegalization=amf_config::feature(JSONCfg,"IterativeMacroLegalizationEnable",true);
+    const bool timingDriven=amf_config::feature(JSONCfg,"TimingDrivenPlacementEnable",true);
+    if(!iterativeLegalization) enableMacroPseudoNet2Site=false;
+    for (int i = 0; i < iterNum || (!stopStrictly && (iterativeLegalization || !WLOptimizer->sllReadyForPacking())); i++)
     {
 
         macro_study::begin(placementInfo, CARRYMacroLegalizer, phase, i, pseudoNetWeight);
@@ -257,7 +261,7 @@ void GlobalPlacer::GlobalPlacement_CLBPhase(int iterNum, bool continuePreviousIt
             if (timingOptimizer->getEffectFactor() >= 1)
                 displacementLimit = 10;
 
-            if (timingOptimizer->getEffectFactor() > 0.5)
+            if (timingDriven && timingOptimizer->getEffectFactor() > 0.5)
             {
                 placementInfo->enhanceRiskyClockNet();
                 placementInfo->enhanceDDRNet();
@@ -266,7 +270,7 @@ void GlobalPlacer::GlobalPlacement_CLBPhase(int iterNum, bool continuePreviousIt
 
             placementInfo->updateElementBinGrid(false);
             timingOptimizer->conductStaticTimingAnalysis();
-            if ((timingOptimizer->getMaxDelay() <
+            if (timingDriven && (timingOptimizer->getMaxDelay() <
                      placementInfo->getTimingInfo()->getSimplePlacementTimingGraph()->getClockPeriod() + 0.5 ||
                  timingOptimizer->getMaxDelay() <
                      placementInfo->getTimingInfo()->getSimplePlacementTimingGraph()->getClockPeriod() * 1.05) &&
@@ -275,7 +279,7 @@ void GlobalPlacer::GlobalPlacement_CLBPhase(int iterNum, bool continuePreviousIt
                 placementInfo->getTimingInfo()->reduceClockPeriodToRatio(0.9);
                 timingOptimizer->setClockEnhanced();
             }
-            if (timingOptimizer->getEffectFactor() > 1)
+            if (timingDriven && timingOptimizer->getEffectFactor() > 1)
                 DPReplaceCnt = timingDrivenDetailedPlacement_shortestPath_intermediate(timingOptimizer);
             // else if (timingOptimizer->getEffectFactor() > 0.3 &&
             //          timingOptimizer->getMaxDelay() >
@@ -345,7 +349,7 @@ void GlobalPlacer::GlobalPlacement_CLBPhase(int iterNum, bool continuePreviousIt
             bool timingDrivenLegalization = false;
             if (timingOptimizer)
             {
-                if (timingOptimizer->getEffectFactor() > 0.6)
+                if (timingDriven && timingOptimizer->getEffectFactor() > 0.6)
                     timingDrivenLegalization = true;
             }
             if (!continuePreviousIteration && !DSPCritical)
@@ -419,7 +423,7 @@ void GlobalPlacer::GlobalPlacement_CLBPhase(int iterNum, bool continuePreviousIt
             iterCntAfterMacrosFixed++;
         ++completedIterations;
         // criteria0 || criteria1 || criteria2 ||
-        if (criteria3 || criteria4)
+        if ((criteria3 || criteria4) && (stopStrictly || WLOptimizer->sllReadyForPacking()))
         {
             stopReason = "macro_fixed";
             print_status("Global Placer: B2B converge");
@@ -429,7 +433,7 @@ void GlobalPlacer::GlobalPlacement_CLBPhase(int iterNum, bool continuePreviousIt
             break;
         }
 
-        if (progressRatio > 0.98 && macroCloseToSite && !continuePreviousIteration)
+        if (progressRatio > 0.98 && macroCloseToSite && !continuePreviousIteration && (stopStrictly || WLOptimizer->sllReadyForPacking()))
         {
             stopReason = "packing_ready";
             print_status("Global Placer: Should do packing now before further optimization");
@@ -1592,4 +1596,28 @@ int GlobalPlacer::timingDrivenDetailedPlacement_shortestPath_intermediate(Placem
     print_status("GlobalPlacer: conducted timing-driven detailed placement (shortest path) and " +
                  std::to_string(replaceCnt) + " PlacementUnits are updated.");
     return replaceCnt;
+}
+
+void GlobalPlacer::finalizeMacroLegalization()
+{
+    if(macroLegalizationFixed) return;
+    AMF_PROFILE_FUNCTION("final_macro_legalization");
+    CARRYMacroLegalizer->setClockRegionAware(enableClockRegionAware);
+    BRAMDSPLegalizer->setIntitialParameters(40.0,40);
+    mCLBLegalizer->setIntitialParameters(20.0,20,2);
+    CARRYMacroLegalizer->setIntitialParameters(2.0f,3,2);
+    BRAMDSPLegalizer->resetSitesMapped();
+    mCLBLegalizer->resetSitesMapped();
+    CARRYMacroLegalizer->resetSitesMapped();
+    // The exact matchers still obey DFX allowed/blocked sites and fixed PUs.
+    BRAMDSPLegalizer->legalize(true,false,false);
+    mCLBLegalizer->legalize(true);
+    CARRYMacroLegalizer->legalize(true,false,false);
+    for(const auto &pair:placementInfo->getPULegalXY().first) {
+        auto pu=pair.first;
+        pu->setAnchorLocationAndForgetTheOriginalOne(pair.second,placementInfo->getPULegalXY().second.at(pu));
+        pu->setFixed();
+    }
+    macrosBindedToSites=macroCloseToSite=macroLegalizationFixed=true;
+    placementInfo->updateElementBinGrid(false);
 }

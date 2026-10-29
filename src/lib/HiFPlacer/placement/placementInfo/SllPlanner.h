@@ -36,7 +36,8 @@ public:
     void addTimingModel(std::vector<Eigen::Triplet<float>>&,std::vector<float>&,Eigen::VectorXd&,float,bool)const;
     double wireLength(int designNetId,double ratio,int trialUnit=-1,amf_sll_plan::Point trial={})const;
     void setLocalDelay(amf_sll_plan::LocalDelay);
-    void exportPlan(const std::string&);
+    void setReferenceDelay(amf_sll_plan::LocalDelay);
+    void exportPlan(const std::string&, bool writeConstraints=true);
     const amf_sll_plan::Model& model()const;
 private:
     double wireLengthUncached(int,double,int,amf_sll_plan::Point)const;

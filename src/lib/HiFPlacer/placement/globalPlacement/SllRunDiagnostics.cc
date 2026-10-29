@@ -1,6 +1,7 @@
 #include "SllRunDiagnostics.h"
 #include "SllDiagnosticMath.h"
-#include "SllAdaptivePolicy.h"
+#include "SllTauPolicies.h"
+#include "../../../utils/PlacementFeatureConfig.h"
 #include "SllQpAudit.h"
 #include "PlacementInfo.h"
 #include "../../../utils/RuntimeProfiler.h"
@@ -36,7 +37,9 @@ uint64_t stableHash(const std::string&s) {uint64_t h=1469598103934665603ULL;for(
 struct SllRunDiagnostics::Impl {
     PlacementInfo* placement;amf_sll::Model model;
     bool enabled=false, globalActive=false, prepared=false, dynamicTau=false, shortSpan=false;
-    amf_sll::TauSchedule schedule;
+    amf_sll::ConfiguredTauSchedule schedule;
+    bool detailed=true, requireCompletion=false;
+    std::string tauPolicy="adaptive";
     amf_sll::ShortSpanPolicy shortPolicy;
     amf_sll::ShortSpanPolicy::Update exclusion;
     bool haveRoundS=false;std::int64_t previousRoundS=0;
@@ -59,10 +62,13 @@ struct SllRunDiagnostics::Impl {
     Impl(PlacementInfo*pi,const std::map<std::string,std::string>&cfg,double r):placement(pi),ratio(r) {
         enabled=flag(cfg,"SllQuantityEnable");flag(cfg,"SllQuantityDiagnostics");
         dynamicTau=flag(cfg,"SllDynamicTauEnable");shortSpan=flag(cfg,"SllShortSpanEnable");
+        detailed=flag(cfg,"DetailedDiagnosticsEnable",true);
+        tauPolicy=cfg.count("SllTauPolicy")?cfg.at("SllTauPolicy"):"adaptive";
+        schedule.configure(tauPolicy);
+        requireCompletion=enabled && dynamicTau && tauPolicy=="periodic" && flag(cfg,"SllTauCompletionRequired",true);
         amf_sll::rejectDeprecatedParameters(cfg);coefficient=amf_sll::firstOrderCoefficient(r);
         if(cfg.count("SllQuantityMaxStep"))throw std::invalid_argument("SllQuantityMaxStep is unsupported in original-writeback diagnostic mode");
-        if(cfg.count("SllRegionPolicy") && cfg.at("SllRegionPolicy")!="preserve")
-            throw std::invalid_argument("This visualization experiment preserves existing region policy; release-single remains in its separate experimental source");
+        amf_config::validatePlacementFeatures(cfg);
         double jobs=number(cfg,"jobs",12);if(jobs<1||jobs>256||jobs!=std::floor(jobs))throw std::invalid_argument("Invalid jobs");threads=int(jobs);
         auto physical=pi->getDeviceInfo()->getPhysicalBoundaryModel();if(!physical)throw std::invalid_argument("SLL needs physical boundaries");
         std::map<int,std::pair<double,double>> spans;
@@ -78,10 +84,12 @@ struct SllRunDiagnostics::Impl {
         std::sort(seams.begin(),seams.end());if(seams!=model.boundaries)throw std::invalid_argument("SLR boundary mismatch");
         model.tau.assign(model.boundaries.size(),number(cfg,"SllQuantityTau",10));model.gamma=number(cfg,"SllQuantityGamma",0.02);
         if(dynamicTau && model.tau[0]!=10)throw std::invalid_argument("Dynamic tau rule v1 must start at tau=10");
-        directory=cfg.at("SllReportDirectory");samplePath=cfg.at("SllTraceNetList");
+        directory=cfg.count("SllReportDirectory")?cfg.at("SllReportDirectory"):(cfg.count("dumpDirectory")?cfg.at("dumpDirectory"):".")+"/sll-quantity";
+        samplePath=cfg.count("SllTraceNetList")?cfg.at("SllTraceNetList"):directory+"/sample-nets.txt";
         std::filesystem::create_directories(directory);
-        audit.reset(new SllQpAudit(pi,cfg));
+        if(detailed) audit.reset(new SllQpAudit(pi,cfg));
         auto open=[&](std::ofstream&out,const char*file,const char*header){
+            if(!detailed && std::string(file)!="adaptive-rounds.tsv")return;
             std::string path=directory+"/"+file;
             if(std::filesystem::exists(path))throw std::runtime_error("Refusing to overwrite diagnostics "+path);
             out.open(path);out<<std::setprecision(17)<<header<<'\n';if(!out)throw std::runtime_error("Cannot open "+path);
@@ -98,16 +106,18 @@ struct SllRunDiagnostics::Impl {
         std::ofstream meta(directory+"/parameters.tsv");meta<<std::setprecision(17)
             <<"model\tsigmoid_wa_first_order_original_writeback_v1\nenabled\t"<<enabled<<"\ntau\t"<<model.tau[0]<<"\ngamma\t"<<model.gamma
             <<"\nsll_length_tiles\t60\ny2x_ratio\t"<<ratio<<"\nlength_coefficient\t"<<coefficient<<"\nextra_y_limit\tfalse\nbacktracking\tfalse\nJ_increase_policy\trecord_only\ninjection_scope\tglobal_placement_after_common_initial_QP\nregion_policy\tpreserve\nnet_selection\t64_common_stratified_plus_8_dynamic\n"
-            <<"dynamic_tau_enabled\t"<<dynamicTau<<"\nshort_span_enabled\t"<<shortSpan
-            <<"\nadaptive_rule_version\t1\ntau_floor\t0.2\ntau_factor\t0.5\ninitial_hold_rounds\t6\nminimum_level_hold_rounds\t4\nphase_settling_rounds\t2\nmedian_window_rounds\t3\nlevel_drop_fraction\t0.1\nplateau_fraction\t0.01\nshort_span_enter_y\t2\nshort_span_resume_y\t3\nshort_span_rule_version\t2\nshort_span_boundary_distance_enter_y\t2\nshort_span_boundary_distance_resume_y\t3\nshort_span_required_crossings\tnone\nshort_span_boundary_retention\tsame_physical_boundary_as_entry\nshort_span_list_update_scope\tboundary_radius_and_hysteresis_mask_without_second_pin_scan\nmask_update\tbefore_each_QP_frozen_through_writeback\nfull_statistics\tinclude_temporarily_excluded_nets\nround_statistic\tafter_legalization\nS_meaning\tdiscrete_vertical_boundary_demand_not_routed_usage\ntiming_scope\twall_seconds_nonoverlapping_categories_except_explicit_total\n";
+            <<"tau_policy\t"<<tauPolicy<<"\ndetailed_diagnostics\t"<<detailed<<"\ndynamic_tau_enabled\t"<<dynamicTau<<"\nshort_span_enabled\t"<<shortSpan
+            <<"\ntau_floor\t0.2\ntau_factor\t0.5\nrule_parameters\tsee_selected_SllTauPolicy_and_adaptive_rounds_decisions\nshort_span_enter_y\t2\nshort_span_resume_y\t3\nshort_span_rule_version\t2\nshort_span_boundary_distance_enter_y\t2\nshort_span_boundary_distance_resume_y\t3\nshort_span_required_crossings\tnone\nshort_span_boundary_retention\tsame_physical_boundary_as_entry\nshort_span_list_update_scope\tboundary_radius_and_hysteresis_mask_without_second_pin_scan\nmask_update\tbefore_each_QP_frozen_through_writeback\nfull_statistics\tinclude_temporarily_excluded_nets\nround_statistic\tafter_legalization\nS_meaning\tdiscrete_vertical_boundary_demand_not_routed_usage\ntiming_scope\twall_seconds_nonoverlapping_categories_except_explicit_total\n";
     }
     ~Impl() {
+        if(!detailed)return;
         // Destructor must not throw. Per-event measurements remain in the TSV.
         std::ofstream summary(directory+"/sll-overhead-summary.tsv");summary<<std::setprecision(17)<<"category\tcalls\twall_seconds\n";
         for(const auto&t:timingTotals)summary<<t.first<<'\t'<<t.second.first<<'\t'<<t.second.second<<'\n';
         summary<<"timing_log_write\t"<<0<<'\t'<<timingLogSeconds<<'\n';
     }
     void timing(const char*category,const char*state,double elapsed) {
+        if(!detailed)return;
         auto started=std::chrono::steady_clock::now();auto&t=timingTotals[category];++t.first;t.second+=elapsed;
         perf<<event<<'\t'<<qid<<'\t'<<phase<<'\t'<<round<<'\t'<<iteration<<'\t'<<state<<'\t'<<model.tau[0]<<'\t'<<category<<'\t'<<elapsed<<std::endl;
         if(!perf)throw std::runtime_error("SLL overhead report write failed");
@@ -238,6 +248,16 @@ void SllRunDiagnostics::stage(const char*phase,int round,int iteration,const cha
     if(s.dynamicTau && s.globalActive && std::string(step)=="begin"){
         double tau=s.schedule.begin(s.phase,round,iteration);std::fill(s.model.tau.begin(),s.model.tau.end(),tau);
     }
+    if(!s.detailed) {
+        if(s.globalActive && std::string(step)=="after_legalization") {
+            s.mask(); auto counted=s.model.countDiscrete(s.coordinates(true),s.threads);
+            // The scheduler uses only discrete S; unavailable expensive metrics are explicit NaNs.
+            amf_sll::Result r; r.discrete=counted.discrete; r.invalidNets=counted.invalidNets;
+            r.smooth=std::numeric_limits<double>::quiet_NaN();
+            s.roundComplete(r,std::numeric_limits<double>::quiet_NaN());
+        }
+        return;
+    }
     auto started=std::chrono::steady_clock::now();s.mask();auto xx=s.coordinates(false),yy=s.coordinates(true);
     if(s.globalActive)s.select(yy);
     s.timing("coordinates_and_selection",step,std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count());
@@ -251,20 +271,29 @@ void SllRunDiagnostics::stage(const char*phase,int round,int iteration,const cha
     s.details(step,xx,yy);if(!s.stages)throw std::runtime_error("SLL stage report write failed");
     s.timing("trace_and_log",step,std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count());
 }
-void SllRunDiagnostics::beginModelAudit(QPSolverWrapper&x,QPSolverWrapper&y,float weight,float ratio){auto&s=*p;s.audit->begin(s.qid+1,s.phase,s.round,s.iteration,x,y,weight,ratio);}
-bool SllRunDiagnostics::auditTarget(int id)const{return p->audit->target(id);}
-void SllRunDiagnostics::auditTimingAnchor(int id,bool after,const QPSolverWrapper&x,const QPSolverWrapper&y){p->audit->timingAnchor(id,after,x,y);}
-void SllRunDiagnostics::auditCheckpoint(const char*name,const QPSolverWrapper&x,const QPSolverWrapper&y){p->audit->checkpoint(name,x,y);}
+void SllRunDiagnostics::beginModelAudit(QPSolverWrapper&x,QPSolverWrapper&y,float weight,float ratio){auto&s=*p;if(s.audit)s.audit->begin(s.qid+1,s.phase,s.round,s.iteration,x,y,weight,ratio);}
+bool SllRunDiagnostics::auditTarget(int id)const{return p->audit && p->audit->target(id);}
+void SllRunDiagnostics::auditTimingAnchor(int id,bool after,const QPSolverWrapper&x,const QPSolverWrapper&y){if(p->audit)p->audit->timingAnchor(id,after,x,y);}
+void SllRunDiagnostics::auditCheckpoint(const char*name,const QPSolverWrapper&x,const QPSolverWrapper&y){if(p->audit)p->audit->checkpoint(name,x,y);}
+bool SllRunDiagnostics::readyForPacking()const{return !p->requireCompletion || p->schedule.readyForPacking();}
 void SllRunDiagnostics::endPhase(){p->globalActive=false;p->prepared=false;p->phase="outside_global";}
 void SllRunDiagnostics::prepare(QPSolverWrapper&x,QPSolverWrapper&y,float weight,float limit){
     AMF_PROFILE_FUNCTION("sll_qp_diagnostics");auto&s=*p;++s.qid;s.mask();s.pseudoWeight=weight;s.limit=limit;
-    auto started=std::chrono::steady_clock::now();auto xx=s.coordinates(false),yy=s.coordinates(true);s.x.capture(x,xx);s.y.capture(y,yy);
+    auto started=std::chrono::steady_clock::now();auto xx=s.coordinates(false),yy=s.coordinates(true);if(s.detailed){s.x.capture(x,xx);s.y.capture(y,yy);}
     s.timing("coordinates_and_base_capture","prepare",std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count());
     if(s.shortSpan){
         std::vector<amf_sll::NetGeometry> geometry;auto counted=s.model.countDiscrete(yy,s.threads,&geometry);
         s.exclusion=s.shortPolicy.update(s.model,geometry,s.globalActive);
         s.before=s.model.evaluate(yy,s.movable,s.threads,true,&s.strength,&counted);
     }else{s.exclusion={};s.before=s.model.evaluate(yy,s.movable,s.threads,true,&s.strength);}
+    if(!s.detailed) {
+        if(s.enabled&&s.globalActive) {
+            std::vector<double> linear(y.solverData.objectiveVector.data(),y.solverData.objectiveVector.data()+yy.size());
+            amf_sll::addFirstOrderModel(s.before.gradient,s.movable,s.coefficient,linear);
+            for(size_t i=0;i<linear.size();++i)y.solverData.objectiveVector[i]=linear[i];
+        }
+        s.prepared=false; return;
+    }
     s.evaluationTiming("prepare",s.before);s.timing("short_span_list_update","prepare",s.exclusion.seconds);
     started=std::chrono::steady_clock::now();
     s.shortReport<<s.qid<<'\t'<<s.phase<<'\t'<<s.round<<'\t'<<s.iteration<<'\t'<<s.model.tau[0]<<'\t'<<(s.shortSpan&&s.globalActive)<<'\t'<<s.exclusion.excluded<<'\t'<<s.exclusion.entered<<'\t'<<s.exclusion.resumed<<'\t'<<s.exclusion.excludedS<<'\t'<<s.before.discrete<<'\t'<<s.before.invalidNets<<'\t'<<s.before.discreteSeconds<<'\t'<<s.exclusion.seconds<<'\t'<<s.exclusion.excludedSameDie<<'\t'<<s.exclusion.excludedCrossDie<<std::endl;

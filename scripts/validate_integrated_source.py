@@ -4,6 +4,7 @@ import argparse, hashlib, json, os, re, subprocess, time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 PYTHON=[
+ 'scripts/test_placement_features.py',
  'scripts/test_e2_incremental.py','scripts/test_sll_inventory_query.py','scripts/test_incremental_config.py',
  'scripts/test_device_placement_config.py','scripts/test_boundary_strategy_config.py',
  'scripts/test_clock_guidance_batch.py','scripts/test_parallel_safety.py',
@@ -14,7 +15,7 @@ PYTHON=[
  'tests/dfx/test_synthesis_resume.py','tests/dfx/test_static_audit_mode.py',
  'tests/test_full_flow.py','tests/test_import_acceptance.py',
  'tests/test_paper_boundary_config.py','tests/test_srl_cascades.py']
-CPP=['checkSllQuantity','checkSllAdaptivePolicy','checkSllVirtualModel','checkSllDensity',
+CPP=['checkPlacementFeatures','checkSllQuantity','checkSllAdaptivePolicy','checkSllVirtualModel','checkSllDensity',
  'checkSllTileInitialization','checkSllColumnInitialization','checkSllNoSplit','checkSllTransientCapacity',
  'checkSllQpProjection','checkSllWireCache','checkSllTimingIndex',
  'checkSllDensityEquivalence','checkSllPlannedTimingCapacity','checkSllOutputTail',
@@ -45,7 +46,7 @@ def main():
   save();print(name,p.returncode,flush=True)
   return p.returncode==0
  save()
- targets=CPP+['checkSllTimingCandidates','checkDieFirstSpreading','checkSllJointIntegration',
+ targets=CPP+['checkFeatureIntegration','checkSllTimingCandidates','checkDieFirstSpreading','checkSllJointIntegration',
               'checkIncrementalSllIntegration','checkSllPhysicalFixture']
  if not run('compile-tests',['cmake','--build',b,'--parallel','8','--target',*targets]):
   manifest['state']='failed';save();return 1
@@ -53,6 +54,7 @@ def main():
  for t in CPP:run(t,[b/t])
  cfg=json.loads(args.fixture_config.read_text())
  run('timing-candidate-equivalence',[b/'checkSllTimingCandidates',cfg['SllChannelFile']])
+ run('feature-switch-integration',[b/'checkFeatureIntegration',args.fixture_config,out/'feature-switches'])
  run('die-first-spreading',[b/'checkDieFirstSpreading',args.fixture_config])
  run('full-e2-qp-sta',[b/'checkSllJointIntegration',args.fixture_config,out/'full-qp','tile'])
  run('incremental-e2-qp',[b/'checkIncrementalSllIntegration',args.incremental_config,out/'incremental-qp'])

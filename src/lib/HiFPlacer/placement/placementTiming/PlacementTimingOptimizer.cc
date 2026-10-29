@@ -79,7 +79,10 @@ PlacementTimingOptimizer::PlacementTimingOptimizer(PlacementInfo *placementInfo,
                (deviceInfo->getDeviceName() == "U250" ? "u250-tile-columns-20260929 (near legacy, middle/far fitted)"
                                                       : "legacy-095"));
     initPois();
-    if(placementInfo->sllPlanner)placementInfo->sllPlanner->setLocalDelay([this](amf_sll_plan::Point a,amf_sll_plan::Point b){return getDelayByModel_conservative(a.x,a.y,b.x,b.y,true);});
+    if(placementInfo->sllPlanner) {
+        placementInfo->sllPlanner->setLocalDelay([this](amf_sll_plan::Point a,amf_sll_plan::Point b){return getDelayByModel_conservative(a.x,a.y,b.x,b.y,true);});
+        placementInfo->sllPlanner->setReferenceDelay([this](amf_sll_plan::Point a,amf_sll_plan::Point b){return getDelayByModel_conservative(a.x,a.y,b.x,b.y,false);});
+    }
 }
 
 void PlacementTimingOptimizer::setPinsLocation()
@@ -1894,6 +1897,9 @@ void PlacementTimingOptimizer::propogateArrivalTime()
 std::vector<float> &PlacementTimingOptimizer::getPUId2Slack(bool update)
 {
     AMF_PROFILE_FUNCTION("timing");
+    if(!amf_config::feature(JSONCfg,"TimingDrivenPlacementEnable",true)) {
+        PUId2Slack.assign(placementInfo->getPlacementUnits().size(),0); return PUId2Slack;
+    }
     if (update)
     {
         auto &timingNodes = placementInfo->getTimingInfo()->getSimplePlacementTimingInfo();

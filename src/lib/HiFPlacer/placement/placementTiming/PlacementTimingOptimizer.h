@@ -1,3 +1,4 @@
+#include "../../../utils/PlacementFeatureConfig.h"
 /**
  * @file PlacementTimingOptimizer.h
  * @author Tingyuan LIANG (tliang@connect.ust.hk)
@@ -141,7 +142,7 @@ class PlacementTimingOptimizer
                                  float Y1, float X2, float Y2)
     {
         double plannedDelay=0;
-        float delay = placementInfo->sllPlanner && placementInfo->sllPlanner->cellDelay(node2->getDesignNode()->getCellId(),node1->getDesignNode()->getCellId(),{X2,Y2},{X1,Y1},plannedDelay) ? plannedDelay : getDelayByModel_conservative(X1, Y1, X2, Y2);
+        float delay = amf_config::sllTiming(JSONCfg) && placementInfo->sllPlanner && placementInfo->sllPlanner->cellDelay(node2->getDesignNode()->getCellId(),node1->getDesignNode()->getCellId(),{X2,Y2},{X1,Y1},plannedDelay) ? plannedDelay : getDelayByModel_conservative(X1, Y1, X2, Y2);
         if (proPrimitiveTiming && !DSPCritical && isPackingTiming)
         {
             if (node1->getDesignNode()->isDSP() && node1->getForwardLevel() == 0)
@@ -164,7 +165,7 @@ class PlacementTimingOptimizer
     }
 
     float getDelayForPins(DesignInfo::DesignPin *source, DesignInfo::DesignPin *sink, float sx,float sy,float tx,float ty) {
-        if(placementInfo->sllPlanner) {
+        if(amf_config::sllTiming(JSONCfg) && placementInfo->sllPlanner) {
             double d=0;
             if(placementInfo->sllPlanner->pinDelay(source->getElementIdInType(),sink->getElementIdInType(),{sx,sy},{tx,ty},d))return d;
         }
@@ -225,9 +226,9 @@ class PlacementTimingOptimizer
     {
         // Incremental interface/static arcs have no new crossing plan. Keep
         // their original model; an RM lease is not a legal candidate pool for them.
-        if(!localOnly && !placementInfo->getIncrementalContext().enabled &&
-           placementInfo->sllPlanner && placementInfo->sllPlanner->crosses({X1,Y1},{X2,Y2}))
-            return placementInfo->sllPlanner->geometryDelay({X1,Y1},{X2,Y2});
+        // Coordinate-only calls cannot identify a receiver's planned tree.
+        // Keep the ordinary model rather than inventing another SLL crossing.
+        // Pin/cell calls above use the current plan when correction is enabled.
         int clockRegionX0, clockRegionY0;
         deviceInfo->getClockRegionByLocation(X1, Y1, clockRegionX0, clockRegionY0);
         int clockRegionX1, clockRegionY1;

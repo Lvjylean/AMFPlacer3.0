@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import zipfile
+from placement_features import route_enabled
 from pathlib import Path
 from inspect_amf_inputs import digest
 from srl_cascades import correct_and_validate
@@ -194,7 +195,7 @@ close $f
     for name in ('resources.json','resources.tsv','cascades.tsv'):
         if source.resolve()!=directory.resolve() and (source/'placement'/name).exists():
             shutil.copy2(source/'placement'/name,directory/'placement'/name)
-    if str(cfg.get('SllPlanningEnable','false')).lower()=='true':
+    if route_enabled(cfg):
         planned=source/'placement/sll-plan.tcl'
         if not planned.is_file():raise ValueError('E2 SLL plan missing from AMF output')
         if planned.resolve()!=(directory/'placement/sll-plan.tcl').resolve():shutil.copy2(planned,directory/'placement/sll-plan.tcl')
@@ -209,7 +210,11 @@ close $f
             manifest['sll_parallel_files_sha256'][name]=digest(helper)
 
     script=directory/'inputs/full_backend.tcl';shutil.copy2(root/'scripts/full_backend.tcl',script)
-    if str(cfg.get('SllPlanningEnable','false')).lower()=='true':
+    from placement_features import validate as validate_features
+    validate_features(cfg)
+    manifest['sll_route_constraint_enabled']=route_enabled(cfg)
+    script.write_text('set ::env(AMF_SLL_ROUTE_CONSTRAINTS) '+str(int(route_enabled(cfg)))+'\n'+script.read_text())
+    if route_enabled(cfg):
         workers=int(cfg.get('SllConstraintWorkers',4))
         if not 1<=workers<=8:raise ValueError('SllConstraintWorkers must be in [1,8]')
         script.write_text('set ::env(AMF_SLL_CONSTRAINT_WORKERS) '+str(workers)+'\n'+script.read_text())

@@ -788,6 +788,7 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
         int packNum = packingSites.size();
 
 #ifdef TIMINGDP
+        if(amf_config::feature(JSONCfg,"TimingDrivenPlacementEnable",true)) {
         int replaceCnt = 1000;
         int DPCnt = 0;
         int lastRecoverDPCnt = 0;
@@ -1090,16 +1091,19 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
         setPULocationToPackedSite();
         timingOptimizer->conductStaticTimingAnalysis();
 
+        }
 #endif
 #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < packNum; i++)
             packingSites[i]->finalMapToSlots();
 #ifdef TIMINGDP
+        if(amf_config::feature(JSONCfg,"TimingDrivenPlacementEnable",true)) {
         timingOptimizer->conductStaticTimingAnalysis();
         timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSlotMapping();
 #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < packNum; i++)
             packingSites[i]->finalMapToSlots();
+        }
 #endif
     }
 

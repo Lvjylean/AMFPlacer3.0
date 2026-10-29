@@ -81,6 +81,7 @@ class WirelengthOptimizer
      */
     void recordSllStage(const char* phase, int round, int iteration, const char* step);
     void recordSllFinal() { if(sllDiagnostics) { sllDiagnostics->reload(); sllDiagnostics->stage("final",-1,-1,"amf_final"); } }
+    bool sllReadyForPacking() const { return !sllDiagnostics || sllDiagnostics->readyForPacking(); }
     void endSllPhase() { if(sllDiagnostics) sllDiagnostics->endPhase(); }
 
     void GlobalPlacementQPSolve(float pesudoNetWeight, bool firstIteration = true,

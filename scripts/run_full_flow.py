@@ -114,8 +114,8 @@ def run(root, args):
     if config.get("SllPlanningEnable")=="true":
         config["SllPlanningReportDirectory"]=str(directory/"reports/sll-planning")
         if "SllReportDirectory" in config or str(config.get("SllQuantityDiagnostics","false")).lower()=="true":config["SllReportDirectory"]=str(directory/"reports/sll-quantity")
-        from e2_incremental import configure_diagnostics
-        configure_diagnostics(config,directory)
+    from e2_incremental import configure_diagnostics
+    configure_diagnostics(config,directory)
     if config.get('physical boundary model file'):
         physical = directory/'reports/physical'
         physical.mkdir()
