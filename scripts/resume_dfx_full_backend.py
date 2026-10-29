@@ -107,7 +107,7 @@ def run(a):
              parent_manifest_sha256=sha(parent / 'manifest.json'), files=files,
              reason=a.reason, checkpoint_stage=resume_stage,
              parent_backend_phase_times=phases,
-             amf_rerun=False), script_hashes={f.name: sha(f) for f in (out/'inputs').iterdir()},
+             amf_rerun=False), script_hashes={f.name: sha(f) for f in (out/'inputs').iterdir() if f.is_file()},
              timing_note='Reused stages retain original measurements; wall_seconds is this backend recovery only. Do not sum failed attempts into placement time.')
     revision = subprocess.run(['git','rev-parse','HEAD'], cwd=script.parent, text=True, capture_output=True)
     m['runner_source_commit'] = revision.stdout.strip() if revision.returncode == 0 else None
