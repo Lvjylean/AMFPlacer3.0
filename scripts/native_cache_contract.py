@@ -59,6 +59,16 @@ def baseline_quality(job, acceptance, common):
                 timing=acceptance.get('timing', {}), sll_audit=sll)
 
 
+def inherit_consumer_policy(parent, derived):
+    """Deriving a cache changes its identity, not the caller's explicit policy."""
+    policy = parent.get('baseline_quality_policy', 'strict')
+    if policy not in ('strict', 'allow-failed-for-experiment'):
+        raise ValueError('Unknown native baseline consumer quality policy')
+    result = dict(derived)
+    result['baseline_quality_policy'] = policy
+    return result
+
+
 def verify_cache(native, job, cfg):
     from parallel_runtime import verify_hashes
     verify_hashes({native['path']: native['sha256'], native['contract']: native['contract_sha256']})

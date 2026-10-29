@@ -6,7 +6,7 @@ import unittest
 import zipfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from native_cache_contract import partition_coordinates, validate_coordinate_map, verify_cache, model_identity, validate_full_capture, verify_export_scripts, baseline_quality
+from native_cache_contract import partition_coordinates, validate_coordinate_map, verify_cache, model_identity, validate_full_capture, verify_export_scripts, baseline_quality, inherit_consumer_policy
 from run_dfx import sha
 
 
@@ -86,6 +86,15 @@ class NativeCacheContractTest(unittest.TestCase):
                      'module\tport\tdirection\tnode\nb\tout[0]\tOUT\tINT_X2Y10/A\n'):
             self.nodes.write_text(text)
             with self.assertRaises(ValueError):partition_coordinates(self.nodes, self.ports, self.mapping, self.root/'bad.tsv')
+
+    def test_derived_cache_preserves_only_explicit_consumer_policy(self):
+        parent = dict(path='parent', sha256='old', baseline_quality_policy='allow-failed-for-experiment')
+        child = dict(path='child', sha256='new', contract='child-contract')
+        result = inherit_consumer_policy(parent, child)
+        self.assertEqual(result, dict(child, baseline_quality_policy='allow-failed-for-experiment'))
+        self.assertNotIn('baseline_quality_policy', child)
+        self.assertEqual(inherit_consumer_policy({}, dict(child, baseline_quality_policy='allow-failed-for-experiment'))['baseline_quality_policy'], 'strict')
+        with self.assertRaises(ValueError):inherit_consumer_policy({'baseline_quality_policy':'typo'}, child)
 
     def test_experimental_quality_never_waives_structural_checks(self):
         common = {'state': 'verified_empty_rps_after_reopen'}

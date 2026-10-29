@@ -66,7 +66,9 @@ class RetainedJointSession:
         added=180-(self.deadline-time.monotonic())
         if added>=180:raise TimeoutError('Added cache publication exceeded180s')
         if result['state']!='completed':raise ValueError('Uncertified local cache')
-        self.job['native_static_cache']=result['native_static_cache']
+        from native_cache_contract import inherit_consumer_policy
+        self.job['native_static_cache']=inherit_consumer_policy(
+            self.job['native_static_cache'],result['native_static_cache'])
         self.job['native_local_pin_access_policy']='fixed-static-local-entrance-v2'
         self.record.update(state='awaiting_modules',cache=result,added_cache_seconds=added,
                            cache_finished_epoch=time.time(),extra_open_seconds=0)
