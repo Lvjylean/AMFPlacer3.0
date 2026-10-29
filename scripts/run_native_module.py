@@ -16,8 +16,10 @@ def _run(config,output,binary,started_epoch):
     native=job['native_static_cache'];cache=Path(native['path']);contract=Path(native['contract'])
     expected={str(cache):native['sha256'],str(contract):native['contract_sha256']}
     cfg=amf_configuration(job)
-    from e2_incremental import bind, publish
+    from e2_incremental import bind, publish, configure_diagnostics
     bind(job,cfg)
+    configure_diagnostics(cfg,out)
+    if cfg.get('SllTraceNetList') and Path(cfg['SllTraceNetList']).is_file():expected[cfg['SllTraceNetList']]=sha(cfg['SllTraceNetList'])
     from sll_planning_inputs import validate as validate_sll
     validate_sll(cfg,binary)
     c=verify_cache(native,job,cfg)

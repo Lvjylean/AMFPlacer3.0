@@ -319,6 +319,8 @@ def run(args):
                     'vivado extracted design information file':str(out/'netlist.zip'), 'clock file':str(out/'clocks'),
                     'ClockPeriod':str(job['clock_period_ns']), 'dumpDirectory':str(out/'placement'),
                     'DumpCLBPacking':'DumpCLBPacking', 'BoundaryReportDirectory':str(out/'reports/physical')})
+        from e2_incremental import configure_diagnostics
+        configure_diagnostics(cfg,out)
         save(out/'amf_config.json', cfg)
         environment = dict(os.environ, AMF_PROFILE_OUTPUT=str(out/'amf_profile.tsv'), AMF_GRID_UPDATE_MODE='batched')
         stage('amf', [str(binary), str(out/'amf_config.json')], cwd=out/'placement', env=environment)

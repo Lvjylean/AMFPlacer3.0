@@ -188,6 +188,8 @@ def run(args):
                     'ClockPeriod':str(job['clock_period_ns']),'dumpDirectory':str(out/'placement'),
                     'DumpCLBPacking':'DumpCLBPacking','BoundaryReportDirectory':str(out/'reports/physical')})
         if partition_floorplan:bind_outputs(cfg,out)
+        from e2_incremental import configure_diagnostics
+        configure_diagnostics(cfg,out)
         save(out/'amf_config.json',cfg)
         if job.get('native_cache_capture'):
             (out/'native_cache').mkdir()

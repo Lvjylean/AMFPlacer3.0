@@ -106,3 +106,20 @@ def copy_plan(source,dest):
     record=json.loads(metadata.read_text())
     if digest(source/'sll-plan.tcl')!=record['sha256']:raise ValueError('SLL worker plan changed')
     for name in ('sll-plan.tcl','sll-plan.json'):shutil.copy2(source/name,dest/name)
+
+def configure_diagnostics(cfg,out):
+    """Bind diagnostic outputs to this run without changing optimization parameters."""
+    keys=('SllQuantityEnable','SllQuantityDiagnostics','SllDynamicTauEnable','SllShortSpanEnable')
+    if not any(str(cfg.get(k,'false')).lower()=='true' for k in keys):
+        return
+    out=Path(out)
+    report=out/'reports'/'sll-quantity'
+    report.mkdir(parents=True,exist_ok=True)
+    cfg['SllReportDirectory']=str(report)
+    trace=report/'sample-nets.txt'
+    if not cfg.get('SllTraceNetList'):
+        # A missing path asks the C++ diagnostic to generate its own sample.
+        # Precreating an empty file is invalid: it means an empty input sample.
+        cfg['SllTraceNetList']=str(trace)
+    elif Path(cfg['SllTraceNetList'])!=trace and not Path(cfg['SllTraceNetList']).is_file():
+        raise ValueError('Missing explicit SLL trace net list')

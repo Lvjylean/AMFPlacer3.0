@@ -84,4 +84,22 @@ class TclConnectivity(unittest.TestCase):
     f=Path(t)/'case.tcl';f.write_text(body)
     result=subprocess.run(['tclsh',str(f)],capture_output=True,text=True)
    self.assertEqual(bool(result.returncode),bool(expected),result.stderr)
+class DiagnosticOutputs(unittest.TestCase):
+ def test_neutral_template_gets_private_outputs(self):
+  from e2_incremental import configure_diagnostics
+  with tempfile.TemporaryDirectory() as temp:
+   a={'SllQuantityEnable':'true'};b=dict(a)
+   configure_diagnostics(a,Path(temp)/'a');configure_diagnostics(b,Path(temp)/'b')
+   self.assertNotEqual(a['SllReportDirectory'],b['SllReportDirectory'])
+   self.assertFalse(Path(a['SllTraceNetList']).exists())
+   self.assertEqual(a['SllQuantityEnable'],'true')
+   configure_diagnostics(a,Path(temp)/'a')
+ def test_explicit_trace_is_preserved_and_disabled_is_noop(self):
+  from e2_incremental import configure_diagnostics
+  with tempfile.TemporaryDirectory() as temp:
+   t=Path(temp)/'trace';t.write_text('example/net\n')
+   c={'SllQuantityDiagnostics':'true','SllTraceNetList':str(t)}
+   configure_diagnostics(c,Path(temp)/'run')
+   self.assertEqual(c['SllTraceNetList'],str(t));self.assertEqual(t.read_text(),'example/net\n')
+   off={};configure_diagnostics(off,Path(temp)/'off');self.assertEqual(off,{})
 if __name__=='__main__':unittest.main()
