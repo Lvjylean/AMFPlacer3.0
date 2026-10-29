@@ -141,8 +141,11 @@ proc e2_sll::needs_native_source_resolution {driver selected roots} {
  if {[get_property REF_NAME $cell] ne "CARRY8"} {return 0}
  set root [lindex $selected 0]
  if {![string match *_COUT $root]} {return 0}
- set next [get_property NAME [get_nodes -downhill -of_objects [get_nodes $root]]]
- if {![llength $next]} {return 0}
+ set downhill [get_nodes -quiet -downhill -of_objects [get_nodes $root]]
+ # A boundary COUT may have no downstream node at all. It still cannot
+ # serve an SLL route; ask Vivado to resolve its alternative fabric access.
+ if {![llength $downhill]} {return 1}
+ set next [get_property NAME $downhill]
  foreach node $next {if {![string match *_CIN_PIN $node]} {return 0}}
  return 1
 }
@@ -156,6 +159,9 @@ proc e2_sll::native_source_route {net route roots} {
  if {[lindex $tail 0] in $roots} {set tail [lrange $tail 1 end]}
  reset_property FIXED_ROUTE $net
  set rc [catch {
+  # Resetting the property leaves import-selected routing in the route
+  # database. Remove that stale COUT root before native source selection.
+  route_design -unroute -nets [get_nets $name]
   route_design -nets [get_nets $name]
   set selected [source_accesses [get_property ROUTE [get_nets $name]] $roots]
   if {[llength $selected]!=1} {error "E2 native router did not resolve one source output on $name: $selected"}

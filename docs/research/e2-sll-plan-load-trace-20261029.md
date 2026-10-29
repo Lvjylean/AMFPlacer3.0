@@ -18,3 +18,11 @@ GETRF/U250/12 ns 的新全量流程已完成综合、AMF 和 Vivado placement，
 - 新分片在 Vivado 中耗时 0.805 秒，4 桶权重保持 134944 / 134944 / 134952 / 134952。
 - 新 Vivado 分片与旧原生 Tcl 分片的完整规范化内容 SHA-256 均为 faaa9c431fb87fb4e86da9beffdbf7eb8aa42c31f6ca16c7caaa1e1693b37d09：桶归属、桶内次序及树内容逐字一致。
 - 这证明是循环实现层面的性能差异，不改变 SLL 规划、物理通道、锁定规则或线程数；尚不把该独立测量当成整轮耗时。
+
+## CARRY8 源出口恢复
+
+- 全量约束准备随后暴露两处问题：COUT 无下游节点时空查询报错；只重置 FIXED_ROUTE 属性未清除导入时的专用 COUT 路由状态，局部路由因源端无法进入普通布线网络失败。
+- 修复在 native 路由前增加对该 net 的 unroute；结束后仍撤销试探线路，只保留 Vivado 选择的物理出口和原计划 SLL 树。AMF 不指定 HMUX 等具体出口。
+- 同一新 placed DCP 上五条 CO7 实测全部通过，其中含三条原失败连接、两条成功参照；Vivado 均自行选出可达普通网络的出口，重新导入原 SLL 约束通过。该验证不等同于整设计布线完成。
+- 边界空下游、carry-only、可达 fabric、非 carry、唯一出口及异常清理的单元验证通过。
+- 初期诊断脚本存在文本替换及样本匹配错误，相关尝试均标为无效证据并留档；正式依据为 carry-source-recovery-v4 与 carry-source-five-net-validation.json。
