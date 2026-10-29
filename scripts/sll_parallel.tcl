@@ -6,6 +6,21 @@ proc e2_sll::tree_weight {items} {
  }
  return $total
 }
+proc e2_sll::partition_plan {e2_sll_plan workers} {
+ set weights [lrepeat $workers 0]
+ for {set i 0} {$i<$workers} {incr i} {set buckets($i) {}}
+ set ranked {}
+ foreach record $e2_sll_plan {lappend ranked [list [tree_weight [dict get $record tree]] $record]}
+ foreach pair [lsort -integer -decreasing -index 0 $ranked] {
+  lassign $pair weight record;set best 0
+  for {set i 1} {$i<$workers} {incr i} {if {[lindex $weights $i]<[lindex $weights $best]} {set best $i}}
+  lappend buckets($best) $record
+  lset weights $best [expr {[lindex $weights $best]+$weight}]
+ }
+ set partitions {}
+ for {set i 0} {$i<$workers} {incr i} {lappend partitions $buckets($i)}
+ return [list $partitions $weights]
+}
 proc e2_sll::apply_parallel {planFile out workers} {
  variable parallelScriptDir;variable records;variable cellsByName;variable cellLocations;variable cellBels
  if {![string is integer -strict $workers]||$workers<1||$workers>8} {error "SLL workers must be 1 through 8"}
@@ -15,15 +30,7 @@ proc e2_sll::apply_parallel {planFile out workers} {
  source -notrace $planFile
  if {![llength $e2_sll_plan]} {set records {};return}
  set workers [expr {min($workers,[llength $e2_sll_plan])}]
- set partitions [lrepeat $workers {}];set weights [lrepeat $workers 0]
- set ranked {}
- foreach record $e2_sll_plan {lappend ranked [list [tree_weight [dict get $record tree]] $record]}
- foreach pair [lsort -integer -decreasing -index 0 $ranked] {
-  lassign $pair weight record;set best 0
-  for {set i 1} {$i<$workers} {incr i} {if {[lindex $weights $i]<[lindex $weights $best]} {set best $i}}
-  lset partitions $best [concat [lindex $partitions $best] [list $record]]
-  lset weights $best [expr {[lindex $weights $best]+$weight}]
- }
+ lassign [partition_plan $e2_sll_plan $workers] partitions weights
  set checkpoint [file join $out getrf_before_sll.dcp]
  write_checkpoint $checkpoint
  for {set i 0} {$i<$workers} {incr i} {
