@@ -345,3 +345,5 @@ target_link_libraries(checkDevicePolicyStretch GlobalPlacer DesignInfo DeviceInf
 
 add_executable(checkIncrementalSllIntegration EXCLUDE_FROM_ALL tests/check_incremental_sll_integration.cc)
 target_link_libraries(checkIncrementalSllIntegration GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkSllTransientCapacity EXCLUDE_FROM_ALL tests/check_sll_transient_capacity.cc)

@@ -40,7 +40,8 @@ inline int Model::initialTile(int from,int to,Point root,const TileBox&input,con
     if(!(initialColumnUtilizationLimit>0&&initialColumnUtilizationLimit<=1)||!std::isfinite(initialColumnUtilizationLimit))
         throw std::invalid_argument("SllInitialColumnUtilizationLimit must be in (0,1]");
     auto load=[&](const Tile&t){auto i=occupied.find(t.key);return i==occupied.end()?size_t(0):i->second;};
-    auto feasible=[&](int ti){const auto&t=tiles[ti];return load(t)<tileCapacity.at(t.key);};
+    const bool transient=transientCapacity(from,to);
+    auto feasible=[&](int ti){const auto&t=tiles[ti];return transient||load(t)<tileCapacity.at(t.key);};
     std::map<ColumnKey,size_t> computedColumnLoads;
     if(fixedColumn<0&&!occupiedColumns){
         for(const auto&v:occupied)computedColumnLoads[physicalColumn(v.first)]+=v.second;
@@ -51,7 +52,7 @@ inline int Model::initialTile(int from,int to,Point root,const TileBox&input,con
         const auto key=physicalColumn(tiles[ti].key);
         const auto load=occupiedColumns->find(key);
         const size_t count=load==occupiedColumns->end()?0:load->second;
-        if(columnPolicy.enabled)return columnPolicy.tier(count+1,columnCapacity.at(key));
+        if(columnPolicy.enabled)return columnPolicy.tier(count+1,columnCapacity.at(key),transient);
         return double(count)+1<=initialColumnUtilizationLimit*columnCapacity.at(key)+1e-9?0:ColumnPolicy::unavailable;
     };
     std::vector<int> candidates;
@@ -104,6 +105,20 @@ inline int Model::initialTile(int from,int to,Point root,const TileBox&input,con
 }
 inline void Model::rebuildTiles(std::vector<Net> nets) {
     initialTileEvaluations=0;
+    boundaryDemand.clear();transientBoundaries.clear();
+    for(const auto&net:nets){
+        int lo=net.source.slr,hi=lo;
+        for(const auto&sink:net.sinks){lo=std::min(lo,sink.slr);hi=std::max(hi,sink.slr);}
+        for(int boundary=lo;boundary<hi;++boundary)++boundaryDemand[boundary];
+    }
+    if(allowTransientOverflow){
+        const auto capacity=boundaryAdmissionCapacity();
+        for(const auto&entry:boundaryDemand){
+            auto found=capacity.find(entry.first);
+            if(found!=capacity.end() && found->second && entry.second>found->second)
+                transientBoundaries.insert(entry.first);
+        }
+    }
     // The priority is immutable during this sort; compute it once per net.
     std::vector<std::pair<double,size_t>> order(nets.size());
     // Each net owns its lookup and priority; the deterministic capacity pass
@@ -161,8 +176,8 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
                     if(old!=previous.end()){
                         const auto&t=tiles.at(old->second);
                         const auto ck=physicalColumn(t.key);
-                        if(t.from==from&&t.to==from+dir&&undo.value(t.key)<tileCapacity.at(t.key)&&
-                           columnPolicy.tier(occupiedColumns[ck]+1,columnCapacity.at(ck))!=ColumnPolicy::unavailable)selected=old->second;
+                        if(t.from==from&&t.to==from+dir&&(transientCapacity(from,from+dir)||undo.value(t.key)<tileCapacity.at(t.key))&&
+                           columnPolicy.tier(occupiedColumns[ck]+1,columnCapacity.at(ck),transientCapacity(from,from+dir))!=ColumnPolicy::unavailable)selected=old->second;
                     }
                     if(selected<0){
                         // Cache both local endpoint boxes once, not once per
@@ -245,6 +260,15 @@ inline void Model::legalizeChannels() {
             if(!added.second&&added.first->second!=t.key){legalizeChannelsSerial();return;}
         }
     }
+    std::map<ColumnKey,size_t> columnLoads;
+    for(const auto&group:grouped){
+        if(group.second.size()>tileCapacity.at(group.first))
+            throw std::runtime_error("Final SLL tile demand exceeds physical capacity");
+        columnLoads[physicalColumn(group.first)]+=group.second.size();
+    }
+    for(const auto&entry:columnLoads)
+        if(columnPolicy.tier(entry.second,columnCapacity.at(entry.first))==ColumnPolicy::unavailable)
+            throw std::runtime_error("Final SLL column utilization ceiling violated");
     // Proven disjoint physical footprints allow independent tile searches.
     std::vector<std::vector<Item>> groups;
     for(auto&g:grouped){groups.push_back(std::move(g.second));auto&items=groups.back();
@@ -286,6 +310,15 @@ inline void Model::legalizeChannelsSerial() {
         const auto&t=tiles.at(plans[pi].crossings[k].tile);
         groups[t.key].push_back({pi,k,t.members});
     }
+    std::map<ColumnKey,size_t> columnLoads;
+    for(const auto&group:groups){
+        if(group.second.size()>tileCapacity.at(group.first))
+            throw std::runtime_error("Final SLL tile demand exceeds physical capacity");
+        columnLoads[physicalColumn(group.first)]+=group.second.size();
+    }
+    for(const auto&entry:columnLoads)
+        if(columnPolicy.tier(entry.second,columnCapacity.at(entry.first))==ColumnPolicy::unavailable)
+            throw std::runtime_error("Final SLL column utilization ceiling violated");
     auto result=plans;std::set<std::string> used=reserved;
     for(auto&group:groups){
         auto&items=group.second;

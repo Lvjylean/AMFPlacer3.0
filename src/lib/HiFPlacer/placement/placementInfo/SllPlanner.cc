@@ -79,6 +79,9 @@ struct SllPlanner::Impl {
         m.columnPolicy.maximum=number(cfg,"SllColumnMaxUtilization",.85);
         m.columnPolicy.step=number(cfg,"SllColumnUtilizationStep",.01);
         m.columnPolicy.validate();
+        m.allowTransientOverflow=boolean("SllPlanningAllowTransientOverflow",false);
+        if(m.allowTransientOverflow&&(!m.jointPlacement||!m.columnPolicy.enabled))
+            throw std::invalid_argument("Transient SLL capacity requires joint tile placement and column capacity");
         m.initialColumnUtilizationLimit=number(cfg,"SllInitialColumnUtilizationLimit",.75);
         if(!(m.initialColumnUtilizationLimit>0&&m.initialColumnUtilizationLimit<=1))
             throw std::invalid_argument("SllInitialColumnUtilizationLimit must be in (0,1]");
@@ -308,6 +311,13 @@ void SllPlanner::refresh() {
         audited=nets.size();auditSeconds=seconds(auditStart);
     }
     const auto rebuildStart=Clock::now();p->m.rebuild(std::move(nets));const double rebuildSeconds=seconds(rebuildStart);
+    if(p->m.allowTransientOverflow){
+        const auto capacity=p->m.boundaryAdmissionCapacity();
+        for(const auto&entry:p->m.boundaryDemand)
+            std::cout<<"E2_SLL_CAPACITY generation="<<p->generation+1<<" boundary="<<entry.first
+                     <<" demand="<<entry.second<<" admissible="<<capacity.at(entry.first)
+                     <<" transient="<<p->m.transientBoundaries.count(entry.first)<<std::endl;
+    }
     // Compute every timing spring from the plan that will enter this QP.
     // No independent candidate search is used for these weights.
     #pragma omp parallel for schedule(dynamic,16)
@@ -402,12 +412,12 @@ void SllPlanner::addTimingModel(std::vector<Eigen::Triplet<float>>&trip,std::vec
 void SllPlanner::exportPlan(const std::string&path) {
     const auto exportStart=std::chrono::steady_clock::now();refresh();
     const auto projectionStart=std::chrono::steady_clock::now();
-    if(jointPlacement()&&p->m.columnPolicy.enabled){
+    if(jointPlacement()&&(p->m.columnPolicy.enabled||p->m.allowTransientOverflow)){
         // Packing can add crossings after the last QP. Reconcile final capacity
         // using the retained virtual coordinates, with the same nearest-tile
         // legalizer as QP. Do not rerank by net wire/timing initialization cost.
         const auto desired=virtualPositions();
-        const auto assigned=p->density.assign(p->m,desired);
+        const auto assigned=p->density.assign(p->m,desired,true);
         std::ofstream finalProjection(path+".final-capacity.tsv");
         finalProjection<<"key\told_column\told_x\told_y\tcolumn\tx\ty\n";
         size_t i=0;

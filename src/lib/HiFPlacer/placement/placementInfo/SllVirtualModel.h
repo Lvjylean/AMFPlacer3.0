@@ -78,6 +78,26 @@ public:
     // tiles and post-QP projection retain their physical-capacity semantics.
     double initialColumnUtilizationLimit=.75;
     ColumnPolicy columnPolicy;
+    // Only overloaded boundaries may borrow virtual tile capacity between QPs.
+    // Physical supply and density denominators never change; export is strict.
+    bool allowTransientOverflow=false;
+    std::set<int> transientBoundaries;
+    std::map<int,size_t> boundaryDemand;
+    bool transientCapacity(int from,int to)const {
+        return allowTransientOverflow && transientBoundaries.count(std::min(from,to));
+    }
+    std::map<int,size_t> boundaryAdmissionCapacity()const {
+        std::map<int,size_t> result;
+        for(const auto&entry:columnCapacity){
+            size_t lo=0,hi=entry.second;
+            while(lo<hi){const size_t mid=lo+(hi-lo+1)/2;
+                if(columnPolicy.tier(mid,entry.second)!=ColumnPolicy::unavailable)lo=mid;
+                else hi=mid-1;
+            }
+            result[entry.first.first]+=lo;
+        }
+        return result;
+    }
     mutable size_t initialTileEvaluations=0;
     // Default: one shared crossing per net and SLR boundary.
     bool allowSplit=false;

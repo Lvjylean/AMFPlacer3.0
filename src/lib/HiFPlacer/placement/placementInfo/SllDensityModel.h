@@ -71,9 +71,8 @@ public:
             double value=0;for(size_t i=0;i<loads.size();++i)value+=penalty(i,loads[i],target);return value;
         }
     };
-    // The incumbent assignment is feasible. One-coordinate updates always
-    // retain it as a fallback, so projection cannot destroy feasibility merely
-    // because a greedy full reassignment picked channels in a bad order.
+    // Ordinary incumbents are feasible. On an explicitly overfull boundary,
+    // density is still measured against the unchanged physical supply.
     Assignment spread(const Model&m,const std::vector<Point>&desired)const {
         if(!m.jointPlacement)throw std::invalid_argument("Tile density requires joint placement");
         Assignment result;result.tiles=current(m);
@@ -81,7 +80,8 @@ public:
         const DenseUsage usage(m,*this);
         std::vector<size_t> loads(usage.binSupply.size()),tileLoads(usage.supply.size()),columnLoads(usage.columnSupply.size());
         for(int ti:result.tiles){++columnLoads[usage.tileColumn.at(ti)];++loads[usage.tileBin.at(ti)];const auto key=usage.tileKey.at(ti);
-            if(++tileLoads[key]>usage.supply[key])throw std::runtime_error("Overfull incumbent SLL tile");}
+            if(++tileLoads[key]>usage.supply[key]&&!m.transientCapacity(m.tiles[ti].from,m.tiles[ti].to))
+                throw std::runtime_error("Overfull incumbent SLL tile");}
         result.energyBefore=usage.energy(loads,targetUtilization);
         // Only the selected tile changes in this coordinate-descent pass.
         // Copying complete nets, pin names and route trees is unnecessary.
@@ -93,8 +93,9 @@ public:
                 return length(desired[i],t.in,m.ratio)+weight*(usage.penalty(b,n+1,targetUtilization)-usage.penalty(b,n,targetUtilization));};
             int selected=-1,bestTier=ColumnPolicy::unavailable;double best=INFINITY;
             for(int ti:m.availableTiles.at({base.from,base.to})){
-                const auto key=usage.tileKey[ti];if(tileLoads[key]>=usage.supply[key])continue;
-                const size_t col=usage.tileColumn[ti];const int tier=m.columnPolicy.tier(columnLoads[col]+1,usage.columnSupply[col]);
+                const auto key=usage.tileKey[ti];const bool transient=m.transientCapacity(base.from,base.to);
+                if(!transient&&tileLoads[key]>=usage.supply[key])continue;
+                const size_t col=usage.tileColumn[ti];const int tier=m.columnPolicy.tier(columnLoads[col]+1,usage.columnSupply[col],transient);
                 if(tier==ColumnPolicy::unavailable)continue;
                 const double value=score(ti);
                 if(tier<bestTier||(tier==bestTier&&(value<best-1e-9||(std::abs(value-best)<=1e-9&&ti==old)))){
@@ -109,25 +110,34 @@ public:
     // After QP, prefer the lowest feasible column tier, then nearest solved coordinates. Soft
     // density pressure has already entered QP through spread()/the anchor.
     // Assign from scratch so full tiles can exchange occupants in one round.
+    // strict=true is the export gate, including after transient overbooking.
     // This is deterministic greedy legalization with augmenting-path repair,
     // not a claim of globally minimum total assignment displacement.
-    Assignment assign(const Model&m,const std::vector<Point>&desired)const {
+    Assignment assign(const Model&m,const std::vector<Point>&desired,bool strict=false)const {
         if(!m.jointPlacement)throw std::invalid_argument("Tile projection requires joint placement");
         const auto old=current(m);const size_t count=old.size();
         if(desired.size()!=count)throw std::invalid_argument("SLL proposal dimension mismatch");
         const DenseUsage usage(m,*this);
-        std::vector<size_t> before(usage.binSupply.size()),initialLoads(usage.supply.size());
+        std::vector<size_t> before(usage.binSupply.size());
         for(size_t i=0;i<count;++i){
             if(!std::isfinite(desired[i].x)||!std::isfinite(desired[i].y))
                 throw std::runtime_error("Non-finite virtual SLL QP proposal");
-            const size_t key=usage.tileKey.at(old[i]);++before[usage.tileBin.at(old[i])];
-            if(++initialLoads[key]>usage.supply[key])
-                throw std::runtime_error("Overfull incumbent SLL tile");
+            ++before[usage.tileBin.at(old[i])]; // Reassignment may repair an overfull incumbent.
         }
+        const auto admission=m.boundaryAdmissionCapacity();
+        std::map<int,size_t> demands;
+        for(int ti:old)++demands[std::min(m.tiles[ti].from,m.tiles[ti].to)];
+        for(const auto&entry:demands){
+            auto found=admission.find(entry.first);
+            if((strict||!m.transientCapacity(entry.first,entry.first+1))&&
+               (found==admission.end()||entry.second>found->second))
+                throw std::runtime_error("Final SLL boundary demand exceeds admissible column capacity");
+        }
+        auto transient=[&](int ti){return !strict&&m.transientCapacity(m.tiles[ti].from,m.tiles[ti].to);};
         Assignment result;result.tiles.assign(count,-1);result.energyBefore=usage.energy(before,targetUtilization);
         std::vector<std::vector<size_t>> occupants(usage.supply.size()),columnOccupants(usage.columnSupply.size());
         std::vector<size_t> columnLoads(usage.columnSupply.size());
-        auto tier=[&](int ti){const auto c=usage.tileColumn[ti];return m.columnPolicy.tier(columnLoads[c]+1,usage.columnSupply[c]);};
+        auto tier=[&](int ti){const auto c=usage.tileColumn[ti];return m.columnPolicy.tier(columnLoads[c]+1,usage.columnSupply[c],transient(ti));};
         auto candidates=[&](size_t i)->const std::vector<int>&{
             const auto&t=m.tiles[old[i]];return m.availableTiles.at({t.from,t.to});};
         auto distance=[&](size_t i,int ti){return length(desired[i],m.tiles[ti].in,m.ratio);};
@@ -159,7 +169,7 @@ public:
             int chosen=-1;
             for(int ti:candidates(i)){
                 const auto&t=m.tiles[ti];
-                if(occupants[usage.tileKey[ti]].size()<usage.supply[usage.tileKey[ti]]&&tier(ti)!=ColumnPolicy::unavailable&&prefer(i,ti,chosen))chosen=ti;
+                if((transient(ti)||occupants[usage.tileKey[ti]].size()<usage.supply[usage.tileKey[ti]])&&tier(ti)!=ColumnPolicy::unavailable&&prefer(i,ti,chosen))chosen=ti;
             }
             if(chosen>=0){move(i,chosen);continue;}
             // Rare asymmetric candidate domains can strand a greedy assignment.
@@ -177,7 +187,7 @@ public:
                 });
                 for(int ti:ranked){
                     const size_t key=usage.tileKey[ti];if(visited[key])continue;visited[key]=true;
-                    if(occupants[usage.tileKey[ti]].size()<usage.supply[usage.tileKey[ti]]&&tier(ti)!=ColumnPolicy::unavailable){
+                    if((transient(ti)||occupants[usage.tileKey[ti]].size()<usage.supply[usage.tileKey[ti]])&&tier(ti)!=ColumnPolicy::unavailable){
                         size_t node=cur;int target=ti;
                         while(true){
                             move(node,target);if(node==i)break;
@@ -195,9 +205,11 @@ public:
         }
         std::vector<size_t> after(usage.binSupply.size());
         for(size_t i=0;i<count;++i){++after[usage.tileBin[result.tiles[i]]];result.moved+=result.tiles[i]!=old[i];}
-        for(size_t c=0;c<columnLoads.size();++c)
-            if(columnLoads[c]&&m.columnPolicy.tier(columnLoads[c],usage.columnSupply[c])==ColumnPolicy::unavailable)
+        for(size_t ti=0;ti<m.tiles.size();++ti){
+            const size_t c=usage.tileColumn[ti];
+            if(columnLoads[c]&&m.columnPolicy.tier(columnLoads[c],usage.columnSupply[c],transient(ti))==ColumnPolicy::unavailable)
                 throw std::runtime_error("SLL column hard utilization ceiling violated");
+        }
         result.energyAfter=usage.energy(after,targetUtilization);return result;
     }
 };

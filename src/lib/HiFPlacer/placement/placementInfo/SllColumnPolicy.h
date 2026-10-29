@@ -13,9 +13,9 @@ struct ColumnPolicy {
            !std::isfinite(target)||!std::isfinite(maximum)||!std::isfinite(step))
             throw std::invalid_argument("Invalid SLL column target/maximum/step");
     }
-    int tier(size_t count,size_t capacity)const {
+    int tier(size_t count,size_t capacity,bool transient=false)const {
         if(!enabled)return 0;
-        if(!capacity || double(count)>=maximum*capacity-1e-9)return unavailable;
+        if(!capacity || (!transient && double(count)>=maximum*capacity-1e-9))return unavailable;
         if(double(count)<=target*capacity+1e-9)return 0;
         return std::max(1,int(std::ceil((double(count)/capacity-target)/step-1e-9)));
     }

@@ -15,7 +15,7 @@ PYTHON=[
  'tests/test_full_flow.py','tests/test_import_acceptance.py',
  'tests/test_paper_boundary_config.py','tests/test_srl_cascades.py']
 CPP=['checkSllQuantity','checkSllAdaptivePolicy','checkSllVirtualModel','checkSllDensity',
- 'checkSllTileInitialization','checkSllColumnInitialization','checkSllNoSplit',
+ 'checkSllTileInitialization','checkSllColumnInitialization','checkSllNoSplit','checkSllTransientCapacity',
  'checkSllQpProjection','checkSllWireCache','checkSllTimingIndex',
  'checkSllDensityEquivalence','checkSllPlannedTimingCapacity','checkSllOutputTail',
  'checkNativeStaticCache','checkNativePlacementRepair','checkBoundarySitePolicy',

@@ -29,6 +29,8 @@ def validate(config,binary):
             raise ValueError('Binary lacks scoped incremental SLL planning')
         if not Path(config.get('SllReservedResourceFile','')).is_file():
             raise ValueError('Incremental SLL reservation file missing')
+    if config.get('SllPlanningAllowTransientOverflow','false')=='true' and caps.get('transient_sll_capacity_schema')!=1:
+        raise ValueError('Binary lacks transient SLL capacity with strict final legalization')
     table=Path(config['SllChannelFile'])
     with table.open() as f:header=[next(f).rstrip('\n') for _ in range(3)]
     if header[0]!='#part\t'+config['physical device part']:raise ValueError('SLL part mismatch')
