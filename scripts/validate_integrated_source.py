@@ -4,7 +4,7 @@ import argparse, hashlib, json, os, re, subprocess, time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 PYTHON=[
- 'scripts/test_e2_incremental.py','scripts/test_incremental_config.py',
+ 'scripts/test_e2_incremental.py','scripts/test_sll_inventory_query.py','scripts/test_incremental_config.py',
  'scripts/test_device_placement_config.py','scripts/test_boundary_strategy_config.py',
  'scripts/test_clock_guidance_batch.py','scripts/test_parallel_safety.py',
  'scripts/test_optimized_rm_contract.py','scripts/test_background_reports.py',
