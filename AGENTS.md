@@ -1,3 +1,7 @@
+# 当前副本说明（2026-10-30，DFX 短期兼容）
+
+本副本位于 `/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261029-dfx-native-interface-fallback/repo`，分支 `codex/dfx-native-interface-fallback-20261029`。用户当前只要求增量编译短期可用，暂不作为主要性能优化方向。本副本将 DFX 接口交给 Vivado 原生路由，内部 net 保留 SLL 约束及审计；详见 `docs/research/dfx-native-interface-fallback-20261029.md`。下文历史副本路径仅供追溯。
+
 # 当前副本说明（2026-10-29）
 
 本副本为 E2 与增量编译集成分支，路径为 /Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261029-e2-incremental-merge/repo。当前工作以本副本及 docs/research/e2-incremental-integration-20261029.md 为准；以下历史路径保留供追溯，不能据此覆盖原副本。新增验证必须使用独立实验目录，DCP 只保留服务器。

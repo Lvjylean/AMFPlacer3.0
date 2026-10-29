@@ -61,6 +61,7 @@ proc main {} {
     set checked [expr {[info exists dfx(e2_sll_enabled)] && $dfx(e2_sll_enabled)}]
     set f [open $out/sll-audit-status.tsv w]
     puts $f "checked\t$checked";puts $f "passed\t[expr {!$rc}]";puts $f "policy\t$policy"
+    if {$checked} {dict for {key value} [dfx_sll::full_audit_scope] {puts $f "$key\t$value"}}
     if {$rc} {puts $f "error\t[string map [list \t { } \n { } \r { }] $msg]"}
     close $f
     if {$rc} {

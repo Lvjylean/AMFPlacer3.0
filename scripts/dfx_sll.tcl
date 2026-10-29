@@ -3,6 +3,7 @@ source [file join [file dirname [info script]] sll_routes.tcl]
 source [file join [file dirname [info script]] sll_parallel.tcl]
 source [file join [file dirname [info script]] sll_usage.tcl]
 namespace eval dfx_sll {variable active 0}
+source [file join [file dirname [info script]] dfx_sll_native.tcl]
 proc dfx_sll::validate_tree {tree prefix footprint usedVar} {
  upvar 1 $usedVar used
  foreach item $tree {
@@ -35,6 +36,7 @@ proc dfx_sll::validate_internal_net {driver prefix} {
 proc dfx_sll::apply {} {
  global dfx
  variable active
+ variable nativeInterfaces;set nativeInterfaces {}
  if {![info exists dfx(e2_sll_enabled)] || !$dfx(e2_sll_enabled)} {return}
  set combined {};set used {}
  foreach row $dfx(rps) {
@@ -74,14 +76,14 @@ proc dfx_sll::audit {} {
  variable active
  if {$active} {
   e2_sll::audit [file join $dfx(output) sll]
+  audit_native_interfaces [file join $dfx(output) sll]
   e2_sll::usage [file join $dfx(output) sll]
  }
 }
 
 
-# Full-design DFX has no frozen route owner yet; Vivado still enforces its
-# existing routing containment. Endpoint SLR/connectivity and final trees are
-# audited by the same exporter as ordinary E2 full placement.
+# Full-design interfaces use native routing to avoid partial-tree STUBs at
+# partition pins. Static/internal plans retain exact SLL constraints.
 proc dfx_sll::apply_full {} {
  global dfx
  variable active
@@ -93,15 +95,28 @@ proc dfx_sll::apply_full {} {
  set ::e2_sll::allowDfxRouting 1
  set ::env(AMF_SLL_DFX_ROUTING) 1
  set ::env(AMF_SLL_VIVADO) $dfx(vivado)
- e2_sll::apply_parallel $plan $dir $dfx(e2_sll_workers)
- set f [open [file join $dir records.tcl] w];puts $f [list set ::e2_sll::records $::e2_sll::records];close $f
+ set filtered [prepare_full_plan $plan $dir]
+ e2_sll::apply_parallel $filtered $dir $dfx(e2_sll_workers)
+ set f [open [file join $dir records.tcl] w]
+ puts $f [list set ::e2_sll::records $::e2_sll::records]
+ puts $f [list set ::dfx_sll::fullScopeMode $::dfx_sll::fullScopeMode]
+ puts $f [list set ::dfx_sll::fullNativeCount $::dfx_sll::fullNativeCount]
+ close $f
 }
 proc dfx_sll::restore_full_audit {} {
  global dfx
  variable active
+ variable nativeInterfaces;variable fullScopeMode;variable fullNativeCount
  if {![info exists dfx(e2_sll_enabled)] || !$dfx(e2_sll_enabled)} {return}
  set records [file join $dfx(output) sll records.tcl]
  if {![file exists $records]} {error "Resumed E2 routing lacks its original SLL audit records"}
+ set nativeInterfaces {};set fullScopeMode legacy-exact;set fullNativeCount 0
  source -notrace $records
+ if {$fullScopeMode eq "native-interfaces-v1"} {
+  set native [file join $dfx(output) sll native-interfaces.tcl]
+  if {![file exists $native]} {error "Resumed E2 routing lacks its native interface audit records"}
+  source -notrace $native
+  if {[llength $nativeInterfaces]!=$fullNativeCount} {error "Native interface audit coverage mismatch"}
+ } elseif {$fullScopeMode ne "legacy-exact"} {error "Unknown full SLL audit scope: $fullScopeMode"}
  set active 1
 }
