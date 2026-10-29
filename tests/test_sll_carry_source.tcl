@@ -53,3 +53,16 @@ set events {};set fail_route 1
 if {![catch {e2_sll::native_source_route target_net [list $root GAP SLL/WIRE] [list $root $fabric]} failure]} {error "route failure was swallowed"}
 if {$failure ne "injected route failure" || $events ne {reset unroute route unroute}} {error "failure cleanup mismatch: $failure / $events"}
 puts "PASS native_source_cleanup_and_failure"
+
+set adj [dict create COUT {CIN} CIN {} HMUX {WIRE0} WIRE0 {WIRE1} WIRE1 {WIRE0 SLL} SLL {LOAD}]
+if {[e2_sll::roots_reaching_sll $adj {COUT HMUX} {SLL}] ne {HMUX}} {error "local carry root must not own the SLL branch"}
+if {[e2_sll::roots_reaching_sll $adj {COUT} {SLL}] ne {}} {error "local root incorrectly crosses"}
+dict set adj SECOND {SLL}
+if {[e2_sll::roots_reaching_sll $adj {HMUX SECOND} {SLL}] ne {HMUX SECOND}} {error "multiple crossing roots must remain explicit for caller rejection"}
+puts "PASS local_and_crossing_native_roots"
+
+set directAdj [dict create HMUX {WIRE0} WIRE0 {SLL} SLL {LOAD}]
+set paths [e2_sll::trace_paths $directAdj {COUT HMUX} {SLL}]
+if {![dict exists $paths COUT] || [dict get $paths COUT] ne {}} {error "direct local carry receiver lost"}
+if {[dict get $paths LOAD] ne {SLL}} {error "remote receiver lost its planned crossing"}
+puts "PASS direct_local_root_path"

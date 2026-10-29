@@ -149,6 +149,43 @@ proc e2_sll::needs_native_source_resolution {driver selected roots} {
  foreach node $next {if {![string match *_CIN_PIN $node]} {return 0}}
  return 1
 }
+# A CARRY net may use COUT for a local CIN and another output for its SLL
+# branches. Keep the output actually chosen by native routing for crossing;
+# do not reject legitimate local roots or choose a named fabric alternative.
+proc e2_sll::roots_reaching_sll {adj roots slls} {
+ set result {}
+ foreach root $roots {
+  set queue [list $root];set head 0;set seen {};set reaches 0
+  while {$head<[llength $queue]} {
+   set node [lindex $queue $head];incr head
+   if {[dict exists $seen $node]} {continue}
+   dict set seen $node 1
+   if {$node in $slls} {set reaches 1;break}
+   if {[dict exists $adj $node]} {
+    foreach next [dict get $adj $node] {if {![dict exists $seen $next]} {lappend queue $next}}
+   }
+  }
+  if {$reaches} {lappend result $root}
+ }
+ return $result
+}
+proc e2_sll::native_crossing_source {net roots} {
+ set selected [source_accesses [get_property ROUTE $net] $roots]
+ if {[llength $selected]<=1} {return $selected}
+ set sllObjects [get_nodes -quiet -of_objects $net -filter {IS_SLL == 1}]
+ if {![llength $sllObjects]} {error "E2 native crossing route has no SLL on $net"}
+ set adj {}
+ foreach pip [get_pips -of_objects $net] {
+  set a [get_property NAME [get_nodes -uphill -of_objects $pip]]
+  set b [get_property NAME [get_nodes -downhill -of_objects $pip]]
+  if {[llength $a]!=1 || [llength $b]!=1} {error "E2 ambiguous native source graph $pip"}
+  dict lappend adj $a $b
+  if {![get_property IS_DIRECTIONAL $pip]} {dict lappend adj $b $a}
+ }
+ set crossing [roots_reaching_sll $adj $selected [get_property NAME $sllObjects]]
+ puts "E2_SLL_NATIVE_SOURCE_ROOTS all=$selected crossing=$crossing"
+ return $crossing
+}
 proc e2_sll::native_source_route {net route roots} {
  # FIXED_ROUTE import can choose the dedicated carry COUT even when the
  # requested SLL requires fabric access. Ask Vivado's router to resolve
@@ -163,7 +200,7 @@ proc e2_sll::native_source_route {net route roots} {
   # database. Remove that stale COUT root before native source selection.
   route_design -unroute -nets [get_nets $name]
   route_design -nets [get_nets $name]
-  set selected [source_accesses [get_property ROUTE [get_nets $name]] $roots]
+  set selected [native_crossing_source [get_nets $name] $roots]
   if {[llength $selected]!=1} {error "E2 native router did not resolve one source output on $name: $selected"}
  } message options]
  set clearRC [catch {route_design -unroute -nets [get_nets $name]} clearMessage clearOptions]
@@ -357,7 +394,11 @@ proc e2_sll::audit {out} {
   set driver [dict get $record driver]
   set dp [pin_object $driver]
   set candidates [lsort -unique [get_property NAME [get_nodes -of_objects [get_site_pins -of_objects [physical_pins $driver]]]]]
-  set roots {};foreach root $candidates {if {$root in $routed && [dict exists $adj $root]} {lappend roots $root}}
+  # A dedicated local COUT-to-CIN connection can be one used node with
+  # no outgoing interconnect PIP. Include roots explicitly present in
+  # ROUTE, even when their only receiver shares that same node.
+  set usedOutputs [source_accesses [get_property ROUTE $net] $candidates]
+  set roots {};foreach root $usedOutputs {if {$root in $routed} {lappend roots $root}}
   if {![llength $roots]} {error "E2 no routed physical output for $driver"}
   puts $rf [join [list $net $candidates $roots] "\t"]
   set actualResources [lsort [get_property NAME [get_nodes -of_objects $net -filter {IS_SLL == 1}]]]
