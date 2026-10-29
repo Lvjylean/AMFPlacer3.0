@@ -230,7 +230,7 @@ def run(args):
             if owners[target.split('/')[0]]!=cells[cell]:raise ValueError('Full AMF region violation: '+cell)
         (out/'placement.tsv').write_text(''.join(n+'\t'+v+'\n' for n,v in sorted(rows.items())))
         m['full_placement_coverage']=dict(expected=len(cells),exported=len(rows),fraction=1,hard_region_violations=0)
-        stage('backend',[job['vivado'],'-mode','batch','-source',str(out/'inputs/dfx_full_backend.tcl'),'-tclargs',str(settings_path)])
+        stage('backend',[job['vivado'],'-mode','batch','-notrace','-source',str(out/'inputs/dfx_full_backend.tcl'),'-tclargs',str(settings_path)])
         m['acceptance']=acceptance(out,'base')
         if not m['acceptance']['implementation_verified']:raise RuntimeError('Full routing/DRC acceptance failed')
         outputs=['base_imported.dcp','base_placed.dcp','base_routed.dcp','base_full.bit']

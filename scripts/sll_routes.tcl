@@ -170,7 +170,7 @@ proc e2_sll::apply {planFile out} {
  variable records;variable pinNodes;variable used;variable cellsByName;variable leafPinsByName;variable receiverNodePaths
  set records {};set pinNodes {};set used {}
  refresh_access_index
- source $planFile
+ source -notrace $planFile
  variable exportLocks;set exportLocks {}
  set pending {};set cells {}
  # Validate every tree before changing routing properties.

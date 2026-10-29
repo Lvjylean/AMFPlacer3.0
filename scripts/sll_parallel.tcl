@@ -12,7 +12,7 @@ proc e2_sll::apply_parallel {planFile out workers} {
  set parallel [file join $out sll-parallel]
  if {[file exists $parallel]} {error "Refusing to overwrite SLL parallel output"}
  file mkdir $parallel
- source $planFile
+ source -notrace $planFile
  if {![llength $e2_sll_plan]} {set records {};return}
  set workers [expr {min($workers,[llength $e2_sll_plan])}]
  set partitions [lrepeat $workers {}];set weights [lrepeat $workers 0]
@@ -36,8 +36,8 @@ proc e2_sll::apply_parallel {planFile out workers} {
  refresh_access_index
  set locks {};set records {};set nets {};set nodes {}
  foreach shard [lsort [glob -directory $parallel shard-*]] {
-  source [file join $shard apply records.tcl]
-  source [file join $shard apply locks.tcl]
+  source -notrace [file join $shard apply records.tcl]
+  source -notrace [file join $shard apply locks.tcl]
   foreach record $::e2_sll_worker_records {
    set name [dict get $record net]
    if {[dict exists $nets $name]} {error "Repeated parallel net $name"};dict set nets $name 1
@@ -66,7 +66,7 @@ proc e2_sll::apply_parallel {planFile out workers} {
  foreach shard [lsort [glob -directory $parallel shard-*]] {
   set file [file join $shard apply sll-fixed-route.xdc]
   set f [open $file r];puts $combined [read $f];close $f
-  source $file
+  source -notrace $file
  }
  close $combined
  puts "E2_SLL_PARALLEL_APPLIED [llength $records]";flush stdout

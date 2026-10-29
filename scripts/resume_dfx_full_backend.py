@@ -4,6 +4,8 @@ from common_static_contract import record as record_common_static, artifact_name
 import argparse
 import copy
 import json
+import os
+import signal
 from pathlib import Path
 import shutil
 import subprocess
@@ -45,10 +47,21 @@ def run(a):
     resume_stage = complete[-1] if a.from_stage == 'auto' else a.from_stage
     if resume_stage not in complete:
         raise ValueError('No successfully saved checkpoint for stage: ' + resume_stage)
+    extra_inputs = []
+    if pm['job'].get('e2_sll_enabled'):
+        extra_inputs.append('placement/sll-plan.tcl')
+        if resume_stage == 'routed': extra_inputs.append('sll/records.tcl')
+    if pm['job'].get('native_cache_capture'):
+        extra_inputs += ['native_ports.tsv', 'native_boundary_pins.tsv',
+                         'dedicated_interface_pins.tsv', 'native_cache/proposed.bin',
+                         'native_cache/context-spec.tsv']
+    for name in extra_inputs:
+        if not (parent/name).is_file():
+            raise ValueError('Missing integrated recovery input: '+name)
     if a.preflight_only:
         print(json.dumps(dict(parent=str(parent), complete_checkpoints=complete,
              selected_stage=resume_stage, checkpoint_sha256=sha(parent/('base_'+resume_stage+'.dcp')),
-             amf_rerun=False, binary_sha256=pm['binary_sha256'])))
+             amf_rerun=False, binary_sha256=pm['binary_sha256'], extra_inputs=extra_inputs)))
         return 0
     out = Path(a.output).resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -68,12 +81,16 @@ def run(a):
                   (f.suffix == '.tcldata' or f.name in ('static_containment.tsv',
                    'rp_footprints.tsv', 'containment_preflight_passed.txt',
                    'amf_profile.tsv', 'stage_intervals.tsv'))]
+    inherited += extra_inputs
     files = {}
     for name in sorted(set(inherited)):
+        (out/name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(parent / name, out / name)
         files[name] = sha(out / name)
         if files[name] != sha(parent / name):
             raise ValueError('Recovery copy mismatch: ' + name)
+    if (parent/'inputs/source').is_dir():
+        shutil.copytree(parent/'inputs/source', out/'inputs/source')
     job['resume_opt_checkpoint'] = str(out / 'base_opt.dcp')
     job['resume_full_stage'] = resume_stage
     job['prepare_worker_shells'] = False
@@ -81,9 +98,10 @@ def run(a):
     m = {k: copy.deepcopy(pm[k]) for k in ('schema', 'amf_placement_scope',
          'binary', 'binary_sha256', 'build', 'source_commit', 'comparison_identity',
          'input_hashes', 'full_input_coverage', 'full_placement_coverage',
-         'primitive_counts', 'source_inputs') if k in pm}
+         'primitive_counts', 'source_inputs', 'dfx_partition_floorplan',
+         'fresh_synthesis', 'preparation_timings') if k in pm}
     reused = [dict(s, execution='reused', source_run=s.get('source_run', str(parent)))
-              for s in pm['stages'] if s['name'] in ('prepare', 'amf')]
+              for s in pm['stages'] if s['name'] in ('prepare', 'amf', 'native_context_spec')]
     m.update(state='running', job=job, stages=reused, started_epoch=time.time(),
              dcp_storage='server-only', recovery=dict(parent=str(parent),
              parent_manifest_sha256=sha(parent / 'manifest.json'), files=files,
@@ -91,22 +109,52 @@ def run(a):
              parent_backend_phase_times=phases,
              amf_rerun=False), script_hashes={f.name: sha(f) for f in (out/'inputs').iterdir()},
              timing_note='Reused stages retain original measurements; wall_seconds is this backend recovery only. Do not sum failed attempts into placement time.')
+    revision = subprocess.run(['git','rev-parse','HEAD'], cwd=script.parent, text=True, capture_output=True)
+    m['runner_source_commit'] = revision.stdout.strip() if revision.returncode == 0 else None
     def update(stage):
         save(out/'manifest.json', m)
         save(out/'status.json', dict(state=m['state'],stage=stage,error=m.get('error')))
-    try:
-        sp = settings(job, out, dict(modeled_sites=str(out/'modeled_sites.txt'),
-                      dsp_critical=int(cfg.get('DSPCritical') == 'true')))
-        save(out/'inputs/job.json', job)
-        command = [job['vivado'], '-mode', 'batch', '-source',
-                   str(out/'inputs/dfx_full_backend.tcl'), '-tclargs', str(sp)]
-        update('backend'); start=time.time(); begin=time.monotonic()
-        with (out/'logs/backend.log').open('w') as log:
-            p=subprocess.Popen(command,cwd=out,stdout=log,stderr=subprocess.STDOUT)
-            m['child_pid']=p.pid;update('backend');rc=p.wait()
-        m['stages'].append(dict(name='backend',command=command,exit_code=rc,
+    def stage(name, command):
+        update(name); start=time.time(); begin=time.monotonic()
+        from native_pin_cache_auto import enabled, check_budget
+        bounded=enabled(job)
+        with (out/'logs'/(name+'.log')).open('w') as log:
+            p=subprocess.Popen(command,cwd=out,stdout=log,stderr=subprocess.STDOUT,
+                               start_new_session=bounded)
+            m['child_pid']=p.pid;update(name)
+            try:
+                while p.poll() is None:
+                    if bounded: check_budget(out)
+                    time.sleep(.1)
+                rc=p.returncode
+                if bounded: check_budget(out)
+            except BaseException:
+                if p.poll() is None:
+                    if bounded: os.killpg(p.pid,signal.SIGTERM)
+                    else: p.terminate()
+                    try: p.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        if bounded: os.killpg(p.pid,signal.SIGKILL)
+                        else: p.kill()
+                        p.wait()
+                raise
+        m['stages'].append(dict(name=name,command=command,exit_code=rc,
               seconds=time.monotonic()-begin,started_epoch=start,ended_epoch=time.time(),execution='executed'))
-        if rc: raise RuntimeError('Recovered backend failed; preserve this run')
+        update(name)
+        if rc: raise RuntimeError(name+' failed during backend recovery; preserve this run')
+    try:
+        extra=dict(modeled_sites=str(out/'modeled_sites.txt'),
+                   dsp_critical=int(cfg.get('DSPCritical') == 'true'))
+        if job.get('native_cache_capture'):
+            extra.update(native_cache_capture=1,
+                         native_resource_inventory=int(job.get('native_dfx_edge_policy','off')!='off'))
+        from native_pin_cache_auto import prepare as prepare_pin_topology
+        extra.update(prepare_pin_topology(job,out))
+        sp = settings(job, out, extra)
+        save(out/'inputs/job.json', job)
+        command = [job['vivado'], '-mode', 'batch', '-notrace', '-source',
+                   str(out/'inputs/dfx_full_backend.tcl'), '-tclargs', str(sp)]
+        stage('backend',command)
         m['acceptance']=acceptance(out,'base')
         if not m['acceptance']['implementation_verified']:
             raise RuntimeError('Recovered routing/DRC acceptance failed')
@@ -114,6 +162,12 @@ def run(a):
         outputs += [r['id']+'_partial.bit' for r in job['partitions']]
         m['common_static_shell']=record_common_static(job,out,out/'base_routed.dcp')
         outputs += common_static_artifacts(job)
+        if job.get('native_cache_capture'):
+            from native_cache_contract import seal_full
+            m['native_static_cache']=seal_full(job,out,Path(pm['binary']),cfg,stage,
+                                               m['acceptance'],m['common_static_shell'])
+            outputs += ['native_cache/sealed.bin','native_cache/contract.json']
+            m['common_static_shell']=record_common_static(job,out,out/'base_routed.dcp')
         m['outputs']={n:sha(out/n) for n in outputs}
         m['state']='completed'
     except Exception as exc:

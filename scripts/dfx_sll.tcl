@@ -102,6 +102,6 @@ proc dfx_sll::restore_full_audit {} {
  if {![info exists dfx(e2_sll_enabled)] || !$dfx(e2_sll_enabled)} {return}
  set records [file join $dfx(output) sll records.tcl]
  if {![file exists $records]} {error "Resumed E2 routing lacks its original SLL audit records"}
- source $records
+ source -notrace $records
  set active 1
 }
