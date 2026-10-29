@@ -209,11 +209,49 @@ proc e2_sll::native_source_route {net route roots} {
  puts "E2_SLL_NATIVE_SOURCE_RESOLVED $name $selected"
  return [concat $selected $tail]
 }
+# Resolve exceptional CARRY outputs together. Native routing only selects the
+# physical source; all probe routing is removed and the original SLL tree is
+# retained. Each net's own roots/route are used, including local carry roots.
+proc e2_sll::native_source_routes {requests} {
+ if {![llength $requests]} {return {}}
+ set names {};set seen {}
+ foreach request $requests {
+  lassign $request name route roots
+  if {[dict exists $seen $name]} {error "E2 repeated native source request $name"}
+  dict set seen $name 1;lappend names $name
+ }
+ set nets [get_nets $names]
+ if {[llength $nets]!=[llength $names]} {error "E2 native source batch coverage mismatch"}
+ reset_property FIXED_ROUTE $nets
+ set resolved {}
+ set rc [catch {
+  route_design -unroute -nets $nets
+  route_design -nets [get_nets $names]
+  foreach request $requests {
+   lassign $request name route roots
+   set selected [native_crossing_source [get_nets [list $name]] $roots]
+   if {[llength $selected]!=1} {error "E2 native router did not resolve one source output on $name: $selected"}
+   if {[lindex $route 0] in $roots} {set route [lrange $route 1 end]}
+   dict set resolved $name [concat $selected $route]
+   puts "E2_SLL_NATIVE_SOURCE_RESOLVED $name $selected"
+  }
+ } message options]
+ # Even a failed or partially completed batch must release its probe routes.
+ set clearRC [catch {route_design -unroute -nets [get_nets $names]} clearMessage clearOptions]
+ if {$rc} {return -options $options $message}
+ if {$clearRC} {return -options $clearOptions $clearMessage}
+ puts "E2_SLL_NATIVE_SOURCE_BATCH nets=[llength $names]"
+ return $resolved
+}
 proc e2_sll::apply {planFile out} {
  variable records;variable pinNodes;variable used;variable cellsByName;variable leafPinsByName;variable receiverNodePaths
+ variable cellLocations;variable cellBels
+ set applyStarted [clock microseconds];set stageStarted $applyStarted;set stageTimes {}
  set records {};set pinNodes {};set used {}
  refresh_access_index
  source -notrace $planFile
+ dict set stageTimes index_and_plan [expr {([clock microseconds]-$stageStarted)/1e6}]
+ set stageStarted [clock microseconds]
  variable exportLocks;set exportLocks {}
  set pending {};set cells {}
  # Validate every tree before changing routing properties.
@@ -256,8 +294,9 @@ proc e2_sll::apply {planFile out} {
    set crossings {}
    foreach child [dict get $record tree] {if {[dict exists $child segment]} {lappend crossings $child}}
    if {![llength $crossings]} {error "E2 SLL plan contains no source crossing subtree: $driver"}
-   set remoteLoads {};set remoteSegments {}
-   set route [children $crossings {} remoteLoads remoteSegments]
+   # children already omits local waypoints at an empty prefix. Reuse the
+   # validated tail instead of resolving every remote endpoint a second time.
+   set route $tail
    if {[llength $crossings]==1} {
     set rootMode vivado_implicit_source
    } else {
@@ -270,11 +309,19 @@ proc e2_sll::apply {planFile out} {
   lappend records [dict create net $name driver $driver source_slr [dict get $record source_slr] roots $roots source_mode $rootMode loads $loads segments $segments]
   if {[llength $records]%250==0} {puts "E2_SLL_TREES_VALIDATED [llength $records]";flush stdout}
  }
- foreach c [dict keys $cells] {
+ dict set stageTimes validate_trees [expr {([clock microseconds]-$stageStarted)/1e6}]
+ set stageStarted [clock microseconds]
+ set endpointObjects {}
+ foreach c [dict keys $cells] {lappend endpointObjects [dict get $cellsByName $c]}
+ if {[llength $endpointObjects]} {
+  set_property IS_LOC_FIXED true $endpointObjects
+  set_property IS_BEL_FIXED true $endpointObjects
+  set endpointTypes [get_property REF_NAME $endpointObjects]
+ } else {set endpointTypes {}}
+ foreach c [dict keys $cells] ref $endpointTypes {
   set cell [dict get $cellsByName $c]
-  set_property IS_LOC_FIXED true $cell;set_property IS_BEL_FIXED true $cell
   set mapping {}
-  if {[string match LUT* [get_property REF_NAME $cell]]} {
+  if {[string match LUT* $ref]} {
    set mapping {}
    foreach pin [get_pins -of_objects $cell -filter {DIRECTION == IN}] {
     set bp [get_bel_pins -of_objects $pin]
@@ -284,15 +331,17 @@ proc e2_sll::apply {planFile out} {
    }
    set_property LOCK_PINS $mapping $cell
   }
-  dict set exportLocks $c [list [get_property LOC $cell] [get_property BEL $cell] $mapping]
+  dict set exportLocks $c [list [dict get $cellLocations $c] [dict get $cellBels $c] $mapping]
  }
+ dict set stageTimes lock_endpoints [expr {([clock microseconds]-$stageStarted)/1e6}]
+ set stageStarted [clock microseconds]
  file mkdir $out
  set af [open $out/sll-macro-pin-aliases.tsv w];puts $af "logical_pin\tphysical_leaf_pins"
  dict for {name leaves} $leafPinsByName {set leafNames [get_property NAME $leaves];if {$leafNames ne $name} {puts $af [join [list $name $leafNames] "\t"]}};close $af
  set f [open $out/sll-fixed-route.xdc w]
  set sf [open $out/sll-source-selection.tsv w]
  puts $sf "net\tmode\tcandidate_outputs\timport_selected_outputs"
- set index 0
+ set index 0;set nativeRequests {};set finalRoutes {}
  try {
   foreach item $pending {
    lassign $item net route preview roots
@@ -309,23 +358,46 @@ proc e2_sll::apply {planFile out} {
    if {![llength $selected]} {error "E2 no native source access in normalized FIXED_ROUTE for $net"}
    set record [lindex $records $index]
    if {[needs_native_source_resolution [dict get $record driver] $selected $roots]} {
-    set route [native_source_route $net $route $roots]
-    set net [get_nets [dict get $record net]]
-    set_property FIXED_ROUTE $route $net
-    set selected [source_accesses [get_property FIXED_ROUTE $net] $roots]
-    if {[llength $selected]!=1 || [needs_native_source_resolution [dict get $record driver] $selected $roots]} {
-     error "E2 native source resolution was not retained for $net"
-    }
-    dict set record source_mode vivado_native_router_source
+    lappend nativeRequests [list [dict get $record net] $route $roots]
    }
    dict set record import_selected_outputs $selected
    lset records $index $record
-   puts $sf [join [list $net [dict get $record source_mode] $roots $selected] "\t"]
-   puts $f [constraint_command $route [get_property NAME $net]]
+   dict set finalRoutes [dict get $record net] $route
    incr index
    if {$index%250==0} {puts "E2_SLL_TREES_APPLIED_PROGRESS $index";flush stdout}
   }
+  dict set stageTimes import_trees [expr {([clock microseconds]-$stageStarted)/1e6}]
+  set stageStarted [clock microseconds]
+  set resolved [native_source_routes $nativeRequests]
+  set index 0
+  foreach record $records {
+   set name [dict get $record net];set roots [dict get $record roots]
+   if {[dict exists $resolved $name]} {
+    set route [dict get $resolved $name];set net [get_nets [list $name]]
+    set_property FIXED_ROUTE $route $net
+    set selected [source_accesses [get_property FIXED_ROUTE $net] $roots]
+    if {[llength $selected]!=1 || [needs_native_source_resolution [dict get $record driver] $selected $roots]} {
+     error "E2 native source resolution was not retained for $name"
+    }
+    dict set finalRoutes $name $route
+    dict set record source_mode vivado_native_router_source
+    dict set record import_selected_outputs $selected
+    lset records $index $record
+   }
+   incr index
+  }
+  dict set stageTimes native_source_batch [expr {([clock microseconds]-$stageStarted)/1e6}]
+  set stageStarted [clock microseconds]
+  foreach record $records {
+   set name [dict get $record net]
+   puts $sf [join [list $name [dict get $record source_mode] [dict get $record roots] [dict get $record import_selected_outputs]] "\t"]
+   puts $f [constraint_command [dict get $finalRoutes $name] $name]
+  }
  } finally {close $f;close $sf}
+ dict set stageTimes write_constraints [expr {([clock microseconds]-$stageStarted)/1e6}]
+ dict set stageTimes total [expr {([clock microseconds]-$applyStarted)/1e6}]
+ set tf [open $out/sll-generation-timings.tsv w];puts $tf "phase\tseconds"
+ dict for {stage seconds} $stageTimes {puts $tf "$stage\t$seconds"};close $tf
  puts "E2_SLL_TREES_APPLIED [llength $records]"
 }
 proc e2_sll::trace_paths {adj roots slls} {
