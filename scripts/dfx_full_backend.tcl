@@ -57,7 +57,7 @@ proc main {} {
     set policy strict
     if {[info exists dfx(e2_sll_audit_policy)]} {set policy $dfx(e2_sll_audit_policy)}
     if {$policy ni {strict record-failure}} {error "Unknown full SLL audit policy: $policy"}
-    set rc [catch {amf_dfx::timed full_sll_audit {dfx_sll::audit}} msg opts]
+    set rc [catch {amf_dfx::timed full_sll_audit {dfx_sll::audit $out/base_routed.dcp}} msg opts]
     set checked [expr {[info exists dfx(e2_sll_enabled)] && $dfx(e2_sll_enabled)}]
     set f [open $out/sll-audit-status.tsv w]
     puts $f "checked\t$checked";puts $f "passed\t[expr {!$rc}]";puts $f "policy\t$policy"

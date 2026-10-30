@@ -2,6 +2,7 @@
 source [file join [file dirname [info script]] sll_routes.tcl]
 source [file join [file dirname [info script]] sll_parallel.tcl]
 source [file join [file dirname [info script]] sll_usage.tcl]
+source [file join [file dirname [info script]] sll_audit_parallel.tcl]
 namespace eval dfx_sll {variable active 0}
 source [file join [file dirname [info script]] dfx_sll_native.tcl]
 proc dfx_sll::validate_tree {tree prefix footprint usedVar} {
@@ -71,13 +72,28 @@ proc dfx_sll::apply {} {
  set f [open [file join $dir records.tcl] w];puts $f [list set ::e2_sll::records $::e2_sll::records];close $f
  puts "E2_INCREMENTAL_SLL_APPLIED nets=[llength $combined]"
 }
-proc dfx_sll::audit {} {
+proc dfx_sll::audit {{checkpoint {}}} {
  global dfx
  variable active
  if {$active} {
-  e2_sll::audit [file join $dfx(output) sll]
-  audit_native_interfaces [file join $dfx(output) sll]
-  e2_sll::usage [file join $dfx(output) sll]
+  set out [file join $dfx(output) sll]
+  set workers 4
+  if {[info exists dfx(e2_sll_workers)]} {set workers $dfx(e2_sll_workers)}
+  set f [open [file join $out sll-audit-stage-timings.tsv] w];puts $f "phase\tseconds"
+  try {
+   set start [clock microseconds]
+   e2_sll::audit_with_workers $out $workers $checkpoint
+   puts $f "paths\t[expr {([clock microseconds]-$start)/1e6}]";flush $f
+   # Worker caches live in other processes. Rebuild parent handles before
+   # checking native DFX interfaces after physical optimization/reload.
+   set start [clock microseconds]
+   e2_sll::refresh_access_index
+   audit_native_interfaces $out
+   puts $f "native_interfaces\t[expr {([clock microseconds]-$start)/1e6}]";flush $f
+   set start [clock microseconds]
+   e2_sll::usage $out
+   puts $f "usage\t[expr {([clock microseconds]-$start)/1e6}]"
+  } finally {close $f}
  }
 }
 

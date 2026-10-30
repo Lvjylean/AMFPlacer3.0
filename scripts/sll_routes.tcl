@@ -433,7 +433,7 @@ proc e2_sll::internal_receiver {driver receiver net} {
  if {[driver_net $receiver] ne $net} {error "E2 internal receiver net changed: $receiver"}
  return {}
 }
-proc e2_sll::audit {out} {
+proc e2_sll::audit_reference {out} {
  variable records;variable pinNodes
  # Physical optimization or checkpoint reload can invalidate object handles.
  refresh_access_index
@@ -498,5 +498,127 @@ proc e2_sll::audit {out} {
   }
  }
  } finally {close $f;close $rf}
+ puts "E2_SLL_PATHS_VERIFIED $count"
+}
+
+# Read-only audit helpers. Every cache is rebuilt from the current checkpoint.
+proc e2_sll::prepare_audit_pins {} {
+ variable records;variable cellsByName;variable pinsByName;variable leafPinsByName
+ set needed {};set owners {}
+ foreach record $records {
+  foreach pin [concat [list [dict get $record driver]] [dict keys [dict get $record loads]]] {
+   dict set needed $pin 1;dict set owners [file dirname $pin] 1
+  }
+ }
+ set objects {}
+ foreach owner [dict keys $owners] {
+  if {![dict exists $cellsByName $owner]} {error "E2 missing endpoint cell $owner"}
+  lappend objects [dict get $cellsByName $owner]
+ }
+ for {set offset 0} {$offset<[llength $objects]} {incr offset 2048} {
+  set pins [get_pins -of_objects [lrange $objects $offset [expr {$offset+2047}]]]
+  set names [get_property NAME $pins];set leaves [get_property IS_LEAF $pins]
+  if {[llength $pins]!=[llength $names] || [llength $pins]!=[llength $leaves]} {error "E2 incomplete batch pin metadata"}
+  foreach pin $pins name $names leaf $leaves {
+   if {![dict exists $needed $name]} {continue}
+   dict set pinsByName $name $pin
+   if {$leaf} {dict set leafPinsByName $name $pin}
+  }
+ }
+ foreach name [dict keys $needed] {
+  if {![dict exists $pinsByName $name]} {error "E2 missing or ambiguous pin $name"}
+ }
+ return [dict size $needed]
+}
+proc e2_sll::audit_graph {net} {
+ set adj {};set pips [get_pips -of_objects $net]
+ if {![llength $pips]} {return $adj}
+ # Property collections preserve the PIP collection's order. Batch this
+ # query rather than crossing the Tcl/Vivado interface once per edge.
+ set directions [get_property IS_DIRECTIONAL $pips]
+ if {[llength $directions]!=[llength $pips]} {error "E2 incomplete PIP direction metadata"}
+ foreach pip $pips directional $directions {
+  set upstream [get_nodes -uphill -of_objects $pip]
+  set downstream [get_nodes -downhill -of_objects $pip]
+  if {[llength $upstream]!=1 || [llength $downstream]!=1} {error "E2 ambiguous route graph $pip"}
+  # Node object string representations are their canonical names. Avoid
+  # two redundant scalar NAME queries per PIP; topology queries stay native.
+  set a [lindex $upstream 0];set b [lindex $downstream 0]
+  dict lappend adj $a $b
+  if {!$directional} {
+   foreach endpoint [get_nodes -of_objects $pip] {
+    if {[get_property IS_SLL $endpoint]} {error "Audit requires explicit direction for an SLL-adjacent bidirectional PIP: $pip"}
+   }
+   dict lappend adj $b $a
+  }
+ }
+ return $adj
+}
+
+proc e2_sll::audit {out} {
+ variable records;variable pinNodes
+ # Physical optimization or checkpoint reload can invalidate object handles.
+ set auditStarted [clock microseconds];set phaseStarted $auditStarted;set timing {}
+ refresh_access_index
+ set endpoints [prepare_audit_pins]
+ dict set timing index [expr {([clock microseconds]-$phaseStarted)/1e6}]
+ foreach phase {graph source receivers} {dict set timing $phase 0.0}
+ set f [open $out/sll-path-audit.tsv w];puts $f "net\tpin\texpected\tactual\tmatch"
+ set rf [open $out/sll-source-access-audit.tsv w];puts $rf "net\tcandidate_outputs\tused_outputs"
+ set count 0
+ try {
+ foreach record $records {
+  set net [driver_net [dict get $record driver]]
+  if {[get_property NAME $net] ne [dict get $record net]} {error "E2 net identity changed"}
+  if {[get_property ROUTE_STATUS $net] ne "ROUTED" || [string match *STUB* [get_property ROUTE $net]]} {error "E2 incomplete routed tree $net"}
+  set phaseStarted [clock microseconds]
+  set routed [get_property NAME [get_nodes -of_objects $net]]
+  set adj [audit_graph $net]
+  dict set timing graph [expr {[dict get $timing graph]+([clock microseconds]-$phaseStarted)/1e6}]
+  set phaseStarted [clock microseconds]
+  # Requery after routing: Vivado may choose another site output. Merely
+  # checking IS_USED on a site pin does not prove it is an interconnect root.
+  set driver [dict get $record driver]
+  set dp [pin_object $driver]
+  set candidates [lsort -unique [get_property NAME [get_nodes -of_objects [get_site_pins -of_objects [physical_pins $driver]]]]]
+  # A dedicated local COUT-to-CIN connection can be one used node with
+  # no outgoing interconnect PIP. Include roots explicitly present in
+  # ROUTE, even when their only receiver shares that same node.
+  set usedOutputs [source_accesses [get_property ROUTE $net] $candidates]
+  set roots {};foreach root $usedOutputs {if {$root in $routed} {lappend roots $root}}
+  if {![llength $roots]} {error "E2 no routed physical output for $driver"}
+  puts $rf [join [list $net $candidates $roots] "\t"]
+  set actualResources [lsort [get_property NAME [get_nodes -of_objects $net -filter {IS_SLL == 1}]]]
+  if {$actualResources ne [lsort [dict keys [dict get $record segments]]]} {error "E2 extra or missing SLL on $net: $actualResources"}
+  set paths [trace_paths $adj $roots $actualResources]
+  dict set timing source [expr {[dict get $timing source]+([clock microseconds]-$phaseStarted)/1e6}]
+  set phaseStarted [clock microseconds]
+  dict for {pin expected} [dict get $record loads] {
+   set actual {};set witnesses 0
+   set targetObjects [get_nodes -quiet -of_objects [get_site_pins -quiet -of_objects [physical_pins $pin]]]
+   set targets {}
+   if {[llength $targetObjects]} {set targets [get_property NAME $targetObjects]} else {
+    set actual [internal_receiver $driver $pin $net];set witnesses 1
+   }
+   foreach target $targets {
+    if {![dict exists $paths $target]} {continue}
+    set candidate [dict get $paths $target]
+    if {$witnesses && $actual ne $candidate} {error "E2 inconsistent receiver access paths $pin"}
+    set actual $candidate;incr witnesses
+   }
+   if {!$witnesses} {error "E2 receiver disconnected $pin"}
+   set match [expr {$actual eq $expected}]
+   puts $f [join [list $net $pin [join $expected ,] [join $actual ,] $match] "\t"]
+   if {!$match} {error "E2 receiver SLL path mismatch $pin: $actual vs $expected"}
+   incr count
+   if {$count%10000==0} {puts "READ_ONLY_AUDIT_PROGRESS $count";flush stdout}
+  }
+  dict set timing receivers [expr {[dict get $timing receivers]+([clock microseconds]-$phaseStarted)/1e6}]
+ }
+ } finally {close $f;close $rf}
+ dict set timing total [expr {([clock microseconds]-$auditStarted)/1e6}]
+ set tf [open [file join $out sll-audit-timings.tsv] w];puts $tf "phase\tseconds"
+ dict for {phase seconds} $timing {puts $tf "$phase\t$seconds"};close $tf
+ puts "E2_SLL_AUDIT_BATCHED endpoints=$endpoints seconds=[dict get $timing total]"
  puts "E2_SLL_PATHS_VERIFIED $count"
 }
