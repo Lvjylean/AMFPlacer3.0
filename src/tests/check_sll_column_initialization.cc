@@ -27,8 +27,8 @@ static void occupy(std::map<TileKey,size_t>&used,int boundary,int col,int count,
 }
 static int select(const Model&m,const std::map<TileKey,size_t>&used,int from=0,int to=1,
                   const std::map<ColumnKey,size_t>*cached=nullptr){
-    TileBox a,b;a.add({21,from?150:-50});b.add({80,to?150:-50});
-    return m.initialTile(from,to,{21,from?150.:-50.},a,b,1,used,-1,-1,cached);
+    TileBox b;b.add({80,to?150:-50});
+    return m.initialTile(from,to,{21,from?150.:-50.},b,1,used,-1,-1,cached);
 }
 static int column(const Model&m,int ti){check(ti>=0,"expected a tile");return m.tiles.at(ti).column;}
 int main(){try{
@@ -51,7 +51,7 @@ int main(){try{
     check(column(m,select(m,used))==20,"explicit 100% policy restores physical-capacity admission");
     m.initialColumnUtilizationLimit=.75;
     TileBox empty;
-    int refinement=m.initialTile(0,1,{21,-50},empty,empty,1,used,-1,20);
+    int refinement=m.initialTile(0,1,{21,-50},empty,1,used,-1,20);
     check(column(m,refinement)==20,"Y refinement does not reapply column admission");
     auto physical=inventory(60,24);used.clear();occupy(used,0,20,1079,24);
     check(physical.columnCapacity.at({0,20})==1440,"60 tiles times 24 physical lanes");

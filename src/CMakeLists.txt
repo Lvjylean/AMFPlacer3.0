@@ -352,3 +352,8 @@ add_executable(checkPlacementFeatures EXCLUDE_FROM_ALL tests/check_placement_fea
 target_link_libraries(checkPlacementFeatures Utils pthread)
 add_executable(checkFeatureIntegration EXCLUDE_FROM_ALL tests/check_feature_integration.cc)
 target_link_libraries(checkFeatureIntegration GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+# Explicit input legs must survive local receiver bounding boxes.
+add_executable(checkSllWireSplit EXCLUDE_FROM_ALL tests/check_sll_wire_split.cc)
+add_executable(checkSllWireSplitQp EXCLUDE_FROM_ALL tests/check_sll_wire_split_qp.cc)
+target_link_libraries(checkSllWireSplitQp GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})

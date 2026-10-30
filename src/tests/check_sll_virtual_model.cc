@@ -19,7 +19,7 @@ int main(){try {
     double expected=m.local(n.source.p,first.in)+first.slowMax+m.local(first.out,second.in)+second.slowMax+m.local(second.out,n.sinks[4].p);
     check(std::abs(m.pathDelay(p,5,n.source.p,n.sinks[4].p)-expected)<1e-12,"paired endpoints and segment timing");
     auto moved=n.sinks[4].p;moved.x+=10;check(m.pathDelay(p,5,n.source.p,moved)!=expected,"receiver side movement affects timing");
-    size_t trees=m.localTrees(p).size();check(trees==3,"one local tree per source/landing");m.rebuild({n});check(m.created==0&&m.retained==2&&m.deleted==0,"stable object lifecycle");
+    size_t trees=m.localTrees(p).size();check(trees==5,"three receiver trees plus two explicit crossing input legs");m.rebuild({n});check(m.created==0&&m.retained==2&&m.deleted==0,"stable object lifecycle");
     for(auto&s:n.sinks)s.slr=1;m.rebuild({n});check(m.plans.empty()&&m.deleted==2,"release resources when crossings vanish");
     n.sinks={pin(1,2,50)};m.rebuild({n});check(m.created==1,"crossing birth");
     auto n2=n;n2.id=2;n2.source.id=20;n2.sinks[0].id=21;m.rebuild({n,n2});check(m.plans.size()==2,"multiple nets allocated");std::set<std::string> used;for(auto&p2:m.plans)for(auto&e:p2.crossings)check(used.insert(m.channels[e.channel].resource).second,"capacity collision");

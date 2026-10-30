@@ -31,9 +31,10 @@ inline void Model::indexTiles() {
         columnCapacity[physicalColumn(v.first)]+=v.second.size();
     } // Count physical lanes once; upward/downward views share this supply.
 }
-inline int Model::initialTile(int from,int to,Point root,const TileBox&input,const TileBox&output,
+inline int Model::initialTile(int from,int to,Point root,const TileBox&output,
                              double weight,const std::map<TileKey,size_t>&occupied,
-                             int incumbent,int fixedColumn,const std::map<ColumnKey,size_t>*occupiedColumns)const {
+                             int incumbent,int fixedColumn,const std::map<ColumnKey,size_t>*occupiedColumns,
+                             const std::vector<Point>&continuations)const {
     if(!(initialTargetUtilization>0&&initialTargetUtilization<=1)||
        !std::isfinite(initialTargetUtilization)||!(initialDensityWeight>=0)||!std::isfinite(initialDensityWeight))
         throw std::invalid_argument("Invalid SLL initialization density parameters");
@@ -83,7 +84,9 @@ inline int Model::initialTile(int from,int to,Point root,const TileBox&input,con
     for(int ti:candidates){
         ++initialTileEvaluations;const auto&t=tiles[ti];const double n=load(t),c=tileCapacity.at(t.key);
         auto penalty=[&](double count){const double e=std::max(0.,count-initialTargetUtilization*c);return e*e/c;};
-        const double score=weight*(input.with(t.in,ratio)+output.with(t.out,ratio))+
+        double wire=length(root,t.in,ratio)+output.with(t.out,ratio);
+        for(const auto&child:continuations)wire+=length(t.out,child,ratio);
+        const double score=weight*wire+
                            initialDensityWeight*(penalty(n+1)-penalty(n));
         const double utilization=(n+1)/c;
         if(score<best-1e-9 || (std::abs(score-best)<=1e-9&&utilization<bestUtilization-1e-12)){
@@ -180,13 +183,13 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
                            columnPolicy.tier(occupiedColumns[ck]+1,columnCapacity.at(ck),transientCapacity(from,from+dir))!=ColumnPolicy::unavailable)selected=old->second;
                     }
                     if(selected<0){
-                        // Cache both local endpoint boxes once, not once per
-                        // candidate or receiver. No timing model is consulted.
-                        TileBox input,output;input.add(root);
-                        if(parent<0){for(const auto&s:n.sinks)if(s.slr==from)input.add(s.p);}
-                        else {for(int id:partition[g])if(pin(n,id).slr==from)input.add(pin(n,id).p);}
+                        // Only the root -> entry pair and landing receivers
+                        // vary here. Receivers on the input die have their own
+                        // hyperedge; they cannot mask the crossing input leg.
+                        // Later crossing entries are refined below once known.
+                        TileBox output;
                         for(int id:downstream)if(pin(n,id).slr==from+dir)output.add(pin(n,id).p);
-                        selected=initialTile(from,from+dir,root,input,output,n.weight,used,-1,-1,&occupiedColumns);
+                        selected=initialTile(from,from+dir,root,output,n.weight,used,-1,-1,&occupiedColumns);
                     }
                     if(selected<0)throw std::runtime_error("SLL initialization found no admissible column/tile: column utilization limit or physical tile capacity exhausted");
                     Crossing e;e.key=key;e.parent=parent;e.sinks=downstream;e.tile=selected;
@@ -195,8 +198,9 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
                     parent=k;root=tiles[selected].out;
                 }
             }
-            // With the complete topology available, score the two adjacent
-            // local hyperedges. Other trees are constant for this tile move.
+            // With the complete topology available, score this input leg, the
+            // landing receiver hyperedge and each child input leg separately.
+            // All other wire terms are constant for this tile move.
             // Refine newborn/reallocated crossings only. Retained legal tiles
             // are QP results and must not be reseeded on the next refresh.
             for(size_t k=0;k<p.crossings.size();++k){
@@ -204,13 +208,15 @@ inline void Model::rebuildTiles(std::vector<Net> nets) {
                 const auto old=previous.find(e.key);
                 if(old!=previous.end()&&old->second==e.tile)continue;
                 const auto base=tiles[e.tile];undo.change(base.key,-1);
-                const auto trees=localTrees(p);TileBox input,output;
-                auto fill=[&](TileBox&box,const std::vector<Terminal>&tree){for(const auto&t:tree)
-                    if(t.crossing!=int(k))box.add(t.isFixed?t.fixed:pin(n,t.pin).p);};
-                fill(input,trees.at(e.parent+1));fill(output,trees.at(k+1));
+                const auto trees=localTrees(p);TileBox output;
+                for(const auto&t:trees.at(k+1))
+                    if(t.crossing!=int(k))output.add(t.isFixed?t.fixed:pin(n,t.pin).p);
+                std::vector<Point> continuations;
+                for(const auto&child:p.crossings)if(child.parent==int(k))
+                    continuations.push_back(geometry(child).in);
                 const int incumbent=old==previous.end()?-1:old->second;
                 Point root=e.parent<0?n.source.p:tiles[p.crossings[e.parent].tile].out;
-                int selected=initialTile(base.from,base.to,root,input,output,n.weight,used,incumbent,base.column,&occupiedColumns);
+                int selected=initialTile(base.from,base.to,root,output,n.weight,used,incumbent,base.column,&occupiedColumns,continuations);
                 if(selected<0)throw std::runtime_error("SLL initialization lost a feasible tile");
                 e.tile=selected;undo.change(tiles[selected].key,1);
             }

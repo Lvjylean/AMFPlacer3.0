@@ -115,10 +115,11 @@ public:
 
     void indexTiles();
     void rebuildTiles(std::vector<Net>);
-    int initialTile(int from,int to,Point root,const TileBox&input,const TileBox&output,
+    int initialTile(int from,int to,Point root,const TileBox&output,
                     double weight,const std::map<TileKey,size_t>&occupied,
                     int incumbent=-1,int fixedColumn=-1,
-                    const std::map<ColumnKey,size_t>*occupiedColumns=nullptr)const;
+                    const std::map<ColumnKey,size_t>*occupiedColumns=nullptr,
+                    const std::vector<Point>&continuations={})const;
     void legalizeChannels();
     void legalizeChannelsSerial();
     const Channel& geometry(const Crossing&e)const {
@@ -183,12 +184,21 @@ public:
         throw std::runtime_error("Unknown SLL tree pin");
     }
     std::vector<std::vector<Terminal>> localTrees(const Plan&p)const {
-        std::vector<std::vector<Terminal>> trees(p.crossings.size()+1);
+        // Receiver hyperedges occupy [0, crossings.size()]: source/local sinks,
+        // then each landing/direct sinks. Append one two-terminal input leg per
+        // crossing. Local fanout must not hide the mandatory root -> SLL wire.
+        // Intermediate roots are the preceding exit, never the original source
+        // connected geometrically across multiple dies. No sharing is assumed
+        // between a receiver hyperedge and its outgoing input legs.
+        std::vector<std::vector<Terminal>> trees(2*p.crossings.size()+1);
         trees[0].push_back({p.net.source.id,{},false});
         for(size_t k=0;k<p.crossings.size();++k) {
             const auto&e=p.crossings[k];const auto&c=geometry(e);
-            trees.at(e.parent+1).push_back({-1,c.in,true,int(k),false});
             trees[k+1].push_back({-1,c.out,true,int(k),true});
+            auto&leg=trees[p.crossings.size()+1+k];
+            if(e.parent<0)leg.push_back({p.net.source.id,{},false});
+            else leg.push_back({-1,geometry(p.crossings.at(e.parent)).out,true,e.parent,true});
+            leg.push_back({-1,c.in,true,int(k),false});
         }
         for(const auto&s:p.net.sinks) {
             const auto&path=p.paths.at(s.id);
@@ -204,7 +214,7 @@ public:
             for(const auto&t:tree){Point v=t.isFixed?t.fixed:pin(p.net,t.pin).p;x0=std::min(x0,v.x);x1=std::max(x1,v.x);y0=std::min(y0,v.y);y1=std::max(y1,v.y);}
             value+=x1-x0+ratio*(y1-y0);
         }
-        return p.net.weight*value; // Shared local hyperedges counted once.
+        return p.net.weight*value; // Receiver hyperedges and input legs counted once.
     }
     double pathDelay(const Plan&p,int sink,Point sourcePoint,Point sinkPoint)const {
         Point cur=sourcePoint;double d=0;const auto&path=p.paths.at(sink);
