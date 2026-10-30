@@ -48,7 +48,7 @@ proc main {} {
         amf_dfx::timed static_membership_pre_route {amf_static_membership::enforce pre_route 1}
         amf_dfx::timed write_membership_placed_dcp {write_checkpoint $out/base_membership_placed.dcp}
         amf_dfx::timed audit_placed {full_region_audit [array get requested] placed}
-        report_timing_summary -delay_type min_max -file $out/base_placed_timing.rpt
+        amf_dfx::timed placed_timing_report {report_timing_summary -delay_type min_max -file $out/base_placed_timing.rpt}
         amf_dfx::timed full_sll_import {dfx_sll::apply_full}
         amf_dfx::timed vivado_route {route_design}
         amf_dfx::timed write_routed_dcp {write_checkpoint $out/base_routed.dcp}

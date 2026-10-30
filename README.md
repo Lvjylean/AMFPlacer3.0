@@ -1,3 +1,18 @@
+# sll-增量合并与加速（2026-10-30）
+
+当前整合：增量编译、SLL 约束导出与严格审计加速、本地 SLL/Pblock/增量布局可视化导入。
+
+**已知问题：SLL 入口侧共享超边可能掩盖发送端到入口的距离；本次未修改 L。**
+
+- [当前代码、入口与验证范围](docs/research/sll-integrated-snapshot-20261030.md)
+- [SLL 建模问题与待实施公式](docs/research/sll-modeling-known-issue-20261030.md)
+- [本地查看器使用与数据格式](scripts/diagnostics/placement_playback/README.md)
+- [GETRF 专用后端覆盖包](variants/getrf-u250-12ns-20261030/README.md)
+
+以下为按历史日期保留的版本说明；其中待开发/未实现描述不代表上述当前功能状态。
+
+---
+
 # incremental_compilation snapshot
 
 Full and incremental compilation, native static cache, joint routing, DFX boundary policy, CARRY and clock repairs: see [current workflow, build and validation scope](docs/incremental-compilation.md).

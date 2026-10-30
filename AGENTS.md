@@ -1,3 +1,7 @@
+# 当前归档约定（2026-10-30）
+
+用户指定功能分支为 `sll-增量合并与加速`。当前功能与来源以 `docs/research/sll-integrated-snapshot-20261030.md` 为准，下文历史副本路径不作为当前入口。SLL 线长建模存在已确认问题，详见 `docs/research/sll-modeling-known-issue-20261030.md`；本次仅归档现有功能，不实施 L_next。后续修改应独立验证。默认 place_design 不调用防驱动复制的 DONT_TOUCH 拓扑保护；相关补丁仅历史留档。CARRY 预连接为特定 GETRF 可选覆盖包，不无条件应用于其他设计。脚本快照生成采用已验证的 support 文件打包版本。
+
 # 当前副本说明（2026-10-30，DFX 短期兼容）
 
 本副本位于 `/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261029-dfx-native-interface-fallback/repo`，分支 `codex/dfx-native-interface-fallback-20261029`。用户当前只要求增量编译短期可用，暂不作为主要性能优化方向。本副本将 DFX 接口交给 Vivado 原生路由，内部 net 保留 SLL 约束及审计；详见 `docs/research/dfx-native-interface-fallback-20261029.md`。下文历史副本路径仅供追溯。

@@ -1,0 +1,335 @@
+{
+  "date": "2026-10-30",
+  "target_branch": "sll-增量合并与加速",
+  "previous_target_commit": "5fba39605c215fd045b91c0503f8f1c9ff38c0ab",
+  "base_commit": "2efea4718cebb017c39b0dbbe55c22e05ca64b76",
+  "source_tree_unchanged": "6897ddae309aecf3598e39e2b863d3227dafac77",
+  "sll_modeling_status": "known_issue_not_fixed",
+  "L_expression_changed": false,
+  "layout_or_routing_started": false,
+  "default_vivado_place": "native; no case-specific DONT_TOUCH or CARRY preroute",
+  "validated_script_generator_sha256": "495356ba9ee7a573b63925ed8bd2a273a338d393ea69459974e5dba694de6306",
+  "viewer_sources": [
+    {
+      "path": "scripts/diagnostics/placement_playback/index.html",
+      "sha256": "adcfe776e0f56a5093a501b671d6aab643f4096d7a61a37790fa8df2e413837c",
+      "bytes": 21116
+    },
+    {
+      "path": "scripts/diagnostics/placement_playback/build_layout_bundle.py",
+      "sha256": "e93fcb811386bd8f665cca07848bb43cd697308c828f7f4ecc535361321be166",
+      "bytes": 11783
+    },
+    {
+      "path": "scripts/diagnostics/placement_playback/local_playback.py",
+      "sha256": "8ef65f4456ef764445530766a8cd0146fdfe5f9af9812349838319b6b4c59d70",
+      "bytes": 10493
+    },
+    {
+      "path": "scripts/diagnostics/placement_playback/group_tracking.py",
+      "sha256": "65394ee7ace0e7347ba81a8f55508a6bc92b1fa6bd01c52af6eca928553b686e",
+      "bytes": 6249
+    },
+    {
+      "path": "scripts/diagnostics/placement_playback/export_gif.py",
+      "sha256": "5b436b4448f36c364dcd9fa98f85582a42d814b8442a3c95e70021cc972381fa",
+      "bytes": 3491
+    },
+    {
+      "path": "scripts/diagnostics/placement_playback/offline_compact.py",
+      "sha256": "4f6152bdd5c549953c5b846f8c0545cfe460eb62a293f3b0d7c8e6cdcdc9d80a",
+      "bytes": 7126
+    },
+    {
+      "path": "scripts/diagnostics/placement_playback/group_tracking.js",
+      "sha256": "95ef95d88261c3206a3571bf19639c121009a1685f395b2edb11601dd0845aba",
+      "bytes": 6875
+    },
+    {
+      "path": "scripts/diagnostics/placement_playback/layered_view.html",
+      "sha256": "b863544d1f9fcec9d28162142396b36a82faf37a941648e5bc894f9947954565",
+      "bytes": 26234
+    },
+    {
+      "path": "scripts/diagnostics/placement_playback/test_compact_preview.py",
+      "sha256": "f8d85a5957bd3a5f5ec0dc1157eb0e71043437c574df8b1795c6565d7d5b2fd5",
+      "bytes": 5378
+    },
+    {
+      "path": "scripts/diagnostics/placement_playback/placement_viewer.py",
+      "sha256": "9dc17d8dad0f932b9bec95ee4ae5974ed2fe16580675353062cb0cbb55f1ef48",
+      "bytes": 18107
+    },
+    {
+      "path": "scripts/diagnostics/placement_playback/README.md",
+      "sha256": "0f52c3c29d26be10aa57c31c6fbac64de2455a0c4bbd34943d3ca88e08f5e9db",
+      "bytes": 7020
+    },
+    {
+      "path": "scripts/diagnostics/placement_playback/trace_stages.py",
+      "sha256": "c3937a6ad20a13efa6fe94393bf8cc3cc227464708c5742746e04d1335418f79",
+      "bytes": 3346
+    },
+    {
+      "path": "scripts/diagnostics/placement_playback/layout_layers.js",
+      "sha256": "5d6c830a363bfed594e149f96d03a83b4d5cc53b8af0a96c185086bdae01d4ac",
+      "bytes": 6670
+    },
+    {
+      "path": "scripts/diagnostics/placement_playback/test_layout_layers.py",
+      "sha256": "6d9abb546ab3a33eec978442a7864875df20b87ab0ea2f0cfc5d84cabed3822d",
+      "bytes": 5563
+    },
+    {
+      "path": "scripts/diagnostics/placement_playback/compact_preview.py",
+      "sha256": "9f5d6ead7c84d1302f8fe7a726cd23d12dd3542c29308616e08511ef5b2e04fc",
+      "bytes": 11702
+    },
+    {
+      "path": "scripts/diagnostics/placement_playback/metadata_snapshot.py",
+      "sha256": "08e602f78465defab703a79540f8b08a2b02a97056e9b56a0795307c8d34f70a",
+      "bytes": 2753
+    },
+    {
+      "path": "scripts/diagnostics/placement_playback/local_layout.py",
+      "sha256": "37f7953344d0d96e87d05b6978ec5b5df5fe1088b6df7ae8555e86fb979d8c6b",
+      "bytes": 6837
+    },
+    {
+      "path": "scripts/diagnostics/placement_playback/test_local_playback.py",
+      "sha256": "bed9c882e2babcddbe018523b331dfd342aad082a7a8c6732f904da685fedd9e",
+      "bytes": 3426
+    },
+    {
+      "path": "experiments/preflight/20261020-viewer-launcher-compat/mac/amf-picker-server.py",
+      "sha256": "7f52df3ba5e10b7760400a8405325bcc6f17e9df11f2099b5c8a03d902637ce1",
+      "bytes": 9686
+    },
+    {
+      "path": "experiments/preflight/20261020-viewer-launcher-compat/mac/viewer_session.py",
+      "sha256": "a604f698047fc9cdb43ad72b4cf77e756b021f5e6e83db2fc3c31c6983d655e1",
+      "bytes": 3480
+    },
+    {
+      "path": "experiments/preflight/20261020-viewer-launcher-compat/mac/amf-viewer-remote.py",
+      "sha256": "2ab325f5cb648fe3efd181dd72a0fa810eece0c2069932bd3bfcc09738091e71",
+      "bytes": 4001
+    },
+    {
+      "path": "experiments/preflight/20261020-viewer-launcher-compat/mac/managed_compact.py",
+      "sha256": "c55e79ff9a4eef39f59ebe09c8399f9f705b5b2ca97f96f593b6dcfc2d94eab4",
+      "bytes": 286
+    },
+    {
+      "path": "experiments/preflight/20261020-viewer-launcher-compat/mac/open-amf-viewer-mac.py",
+      "sha256": "f24a9c818bdf6bd3fc7f4bad752a739634f0b5f38c059af5964d0a9c5d9bf1cc",
+      "bytes": 5733
+    },
+    {
+      "path": "experiments/preflight/20261020-viewer-launcher-compat/mac/viewer_hosts.py",
+      "sha256": "8b2a776ad1d627a0b8dad5ac7b83c7a784f3a87782380b572ae2f6f966aac16c",
+      "bytes": 2710
+    },
+    {
+      "path": "experiments/preflight/20261020-viewer-launcher-compat/mac/amf-picker.html",
+      "sha256": "91fd4aa2f9a20d01e151db62350c5e2e68c63d480bcb59e7fb8706466590b33c",
+      "bytes": 12992
+    },
+    {
+      "path": "experiments/preflight/20261020-viewer-launcher-compat/mac/open-amf-viewer-mac.command",
+      "sha256": "f60dee58c62604842679a8db5470fa6005a8f4bd90c6ca22786cb924d6b1993b",
+      "bytes": 428
+    },
+    {
+      "path": "experiments/preflight/20261024-viewer-session-lifecycle/playback/index.html",
+      "sha256": "45a3704b46304ab5a8e5ad292aea3852bfac418614c6afa6b56b68558e8c035b",
+      "bytes": 24353
+    },
+    {
+      "path": "experiments/preflight/20261024-viewer-session-lifecycle/playback/local_playback.py",
+      "sha256": "5cee3a3ac669b6fc3233df04f92a8480371eaa5e44f6fb5597f54d51b1c99317",
+      "bytes": 13210
+    },
+    {
+      "path": "experiments/preflight/20261024-viewer-session-lifecycle/playback/test_fast_cache.py",
+      "sha256": "01a30bdb76ecd2de98d2fab90fef4f08864a62838512c488ea002f08611578f5",
+      "bytes": 2738
+    },
+    {
+      "path": "experiments/preflight/20261024-viewer-session-lifecycle/playback/group_tracking.py",
+      "sha256": "65394ee7ace0e7347ba81a8f55508a6bc92b1fa6bd01c52af6eca928553b686e",
+      "bytes": 6249
+    },
+    {
+      "path": "experiments/preflight/20261024-viewer-session-lifecycle/playback/export_gif.py",
+      "sha256": "5b436b4448f36c364dcd9fa98f85582a42d814b8442a3c95e70021cc972381fa",
+      "bytes": 3491
+    },
+    {
+      "path": "experiments/preflight/20261024-viewer-session-lifecycle/playback/viewer_session.py",
+      "sha256": "a604f698047fc9cdb43ad72b4cf77e756b021f5e6e83db2fc3c31c6983d655e1",
+      "bytes": 3480
+    },
+    {
+      "path": "experiments/preflight/20261024-viewer-session-lifecycle/playback/group_tracking.js",
+      "sha256": "95ef95d88261c3206a3571bf19639c121009a1685f395b2edb11601dd0845aba",
+      "bytes": 6875
+    },
+    {
+      "path": "experiments/preflight/20261024-viewer-session-lifecycle/playback/test_compact_preview.py",
+      "sha256": "f8d85a5957bd3a5f5ec0dc1157eb0e71043437c574df8b1795c6565d7d5b2fd5",
+      "bytes": 5378
+    },
+    {
+      "path": "experiments/preflight/20261024-viewer-session-lifecycle/playback/placement_viewer.py",
+      "sha256": "b47f723fd817b0260af2dd228e256ec279d71b77d21f4501685af9c7aad16eba",
+      "bytes": 19183
+    },
+    {
+      "path": "experiments/preflight/20261024-viewer-session-lifecycle/playback/managed_remote.py",
+      "sha256": "a7973674b8018a62472f4bdb198c526e117614ed8291f1090e7372a76ce35414",
+      "bytes": 625
+    },
+    {
+      "path": "experiments/preflight/20261024-viewer-session-lifecycle/playback/test_viewer_session.py",
+      "sha256": "067e5f12e682e3cea7cc9ae1903582d958c5af1d8ebca4d709e078003a831a40",
+      "bytes": 3865
+    },
+    {
+      "path": "experiments/preflight/20261024-viewer-session-lifecycle/playback/trace_stages.py",
+      "sha256": "c3937a6ad20a13efa6fe94393bf8cc3cc227464708c5742746e04d1335418f79",
+      "bytes": 3346
+    },
+    {
+      "path": "experiments/preflight/20261024-viewer-session-lifecycle/playback/compact_preview.py",
+      "sha256": "14023a6585292657440ae9bfedb6c08732de3f5a1fdd01151a5f8dbc027377a4",
+      "bytes": 13078
+    },
+    {
+      "path": "experiments/preflight/20261024-viewer-session-lifecycle/playback/metadata_snapshot.py",
+      "sha256": "08e602f78465defab703a79540f8b08a2b02a97056e9b56a0795307c8d34f70a",
+      "bytes": 2753
+    },
+    {
+      "path": "experiments/preflight/20261024-viewer-session-lifecycle/playback/test_local_playback.py",
+      "sha256": "97b8a86bc57fb40050734fc4b8b40a735c8694537f9f0b4d63a3bc6747c0056c",
+      "bytes": 6305
+    }
+  ],
+  "viewer_original_validation": "experiments/preflight/20261030-local-viewer-layers/verification.json",
+  "server_unit_results": [
+    {
+      "argv": [
+        "tclsh",
+        "scripts/test_sll_audit_batch.tcl"
+      ],
+      "exit": 0,
+      "wall_seconds": 0.002543210983276367
+    },
+    {
+      "argv": [
+        "tclsh",
+        "scripts/test_sll_audit_parallel.tcl"
+      ],
+      "exit": 0,
+      "wall_seconds": 0.013587713241577148
+    },
+    {
+      "argv": [
+        "tclsh",
+        "scripts/test_sll_route_structure.tcl"
+      ],
+      "exit": 0,
+      "wall_seconds": 0.0022928714752197266
+    },
+    {
+      "argv": [
+        "tclsh",
+        "scripts/test_sll_dfx_bridge.tcl"
+      ],
+      "exit": 0,
+      "wall_seconds": 0.003357410430908203
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "scripts/test_sll_audit_collect.py"
+      ],
+      "exit": 0,
+      "wall_seconds": 0.04256725311279297
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "scripts/test_dfx_sll_native.py"
+      ],
+      "exit": 0,
+      "wall_seconds": 0.050920724868774414
+    },
+    {
+      "argv": [
+        "tclsh",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-integrated-snapshot/repo/variants/getrf-u250-12ns-20261030/tests/test_topology_guard.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-integrated-snapshot/repo/variants/getrf-u250-12ns-20261030/scripts/dfx_full_topology_guard.tcl",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-integrated-snapshot/validation/topology-guard"
+      ],
+      "exit": 0,
+      "wall_seconds": 0.0025196075439453125
+    },
+    {
+      "argv": [
+        "tclsh",
+        "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-integrated-snapshot/validation/carry-guard/test_carry_preroute.tcl"
+      ],
+      "exit": 0,
+      "wall_seconds": 0.002947092056274414
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "scripts/diagnostics/placement_playback",
+        "-p",
+        "test_*.py",
+        "-v"
+      ],
+      "exit": 0,
+      "wall_seconds": 1.1468870639801025
+    }
+  ],
+  "additional_checks": {
+    "script_snapshot_regression": "2 tests passed; uses actual runner snapshot loop",
+    "default_backend_case_patches_disabled": true,
+    "local_viewer": "25 tests passed in isolated packaged copy using bundled Python/Pillow and loopback permission",
+    "legacy_viewer_dependencies": {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "experiments/preflight/20261024-viewer-session-lifecycle/playback",
+        "-p",
+        "test_*.py",
+        "-v"
+      ],
+      "exit": 0,
+      "wall_seconds": 2.162325620651245
+    },
+    "diff_check": true
+  },
+  "compatibility_scope": "Historical high-fanout topology protection archived only. Optional GETRF CARRY overlay derives from validated deployment but with topology calls removed per latest user request; this adjusted combination has not had a new full implementation run.",
+  "historical_evidence": {
+    "export_commit": "5fba396",
+    "audit_commit": "2efea471",
+    "free_sll_comparison": "getrf-u250-12ns-free-sll-20261030",
+    "note": "Past experiment results belong to frozen historical inputs; no new QoR or speed claims."
+  }
+}

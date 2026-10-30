@@ -49,7 +49,7 @@ def run(args):
     for p in ('inputs','logs','placement','reports/physical'):(out/p).mkdir(parents=True)
     script=Path(__file__).resolve().parent
     for f in script.iterdir():
-        if f.is_file() and f.suffix in ('.py','.tcl'):shutil.copy2(f,out/'inputs'/f.name)
+        if f.is_file() and (f.suffix in ('.py','.tcl') or f.name == 'topology-guard-nets.txt'):shutil.copy2(f,out/'inputs'/f.name)
     revision=subprocess.run(['git','rev-parse','HEAD'],cwd=script.parent,text=True,capture_output=True)
     m=dict(schema='amf-dfx-multi-shell-v1',state='running',job=job,stages=[],started_epoch=time.time(),
            amf_placement_scope='whole_design',binary=str(binary),binary_sha256=sha(binary),
