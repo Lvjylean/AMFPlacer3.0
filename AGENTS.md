@@ -1,3 +1,7 @@
+# 当前 L 修订副本（2026-10-30）
+
+本副本已按用户授权拆分 SLL 输入段与本地接收端超边，见 docs/research/sll-wirelength-split-20261030.md。新分支 codex/sll-wirelength-split-20261030；原 sll-增量合并与加速 分支仍为未修正基线。下文“不实施 L_next”仅描述历史归档任务，不适用于本次修订。10 个模型程序和 3 个集成测试通过；未运行新的完整 GETRF 实验。
+
 # 当前归档约定（2026-10-30）
 
 用户指定功能分支为 `sll-增量合并与加速`。当前功能与来源以 `docs/research/sll-integrated-snapshot-20261030.md` 为准，下文历史副本路径不作为当前入口。SLL 线长建模存在已确认问题，详见 `docs/research/sll-modeling-known-issue-20261030.md`；本次仅归档现有功能，不实施 L_next。后续修改应独立验证。默认 place_design 不调用防驱动复制的 DONT_TOUCH 拓扑保护；相关补丁仅历史留档。CARRY 预连接为特定 GETRF 可选覆盖包，不无条件应用于其他设计。脚本快照生成采用已验证的 support 文件打包版本。

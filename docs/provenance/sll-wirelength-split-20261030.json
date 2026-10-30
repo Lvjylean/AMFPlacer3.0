@@ -1,0 +1,233 @@
+{
+  "base_commit": "8841dca23856cf7972fee955ca5c723d0a8af249",
+  "implementation_commit": "417484ecb714457d23b21ac43f34c115e08dd369",
+  "branch": "codex/sll-wirelength-split-20261030",
+  "server_copy": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-wirelength-split/repo",
+  "build": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-wirelength-split/repo/builds/build-20261030-200320-571931-417484ec",
+  "build_manifest": {
+    "build_id": "build-20261030-200320-571931-417484ec",
+    "source_commit": "417484ecb714457d23b21ac43f34c115e08dd369",
+    "git_status": "",
+    "source_snapshot": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-wirelength-split/repo/builds/build-20261030-200320-571931-417484ec/src",
+    "created": "2026-10-30T20:03:20.759489+08:00",
+    "jobs": 2,
+    "state": "completed",
+    "stages": [
+      {
+        "name": "configure",
+        "command": [
+          "cmake",
+          "-S",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-wirelength-split/repo/builds/build-20261030-200320-571931-417484ec/src",
+          "-B",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-wirelength-split/repo/builds/build-20261030-200320-571931-417484ec/build",
+          "-G",
+          "Ninja",
+          "-DCMAKE_CXX_FLAGS=-g",
+          "-DBOOST_LIBRARYDIR=/usr/lib/x86_64-linux-gnu",
+          "-DBoost_NO_SYSTEM_PATHS=OFF",
+          "-DAMF_ENABLE_RUNTIME_PROFILING=ON"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "compile",
+        "command": [
+          "cmake",
+          "--build",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-wirelength-split/repo/builds/build-20261030-200320-571931-417484ec/build",
+          "--parallel",
+          "2",
+          "--target",
+          "AMFPlacer",
+          "partitionHyperGraph"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "runtime_profiling": true,
+    "tool_versions": {
+      "cmake": "cmake version 3.22.1\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).",
+      "cxx": "c++ (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0\nCopyright (C) 2021 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+      "ninja": "1.10.1"
+    },
+    "capabilities": {
+      "schema": "amf-capabilities-v1",
+      "placement_feature_switch_schema": 1,
+      "sll_tau_policy_schema": 3,
+      "hard_macro_anchor_schema": 1,
+      "dsp_preg_metadata_schema": 1,
+      "dsp_legacy_depth_true_preg_timing_schema": 1,
+      "boundary_min_cells_from_path_threshold_schema": 1,
+      "virtual_sll_resource_schema": 1,
+      "joint_sll_qp_density_schema": 1,
+      "tile_sll_global_schema": 1,
+      "simple_sll_initialization_schema": 1,
+      "qp_sll_projection_schema": 1,
+      "bounded_sll_qp_projection_schema": 1,
+      "paired_sll_timing_schema": 1,
+      "sll_output_long_delay_schema": 1,
+      "transient_sll_capacity_schema": 1,
+      "receiver_group_fixed_route_schema": 1,
+      "sll_first_order_original_writeback_schema": 1,
+      "sll_qp_net_diagnostics_schema": 1,
+      "sll_adaptive_tau_short_span_schema": 1,
+      "sll_edge_compact_exclusion_schema": 1,
+      "die_first_spreading_schema": 1,
+      "visualization_config_schema": 1,
+      "device_placement_policy_schema": 1,
+      "clock_region_column_stretch_schema": 1,
+      "incremental_sll_planning_schema": 1,
+      "clock_resource_capacity_schema": 1,
+      "external_floorplan_initialization_schema": 1,
+      "paper_hierarchical_boundaries_schema": 2,
+      "boundary_clustering_strategy_schema": 1,
+      "cr_slr_hierarchical_schema": 1,
+      "boundary_clustering_strategy_default": "slr-hierarchical",
+      "paper_region_clipping_toggle_schema": 1,
+      "paper_boundary_stage_mode_schema": 1,
+      "global_placement_inspection_schema": 1,
+      "amf2pro_integration_schema": 1,
+      "dfx_incremental_schema": 1,
+      "incremental_compilation_key_schema": 1,
+      "dfx_full_hard_regions_schema": 1,
+      "dfx_partition_floorplan_schema": 1,
+      "native_static_cache_schema": 2,
+      "native_placement_repair_schema": 1,
+      "native_ff_pin_access_repair_schema": 1,
+      "native_pin_cache_packing_schema": 1,
+      "native_inline_pin_cache_schema": 1,
+      "native_local_pin_access_schema": 2,
+      "native_dfx_edge_policy_schema": 1
+    },
+    "binaries": {
+      "AMFPlacer": "d4f89a306ec0a1c5148b3ab3d4b9f165edfd6c2be848fd997d5d0a57b535bb10",
+      "partitionHyperGraph": "1fb56f68291f36210d1dbdb604687dfa0be0d563dd0675dfb008e9c6b683bdf9"
+    }
+  },
+  "source_snapshot_matches": true,
+  "tests": [
+    {
+      "test": "wire_split",
+      "exit_code": 0,
+      "seconds": 3.6541807651519775,
+      "final_exit_code": 0
+    },
+    {
+      "test": "virtual_model",
+      "exit_code": 0,
+      "seconds": 3.3724615573883057,
+      "final_exit_code": 0
+    },
+    {
+      "test": "tile_initialization",
+      "exit_code": 1,
+      "seconds": 4.044013977050781,
+      "final_exit_code": 0,
+      "final_log": "unit-02/tile_initialization.log",
+      "note": "Old shared-transit Y expectation changed from 12 to 14; new split geometry validated."
+    },
+    {
+      "test": "column_initialization",
+      "exit_code": 0,
+      "seconds": 3.8788487911224365,
+      "final_exit_code": 0
+    },
+    {
+      "test": "wire_cache",
+      "exit_code": 0,
+      "seconds": 1.2789454460144043,
+      "final_exit_code": 0
+    },
+    {
+      "test": "no_split",
+      "exit_code": 0,
+      "seconds": 4.379373788833618,
+      "final_exit_code": 0
+    },
+    {
+      "test": "qp_projection",
+      "exit_code": 0,
+      "seconds": 4.56932520866394,
+      "final_exit_code": 0
+    },
+    {
+      "test": "planned_timing_capacity",
+      "exit_code": 0,
+      "seconds": 4.521786212921143,
+      "final_exit_code": 0
+    },
+    {
+      "test": "output_tail",
+      "exit_code": 0,
+      "seconds": 0.9986543655395508,
+      "final_exit_code": 0
+    },
+    {
+      "test": "transient_capacity",
+      "exit_code": 0,
+      "seconds": 4.5233213901519775,
+      "final_exit_code": 0
+    }
+  ],
+  "integration": {
+    "state": "passed",
+    "build": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-wirelength-split/repo/builds/build-20261030-200320-571931-417484ec",
+    "commands": [
+      {
+        "name": "compile",
+        "command": [
+          "cmake",
+          "--build",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-wirelength-split/repo/builds/build-20261030-200320-571931-417484ec/build",
+          "--parallel",
+          "2",
+          "--target",
+          "checkSllWireSplitQp",
+          "checkSllJointIntegration",
+          "checkSllPlannerIntegration"
+        ],
+        "exit_code": 0,
+        "seconds": 13.961360216140747
+      },
+      {
+        "name": "split-qp",
+        "command": [
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-wirelength-split/repo/builds/build-20261030-200320-571931-417484ec/build/checkSllWireSplitQp",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-wirelength-split/integration-inputs/split-config.json",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-wirelength-split/integration-01/split-qp"
+        ],
+        "exit_code": 0,
+        "seconds": 8.225813627243042
+      },
+      {
+        "name": "joint",
+        "command": [
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-wirelength-split/repo/builds/build-20261030-200320-571931-417484ec/build/checkSllJointIntegration",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-wirelength-split/integration-inputs/joint-config.json",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-wirelength-split/integration-01/joint",
+          "tile"
+        ],
+        "exit_code": 0,
+        "seconds": 8.691580772399902
+      },
+      {
+        "name": "planner",
+        "command": [
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-wirelength-split/repo/builds/build-20261030-200320-571931-417484ec/build/checkSllPlannerIntegration",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-wirelength-split/integration-01/planner-config.json",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261030-sll-wirelength-split/integration-01/planner"
+        ],
+        "exit_code": 0,
+        "seconds": 8.158568382263184
+      }
+    ]
+  },
+  "full_placement_or_routing_run": false,
+  "base_branch_unchanged": true,
+  "generated_utc": "2026-10-30T12:07:44.751675+00:00",
+  "notes": [
+    "Initial standard build launcher rejected inherited machine root before configuration; build-r2 uses a separate AMF_MACHINE_CONFIG bound to this copy.",
+    "Single-crossing initialization has no timing score; multi-boundary refinement prices separate child input legs."
+  ]
+}
