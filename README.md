@@ -1,4 +1,4 @@
-# 当前副本：SLL 输入线长分段修订
+# sll-增量合并与加速：已合入 L 分段修正（2026-10-31）
 
 本分支已将发送端到 SLL 入口（或上一出口到下一入口）建模为独立两端子连接，接收端仍用共享超边。公式、验证及边界见 [L 修订说明](docs/research/sll-wirelength-split-20261030.md)。下文整合基线的已知问题状态属于历史，本副本已完成模型修正和小型验证，尚无新的全量 QoR 结论。
 
@@ -6,10 +6,10 @@
 
 当前整合：增量编译、SLL 约束导出与严格审计加速、本地 SLL/Pblock/增量布局可视化导入。
 
-**已知问题：SLL 入口侧共享超边可能掩盖发送端到入口的距离；本次未修改 L。**
+**历史问题（8841dca）：入口侧共享超边可能掩盖发送端到入口的距离；现已由 417484ec 的独立输入段修正。**
 
 - [当前代码、入口与验证范围](docs/research/sll-integrated-snapshot-20261030.md)
-- [SLL 建模问题与待实施公式](docs/research/sll-modeling-known-issue-20261030.md)
+- [SLL 建模历史问题与修正来源](docs/research/sll-modeling-known-issue-20261030.md)
 - [本地查看器使用与数据格式](scripts/diagnostics/placement_playback/README.md)
 - [GETRF 专用后端覆盖包](variants/getrf-u250-12ns-20261030/README.md)
 
