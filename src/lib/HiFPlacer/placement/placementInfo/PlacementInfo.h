@@ -4055,7 +4055,8 @@ class PlacementInfo
      * @param fX the X coordinate the cell is moved to
      * @param fY the Y coordinate the cell is moved to
      */
-    inline void transferCellBinInfo(int cellId, float fX, int fY)
+    // Preserve fractional Y: truncation can choose the wrong 2.5-unit bin.
+    inline void transferCellBinInfo(int cellId, float fX, float fY)
     {
         assert((unsigned int)cellId < cellId2CellBinInfo.size());
         int binIdX, binIdY;

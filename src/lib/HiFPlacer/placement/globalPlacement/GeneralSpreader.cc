@@ -25,9 +25,21 @@
 #include <filesystem>
 #include <iomanip>
 
+void GeneralSpreader::initializeRoundLimit(PlacementInfo *placement,
+    const std::map<std::string,std::string> &config, CrossDieSpreadLimit &limit)
+{
+    double bins = amf_config::crossDieSpreadMaxBins(config);
+    bool seams = false;
+    if (auto model = placement->getDeviceInfo()->getPhysicalBoundaryModel())
+        for (const auto &b : model->getBoundaries())
+            seams |= b.active && b.kind == "SLR" && b.orientation == 'Y';
+    if (!seams || !amf_config::feature(config, "DieFirstSpreadingEnable", true)) bins = 0;
+    limit.reset(bins, placement->getBinGridW(), placement->getBinGridH(), placement->getPlacementUnits());
+}
+
 GeneralSpreader::GeneralSpreader(PlacementInfo *placementInfo, std::map<std::string, std::string> &JSONCfg,
                                  std::string &sharedCellType, int currentIteration, float capacityShrinkRatio,
-                                 bool verbose)
+                                 bool verbose, CrossDieSpreadLimit *sharedRoundLimit)
     : placementInfo(placementInfo), JSONCfg(JSONCfg), sharedCellType(sharedCellType),
       currentIteration(currentIteration), capacityShrinkRatio(capacityShrinkRatio), verbose(verbose),
       binGrid(placementInfo->getBinGrid(placementInfo->getSharedBELTypeId(sharedCellType)))
@@ -53,6 +65,8 @@ GeneralSpreader::GeneralSpreader(PlacementInfo *placementInfo, std::map<std::str
             [&](int id){return placementInfo->getCellId2location().at(id);},
             [&](int id){return int(placementInfo->getCellId2CellBinInfo().at(id).occupation);}));
         binGrid=dieView->rows;
+        roundLimit = sharedRoundLimit ? sharedRoundLimit : &ownedRoundLimit;
+        if (!sharedRoundLimit) initializeRoundLimit(placementInfo, JSONCfg, ownedRoundLimit);
         if(amf_config::feature(JSONCfg,"DetailedDiagnosticsEnable",true)) {
         auto dir=JSONCfg.find("SllReportDirectory");
         const std::filesystem::path output=dir==JSONCfg.end()?std::filesystem::path("."):std::filesystem::path(dir->second);
@@ -275,10 +289,12 @@ void GeneralSpreader::spreadPlacementUnits(float forgetRatio, bool enableClockRe
         if(dieView) for(auto pu:involvedPUVec) before.emplace(pu->getId(),PlacementInfo::Location{pu->X(),pu->Y()});
         if (verbose)
             print_status("GeneralSpreader: updating Placement Units With Spreaded Cell Locations");
+        activateCrossDieLimits();
         updatePlacementUnitsWithSpreadedCellLocations(involvedPUs, involvedCells, involvedPUVec, forgetRatio,
                                                       enableClockRegionAware, displacementLimit);
         if(dieView) {
             constrainLocalWrites(involvedPUVec,before);
+            constrainCrossDieWrites(involvedPUVec,before);
             finishDieFirstIteration(replayCall,loopCnt,involvedPUVec,before);
         }
         replay.puState(involvedPUVec,"after");
@@ -352,7 +368,8 @@ void GeneralSpreader::findOverflowBins(float overflowThreshold)
 void GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocationsWorker(
     PlacementInfo *placementInfo, std::set<PlacementInfo::PlacementUnit *> &involvedPUs,
     std::set<DesignInfo::DesignCell *> &involvedCells, std::vector<PlacementInfo::PlacementUnit *> &involvedPUVec,
-    float forgetRatio, float displacementLimit, int startId, int endId)
+    float forgetRatio, float displacementLimit, int startId, int endId,
+    const CrossDieSpreadLimit *roundLimit)
 {
     AMF_PROFILE_FUNCTION("spreading");
     bool displacementLimitEnable = displacementLimit > 0;
@@ -374,7 +391,7 @@ void GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocationsWorker(
             else
             {
                 makeCellInLegalArea(placementInfo, cellLoc[curCell->getCellId()].X, cellLoc[curCell->getCellId()].Y);
-                if (displacementLimitEnable)
+                if (displacementLimitEnable && !(roundLimit && roundLimit->active(curPU->getId())))
                     curPU->setSpreadLocation_WithLimitDisplacement(cellLoc[curCell->getCellId()].X,
                                                                    cellLoc[curCell->getCellId()].Y, forgetRatio,
                                                                    displacementLimit);
@@ -436,7 +453,7 @@ void GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocationsWorker(
                 float curNewPUY = tmpTotalY;
                 const float studyX0=curPU->X(),studyY0=curPU->Y();
                 placementInfo->legalizeXYInArea(curPU, curNewPUX, curNewPUY);
-                if (displacementLimitEnable)
+                if (displacementLimitEnable && !(roundLimit && roundLimit->active(curPU->getId())))
                     curPU->setSpreadLocation_WithLimitDisplacement(curNewPUX, curNewPUY, forgetRatio,
                                                                    displacementLimit);
                 else
@@ -609,7 +626,7 @@ void GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocations(
                 new std::thread(GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocationsWorker, placementInfo,
                                 std::ref(involvedPUs), std::ref(involvedCells), std::ref(involvedPUVec),
                                 std::ref(forgetRatio), std::ref(displacementLimit),
-                                std::ref(startEndPairs[threadId].first), std::ref(startEndPairs[threadId].second));
+                                std::ref(startEndPairs[threadId].first), std::ref(startEndPairs[threadId].second), roundLimit);
             threadsVec.push_back(newThread);
         }
         for (int threadId = 0; threadId < nJobs; threadId++)
@@ -637,13 +654,15 @@ void GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocations(
                     makeCellInLegalArea(placementInfo, cellLoc[curCell->getCellId()].X,
                                         cellLoc[curCell->getCellId()].Y);
 
-                    if (displacementLimitEnable)
+                    if (displacementLimitEnable && !(roundLimit && roundLimit->active(curPU->getId())))
                         curPU->setSpreadLocation_WithLimitDisplacement(cellLoc[curCell->getCellId()].X,
                                                                        cellLoc[curCell->getCellId()].Y, forgetRatio,
                                                                        displacementLimit);
                     else
                         curPU->setSpreadLocation(cellLoc[curCell->getCellId()].X, cellLoc[curCell->getCellId()].Y,
                                                  forgetRatio);
+                    if (roundLimit && roundLimit->active(curPU->getId()))
+                        placementInfo->clipPaperRegionLocation(curPU);
                     placementInfo->transferCellBinInfo(curCell->getCellId(), curPU->X(), curPU->Y());
                     cellLoc[curCell->getCellId()].X = curPU->X();
                     cellLoc[curCell->getCellId()].Y = curPU->Y();
@@ -696,7 +715,7 @@ void GeneralSpreader::updatePlacementUnitsWithSpreadedCellLocations(
                     const float studyX0=curPU->X(),studyY0=curPU->Y();
                     placementInfo->legalizeXYInArea(curPU, curNewPUX, curNewPUY);
 
-                    if (displacementLimitEnable)
+                    if (displacementLimitEnable && !(roundLimit && roundLimit->active(curPU->getId())))
                         curPU->setSpreadLocation_WithLimitDisplacement(curNewPUX, curNewPUY, forgetRatio,
                                                                        displacementLimit);
                     else
@@ -1566,11 +1585,89 @@ double spreadOverflow(die_spread::Bin *b,float ratio) {
 std::string spreadSafe(std::string s) {for(char &c:s)if(c=='\t'||c=='\n'||c=='\r')c=' ';return s;}
 }
 
+void GeneralSpreader::activateCrossDieLimits()
+{
+    localWritePUs.clear();
+    if (!dieView) return;
+    for (auto region : expandedRegions) if (region->decision.local)
+        for (auto cell : region->getCells())
+            localWritePUs.insert(placementInfo->getPlacementUnitByCell(cell)->getId());
+    if (!roundLimit || !roundLimit->enabled()) return;
+    for (auto region : expandedRegions) if (!region->decision.local)
+        for (auto cell : region->getCells()) {
+            auto pu = placementInfo->getPlacementUnitByCell(cell);
+            if (!localWritePUs.count(pu->getId()) && !pu->isFixed() && !pu->isLocked())
+                roundLimit->activate(pu->getId());
+        }
+    // Activation lasts for the whole round. Later resource/local passes must
+    // not reset the reference or let a previously cross-die PU escape its disk.
+}
+
+void GeneralSpreader::constrainCrossDieWrites(const std::vector<PU*> &units,
+                                             const std::map<int,Loc> &before)
+{
+    if (!roundLimit || !roundLimit->enabled()) return;
+    const auto &local = localWritePUs;
+    for (auto pu : units) {
+        const int id = pu->getId();
+        if (pu->isFixed() || pu->isLocked() || !roundLimit->active(id)) continue;
+        CrossDieSpreadLimit::Point target{pu->X(), pu->Y()};
+        if (roundLimit->contains(id, target)) continue;
+        const auto old = before.at(id);
+        const bool localOnly = local.count(id);
+        die_spread::Range range;
+        if (localOnly)
+            spreadMembers(pu, [&](DesignInfo::DesignCell*, float, float y) {
+                range.includeMember(dieView->seams, old.Y + y, y);
+            });
+        auto valid = [&]() {
+            bool ok = roundLimit->contains(id, {pu->X(), pu->Y()});
+            if (localOnly) {
+                ok &= range.contains(pu->Y());
+                spreadMembers(pu, [&](DesignInfo::DesignCell*, float, float y) {
+                    ok &= die_spread::dieAt(dieView->seams, old.Y + y) ==
+                          die_spread::dieAt(dieView->seams, pu->Y() + y);
+                });
+            }
+            return ok;
+        };
+        auto projectLegal = [&](CrossDieSpreadLimit::Point p) {
+            pu->setAnchorLocationAndForgetTheOriginalOne(p.x, p.y);
+            placementInfo->enforceLegalizeXYInArea(pu);
+            placementInfo->clipPaperRegionLocation(pu);
+            if (localOnly) {
+                pu->setAnchorLocationAndForgetTheOriginalOne(pu->X(),
+                    std::max(range.low, std::min(range.high, pu->Y())));
+                placementInfo->enforceLegalizeXYInArea(pu);
+                placementInfo->clipPaperRegionLocation(pu);
+            }
+        };
+        projectLegal(roundLimit->project(id, target));
+        ++roundLimit->limitedWrites;
+        if (!valid()) {
+            // Non-convex hard regions or preference projections can undo the
+            // radial clip. Retain a feasible preceding anchor, then try the
+            // round origin; never silently enlarge the configured radius.
+            ++roundLimit->rejectedWrites;
+            projectLegal({old.X, old.Y});
+            if (!valid()) projectLegal(roundLimit->origin(id));
+            if (!valid()) {
+                pu->setAnchorLocationAndForgetTheOriginalOne(old.X, old.Y);
+                throw std::runtime_error("No legal cross-die spread placement within round budget for PU " +
+                                         pu->getName());
+            }
+        }
+        spreadMembers(pu, [&](DesignInfo::DesignCell *cell, float x, float y) {
+            const float cellX = pu->X() + x, cellY = pu->Y() + y;
+            placementInfo->transferCellBinInfo(cell->getCellId(), cellX, cellY);
+            placementInfo->getCellId2location()[cell->getCellId()] = {cellX, cellY};
+        });
+    }
+}
+
 void GeneralSpreader::constrainLocalWrites(const std::vector<PU*> &units,const std::map<int,Loc> &before)
 {
-    std::set<int> local;
-    for(auto r:expandedRegions)if(r->decision.local)for(auto c:r->getCells())
-        local.insert(placementInfo->getPlacementUnitByCell(c)->getId());
+    const auto &local = localWritePUs;
     for(auto pu:units)if(local.count(pu->getId())&&!pu->isFixed()&&!pu->isLocked()) {
         const auto old=before.at(pu->getId());die_spread::Range range;
         spreadMembers(pu,[&](DesignInfo::DesignCell*,float,float y){range.includeMember(dieView->seams,old.Y+y,y);});

@@ -14,5 +14,6 @@
   "BoundaryWeakAttraction": "true",
   "BoundaryAnchorStopOnRegionEntry": "false",
   "ClockRegionColumnStretch": "false",
+  "CrossDieSpreadMaxBins": "20",
   "IncrementalCompilation": "false"
 }

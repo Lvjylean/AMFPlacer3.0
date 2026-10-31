@@ -357,3 +357,8 @@ target_link_libraries(checkFeatureIntegration GlobalPlacer DesignInfo DeviceInfo
 add_executable(checkSllWireSplit EXCLUDE_FROM_ALL tests/check_sll_wire_split.cc)
 add_executable(checkSllWireSplitQp EXCLUDE_FROM_ALL tests/check_sll_wire_split_qp.cc)
 target_link_libraries(checkSllWireSplitQp GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+# Cross-die round budget: unit properties and real U250 writeback/occupancy.
+add_executable(checkCrossDieSpreadLimit EXCLUDE_FROM_ALL tests/check_cross_die_spread_limit.cc)
+add_executable(checkCrossDieSpreadLimitIntegration EXCLUDE_FROM_ALL tests/check_cross_die_spread_limit_integration.cc)
+target_link_libraries(checkCrossDieSpreadLimitIntegration GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})

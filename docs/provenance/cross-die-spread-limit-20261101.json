@@ -1,0 +1,176 @@
+{
+  "completed": "2026-10-31T17:55:06.117819+00:00",
+  "base_commit": "6c0557f5c55db2da1f5498082f909033e0a54106",
+  "branch": "codex/cross-die-spread-limit-20261101",
+  "server_repository": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/repo",
+  "build": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/repo/builds/build-20261101-015106-331245-6c0557f5",
+  "build_source_files": 3533,
+  "build_source_mismatches": [],
+  "build_source_extra_files": [],
+  "build_manifest_sha256": "a35e5201436836a473b553ea73b6171b2fdd9b451271b6086dae72cf2cac3a7d",
+  "build_binaries": {
+    "AMFPlacer": "c05f33cac1a3a99ee259068175b157185ce76e7cd800a7d38c227cfff749ff39",
+    "partitionHyperGraph": "e958a6c4288d685ff87c5920141ef29d2cc45d46a062556b048bf3858008a4f9"
+  },
+  "capability": {
+    "cross_die_spread_round_limit_schema": 1
+  },
+  "parameters": {
+    "CrossDieSpreadMaxBins": 20,
+    "bin_sizes": [
+      5,
+      2.5,
+      2
+    ],
+    "stage_radius_amf_units": [
+      100,
+      50,
+      40
+    ],
+    "zero_restores_legacy": true
+  },
+  "validation": {
+    "started": "2026-10-31T17:51:06.306936+00:00",
+    "state": "passed",
+    "steps": [
+      {
+        "name": "build",
+        "command": [
+          "python3",
+          "scripts/amf3.py",
+          "build",
+          "--jobs",
+          "4",
+          "--no-set-current"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 71.55929366499186,
+        "log": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v3/build.log"
+      },
+      {
+        "name": "compile-tests",
+        "command": [
+          "cmake",
+          "--build",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/repo/builds/build-20261101-015106-331245-6c0557f5/build",
+          "--parallel",
+          "4",
+          "--target",
+          "checkCrossDieSpreadLimit",
+          "checkCrossDieSpreadLimitIntegration",
+          "checkSpreadDisplacement",
+          "checkSpreadRegionLimit",
+          "checkDieFirstSpreading",
+          "checkDieFirstSpreadingIntegration",
+          "checkSllWireSplit"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 12.26789393182844,
+        "log": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v3/compile-tests.log"
+      },
+      {
+        "name": "unit",
+        "command": [
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/repo/builds/build-20261101-015106-331245-6c0557f5/build/checkCrossDieSpreadLimit"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.0013623619452118874,
+        "log": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v3/unit.log"
+      },
+      {
+        "name": "integration",
+        "command": [
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/repo/builds/build-20261101-015106-331245-6c0557f5/build/checkCrossDieSpreadLimitIntegration",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v3/fixture-fdre.json",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v3/integration"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 11.534718874841928,
+        "log": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v3/integration.log"
+      },
+      {
+        "name": "legacy-displacement",
+        "command": [
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/repo/builds/build-20261101-015106-331245-6c0557f5/build/checkSpreadDisplacement"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.007199455983936787,
+        "log": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v3/legacy-displacement.log"
+      },
+      {
+        "name": "region-budget",
+        "command": [
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/repo/builds/build-20261101-015106-331245-6c0557f5/build/checkSpreadRegionLimit",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v3/fixture-lut.json"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 7.8541880724951625,
+        "log": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v3/region-budget.log"
+      },
+      {
+        "name": "die-first",
+        "command": [
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/repo/builds/build-20261101-015106-331245-6c0557f5/build/checkDieFirstSpreading",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v3/fixture-lut.json"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 7.7911416329443455,
+        "log": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v3/die-first.log"
+      },
+      {
+        "name": "die-first-single",
+        "command": [
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/repo/builds/build-20261101-015106-331245-6c0557f5/build/checkDieFirstSpreadingIntegration",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v3/fixture-lut.json",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v3/local-single"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 8.737012075260282,
+        "log": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v3/die-first-single.log"
+      },
+      {
+        "name": "die-first-macro",
+        "command": [
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/repo/builds/build-20261101-015106-331245-6c0557f5/build/checkDieFirstSpreadingIntegration",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v4/macro-fixture.json",
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v4/macro",
+          "macro"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 8.673614262603223,
+        "log": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v4/die-first-macro.log"
+      },
+      {
+        "name": "split-wire",
+        "command": [
+          "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/repo/builds/build-20261101-015106-331245-6c0557f5/build/checkSllWireSplit"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.015568049624562263,
+        "log": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v4/split-wire.log"
+      }
+    ],
+    "scope": "build and synthetic tests only; no GETRF placement or Vivado",
+    "build": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/repo/builds/build-20261101-015106-331245-6c0557f5",
+    "fixtures": {
+      "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v3/fixture-fdre.json": "ce8e993a48a702a858016fb8070fccf72eb2a9ed59676265771eb2b5a4d67413",
+      "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v3/fixture-lut.json": "444c43ddf20bd4aa2c31497f795b60942e31d45948a0ba8a87e355842b9c3807",
+      "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v3/synthetic-lut.zip": "435c1bc1c4a0dd62fca3309414ec480beeb1f632dae784b5c932edf263a75810"
+    },
+    "previous_attempt": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-cross-die-spread-limit/evidence/validation-v3/validation.json",
+    "finished": "2026-10-31T17:54:37.823523+00:00"
+  },
+  "original_branch_unchanged": true,
+  "current_build_link_changed": false,
+  "full_getrf_experiments": 0,
+  "vivado_invocations": 0,
+  "limits": "Only spreading is bounded. Independent macro legalization and its fixed-state policy unchanged; no QoR/runtime improvement claim.",
+  "preserved_failures": [
+    "first build: int/unsigned template max type mismatch, fixed",
+    "syntax precheck: test used private field, fixed to inspect public bin members",
+    "validation-v2: production transferCellBinInfo int Y truncation exposed by 2.5-unit grid, fixed to float",
+    "validation-v3 macro test: reused report directory rejected overwrite; resumed in an independent report directory",
+    "local compiler SDK/linker mismatch; authoritative compile/tests run on eda072"
+  ],
+  "source_binding_note": "Build recorded base HEAD plus working_tree.patch; final commit source files match source_hashes.json exactly."
+}

@@ -756,13 +756,15 @@ void GlobalPlacer::spreading(int currentIteration, int spreadRegionSizeLimit, fl
     if (spreadRegionSizeLimit <= 0)
         throw std::invalid_argument("Spread region bin limit must be positive");
     placementInfo->updateElementBinGrid(false);
+    CrossDieSpreadLimit roundLimit;
+    GeneralSpreader::initializeRoundLimit(placementInfo, JSONCfg, roundLimit);
     float supplyRatio = (placementInfo->getBinGridW() < 2.5) ? 0.95 : (0.80 + 0.1 * progressRatio);
 
     if (!macroLegalizationFixed)
     {
         std::string sharedCellType_SLICEL_CARRY8 = "SLICEL_CARRY8";
         generalSpreader = new GeneralSpreader(placementInfo, JSONCfg, sharedCellType_SLICEL_CARRY8, currentIteration,
-                                              supplyRatio, verbose);
+                                              supplyRatio, verbose, &roundLimit);
         generalSpreader->spreadPlacementUnits(spreadingForgetRatio, enableClockRegionAware, displacementLimit,
                                             spreadRegionSizeLimit);
         delete generalSpreader;
@@ -770,14 +772,14 @@ void GlobalPlacer::spreading(int currentIteration, int spreadRegionSizeLimit, fl
 
     std::string sharedCellType_SLICEL_MUXF8 = "SLICEL_MUXF8";
     generalSpreader =
-        new GeneralSpreader(placementInfo, JSONCfg, sharedCellType_SLICEL_MUXF8, currentIteration, 0.75, verbose);
+        new GeneralSpreader(placementInfo, JSONCfg, sharedCellType_SLICEL_MUXF8, currentIteration, 0.75, verbose, &roundLimit);
     generalSpreader->spreadPlacementUnits(spreadingForgetRatio, enableClockRegionAware, displacementLimit,
                                             spreadRegionSizeLimit);
     delete generalSpreader;
 
     std::string sharedCellType_SLICEL_MUXF7 = "SLICEL_MUXF7";
     generalSpreader =
-        new GeneralSpreader(placementInfo, JSONCfg, sharedCellType_SLICEL_MUXF7, currentIteration, 0.75, verbose);
+        new GeneralSpreader(placementInfo, JSONCfg, sharedCellType_SLICEL_MUXF7, currentIteration, 0.75, verbose, &roundLimit);
     generalSpreader->spreadPlacementUnits(spreadingForgetRatio, enableClockRegionAware, displacementLimit,
                                             spreadRegionSizeLimit);
     delete generalSpreader;
@@ -787,19 +789,26 @@ void GlobalPlacer::spreading(int currentIteration, int spreadRegionSizeLimit, fl
     // some cells are inflatten.
     std::string sharedCellType_SLICEL_LUT = "SLICEL_LUT";
     generalSpreader =
-        new GeneralSpreader(placementInfo, JSONCfg, sharedCellType_SLICEL_LUT, currentIteration, supplyRatio, verbose);
+        new GeneralSpreader(placementInfo, JSONCfg, sharedCellType_SLICEL_LUT, currentIteration, supplyRatio, verbose, &roundLimit);
     generalSpreader->spreadPlacementUnits(spreadingForgetRatio, enableClockRegionAware, displacementLimit,
                                             spreadRegionSizeLimit);
     delete generalSpreader;
 
     std::string sharedCellType_SLICEL_FF = "SLICEL_FF";
     generalSpreader =
-        new GeneralSpreader(placementInfo, JSONCfg, sharedCellType_SLICEL_FF, currentIteration, supplyRatio, verbose);
+        new GeneralSpreader(placementInfo, JSONCfg, sharedCellType_SLICEL_FF, currentIteration, supplyRatio, verbose, &roundLimit);
     generalSpreader->spreadPlacementUnits(spreadingForgetRatio, enableClockRegionAware, displacementLimit,
                                             spreadRegionSizeLimit);
     delete generalSpreader;
 
     generalSpreader = nullptr;
+    if (roundLimit.enabled())
+        print_info("Cross-die spread radius=" + std::to_string(roundLimit.maxBins()) +
+                   " bins; grid=" + std::to_string(roundLimit.width()) + "x" +
+                   std::to_string(roundLimit.height()) + " active_pus=" +
+                   std::to_string(roundLimit.activeUnits) + " limited_writes=" +
+                   std::to_string(roundLimit.limitedWrites) + " rejected_writes=" +
+                   std::to_string(roundLimit.rejectedWrites));
 
     placementInfo->updateElementBinGrid();
     if (progressRatio > 0.4)

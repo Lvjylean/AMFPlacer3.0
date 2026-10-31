@@ -17,6 +17,7 @@
 
 #include "DesignInfo.h"
 #include "DieFirstSpreading.h"
+#include "CrossDieSpreadLimit.h"
 #include "DeviceInfo.h"
 #include "PlacementInfo.h"
 #include "const.h"
@@ -51,7 +52,10 @@ class GeneralSpreader
      * @param verbose option to enable detailed information display in terminal
      */
     GeneralSpreader(PlacementInfo *placementInfo, std::map<std::string, std::string> &JSONCfg,
-                    std::string &sharedCellType, int currentIteration, float capacityShrinkRatio, bool verbose = true);
+                    std::string &sharedCellType, int currentIteration, float capacityShrinkRatio, bool verbose = true,
+                    CrossDieSpreadLimit *roundLimit = nullptr);
+    static void initializeRoundLimit(PlacementInfo *placement,
+        const std::map<std::string,std::string> &config, CrossDieSpreadLimit &limit);
     ~GeneralSpreader()
     {
     }
@@ -1221,7 +1225,8 @@ class GeneralSpreader
     static void updatePlacementUnitsWithSpreadedCellLocationsWorker(
         PlacementInfo *placementInfo, std::set<PlacementInfo::PlacementUnit *> &involvedPUs,
         std::set<DesignInfo::DesignCell *> &involvedCells, std::vector<PlacementInfo::PlacementUnit *> &involvedPUVec,
-        float forgetRatio, float displacementLimit, int startId, int endId);
+        float forgetRatio, float displacementLimit, int startId, int endId,
+        const CrossDieSpreadLimit *roundLimit = nullptr);
 
     /**
      * @brief ensure the X/Y is in the legal range of the target device
@@ -1261,6 +1266,13 @@ class GeneralSpreader
     void DumpPUCoordinate(std::string dumpFileName, std::vector<PlacementInfo::PlacementUnit *> &involvedPUVec);
 
   private:
+    friend struct CrossDieSpreadLimitTestAccess;
+    CrossDieSpreadLimit ownedRoundLimit;
+    CrossDieSpreadLimit *roundLimit = nullptr;
+    std::set<int> localWritePUs;
+    void activateCrossDieLimits();
+    void constrainCrossDieWrites(const std::vector<PlacementInfo::PlacementUnit *> &units,
+        const std::map<int,PlacementInfo::Location> &before);
     PlacementInfo *placementInfo;
     std::map<std::string, std::string> &JSONCfg;
     std::string sharedCellType;

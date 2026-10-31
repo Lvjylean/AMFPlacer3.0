@@ -1,5 +1,6 @@
 #pragma once
 #include <map>
+#include <cmath>
 #include <stdexcept>
 #include <string>
 
@@ -16,7 +17,17 @@ inline bool sllRoute(const FeatureMap &c) {
 inline bool sllTiming(const FeatureMap &c) {
     return feature(c,"SllPlanningEnable") && feature(c,"SllTimingCorrectionEnable",true);
 }
+inline double crossDieSpreadMaxBins(const FeatureMap &c) {
+    auto it = c.find("CrossDieSpreadMaxBins");
+    if (it == c.end()) return 20;
+    size_t end = 0;
+    double bins = std::stod(it->second, &end);
+    if (end != it->second.size() || !std::isfinite(bins) || bins < 0)
+        throw std::invalid_argument("CrossDieSpreadMaxBins must be a finite nonnegative number");
+    return bins;
+}
 inline void validatePlacementFeatures(const FeatureMap &c) {
+    crossDieSpreadMaxBins(c);
     for(const char *key:{"SllQuantityEnable","SllDynamicTauEnable","SllPlanningEnable",
         "SllCapacityOptimizationEnable","SllTimingCorrectionEnable","SllRouteConstraintEnable",
         "DieFirstSpreadingEnable","TimingDrivenPlacementEnable","DetailedDiagnosticsEnable",
