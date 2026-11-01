@@ -7,7 +7,8 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <sstream>
+#include <cstdio>
+#include <unistd.h>
 #include <cstring>
 #include <omp.h>
 static void check(bool ok,const char*s){if(!ok)throw std::runtime_error(s);}
@@ -234,10 +235,15 @@ int main(int argc,char**argv){try{
         const auto &nodes=pi.getTimingInfo()->getSimplePlacementTimingInfo();
         for(size_t i=0;i<nodes.size();++i)nodes[i]->setRequiredArrivalTime(required+(i%2)*.21f);
         auto capture=[&](int threads) {
-            omp_set_num_threads(threads);std::ostringstream output;
-            auto *original=std::cout.rdbuf(output.rdbuf());float result=0;
-            try{result=timing.getSlackThr();}catch(...){std::cout.rdbuf(original);throw;}
-            std::cout.rdbuf(original);return std::make_pair(result,output.str());
+            omp_set_num_threads(threads);std::cout.flush();std::fflush(stdout);
+            FILE *file=std::tmpfile();check(file!=nullptr,"create capture file");
+            const int saved=dup(STDOUT_FILENO);check(saved>=0,"duplicate stdout");
+            check(dup2(fileno(file),STDOUT_FILENO)>=0,"redirect stdout");float result=0;
+            try{result=timing.getSlackThr();}catch(...){std::fflush(stdout);dup2(saved,STDOUT_FILENO);close(saved);std::fclose(file);throw;}
+            std::cout.flush();std::fflush(stdout);check(dup2(saved,STDOUT_FILENO)>=0,"restore stdout");close(saved);
+            std::rewind(file);std::string output;char buffer[4096];size_t n;
+            while((n=std::fread(buffer,1,sizeof(buffer),file))>0)output.append(buffer,n);
+            std::fclose(file);return std::make_pair(result,output);
         };
         auto serial=capture(1);const auto expected=timing.getNetActualSlackPinNum();
         auto parallel=capture(12);
