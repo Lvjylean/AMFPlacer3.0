@@ -7,6 +7,9 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
+#include <cstring>
+#include <omp.h>
 static void check(bool ok,const char*s){if(!ok)throw std::runtime_error(s);}
 int main(int argc,char**argv){try{
     check(argc==3 || (argc==4 && std::string(argv[3])=="tile"),"usage: checkSllJointIntegration config NEW_OUTPUT [tile]");
@@ -223,6 +226,29 @@ int main(int argc,char**argv){try{
         check(e.channel>=0,"export assigns precise SLL channels");const auto&c=pi.sllPlanner->model().channels[e.channel];
         check(!amf_sll_plan::Model::conflicts(c,used),"final SLL paths are disjoint");amf_sll_plan::Model::occupy(c,used);
     }
+    // Serial versus parallel threshold and per-net counts, with positive,
+    // negative and mixed slack, both ordinary and planned SLL timing.
+    const int previousThreads=omp_get_max_threads();
+    for(bool sll:{false,true})for(float required:{100.f,-30.f,.3f}) {
+        cfg["SllTimingCorrectionEnable"]=sll?"true":"false";
+        const auto &nodes=pi.getTimingInfo()->getSimplePlacementTimingInfo();
+        for(size_t i=0;i<nodes.size();++i)nodes[i]->setRequiredArrivalTime(required+(i%2)*.21f);
+        auto capture=[&](int threads) {
+            omp_set_num_threads(threads);std::ostringstream output;
+            auto *original=std::cout.rdbuf(output.rdbuf());float result=0;
+            try{result=timing.getSlackThr();}catch(...){std::cout.rdbuf(original);throw;}
+            std::cout.rdbuf(original);return std::make_pair(result,output.str());
+        };
+        auto serial=capture(1);const auto expected=timing.getNetActualSlackPinNum();
+        auto parallel=capture(12);
+        check(std::memcmp(&serial.first,&parallel.first,sizeof(float))==0,"slack threshold bitwise equal with 1 and 12 threads");
+        check(serial.second.find("Slack distribution:")!=std::string::npos,"full histogram captured");
+        check(serial.second==parallel.second,"all histogram bins equal with 1 and 12 threads");
+        check(expected==timing.getNetActualSlackPinNum(),"all per-net slack counts equal");
+        if(required<0){int count=0;for(const auto&x:expected)count+=x.second;check(count>0,"negative-slack case is nonempty");}
+    }
+    omp_set_num_threads(previousThreads);
+    std::cout<<"SLACK_PARALLEL_EQUIVALENCE cases=6 threads=1,12 histogram=exact net_counts=exact threshold=bitwise\n";
     check(design.getCells().size()==cells,"logical netlist unchanged");
     std::cout<<"PASS joint QP coupling, density movement, legal channels, two solves, dynamic tau/quantity, lifecycle, export\n";
 }catch(const std::exception&e){std::cerr<<e.what()<<'\n';return 1;}}

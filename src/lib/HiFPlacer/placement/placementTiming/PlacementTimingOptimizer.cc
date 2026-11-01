@@ -18,6 +18,8 @@
 #include <chrono>
 #include <codecvt>
 #include <stdexcept>
+#include <exception>
+#include <omp.h>
 
 PlacementTimingOptimizer::PlacementTimingOptimizer(PlacementInfo *placementInfo,
                                                    std::map<std::string, std::string> &JSONCfg)
@@ -1010,8 +1012,22 @@ float PlacementTimingOptimizer::getSlackThr()
 
     netActualSlackPinNum.clear();
 
-    for (auto curNet : placementInfo->getPlacementNets())
+    const auto &placementNets = placementInfo->getPlacementNets();
+    // Only joined, read-only delay queries run in parallel. Each net owns one
+    // result slot; integer histograms are private to a thread. Publish the map
+    // afterward in the original net order, with the same floating-point work.
+    struct alignas(64) SlackHistogram { std::array<int,200> bins{}; int total=0; };
+    std::vector<SlackHistogram> histograms(omp_get_max_threads());
+    std::vector<int> netSlackCounts(placementNets.size(),-1);
+    std::exception_ptr failure;
+    AMF_PROFILE_NAMED(scanScope,"timing_slack_scan","parallel read-only slack histogram scan");
+#pragma omp parallel for schedule(dynamic,64)
+    for (size_t netIndex=0; netIndex<placementNets.size(); ++netIndex)
     {
+        auto curNet=placementNets[netIndex];
+        auto &histogram=histograms[omp_get_thread_num()];
+        try {
+
         auto designNet = curNet->getDesignNet();
         if (designNet->checkIsPowerNet() || designNet->checkIsGlobalClock())
             continue;
@@ -1043,7 +1059,7 @@ float PlacementTimingOptimizer::getSlackThr()
         auto srcLoc = cellLoc[srcCellId];
         // iterate the sinkPin for evaluation and enhancement
 
-        netActualSlackPinNum[curNet] = 0;
+        netSlackCounts[netIndex] = 0;
         for (int pinBeDriven = 0; pinBeDriven < pinNum; pinBeDriven++)
         {
             if (pinBeDriven == driverPinInNet)
@@ -1060,16 +1076,29 @@ float PlacementTimingOptimizer::getSlackThr()
             if (slack > 0)
                 continue;
 
-            netActualSlackPinNum[curNet]++;
+            netSlackCounts[netIndex]++;
             int slotId = (int)(-slack / 0.1);
             if (slotId >= 100)
                 slotId = 100;
             if (slotId < 0)
                 slotId = 0;
-            slackCntVec[slotId] += 1;
-            totalSlackChecked++;
+            histogram.bins[slotId] += 1;
+            histogram.total++;
+        }
+
+        } catch (...) {
+#pragma omp critical(amf_slack_scan_exception)
+            { if(!failure)failure=std::current_exception(); }
         }
     }
+    AMF_PROFILE_STOP(scanScope);
+    if(failure)std::rethrow_exception(failure);
+    for(const auto &histogram:histograms) {
+        totalSlackChecked+=histogram.total;
+        for(size_t i=0;i<slackCntVec.size();++i)slackCntVec[i]+=histogram.bins[i];
+    }
+    for(size_t i=0;i<placementNets.size();++i)
+        if(netSlackCounts[i]>=0)netActualSlackPinNum[placementNets[i]]=netSlackCounts[i];
 
     float slackThr = 0;
     int slackUnderThrCnt = 0;
