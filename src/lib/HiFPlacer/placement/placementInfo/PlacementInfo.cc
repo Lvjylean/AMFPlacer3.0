@@ -1042,6 +1042,7 @@ void PlacementInfo::resetElementBinGrid()
 void PlacementInfo::updateElementBinGridLegacy(bool checkGridForPackingRouting, bool bypassBRAMDSP)
 {
     AMF_PROFILE_FUNCTION("placement_bookkeeping");
+    // Whole-grid rebuild has one owner; shared addCell remains locked elsewhere.
     resetElementBinGrid();
     cellId2location.resize(designInfo->getNumCells());
     // for (auto curPU : placementUnits)
@@ -1090,7 +1091,7 @@ void PlacementInfo::updateElementBinGridLegacy(bool checkGridForPackingRouting, 
                 assert(getBinGrid(SharedBELID)[binIdY][binIdX]->inRange(cellX, cellY));
                 if (getBinGrid(SharedBELID)[binIdY][binIdX]->canAddMore(num_cellOccupationBELs))
                 {
-                    getBinGrid(SharedBELID)[binIdY][binIdX]->addCell(curCell, num_cellOccupationBELs);
+                    getBinGrid(SharedBELID)[binIdY][binIdX]->addGridCellExclusive(curCell, num_cellOccupationBELs, false);
                     setCellBinInfo(curCell->getCellId(), SharedBELID, binIdX, binIdY, num_cellOccupationBELs);
                     nonOverflow = true;
                     break;
@@ -1098,8 +1099,7 @@ void PlacementInfo::updateElementBinGridLegacy(bool checkGridForPackingRouting, 
             }
             if (!nonOverflow)
             {
-                getBinGrid(getPotentialBELTypeIDs(curCell)[0])[binIdY][binIdX]->addCell(curCell,
-                                                                                        num_cellOccupationBELs);
+                getBinGrid(getPotentialBELTypeIDs(curCell)[0])[binIdY][binIdX]->addGridCellExclusive(curCell, num_cellOccupationBELs, false);
                 setCellBinInfo(curCell->getCellId(), getPotentialBELTypeIDs(curCell)[0], binIdX, binIdY,
                                num_cellOccupationBELs);
             }
@@ -1144,7 +1144,7 @@ void PlacementInfo::updateElementBinGridLegacy(bool checkGridForPackingRouting, 
                     if (getBinGrid(SharedBELID)[binIdY][binIdX]->canAddMore(num_cellOccupationBELs))
                     {
 
-                        getBinGrid(SharedBELID)[binIdY][binIdX]->addCell(curCell, num_cellOccupationBELs);
+                        getBinGrid(SharedBELID)[binIdY][binIdX]->addGridCellExclusive(curCell, num_cellOccupationBELs, false);
                         setCellBinInfo(curCell->getCellId(), SharedBELID, binIdX, binIdY, num_cellOccupationBELs);
                         nonOverflow = true;
                         break;
@@ -1153,8 +1153,7 @@ void PlacementInfo::updateElementBinGridLegacy(bool checkGridForPackingRouting, 
 
                 if (!nonOverflow)
                 {
-                    getBinGrid(getPotentialBELTypeIDs(curCell)[0])[binIdY][binIdX]->addCell(curCell,
-                                                                                            num_cellOccupationBELs);
+                    getBinGrid(getPotentialBELTypeIDs(curCell)[0])[binIdY][binIdX]->addGridCellExclusive(curCell, num_cellOccupationBELs, false);
                     setCellBinInfo(curCell->getCellId(), getPotentialBELTypeIDs(curCell)[0], binIdX, binIdY,
                                    num_cellOccupationBELs);
                 }
@@ -1162,6 +1161,7 @@ void PlacementInfo::updateElementBinGridLegacy(bool checkGridForPackingRouting, 
         }
     }
 
+    // Auxiliary grids reuse coordinates/bin IDs from the shared-resource pass.
     if (checkGridForPackingRouting)
     {
         for (auto &tmpRow : globalBinGrid)
@@ -1181,43 +1181,42 @@ void PlacementInfo::updateElementBinGridLegacy(bool checkGridForPackingRouting, 
             if (auto curUnpackedCell = dynamic_cast<PlacementUnpackedCell *>(curPU))
             {
                 int binIdX, binIdY;
-                float cellX = curUnpackedCell->X();
-                float cellY = curUnpackedCell->Y();
                 DesignInfo::DesignCell *curCell = curUnpackedCell->getCell();
+                const auto &cachedLocation = cellId2location[curCell->getCellId()];
+                float cellX = cachedLocation.X, cellY = cachedLocation.Y;
 
                 if (curCell->isLUT() || curCell->isFF()) // currently we only resize LUT/FF
                 {
-                    getGridXY(cellX, cellY, binIdX, binIdY);
+                    const auto &cachedBin = cellId2CellBinInfo[curCell->getCellId()];
+                    binIdX = cachedBin.X; binIdY = cachedBin.Y;
                     assert(globalBinGrid[binIdY][binIdX]->inRange(cellX, cellY));
                     assert(binIdY >= 0);
                     assert(binIdX >= 0);
                     assert((unsigned int)binIdY < globalBinGrid.size());
                     assert((unsigned int)binIdX < globalBinGrid[binIdY].size());
-                    globalBinGrid[binIdY][binIdX]->addCell(curCell, 0);
+                    globalBinGrid[binIdY][binIdX]->addGridCellExclusive(curCell, 0, false);
                 }
             }
             else if (auto curMacro = dynamic_cast<PlacementMacro *>(curPU))
             {
                 for (int vId = 0; vId < curMacro->getNumOfCells(); vId++)
                 {
-                    float offsetX_InMacro, offsetY_InMacro;
-                    DesignInfo::DesignCellType cellType;
-                    curMacro->getVirtualCellInfo(vId, offsetX_InMacro, offsetY_InMacro, cellType);
                     DesignInfo::DesignCell *curCell = curMacro->getCell(vId);
                     if (curCell->isLUT() || curCell->isFF()) // currently we only resize LUT/FF
                     {
                         int binIdX, binIdY;
-                        float cellX = curMacro->X() + offsetX_InMacro;
-                        float cellY = curMacro->Y() + offsetY_InMacro;
+                        const auto &cachedLocation = cellId2location[curCell->getCellId()];
+                        float cellX = cachedLocation.X, cellY = cachedLocation.Y;
 
-                        getGridXY(cellX, cellY, binIdX, binIdY);
+                        const auto &cachedBin = cellId2CellBinInfo[curCell->getCellId()];
+                        binIdX = cachedBin.X; binIdY = cachedBin.Y;
                         assert(globalBinGrid[binIdY][binIdX]->inRange(cellX, cellY));
 
                         assert(binIdY >= 0);
                         assert(binIdX >= 0);
                         assert((unsigned int)binIdY < globalBinGrid.size());
                         assert((unsigned int)binIdX < globalBinGrid[binIdY].size());
-                        globalBinGrid[binIdY][binIdX]->addCell(curCell, 0);
+                        globalBinGrid[binIdY][binIdX]->addGridCellExclusive(curCell, 0, false);
                     }
                 }
             }
@@ -1235,20 +1234,20 @@ void PlacementInfo::updateElementBinGridLegacy(bool checkGridForPackingRouting, 
             if (auto curUnpackedCell = dynamic_cast<PlacementUnpackedCell *>(curPU))
             {
                 int binIdX, binIdY;
-                float cellX = curUnpackedCell->X();
-                float cellY = curUnpackedCell->Y();
                 DesignInfo::DesignCell *curCell = curUnpackedCell->getCell();
+                const auto &cachedLocation = cellId2location[curCell->getCellId()];
+                float cellX = cachedLocation.X, cellY = cachedLocation.Y;
 
                 if (curCell->isLUT() || curCell->isFF() || curCell->isCarry() || curCell->isMux())
                 {
-                    getGridXY(cellX, cellY, binIdX, binIdY);
+                    const auto &cachedBin = cellId2CellBinInfo[curCell->getCellId()];
+                    binIdX = cachedBin.X; binIdY = cachedBin.Y;
                     assert(CLBBinGrid[binIdY][binIdX]->inRange(cellX, cellY));
                     assert(binIdY >= 0);
                     assert(binIdX >= 0);
                     assert((unsigned int)binIdY < CLBBinGrid.size());
                     assert((unsigned int)binIdX < CLBBinGrid[binIdY].size());
-                    CLBBinGrid[binIdY][binIdX]->addCell(curCell,
-                                                        0); // we just use the bininfo to record LUTFF location
+                    CLBBinGrid[binIdY][binIdX]->addGridCellExclusive(curCell, 0, false); // we just use the bininfo to record LUTFF location
                     cellId2location[curCell->getCellId()].X = cellX;
                     cellId2location[curCell->getCellId()].Y = cellY;
                 }
@@ -1257,25 +1256,22 @@ void PlacementInfo::updateElementBinGridLegacy(bool checkGridForPackingRouting, 
             {
                 for (int vId = 0; vId < curMacro->getNumOfCells(); vId++)
                 {
-                    float offsetX_InMacro, offsetY_InMacro;
-                    DesignInfo::DesignCellType cellType;
-                    curMacro->getVirtualCellInfo(vId, offsetX_InMacro, offsetY_InMacro, cellType);
                     DesignInfo::DesignCell *curCell = curMacro->getCell(vId);
                     if (curCell->isLUT() || curCell->isFF() || curCell->isCarry() || curCell->isMux())
                     {
                         int binIdX, binIdY;
-                        float cellX = curMacro->X() + offsetX_InMacro;
-                        float cellY = curMacro->Y() + offsetY_InMacro;
+                        const auto &cachedLocation = cellId2location[curCell->getCellId()];
+                        float cellX = cachedLocation.X, cellY = cachedLocation.Y;
 
-                        getGridXY(cellX, cellY, binIdX, binIdY);
+                        const auto &cachedBin = cellId2CellBinInfo[curCell->getCellId()];
+                        binIdX = cachedBin.X; binIdY = cachedBin.Y;
                         assert(CLBBinGrid[binIdY][binIdX]->inRange(cellX, cellY));
 
                         assert(binIdY >= 0);
                         assert(binIdX >= 0);
                         assert((unsigned int)binIdY < CLBBinGrid.size());
                         assert((unsigned int)binIdX < CLBBinGrid[binIdY].size());
-                        CLBBinGrid[binIdY][binIdX]->addCell(curCell,
-                                                            0); // we just use the bininfo to record LUTFF location
+                        CLBBinGrid[binIdY][binIdX]->addGridCellExclusive(curCell, 0, false); // we just use the bininfo to record LUTFF location
                         cellId2location[curCell->getCellId()].X = cellX;
                         cellId2location[curCell->getCellId()].Y = cellY;
                     }

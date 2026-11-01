@@ -363,3 +363,6 @@ target_link_libraries(checkSllWireSplitQp GlobalPlacer DesignInfo DeviceInfo Pla
 add_executable(checkCrossDieSpreadLimit EXCLUDE_FROM_ALL tests/check_cross_die_spread_limit.cc)
 add_executable(checkCrossDieSpreadLimitIntegration EXCLUDE_FROM_ALL tests/check_cross_die_spread_limit_integration.cc)
 target_link_libraries(checkCrossDieSpreadLimitIntegration GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkRuntimeBookkeeping EXCLUDE_FROM_ALL tests/check_runtime_bookkeeping.cc)
+target_link_libraries(checkRuntimeBookkeeping GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})

@@ -1,5 +1,6 @@
 #include "../../../utils/RuntimeProfiler.h"
 #include "BoundaryAwareClusterer.h"
+#include "BoundaryAuditCounts.h"
 #include "BoundaryClusteringStrategy.h"
 #include "RegionCapacityTracker.h"
 #include <algorithm>
@@ -238,14 +239,8 @@ void BoundaryAwareClusterer::audit(const std::string &stage)
     if(config["BoundaryReportDirectory"].empty())return;
     auto graph=placement->getTimingInfo()->getSimplePlacementTimingGraph();
     const auto &pins=placement->getPinId2location();
-    long long slr=0,io=0,crossed=0,valid=0;
-    for(auto edge:graph->getEdges())
-    {
-        auto a=pins[edge->getSourcePin()->getElementIdInType()],b=pins[edge->getSinkPin()->getElementIdInType()];
-        if((a.X<-5 && a.Y<-5)||(b.X<-5 && b.Y<-5))continue;
-        int s=model->crossingCount(a.X,a.Y,b.X,b.Y,"SLR"),i=model->crossingCount(a.X,a.Y,b.X,b.Y,"IO");
-        slr+=s;io+=i;crossed+=(s+i)>0;++valid;
-    }
+    const auto counts=boundary_audit::count(graph->getEdges(),pins,*model);
+    const auto slr=counts.slr,io=counts.io,crossed=counts.crossed,valid=counts.valid;
     std::ofstream f(config["BoundaryReportDirectory"]+"/amf_boundaries.tsv",std::ios::app);
     if(f.tellp()==0)f<<"stage\tdriver_sink_edges\tslr_crossings\tio_crossings\tcrossing_edges\tregion_preferences\n";
     f<<stage<<'\t'<<valid<<'\t'<<slr<<'\t'<<io<<'\t'<<crossed<<'\t'<<placement->getRegionPreferences().size()<<'\n';
