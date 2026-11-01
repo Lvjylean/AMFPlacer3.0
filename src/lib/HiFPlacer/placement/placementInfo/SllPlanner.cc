@@ -24,6 +24,9 @@ double number(const std::map<std::string,std::string>&cfg,const std::string&key,
 struct SllPlanner::Impl {
     PlacementInfo*pi;Model m;std::vector<int> netIndex;
     TimingIndex timingIndex;
+    bool timingBatchActive=false;
+    std::vector<DelayPrefix> timingPrefixes;
+    std::vector<std::unique_ptr<Net>> collectPending;
     LocalDelay referenceDelay;
     std::vector<PhysicalBoundaryModel::Region> regions;
     std::map<std::pair<int,int>,std::vector<int>> timingCandidates;
@@ -191,9 +194,34 @@ struct SllPlanner::Impl {
 SllPlanner::SllPlanner(PlacementInfo*pi,const std::map<std::string,std::string>&cfg):p(new Impl(pi,cfg)){}
 SllPlanner::~SllPlanner()=default;
 const Model&SllPlanner::model()const{return p->m;}
-void SllPlanner::setLocalDelay(LocalDelay f){p->m.local=std::move(f);}
+void SllPlanner::setLocalDelay(LocalDelay f){
+    if(p->timingBatchActive)throw std::logic_error("Cannot change delay model during a timing batch");
+    p->m.local=std::move(f);
+}
 void SllPlanner::setReferenceDelay(LocalDelay f){p->referenceDelay=std::move(f);}
 bool SllPlanner::jointPlacement()const{return p->m.jointPlacement;}
+void SllPlanner::beginTimingBatch(TimingCoordinates mode) {
+    if(p->timingBatchActive)throw std::logic_error("Nested SLL timing batch");
+    AMF_PROFILE_SCOPE("sll_timing_prefix","prepare immutable SLL timing prefixes");
+    p->timingPrefixes.resize(p->m.plans.size());std::exception_ptr failure;
+    #pragma omp parallel for schedule(dynamic,16)
+    for(size_t i=0;i<p->m.plans.size();++i) {
+        try {
+            const auto&plan=p->m.plans[i];const auto pin=p->pi->getDesignInfo()->getPins().at(plan.net.source.id);
+            Point source;
+            if(mode==TimingCoordinates::PlacementPins)source=p->position(pin);
+            else if(mode==TimingCoordinates::TimingPins){const auto&v=p->pi->getPinId2location().at(plan.net.source.id);source={v.X,v.Y};}
+            else {const auto&v=p->pi->getCellId2location().at(pin->getCell()->getCellId());source={v.X,v.Y};}
+            p->m.prepareDelayPrefix(plan,source,p->timingPrefixes[i]);
+        } catch(...) {
+            #pragma omp critical(amf_sll_prefix_exception)
+            {if(!failure)failure=std::current_exception();}
+        }
+    }
+    if(failure)std::rethrow_exception(failure);
+    p->timingBatchActive=true;
+}
+void SllPlanner::endTimingBatch(){p->timingBatchActive=false;}
 size_t SllPlanner::variableCount()const {
     if(!jointPlacement())return 0;size_t n=0;for(const auto&plan:p->m.plans)n+=plan.crossings.size();return n;
 }
@@ -214,6 +242,7 @@ void SllPlanner::addDensityModel(std::vector<float>&diag,Eigen::VectorXd&rhs,boo
     for(size_t i=0;i<p->densityTargets.size();++i){diag.at(offset+i)+=w;rhs[offset+i]-=w*(x?p->densityTargets[i].x:p->densityTargets[i].y);}
 }
 void SllPlanner::projectQp(const Eigen::VectorXd&x,const Eigen::VectorXd&y,double displacementLimit) {
+    if(p->timingBatchActive)throw std::logic_error("Cannot project during a timing batch");
     if(p->wireBatchActive)throw std::logic_error("Cannot project SLL coordinates during a wire batch");
     if(!jointPlacement())return;const size_t offset=p->pi->getPlacementUnits().size(),n=variableCount();
     if(x.size()!=offset+n||y.size()!=offset+n)throw std::runtime_error("SLL QP dimension mismatch");
@@ -244,6 +273,7 @@ void SllPlanner::projectQp(const Eigen::VectorXd&x,const Eigen::VectorXd&y,doubl
 bool SllPlanner::handles(int id)const{return id>=0&&size_t(id)<p->netIndex.size()&&p->netIndex[id]>=0;}
 bool SllPlanner::crosses(Point a,Point b)const{return p->slr(a)!=p->slr(b);}
 void SllPlanner::refresh() {
+    if(p->timingBatchActive)throw std::logic_error("Cannot refresh during a timing batch");
     if(p->wireBatchActive)throw std::logic_error("Cannot refresh SLL topology during a wire batch");
     AMF_PROFILE_SCOPE("sll_position_planning","virtual SLL lifecycle and capacity allocation");
     using Clock=std::chrono::steady_clock;
@@ -292,7 +322,7 @@ void SllPlanner::refresh() {
         return crossing?std::move(result):std::unique_ptr<Net>{};
     };
     auto collect=[&](bool fast) {
-        std::vector<std::unique_ptr<Net>> pending(placementNets.size());std::exception_ptr failure;
+        auto&pending=p->collectPending;pending.resize(placementNets.size());std::exception_ptr failure;
         if(fast) {
             #pragma omp parallel for schedule(dynamic,64)
             for(size_t i=0;i<placementNets.size();++i) {
@@ -306,10 +336,15 @@ void SllPlanner::refresh() {
         } else for(size_t i=0;i<placementNets.size();++i)pending[i]=buildNet(placementNets[i],false);
         std::vector<Net> nets;
         // Capacity allocation below must see the same deterministic input order.
-        for(auto&net:pending)if(net)nets.push_back(std::move(*net));
+        for(auto&net:pending)if(net){nets.push_back(std::move(*net));net.reset();}
         return nets;
     };
-    const auto collectStart=Clock::now();auto nets=collect(p->refreshParallel);
+    const auto collectStart=Clock::now();std::vector<Net> nets;
+    {
+        AMF_PROFILE_SCOPE("sll_refresh_collect","SLL collect coordinates and previous-plan criticality");
+        TimingBatch batch(this,TimingCoordinates::PlacementPins);
+        nets=collect(p->refreshParallel);
+    }
     const double collectSeconds=seconds(collectStart);const size_t selected=nets.size();
     double auditSeconds=0;size_t audited=0;
     if(p->refreshAuditStride && ++p->refreshCalls%p->refreshAuditStride==0) {
@@ -326,7 +361,9 @@ void SllPlanner::refresh() {
         if(!equal)throw std::runtime_error("Parallel SLL collection changed the reference net data");
         audited=nets.size();auditSeconds=seconds(auditStart);
     }
-    const auto rebuildStart=Clock::now();p->m.rebuild(std::move(nets));const double rebuildSeconds=seconds(rebuildStart);
+    const auto rebuildStart=Clock::now();
+    {AMF_PROFILE_SCOPE("sll_refresh_rebuild","SLL topology and deterministic capacity allocation");p->m.rebuild(std::move(nets));}
+    const double rebuildSeconds=seconds(rebuildStart);
     if(p->m.allowTransientOverflow){
         const auto capacity=p->m.boundaryAdmissionCapacity();
         for(const auto&entry:p->m.boundaryDemand)
@@ -336,21 +373,31 @@ void SllPlanner::refresh() {
     }
     // Compute every timing spring from the plan that will enter this QP.
     // No independent candidate search is used for these weights.
+    AMF_PROFILE_NAMED(criticalityScope,"sll_refresh_criticality","SLL new-plan criticality");
     #pragma omp parallel for schedule(dynamic,16)
     for(size_t i=0;i<p->m.plans.size();++i)p->m.updatePlannedCriticalities(p->m.plans[i]);
+    AMF_PROFILE_STOP(criticalityScope);
+    AMF_PROFILE_NAMED(indexScope,"sll_refresh_index","SLL active pin and net index");
     const auto indexStart=Clock::now();p->netIndex.assign(di.getNets().size(),-1);p->virtualBase.clear();
     size_t indexedSinks=0;for(const auto&plan:p->m.plans)indexedSinks+=plan.net.sinks.size();
     p->timingIndex.reset(di.getPins().size(),indexedSinks);
-    std::vector<double> wireCosts(p->m.plans.size());
-    #pragma omp parallel for schedule(dynamic,16)
-    for(size_t i=0;i<p->m.plans.size();++i)wireCosts[i]=p->m.wireCost(p->m.plans[i]);
+    const bool reportWire=p->log.is_open() && p->log.good();
+    std::vector<double> wireCosts;
+    if(reportWire) {
+        AMF_PROFILE_SCOPE("sll_refresh_diagnostics","SLL log-only wire cost");
+        wireCosts.resize(p->m.plans.size());
+        #pragma omp parallel for schedule(dynamic,16)
+        for(size_t i=0;i<p->m.plans.size();++i)wireCosts[i]=p->m.wireCost(p->m.plans[i]);
+    }
     size_t cells=0;double wire=0;
     for(size_t i=0;i<p->m.plans.size();++i) {
-        const auto&plan=p->m.plans[i];p->netIndex[plan.net.id]=i;p->virtualBase[plan.net.id]=cells;cells+=plan.crossings.size();wire+=wireCosts[i]; // Preserve the original summation order.
+        const auto&plan=p->m.plans[i];p->netIndex[plan.net.id]=i;p->virtualBase[plan.net.id]=cells;cells+=plan.crossings.size();
+        if(reportWire)wire+=wireCosts[i]; // Preserve the original summation order.
         const int sourceCell=di.getPins().at(plan.net.source.id)->getCell()->getCellId();
         for(size_t j=0;j<plan.net.sinks.size();++j){const auto&s=plan.net.sinks[j];
             int dest=di.getPins().at(s.id)->getCell()->getCellId();p->timingIndex.add(s.id,i,j,sourceCell,dest);}
     }
+    AMF_PROFILE_STOP(indexScope);
     if(p->refreshLog)p->refreshLog<<p->generation+1<<'\t'<<placementNets.size()<<'\t'<<selected<<'\t'
         <<collectSeconds<<'\t'<<rebuildSeconds<<'\t'<<seconds(indexStart)<<'\t'<<auditSeconds<<'\t'<<audited<<std::endl;
     if(p->log)p->log<<++p->generation<<'\t'<<p->m.plans.size()<<'\t'<<cells<<'\t'<<p->m.created<<'\t'<<p->m.retained<<'\t'<<p->m.deleted<<'\t'<<std::setprecision(17)<<wire<<std::endl;
@@ -378,16 +425,21 @@ void SllPlanner::addWireModel(int id,std::vector<Eigen::Triplet<float>>&trip,std
 bool SllPlanner::pinDelay(int source,int sink,Point a,Point b,double&result)const {
     auto entry=p->timingIndex.findPin(sink);if(!entry)return false;
     const auto&plan=p->m.plans.at(entry->plan);if(plan.net.source.id!=source)return false;
-    const auto&s=plan.net.sinks.at(entry->sink);
+    return plannedDelay(entry->plan,entry->sink,a,b,result);
+}
+bool SllPlanner::plannedDelay(int planIndex,int sinkIndex,Point a,Point b,double&result)const {
+    const auto&plan=p->m.plans.at(planIndex);
+    const auto&s=plan.net.sinks.at(sinkIndex);
     if(p->slr(a)!=plan.net.source.slr||p->slr(b)!=s.slr)return false;
-    result=p->m.pathDelay(plan,sink,a,b);return true;
+    result=p->timingBatchActive?p->m.pathDelayWithPrefix(plan,s.id,a,b,p->timingPrefixes.at(planIndex)):
+                               p->m.pathDelay(plan,s.id,a,b);return true;
 }
 bool SllPlanner::cellDelay(int source,int sink,Point a,Point b,double&result)const {
     // Ambiguous cell pairs can have different pin-level trees. Caller must use
     // exact pin IDs; never select an arbitrary net between the two cells.
     int id=p->timingIndex.uniqueSink(source,sink);if(id<0)return false;
     auto entry=p->timingIndex.findPin(id);if(!entry)return false;
-    return pinDelay(p->m.plans.at(entry->plan).net.source.id,id,a,b,result);
+    return plannedDelay(entry->plan,entry->sink,a,b,result);
 }
 double SllPlanner::geometryDelay(Point a,Point b)const {
     int from=p->slr(a),to=p->slr(b);if(from==to)return p->m.delay(a,b);

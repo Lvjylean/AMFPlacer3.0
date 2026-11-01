@@ -9,6 +9,18 @@ class SllPlanner {
 public:
     SllPlanner(PlacementInfo*,const std::map<std::string,std::string>&);
     ~SllPlanner();
+    enum class TimingCoordinates { PlacementPins, TimingPins, CellCenters };
+    void beginTimingBatch(TimingCoordinates);
+    void endTimingBatch();
+    // No coordinates, timing coefficients or plan geometry may change inside.
+    class TimingBatch {
+        SllPlanner* planner;
+    public:
+        explicit TimingBatch(SllPlanner* owner,TimingCoordinates mode):planner(owner){if(planner)planner->beginTimingBatch(mode);}
+        ~TimingBatch(){if(planner)planner->endTimingBatch();}
+        TimingBatch(const TimingBatch&)=delete;
+        TimingBatch& operator=(const TimingBatch&)=delete;
+    };
     // Scoped, immutable coordinates for parallel candidate scoring only.
     void beginWireLengthBatch();
     void endWireLengthBatch();
@@ -40,6 +52,7 @@ public:
     void exportPlan(const std::string&, bool writeConstraints=true);
     const amf_sll_plan::Model& model()const;
 private:
+    bool plannedDelay(int,int,amf_sll_plan::Point,amf_sll_plan::Point,double&)const;
     double wireLengthUncached(int,double,int,amf_sll_plan::Point)const;
     struct Impl;std::unique_ptr<Impl> p;
 };

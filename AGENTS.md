@@ -1,3 +1,7 @@
+# 当前 SLL 等价运行时优化副本（2026-11-01）
+
+独立分支 `codex/sll-runtime-optimization-20261101`，基于 `9f63b97b`。用户已授权两批等价性能优化及同配置 AMF-only 性能验证：关闭日志时跳过纯汇总、缓存固定时序开关、限定生命周期的共享延迟前缀、复用收集缓冲、增加刷新分阶段 profile。保持刷新频率、公式、浮点顺序、容量与候选决策。当前测量配置 10 ns、12 线程、SLL 开、visualization=false、CrossDieSpreadMaxBins=0；不启动 Vivado。历史实验和源码不修改。下文为历史记录。
+
 # 当前跨 die 扩散限幅副本（2026-11-01）
 
 本副本分支为 `codex/cross-die-spread-limit-20261101`，基于 `6c0557f5`。用户已确认 `CrossDieSpreadMaxBins=20`，按标称网格宽高约束整轮跨 die 扩散净位移，参考点为 QP 后、扩散前。原整合分支与实验冻结输入不改。本任务只构建及小型验证，不自动启动完整布局布线；详见 `docs/research/cross-die-spread-limit-20261101.md`。以下标题和路径属于历史记录。

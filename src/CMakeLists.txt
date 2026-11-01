@@ -337,6 +337,7 @@ target_include_directories(checkSllDensityEquivalence PRIVATE lib/HiFPlacer/plac
 add_executable(checkSllPlannedTimingCapacity EXCLUDE_FROM_ALL tests/check_sll_planned_timing_capacity.cc)
 
 add_executable(checkSllOutputTail EXCLUDE_FROM_ALL tests/check_sll_output_tail.cc)
+add_executable(checkSllDelayPrefix EXCLUDE_FROM_ALL tests/check_sll_delay_prefix.cc)
 
 # Device policies retained from the incremental development branch.
 add_executable(checkDevicePlacementPolicy EXCLUDE_FROM_ALL tests/check_device_placement_policy.cc)

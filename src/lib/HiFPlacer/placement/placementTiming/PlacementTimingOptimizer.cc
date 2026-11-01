@@ -33,7 +33,8 @@ PlacementTimingOptimizer::PlacementTimingOptimizer(PlacementInfo *placementInfo,
                                            163.46881911227194, 136.17523346378107}
                    : std::array<float, 10>{234.7694101, -433.99467294, -64.96319998,
                                            373.78606257, 139.45226658}),
-      placementInfo(placementInfo), timingInfo(placementInfo->getTimingInfo()), JSONCfg(JSONCfg)
+      placementInfo(placementInfo), timingInfo(placementInfo->getTimingInfo()), JSONCfg(JSONCfg),
+      sllTimingEnabled(amf_config::sllTiming(JSONCfg))
 {
     AMF_PROFILE_FUNCTION("timing");
     if (JSONCfg.find("PlacementTimingOptimizerVerbose") != JSONCfg.end())
@@ -671,6 +672,9 @@ float PlacementTimingOptimizer::conductStaticTimingAnalysis(bool disableOptimist
     int numEdges = edges.size();
     chainTimingEnabled = effectFactor > 1;
 
+    {
+    SllPlanner::TimingBatch timingBatch(sllTimingEnabled?placementInfo->sllPlanner.get():nullptr,
+                                      SllPlanner::TimingCoordinates::TimingPins);
 #pragma omp parallel for
     for (int i = 0; i < numEdges; i++)
     {
@@ -688,6 +692,7 @@ float PlacementTimingOptimizer::conductStaticTimingAnalysis(bool disableOptimist
         //     edge->setDelay(delay + 0.15);
         // else
         edge->setDelay(delay);
+    }
     }
 
     timingGraph->propogateArrivalTime();
@@ -986,6 +991,8 @@ float PlacementTimingOptimizer::conductStaticTimingAnalysis(bool disableOptimist
 float PlacementTimingOptimizer::getSlackThr()
 {
     AMF_PROFILE_FUNCTION("timing");
+    SllPlanner::TimingBatch timingBatch(sllTimingEnabled?placementInfo->sllPlanner.get():nullptr,
+                                      SllPlanner::TimingCoordinates::CellCenters);
     assert(placementInfo->getTimingInfo());
 
     // float maxEnhanceRatio = 0;

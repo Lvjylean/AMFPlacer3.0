@@ -53,6 +53,9 @@ struct Crossing {
     int tile=-1; // Joint placement selects a tile; channel stays -1 until final legalization.
 };
 struct Plan { Net net;std::vector<Crossing> crossings;std::unordered_map<int,std::vector<int>> paths; };
+// Valid only while this plan's geometry and local delay model are immutable.
+// Source coordinates are explicit: STA pins and cell-centre trials differ.
+struct DelayPrefix { Point source;std::vector<double> values;bool usable=false; };
 struct Terminal { int pin=-1;Point fixed;bool isFixed=true;int crossing=-1;bool exit=false; };
 using LocalDelay=std::function<double(Point,Point)>;
 inline double length(Point a,Point b,double ratio) {return std::abs(a.x-b.x)+ratio*std::abs(a.y-b.y);}
@@ -221,10 +224,36 @@ public:
         for(int k:path){const auto&c=geometry(p.crossings.at(k));d+=delay(cur,c.in)+c.slowMax;cur=c.out;}
         return d+(path.empty()?delay(cur,sinkPoint):outputDelay(cur,sinkPoint));
     }
+    void prepareDelayPrefix(const Plan&p,Point source,DelayPrefix&cache)const {
+        cache.usable=false;cache.source=source;cache.values.resize(p.crossings.size());
+        for(size_t k=0;k<p.crossings.size();++k) {
+            const auto&e=p.crossings[k];
+            // Hand-built/non-tree plans retain the original path evaluator.
+            if(e.parent < -1 || e.parent>=int(k))return;
+            const auto&c=geometry(e);
+            Point cur=e.parent<0?source:geometry(p.crossings[e.parent]).out;
+            double d=e.parent<0?0:cache.values[e.parent];
+            d+=delay(cur,c.in)+c.slowMax; // Keep the reference association.
+            cache.values[k]=d;
+        }
+        cache.usable=true;
+    }
+    double pathDelayWithPrefix(const Plan&p,int sink,Point source,Point target,const DelayPrefix&cache)const {
+        if(!cache.usable || source.x!=cache.source.x || source.y!=cache.source.y || cache.values.size()!=p.crossings.size())
+            return pathDelay(p,sink,source,target);
+        const auto&path=p.paths.at(sink);int previous=-1;
+        for(int k:path) {
+            if(p.crossings.at(k).parent!=previous)return pathDelay(p,sink,source,target);
+            previous=k;
+        }
+        if(path.empty())return 0.+delay(source,target);
+        return cache.values.at(previous)+outputDelay(geometry(p.crossings.at(previous)).out,target);
+    }
     void updatePlannedCriticalities(Plan&p)const {
         if(!plannedTimingCriticalities)return;
+        DelayPrefix prefix;prepareDelayPrefix(p,p.net.source.p,prefix);
         for(auto&s:p.net.sinks){
-            const double d=pathDelay(p,s.id,p.net.source.p,s.p);
+            const double d=pathDelayWithPrefix(p,s.id,p.net.source.p,s.p,prefix);
             s.criticality=std::isfinite(s.timingBudget)&&s.timingBudget<1e5?
                 std::min(64.,1.+std::max(0.,d-s.timingBudget)):1.;
         }

@@ -53,6 +53,35 @@ int main(int argc,char**argv){try{
             check(rejected,"topology mutation rejected inside read-only candidate batch");
         }
     };
+    auto checkTimingBatch=[&] {
+        using Point=amf_sll_plan::Point;
+        struct Query {int source,sink,sourceCell,sinkCell;Point a,b;double pin=0,cell=0;bool pinOk=false,cellOk=false;};
+        for(auto mode:{SllPlanner::TimingCoordinates::PlacementPins,SllPlanner::TimingCoordinates::TimingPins,SllPlanner::TimingCoordinates::CellCenters}) {
+            std::vector<Query> queries;
+            timing.setPinsLocation();
+            for(const auto&plan:pi.sllPlanner->model().plans)for(const auto&sink:plan.net.sinks) {
+                const int sc=design.getPins().at(plan.net.source.id)->getCell()->getCellId(),tc=design.getPins().at(sink.id)->getCell()->getCellId();
+                for(double delta:{0.,.125}) {
+                    Point a=plan.net.source.p,b=sink.p;
+                    if(mode==SllPlanner::TimingCoordinates::TimingPins){const auto&v=pi.getPinId2location().at(plan.net.source.id);a={v.X,v.Y};}
+                    if(mode==SllPlanner::TimingCoordinates::CellCenters){const auto&v=pi.getCellId2location().at(sc);a={v.X,v.Y};}
+                    a.x+=delta;
+                    Query q{plan.net.source.id,sink.id,sc,tc,a,b};
+                    q.pinOk=pi.sllPlanner->pinDelay(q.source,q.sink,q.a,q.b,q.pin);
+                    q.cellOk=pi.sllPlanner->cellDelay(sc,tc,q.a,q.b,q.cell);queries.push_back(q);
+                }
+            }
+            {SllPlanner::TimingBatch batch(pi.sllPlanner.get(),mode);
+                for(const auto&q:queries){double d=0;check(pi.sllPlanner->pinDelay(q.source,q.sink,q.a,q.b,d)==q.pinOk && (!q.pinOk || d==q.pin),"batch pin exact equality");
+                    check(pi.sllPlanner->cellDelay(q.sourceCell,q.sinkCell,q.a,q.b,d)==q.cellOk && (!q.cellOk || d==q.cell),"batch cell exact equality");}
+                bool rejected=false;try{pi.sllPlanner->refresh();}catch(const std::logic_error&){rejected=true;}check(rejected,"timing batch rejects refresh");
+                rejected=false;try{pi.sllPlanner->setLocalDelay({});}catch(const std::logic_error&){rejected=true;}check(rejected,"timing batch rejects model change");
+                rejected=false;try{SllPlanner::TimingBatch nested(pi.sllPlanner.get(),mode);}catch(const std::logic_error&){rejected=true;}check(rejected,"timing batch rejects nesting");
+            }
+            for(const auto&q:queries){double d=0;check(pi.sllPlanner->pinDelay(q.source,q.sink,q.a,q.b,d)==q.pinOk && (!q.pinOk || d==q.pin),"batch exit restores direct evaluation");}
+        }
+    };
+    checkTimingBatch();
     checkWireBatch();
     {auto u=pi.getPlacementUnits()[0];const auto x=u->X(),y=u->Y();
         u->setAnchorLocationAndForgetTheOriginalOne(x+3.25,y);checkWireBatch();
@@ -82,6 +111,7 @@ int main(int argc,char**argv){try{
         pi.sllPlanner->refresh();
         check(tileInventory.current(pi.sllPlanner->model())==expected,"refresh keeps QP-selected tile");
         check(pi.sllPlanner->model().initialTileEvaluations==0,"refresh does not initialize surviving crossings");
+        checkTimingBatch();
         pi.sllPlanner->prepareDensityTargets();
     }
     {
