@@ -1,6 +1,6 @@
 # 当前 SLL 等价运行时优化副本（2026-11-01）
 
-独立分支 `codex/sll-runtime-optimization-20261101`，基于 `9f63b97b`。用户已授权两批等价性能优化及同配置 AMF-only 性能验证：关闭日志时跳过纯汇总、缓存固定时序开关、限定生命周期的共享延迟前缀、复用收集缓冲、增加刷新分阶段 profile。保持刷新频率、公式、浮点顺序、容量与候选决策。当前测量配置 10 ns、12 线程、SLL 开、visualization=false、CrossDieSpreadMaxBins=0；不启动 Vivado。历史实验和源码不修改。下文为历史记录。
+独立分支 `codex/sll-runtime-optimization-r2-20261101`，基于 `9f63b97b`。用户已授权两批等价性能优化及同配置 AMF-only 性能验证：关闭日志时跳过纯汇总、批次内缓存时序开关、批次外保留动态读取、限定生命周期的共享延迟前缀、复用收集缓冲、增加刷新分阶段 profile。保持刷新频率、公式、浮点顺序、容量与候选决策。当前测量配置 10 ns、12 线程、SLL 开、visualization=false、CrossDieSpreadMaxBins=0；不启动 Vivado。历史实验和源码不修改。下文为历史记录。
 
 # 当前跨 die 扩散限幅副本（2026-11-01）
 

@@ -142,7 +142,7 @@ class PlacementTimingOptimizer
                                  float Y1, float X2, float Y2)
     {
         double plannedDelay=0;
-        float delay = sllTimingEnabled && placementInfo->sllPlanner && placementInfo->sllPlanner->cellDelay(node2->getDesignNode()->getCellId(),node1->getDesignNode()->getCellId(),{X2,Y2},{X1,Y1},plannedDelay) ? plannedDelay : getDelayByModel_conservative(X1, Y1, X2, Y2);
+        float delay = useSllTiming() && placementInfo->sllPlanner && placementInfo->sllPlanner->cellDelay(node2->getDesignNode()->getCellId(),node1->getDesignNode()->getCellId(),{X2,Y2},{X1,Y1},plannedDelay) ? plannedDelay : getDelayByModel_conservative(X1, Y1, X2, Y2);
         if (proPrimitiveTiming && !DSPCritical && isPackingTiming)
         {
             if (node1->getDesignNode()->isDSP() && node1->getForwardLevel() == 0)
@@ -165,7 +165,7 @@ class PlacementTimingOptimizer
     }
 
     float getDelayForPins(DesignInfo::DesignPin *source, DesignInfo::DesignPin *sink, float sx,float sy,float tx,float ty) {
-        if(sllTimingEnabled && placementInfo->sllPlanner) {
+        if(useSllTiming() && placementInfo->sllPlanner) {
             double d=0;
             if(placementInfo->sllPlanner->pinDelay(source->getElementIdInType(),sink->getElementIdInType(),{sx,sy},{tx,ty},d))return d;
         }
@@ -384,7 +384,24 @@ class PlacementTimingOptimizer
     std::map<int, PlacementInfo::Location> incrementalPinSnapshot;
     bool noBlockAware = false;
     bool proPrimitiveTiming = false;
-    const bool sllTimingEnabled;
+    bool timingConfigCached=false,cachedSllTimingEnabled=false;
+    bool useSllTiming()const {
+        return timingConfigCached?cachedSllTimingEnabled:amf_config::sllTiming(JSONCfg);
+    }
+    // Config mutation remains observable outside a joined read-only batch.
+    class TimingConfigBatch {
+        PlacementTimingOptimizer& owner;
+        bool previousCached,previousEnabled;
+    public:
+        explicit TimingConfigBatch(PlacementTimingOptimizer& p):owner(p),
+            previousCached(p.timingConfigCached),previousEnabled(p.cachedSllTimingEnabled) {
+            owner.cachedSllTimingEnabled=amf_config::sllTiming(owner.JSONCfg);
+            owner.timingConfigCached=true;
+        }
+        ~TimingConfigBatch(){owner.timingConfigCached=previousCached;owner.cachedSllTimingEnabled=previousEnabled;}
+        TimingConfigBatch(const TimingConfigBatch&)=delete;
+        TimingConfigBatch& operator=(const TimingConfigBatch&)=delete;
+    };
     bool proLegacyIOBoundary = false;
 
     inline float getDis(float x1, float y1, float x2, float y2)
