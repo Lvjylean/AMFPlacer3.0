@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "release": "提速版1.0",
+  "prepared_at": "2026-11-01T16:26:06.144102+08:00",
+  "repository": "https://github.com/Lvjylean/AMFPlacer3.0",
+  "target_branch": "codex/sll-edge-compact-snapshot-20261024",
+  "target_before": "a4e5fed0e2033e51c0e6d209b757c3e337a870b7",
+  "validated_source_commit": "e9a21f594caab335c39fca80646a7f164781b30f",
+  "implementation_commit": "daa5b47f0990eaee6470b4e284d3ff698f33a2cb",
+  "source_tree": "c32e5a7b18c01c30792c48133b6094c255a32ed2",
+  "release_scope": "Documentation-only release commit on top of validated implementation; ordinary fast-forward push",
+  "benchmark": {
+    "host": "eda072",
+    "design": "GETRF",
+    "device": "U250",
+    "clock_ns": 10,
+    "amf_threads": 12,
+    "ProPrimitiveTiming": false,
+    "visualization": false,
+    "CrossDieSpreadMaxBins": 0,
+    "sll_features": "all enabled",
+    "scope": "AMF-only; synthesis/export inputs reused; no backend"
+  },
+  "metrics": {
+    "baseline_amf_seconds": 1354.7001128634438,
+    "optimized_amf_seconds": 1291.309400562197,
+    "saved_seconds": 63.39071230124682,
+    "saved_percent": 4.6793169720239565,
+    "checks": {
+      "final_contents": true,
+      "plan_contents": true,
+      "selected_algorithm_logs": true,
+      "same_rounds": true,
+      "same_qp": true,
+      "amf_only": true,
+      "no_frames": true,
+      "no_dcp": true,
+      "plan_capacity": true,
+      "only_output_config_differences": true,
+      "dynamic_switch_compatibility": true,
+      "parallel_slack_fixture_equivalence": true
+    },
+    "sll_plan_equal": {
+      "placement/sll-plan.tcl": true
+    },
+    "source_commit": "6dfbbbd749ca3f6bf7f2e959d060c1e946740c4d",
+    "build_source_commit": "daa5b47f0990eaee6470b4e284d3ff698f33a2cb",
+    "binary_sha256": "2a2640383686314edbaaedada6e66ac295b81b98a579d1b38c4956b178288425"
+  },
+  "artifacts_excluded": [
+    "DCP",
+    "bitstream",
+    "build binaries",
+    "large inputs",
+    "runtime logs"
+  ],
+  "known_scope": "Single-run wall time; planned SLL rather than actual routing; PU legalization record order normalized",
+  "inherited_whitespace_only_warnings": 9
+}

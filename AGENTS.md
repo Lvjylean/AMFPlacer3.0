@@ -1,3 +1,7 @@
+# 当前 GitHub 发布：提速版1.0（2026-11-01）
+
+本版按用户要求更新 GitHub 最近的 `codex/sll-edge-compact-snapshot-20261024` 分支，发布整理副本位于 experiments/preflight/20261101-sll-speed-v1-release/repo。已验证的算法源码来自 e9a21f594caab335c39fca80646a7f164781b30f，发布仅增加版本入口和轻量验证说明，保持算法、测试、脚本与配置原样。功能及计时范围以 docs/research/sll-speed-v1-20261101.md 为准；下文分支名称和实验路径属于历史。后续讨论的网格、边界报告和扩散容器优化尚未实施，不纳入本版。
+
 # 当前 SLL 等价运行时优化副本（2026-11-01）
 
 独立分支 `codex/sll-runtime-optimization-r2-20261101`，基于 `9f63b97b`。用户已授权两批等价性能优化及同配置 AMF-only 性能验证：关闭日志时跳过纯汇总、批次内缓存时序开关、批次外保留动态读取、限定生命周期的共享延迟前缀、复用收集缓冲、增加刷新分阶段 profile，并在既有线程内并行只读 slack 直方图扫描（整数汇总、原序写回）。保持刷新频率、公式、浮点顺序、容量与候选决策。当前测量配置 10 ns、12 线程、SLL 开、visualization=false、CrossDieSpreadMaxBins=0；不启动 Vivado。历史实验和源码不修改。下文为历史记录。
