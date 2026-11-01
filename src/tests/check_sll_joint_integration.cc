@@ -56,9 +56,9 @@ int main(int argc,char**argv){try{
     auto checkTimingBatch=[&] {
         using Point=amf_sll_plan::Point;
         struct Query {int source,sink,sourceCell,sinkCell;Point a,b;double pin=0,cell=0;bool pinOk=false,cellOk=false;};
+        pi.updateElementBinGrid(false);timing.setPinsLocation();
         for(auto mode:{SllPlanner::TimingCoordinates::PlacementPins,SllPlanner::TimingCoordinates::TimingPins,SllPlanner::TimingCoordinates::CellCenters}) {
             std::vector<Query> queries;
-            timing.setPinsLocation();
             for(const auto&plan:pi.sllPlanner->model().plans)for(const auto&sink:plan.net.sinks) {
                 const int sc=design.getPins().at(plan.net.source.id)->getCell()->getCellId(),tc=design.getPins().at(sink.id)->getCell()->getCellId();
                 for(double delta:{0.,.125}) {
