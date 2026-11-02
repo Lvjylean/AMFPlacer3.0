@@ -987,6 +987,7 @@ void ClusterPlacer::placeClusters()
 
     // SA-based cluster placement
     const float saY2xRatio = SAPlacer::configuredY2XRatio(JSONCfg, y2xRatio);
+    const auto saDevicePolicy = placementInfo->getDeviceInfo()->getPlacementPolicy();
     print_status("SA effective y2xRatio = " + std::to_string(saY2xRatio) +
                  (JSONCfg.count("Simulated Annealing y2xRatio") ? " (explicit)" : " (legacy y2xRatio * 0.8)"));
     if(dfxPartitionFloorplan) {
@@ -996,9 +997,12 @@ void ClusterPlacer::placeClusters()
         print_status("DFX partition/floorplan completed; RP representatives fixed, internal cells remain movable.");
         return;
     }
+    print_info("SA legacy column-2 penalty=" +
+               std::string(saDevicePolicy.saLegacyColumnPenalty() ? "enabled" : "disabled") +
+               " device=" + placementInfo->getDeviceInfo()->getDeviceName());
     saPlacer = new SAPlacer("ClusterSA", clusterAdjMat, enhancedClusterCluster, clusterCLBCellWeights, cluster2FixedUnitMat, fixedX, fixedY,
                             gridH, gridW, deviceH, deviceW, connectionToFixedFactor, saY2xRatio, SAIterNum, jobs,
-                            restartNum, verbose);
+                            restartNum, verbose, saDevicePolicy.saLegacyColumnPenalty());
     saPlacer->solve();
     cluster2XY = saPlacer->getCluster2XY();
 

@@ -38,7 +38,8 @@ double SAPlacer::evaluateClusterPlacement(const std::vector<std::vector<std::vec
                 resWL += clusterAdjMat[clusterA][clusterB] *
                          (fabs(cluster2XY[clusterA].first - cluster2XY[clusterB].first) * regionW +
                           y2xRatio * fabs(cluster2XY[clusterA].second - cluster2XY[clusterB].second) * regionH);
-                if (cluster2XY[clusterA].first == 2 || cluster2XY[clusterB].first == 2)
+                if (legacyColumnPenalty &&
+                    (cluster2XY[clusterA].first == 2 || cluster2XY[clusterB].first == 2))
                     resWL += fabs(cluster2XY[clusterA].first - cluster2XY[clusterB].first) * regionW * 0.5;
             }
         }

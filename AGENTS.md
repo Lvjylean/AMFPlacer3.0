@@ -1,3 +1,7 @@
+# 当前独立副本：SA 器件分派（2026-11-02）
+
+用户授权从 b0c4ad1 新建代码备份，仅按现有 device 配置禁用 U250 的 SA 第三列水平距离附加罚，保留 VU095/VCU108 原行为。副本分支 codex/sa-device-policy-20261102。修改前归档在父目录 baseline-source.tar.gz。只构建和小型验证，不启动完整布局布线，不推送；不捎带修正 SA 多启动或新增容量/跨 SLR 成本。详见 docs/research/sa-device-policy-20261102.md。以下为历史记录。
+
 # 当前 GitHub 发布：sll约束优化延后（2026-11-02）
 
 用户授权将已验收候选 c425bb98737019694942cd5d8fd6b990ece4a91c 发布到 `codex/sll-edge-compact-snapshot-20261024`。独立发布副本 experiments/preflight/20261102-sll-deferred-release/repo 基于上次发布258d1178，生产树与候选逐项一致；仅额外增加发布说明。保留2.0提速和L分段修正。

@@ -10,6 +10,8 @@ int main()
         const auto v=resolve(cfg,"VCU108"), alias=resolve(cfg,"VU095"), u=resolve(cfg,"U250");
         check(v.kind==alias.kind && canonicalDeviceName("VU095")=="VCU108","VU095 alias");
         check(v.shouldStretch(false,false) && !u.shouldStretch(false,false),"Device defaults");
+        check(v.saLegacyColumnPenalty() && alias.saLegacyColumnPenalty() &&
+              !u.saLegacyColumnPenalty(),"SA column penalty device selection");
         for (const auto device : {"VCU108","VU095","U250"})
             for (const auto stretch : {"true","false"})
                 for (const auto strategy : {"slr-hierarchical","cr-slr-hierarchical"})
@@ -18,6 +20,8 @@ int main()
                             cfg={{"ClockRegionColumnStretch",stretch},{"BoundaryClusteringStrategy",strategy},
                                  {"BoundaryStageMode",stage},{"IncrementalCompilation",incremental}};
                             auto before=cfg;auto p=resolve(cfg,device);
+                            check(p.saLegacyColumnPenalty()==(std::string(device)!="U250"),
+                                  "SA policy must be independent of clustering/stretch/DFX switches");
                             check(cfg==before,"Policy must not rewrite algorithm/cache config");
                             check(p.shouldStretch(false,false)==(std::string(stretch)=="true"),"Explicit switch");
                             check(!p.shouldStretch(true,false) && !p.shouldStretch(false,true),"New/disabled legacy gate");

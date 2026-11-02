@@ -61,12 +61,12 @@ class SAPlacer
              std::vector<std::vector<float>> &cluster2FixedUnitMat, std::vector<float> &fixedX,
              std::vector<float> &fixedY, int gridH, int gridW, float deviceH, float deviceW,
              float connectionToFixedFactor = 5.0, float y2xRatio = 0.8, int Kmax = 100000, int nJobs = 1,
-             int restartNum = 10, bool verbose = false)
+             int restartNum = 10, bool verbose = false, bool legacyColumnPenalty = true)
         : placerName(placerName), clusterAdjMat(clusterAdjMat), enhancedClusterCluster(enhancedClusterCluster),
           clusterWeights(clusterWeights), cluster2FixedUnitMat(cluster2FixedUnitMat), fixedX(fixedX), fixedY(fixedY),
           gridH(gridH), gridW(gridW), deviceH(deviceH), deviceW(deviceW),
           connectionToFixedFactor(connectionToFixedFactor), y2xRatio(y2xRatio), Kmax(Kmax), nJobs(nJobs),
-          restartNum(restartNum), verbose(verbose)
+          restartNum(restartNum), verbose(verbose), legacyColumnPenalty(legacyColumnPenalty)
     {
     }
     ~SAPlacer()
@@ -119,6 +119,8 @@ class SAPlacer
     int nJobs;
     int restartNum;
     bool verbose;
+    // Default preserves standalone/legacy callers. Production resolves device policy.
+    bool legacyColumnPenalty;
 
     std::vector<std::pair<int, int>> res_cluster2XY;
     std::vector<std::vector<std::vector<int>>> res_grid2clusters;

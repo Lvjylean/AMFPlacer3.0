@@ -18,6 +18,13 @@ struct PlacementPolicy
     std::string name;
     bool clockRegionColumnStretch;
 
+    bool saLegacyColumnPenalty() const
+    {
+        // The inherited grid-column-2 surcharge is a VU095 policy, not a
+        // device-independent distance term. U250 uses the base SA distance.
+        return kind == Kind::VU095;
+    }
+
     bool shouldStretch(bool boundaryAware, bool noBlockAware) const
     {
         return clockRegionColumnStretch && !boundaryAware && !noBlockAware;
