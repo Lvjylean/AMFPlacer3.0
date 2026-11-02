@@ -71,6 +71,97 @@ static void checkCells(PI &pi) {
     }
 }
 
+static void checkRegionNormalization(std::map<std::string,std::string> cfg,
+                                    const std::filesystem::path &root, bool slr, bool parallel) {
+    cfg["BoundaryRegionClipping"]="true";
+    cfg["BoundaryAwareClustering"]="true";
+    cfg["BoundaryClusteringStrategy"]="cr-slr-hierarchical";
+    cfg["DetailedDiagnosticsEnable"]="true";
+    cfg["CrossDieSpreadMaxBins"]="20";
+    cfg["SllRegionPolicy"]="preserve";
+    for(const auto &key:{"SllReportDirectory","BoundaryReportDirectory","SllPlanningReportDirectory","dumpDirectory"})
+        cfg[key]=(root/key).string();
+    std::filesystem::create_directories(root/"BoundaryReportDirectory");
+    DeviceInfo dev(cfg,cfg["device"]);DesignInfo design(cfg,&dev);PI pi(&design,&dev,cfg);
+    auto cells=design.getCells();check(cells.size()==4,"four-cell normalization fixture required");
+    auto macro=new PI::PlacementMacro("normalization-pair",0,PI::PlacementMacro::PlacementMacroType_LUTLUTSeires);
+    for(int i=0;i<2;++i) {
+        macro->addCell(cells[i],cells[i]->getCellType(),0,float(i));
+        pi.getCellId2PlacementUnit()[cells[i]->getCellId()]=macro;
+    }
+    pi.getPlacementUnits().push_back(macro);pi.getPlacementMacros().push_back(macro);
+    for(size_t i=2;i<cells.size();++i) {
+        auto pu=new PI::PlacementUnpackedCell(cells[i]->getName(),pi.getPlacementUnits().size(),cells[i]);
+        pi.getPlacementUnits().push_back(pu);pi.getPlacementUnpackedCells().push_back(pu);
+        pi.getCellId2PlacementUnit()[cells[i]->getCellId()]=pu;
+    }
+    pi.updateCells2PlacementUnits();pi.reloadNets();pi.setBELTypeForCells(&design);
+    auto units=pi.getPlacementUnits();auto protectedPU=units.back();
+    const float x=77.3128433228f, y=579.516479492f;
+    for(auto pu:units) {
+        pu->setAnchorLocationAndForgetTheOriginalOne(x,y);pu->recordSpreadLocatin();
+        PI::RegionPreference pref;pref.region=3;pref.cluster=pu->getId();pref.pullX=1;
+        check(pi.initializeCRBoundaryAnchor(pref,y),"fixture CR anchor missing");
+        pi.getRegionPreferences()[pu]=pref;
+    }
+    if(parallel) protectedPU->setLocked(); else protectedPU->setFixed();
+    pi.setPaperSLRStage(slr);pi.createGridBins(5,5);pi.updateElementBinGrid(false);
+    const double originalLoad=total(pi,"SLICEL_FF");
+    std::string type="SLICEL_FF";
+    // The captured llama state is impossible with a raw post-QP origin.
+    CrossDieSpreadLimit raw;GeneralSpreader::initializeRoundLimit(&pi,cfg,raw);
+    for(auto pu:units)if(pu!=protectedPU)raw.activate(pu->getId());
+    bool failed=false;
+    try {
+        GeneralSpreader oldOrder(&pi,cfg,type,0,.8,false,&raw);
+        CrossDieSpreadLimitTestAccess::write(oldOrder,pi,raw,x,479.25f,parallel);
+    } catch(const std::runtime_error &e) {
+        failed=std::string(e.what()).find("No legal cross-die spread placement")!=std::string::npos;
+    }
+    check(failed,"captured raw-origin contradiction no longer reproduced");
+    for(auto pu:units)if(pu!=protectedPU)pu->setAnchorLocationAndForgetTheOriginalOne(x,y);
+    CrossDieSpreadLimit limit;
+    GeneralSpreader::prepareRoundLimit(&pi,cfg,limit,0);
+    check(pi.getRegionPreferences().size()==units.size(),"normalization silently released preferences");
+    check(protectedPU->X()==x&&protectedPU->Y()==y,"region normalization moved fixed/locked PU");
+    for(auto pu:units)if(pu!=protectedPU) {
+        float l,r,b,t;check(pi.paperRegionBounds(pu,pi.getRegionPreferences().at(pu),!slr,l,r,b,t),"missing normalized bounds");
+        check(pu->Y()>=b&&pu->Y()<=t,"normalization left PU outside target region");
+        check(limit.origin(pu->getId()).x==pu->X()&&limit.origin(pu->getId()).y==pu->Y(),"budget captured pre-correction origin");
+        check(std::abs(pu->Y()-y)>100,"fixture must exceed the old 20-bin budget");
+    }
+    checkCells(pi);
+    check(std::abs(total(pi,type)-originalLoad)<1e-5,"normalization lost density load");
+    const auto origin=limit.origin(0);
+    {
+        GeneralSpreader spread(&pi,cfg,type,0,.8,false,&limit);
+        CrossDieSpreadLimitTestAccess::checkView(spread,pi);
+        CrossDieSpreadLimitTestAccess::activate(spread,pi,type,x,macro->Y(),false);
+        check(limit.active(0)&&limit.active(1),"normalized cross region did not activate both movable PUs");
+        CrossDieSpreadLimitTestAccess::write(spread,pi,limit,x,800,parallel);
+        for(auto pu:units)if(pu!=protectedPU)check(limit.contains(pu->getId(),{pu->X(),pu->Y()}),"region clip escaped normalized budget");
+        CrossDieSpreadLimitTestAccess::activate(spread,pi,type,macro->X(),macro->Y(),true);
+        CrossDieSpreadLimitTestAccess::write(spread,pi,limit,x,900,parallel);
+        check(macro->Y()<=478.25f&&units[1]->Y()<=479.25f,"local guard undid normalized region");
+        checkCells(pi);CrossDieSpreadLimitTestAccess::checkView(spread,pi);
+    }
+    {
+        // The next resource object must retain the same normalized origin.
+        std::string nextType="SLICEL_FF";
+        GeneralSpreader next(&pi,cfg,nextType,0,.8,false,&limit);
+        CrossDieSpreadLimitTestAccess::write(next,pi,limit,x,50,parallel);
+        check(limit.origin(0).x==origin.x&&limit.origin(0).y==origin.y,"resource pass refreshed budget origin");
+        for(auto pu:units)if(pu!=protectedPU)check(limit.contains(pu->getId(),{pu->X(),pu->Y()}),"later resource escaped shared budget");
+        checkCells(pi);CrossDieSpreadLimitTestAccess::checkView(next,pi);
+    }
+    check(std::abs(total(pi,type)-originalLoad)<1e-5,"combined clipping lost density");
+    check(protectedPU->X()==x&&protectedPU->Y()==y,"spreading moved protected PU");
+    const auto summary=root/"BoundaryReportDirectory/spreading-region-correction-summary.tsv";
+    std::ifstream f(summary);std::string text((std::istreambuf_iterator<char>(f)),{});
+    check(text.find("post_region_correction")!=std::string::npos,"missing separate correction accounting");
+    std::cout<<"PASS normalized region + 20-bin budget slr="<<slr<<" parallel="<<parallel<<'\n';
+}
+
 int main(int argc,char **argv) { try {
     check(argc==3,"usage: checkCrossDieSpreadLimitIntegration fixture.json NEW_OUTPUT");
     auto root=std::filesystem::path(argv[2]);check(std::filesystem::create_directory(root),"refuse overwrite");
@@ -141,5 +232,7 @@ int main(int argc,char **argv) { try {
     {GeneralSpreader spread(&pi,cfg,type,0,.8,false,&off);
      CrossDieSpreadLimitTestAccess::write(spread,pi,off,80,y0+40,false);
      check(std::abs(macro->X()-56)<1e-4 && std::abs(macro->Y()-y0-8)<1e-4,"disabled mode changed legacy behavior");}
-    std::cout<<"PASS real U250 single/parallel writeback, macro offsets, fixed objects, occupancy, cross/local activation, legacy fallback\n";
+    for(bool slr:{true,false})for(bool parallel:{false,true})
+        checkRegionNormalization(cfg,root/(std::string(slr?"slr-":"hpio-")+(parallel?"parallel":"single")),slr,parallel);
+    std::cout<<"PASS real U250 single/parallel writeback, macro offsets, fixed objects, occupancy, cross/local activation, legacy fallback, normalized region budget\n";
 }catch(const std::exception &e){std::cerr<<"FAIL "<<e.what()<<'\n';return 1;} }

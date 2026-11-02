@@ -757,9 +757,8 @@ void GlobalPlacer::spreading(int currentIteration, int spreadRegionSizeLimit, fl
     AMF_PROFILE_FUNCTION("global_orchestration");
     if (spreadRegionSizeLimit <= 0)
         throw std::invalid_argument("Spread region bin limit must be positive");
-    placementInfo->updateElementBinGrid(false);
     CrossDieSpreadLimit roundLimit;
-    GeneralSpreader::initializeRoundLimit(placementInfo, JSONCfg, roundLimit);
+    GeneralSpreader::prepareRoundLimit(placementInfo, JSONCfg, roundLimit, currentIteration);
     float supplyRatio = (placementInfo->getBinGridW() < 2.5) ? 0.95 : (0.80 + 0.1 * progressRatio);
 
     if (!macroLegalizationFixed)

@@ -25,6 +25,69 @@
 #include <filesystem>
 #include <iomanip>
 
+void GeneralSpreader::prepareRoundLimit(PlacementInfo *placement,
+    const std::map<std::string,std::string> &config, CrossDieSpreadLimit &limit, int iteration)
+{
+    AMF_PROFILE_SCOPE("spreading", "region_normalization");
+    static size_t round = 0;
+    const auto roundId = ++round;
+    const auto started = std::chrono::steady_clock::now();
+    using PU = PlacementInfo::PlacementUnit;
+    std::vector<std::pair<PU*, CrossDieSpreadLimit::Point>> before;
+    const bool normalize = placement->paperBoundaryClusteringEnabled() &&
+        amf_config::feature(config, "BoundaryRegionClipping", true);
+    if (normalize) {
+        const auto &preferences = placement->getRegionPreferences();
+        for (auto pu : placement->getPlacementUnits())
+            if (!pu->isFixed() && !pu->isLocked() && preferences.count(pu))
+                before.push_back({pu, {pu->X(), pu->Y()}});
+        placement->clipPaperRegionLocations();
+    }
+    // Publish PU/member coordinates and density before constructing private die
+    // views or recording any resource pass's displacement reference.
+    placement->updateElementBinGrid(false);
+    initializeRoundLimit(placement, config, limit);
+
+    auto dir = config.find("BoundaryReportDirectory");
+    if (!normalize || dir == config.end() || dir->second.empty()) return;
+    const std::filesystem::path output(dir->second);
+    std::filesystem::create_directories(output);
+    auto open = [&](std::ofstream &file, const char *name, const char *header) {
+        const auto path = output / name;
+        const bool fresh = !std::filesystem::exists(path) || std::filesystem::file_size(path) == 0;
+        file.open(path, std::ios::app);
+        if (!file) throw std::runtime_error("Cannot write spreading region correction report");
+        file << std::setprecision(12);
+        if (fresh) file << header << '\n';
+    };
+    std::ofstream summary, details;
+    open(summary, "spreading-region-correction-summary.tsv",
+         "round\tphase\titeration\tcorrected_pus\tmax_correction_bins\tsum_correction_bins\tpreparation_seconds\tbudget_origin");
+    const bool detailed = amf_config::feature(config, "DetailedDiagnosticsEnable", true);
+    if (detailed) open(details, "spreading-region-corrections.tsv",
+         "round\tphase\titeration\tpu_id\tpu_name\told_x\told_y\tnew_x\tnew_y\tdx\tdy\tcorrection_bins");
+    size_t moved = 0;
+    double maximum = 0, sum = 0;
+    for (const auto &entry : before) {
+        auto pu = entry.first;
+        const auto old = entry.second;
+        const double dx = double(pu->X()) - old.x, dy = double(pu->Y()) - old.y;
+        if (dx == 0 && dy == 0) continue;
+        const double bins = std::hypot(dx / placement->getBinGridW(), dy / placement->getBinGridH());
+        ++moved; maximum = std::max(maximum, bins); sum += bins;
+        if (detailed) {
+            std::string name = pu->getName();
+            for (char &c : name) if (c == '\t' || c == '\r' || c == '\n') c = ' ';
+            details << roundId << '\t' << placement->paperBoundaryPhaseName() << '\t' << iteration << '\t'
+                    << pu->getId() << '\t' << name << '\t' << old.x << '\t' << old.y << '\t'
+                    << pu->X() << '\t' << pu->Y() << '\t' << dx << '\t' << dy << '\t' << bins << '\n';
+        }
+    }
+    const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+    summary << roundId << '\t' << placement->paperBoundaryPhaseName() << '\t' << iteration << '\t'
+            << moved << '\t' << maximum << '\t' << sum << '\t' << seconds << "\tpost_region_correction\n";
+}
+
 void GeneralSpreader::initializeRoundLimit(PlacementInfo *placement,
     const std::map<std::string,std::string> &config, CrossDieSpreadLimit &limit)
 {
@@ -54,6 +117,8 @@ GeneralSpreader::GeneralSpreader(PlacementInfo *placementInfo, std::map<std::str
     {
         useSimpleExpland = JSONCfg["SpreaderSimpleExpland"] == "true";
     }
+    if (!sharedRoundLimit)
+        prepareRoundLimit(placementInfo, JSONCfg, ownedRoundLimit, currentIteration);
     std::vector<float> seams;
     if (auto physical=placementInfo->getDeviceInfo()->getPhysicalBoundaryModel())
         for (const auto &b:physical->getBoundaries())
@@ -66,7 +131,6 @@ GeneralSpreader::GeneralSpreader(PlacementInfo *placementInfo, std::map<std::str
             [&](int id){return int(placementInfo->getCellId2CellBinInfo().at(id).occupation);}));
         binGrid=dieView->rows;
         roundLimit = sharedRoundLimit ? sharedRoundLimit : &ownedRoundLimit;
-        if (!sharedRoundLimit) initializeRoundLimit(placementInfo, JSONCfg, ownedRoundLimit);
         if(amf_config::feature(JSONCfg,"DetailedDiagnosticsEnable",true)) {
         auto dir=JSONCfg.find("SllReportDirectory");
         const std::filesystem::path output=dir==JSONCfg.end()?std::filesystem::path("."):std::filesystem::path(dir->second);

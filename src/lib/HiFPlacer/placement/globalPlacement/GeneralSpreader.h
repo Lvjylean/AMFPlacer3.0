@@ -56,6 +56,10 @@ class GeneralSpreader
                     CrossDieSpreadLimit *roundLimit = nullptr);
     static void initializeRoundLimit(PlacementInfo *placement,
         const std::map<std::string,std::string> &config, CrossDieSpreadLimit &limit);
+    // Normalize region preferences before taking the shared spreading origin.
+    // Region correction is recorded separately and is not charged to this budget.
+    static void prepareRoundLimit(PlacementInfo *placement,
+        const std::map<std::string,std::string> &config, CrossDieSpreadLimit &limit, int iteration);
     ~GeneralSpreader()
     {
     }

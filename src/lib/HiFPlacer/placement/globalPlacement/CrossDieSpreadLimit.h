@@ -7,7 +7,8 @@
 #include <vector>
 
 // One budget per GP spreading round, shared by all resource passes and inner
-// iterations. Distances use the original (not seam-fragment) bin dimensions.
+// iterations. The origin follows pre-spreading region correction, whose movement
+// is reported separately. Distances use original (not seam-fragment) bin sizes.
 class CrossDieSpreadLimit
 {
   public:

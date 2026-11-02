@@ -1,3 +1,7 @@
+# Current isolated revision: region correction before spreading budget (2026-11-03)
+
+The user authorized region normalization before the shared 20-bin spreading origin, separate correction-distance accounting, and a new complete llama U250 acceptance run. Base 65e9bfa and historical failures remain unchanged. Use 3.332 ns, ordinary Pro, ProPrimitiveTiming=false, SllRegionPolicy=preserve, AMF 12 threads and Vivado 2026.1 four threads. Source changes are confined to this copy. Full acceptance must follow successful focused regressions; logs and results live in the parent validation and experiment directories. See docs/research/llama-region-before-spread-20261103.md. Statements below refer to their historical dates.
+
 # 当前独立副本：AND2B1L 组合时序修复（2026-11-03）
 
 用户要求单独修正组合逻辑被当作端点的问题。本轮基于 76070fc，仅从时序端点分类中排除 AND2B1L，保留物理 FF/锁存器资源、SRI 极性及打包规则。专项前后向传播/关键路径测试、既有 I/O 和 FF 控制回归、真实 llama 初始打包及两个图中的 4 个 AND2B1L 核验通过。主周期仍为 3.332 ns，既有时钟和物理约束不改；未运行全局布局布线。详见 docs/research/llama-u250-and2b1l-timing-20261103.md 和父目录 reports/and2b1l/。下文 AND2B1L 未修复的说明保留为上一批历史记录。
