@@ -38,6 +38,9 @@ double SAPlacer::evaluateClusterPlacement(const std::vector<std::vector<std::vec
                 resWL += clusterAdjMat[clusterA][clusterB] *
                          (fabs(cluster2XY[clusterA].first - cluster2XY[clusterB].first) * regionW +
                           y2xRatio * fabs(cluster2XY[clusterA].second - cluster2XY[clusterB].second) * regionH);
+                if (!crossDieRowCosts.empty())
+                    resWL += clusterAdjMat[clusterA][clusterB] *
+                             crossDieRowCosts[cluster2XY[clusterA].second][cluster2XY[clusterB].second];
                 if (legacyColumnPenalty &&
                     (cluster2XY[clusterA].first == 2 || cluster2XY[clusterB].first == 2))
                     resWL += fabs(cluster2XY[clusterA].first - cluster2XY[clusterB].first) * regionW * 0.5;
@@ -52,6 +55,9 @@ double SAPlacer::evaluateClusterPlacement(const std::vector<std::vector<std::vec
                 resWL += connectionToFixedFactor * cluster2FixedUnitMat[clusterA][fixedUnitId] *
                          (fabs((cluster2XY[clusterA].first * regionW + regionW / 2) - fixedX[fixedUnitId]) +
                           y2xRatio * fabs((cluster2XY[clusterA].second * regionH + regionH / 2) - fixedY[fixedUnitId]));
+                if (!crossDieRowCosts.empty())
+                    resWL += connectionToFixedFactor * cluster2FixedUnitMat[clusterA][fixedUnitId] *
+                             crossDieFixedCosts[cluster2XY[clusterA].second][fixedUnitId];
             }
         }
     }
@@ -137,6 +143,9 @@ double SAPlacer::incrementalEvaluateClusterPlacement(const std::vector<std::vect
                     resWL += clusterAdjMat[clusterA][clusterB] *
                              (fabs(cluster2XY[clusterA].first - cluster2XY[clusterB].first) * regionW +
                               y2xRatio * fabs(cluster2XY[clusterA].second - cluster2XY[clusterB].second) * regionH);
+                    if (!crossDieRowCosts.empty())
+                        resWL += clusterAdjMat[clusterA][clusterB] *
+                                 crossDieRowCosts[cluster2XY[clusterA].second][cluster2XY[clusterB].second];
                 }
             }
         }
@@ -152,6 +161,9 @@ double SAPlacer::incrementalEvaluateClusterPlacement(const std::vector<std::vect
                         connectionToFixedFactor * cluster2FixedUnitMat[clusterA][fixedUnitId] *
                         (fabs((cluster2XY[clusterA].first * regionW + regionW / 2) - fixedX[fixedUnitId]) +
                          y2xRatio * fabs((cluster2XY[clusterA].second * regionH + regionH / 2) - fixedY[fixedUnitId]));
+                    if (!crossDieRowCosts.empty())
+                        resWL += connectionToFixedFactor * cluster2FixedUnitMat[clusterA][fixedUnitId] *
+                                 crossDieFixedCosts[cluster2XY[clusterA].second][fixedUnitId];
                 }
             }
         }
@@ -911,6 +923,8 @@ void SAPlacer::solve()
 void SAPlacer::setPhysicalGrid(const std::vector<std::pair<float,float>> &points,
                                const std::vector<bool> &allowed)
 {
+    if (!crossDieRowCosts.empty())
+        throw std::invalid_argument("Ordinary SA cross-die calibration cannot be mixed with physical-grid DFX");
     if(gridH<=0||gridW<=0||points.size()!=size_t(gridH*gridW)||allowed.size()!=points.size())
         throw std::runtime_error("Invalid physical SA grid");
     allowedBins.clear();
@@ -921,6 +935,35 @@ void SAPlacer::setPhysicalGrid(const std::vector<std::pair<float,float>> &points
     }
     if(allowedBins.empty())throw std::runtime_error("No static coarse bin outside hard Pblocks");
     physicalGrid=points;
+}
+
+void SAPlacer::setCrossDieCompensation(const std::vector<int> &rows,
+                                      const std::vector<int> &fixed, double extraY)
+{
+    if (!physicalGrid.empty())
+        throw std::invalid_argument("SA cross-die calibration requires the ordinary CR grid");
+    if (gridH <= 0 || rows.size() != static_cast<size_t>(gridH) ||
+        fixed.size() != fixedY.size() || fixedX.size() != fixedY.size() ||
+        !std::isfinite(extraY) || extraY < 0 || !std::isfinite(y2xRatio) || y2xRatio <= 0)
+        throw std::invalid_argument("Invalid SA cross-die compensation dimensions or coefficient");
+    for (size_t i = 0; i < rows.size(); ++i)
+        if (rows[i] < 0 || rows[i] > gridH || (i && rows[i] < rows[i - 1]))
+            throw std::invalid_argument("SA row seam prefixes must be nonnegative and ordered");
+    for (int prefix : fixed)
+        if (prefix < 0 || prefix > gridH)
+            throw std::invalid_argument("Invalid SA fixed-terminal seam prefix");
+    std::vector<std::vector<double>> rowCosts(gridH, std::vector<double>(gridH));
+    std::vector<std::vector<double>> fixedCosts(gridH, std::vector<double>(fixed.size()));
+    const double perSeam = y2xRatio * extraY;
+    for (int a = 0; a < gridH; ++a)
+    {
+        for (int b = 0; b < gridH; ++b)
+            rowCosts[a][b] = perSeam * std::abs(rows[a] - rows[b]);
+        for (size_t f = 0; f < fixed.size(); ++f)
+            fixedCosts[a][f] = perSeam * std::abs(rows[a] - fixed[f]);
+    }
+    crossDieRowCosts.swap(rowCosts);
+    crossDieFixedCosts.swap(fixedCosts);
 }
 
 double SAPlacer::evaluatePhysicalGrid(const std::vector<std::vector<std::vector<int>>> &grid,

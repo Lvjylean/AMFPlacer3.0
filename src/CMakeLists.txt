@@ -343,6 +343,10 @@ add_executable(checkSllDelayPrefix EXCLUDE_FROM_ALL tests/check_sll_delay_prefix
 add_executable(checkDevicePlacementPolicy EXCLUDE_FROM_ALL tests/check_device_placement_policy.cc)
 add_executable(checkSADevicePolicy EXCLUDE_FROM_ALL tests/check_sa_device_policy.cc)
 target_link_libraries(checkSADevicePolicy ProblemSolvers Utils pthread ${Boost_LIBRARIES})
+add_executable(checkSACrossDieCompensation EXCLUDE_FROM_ALL tests/check_sa_cross_die_compensation.cc)
+target_link_libraries(checkSACrossDieCompensation ProblemSolvers Utils pthread ${Boost_LIBRARIES})
+add_executable(checkSACrossDieGeometry EXCLUDE_FROM_ALL tests/check_sa_cross_die_geometry.cc)
+target_link_libraries(checkSACrossDieGeometry DeviceInfo Utils ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 add_executable(checkDevicePolicyStretch EXCLUDE_FROM_ALL tests/check_device_policy_stretch.cc)
 target_link_libraries(checkDevicePolicyStretch GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 

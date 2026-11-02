@@ -14,6 +14,7 @@
 
 #include "ClusterPlacer.h"
 #include "ExternalFloorplan.h"
+#include "SACrossDieCompensation.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -1003,6 +1004,32 @@ void ClusterPlacer::placeClusters()
     saPlacer = new SAPlacer("ClusterSA", clusterAdjMat, enhancedClusterCluster, clusterCLBCellWeights, cluster2FixedUnitMat, fixedX, fixedY,
                             gridH, gridW, deviceH, deviceW, connectionToFixedFactor, saY2xRatio, SAIterNum, jobs,
                             restartNum, verbose, saDevicePolicy.saLegacyColumnPenalty());
+    if (amf_sa_cross_die::enabled(JSONCfg, saDevicePolicy.kind))
+    {
+        auto *device = placementInfo->getDeviceInfo();
+        if (gridH != device->getClockRegionNumY())
+            throw std::invalid_argument("SA cross-die calibration requires one grid row per physical CR row");
+        std::vector<int> rowPrefixes(gridH), fixedPrefixes(fixedY.size());
+        for (int row = 0; row < gridH; ++row)
+            rowPrefixes[row] = device->getSLRBoundaryCount(0, row);
+        for (size_t f = 0; f < fixedY.size(); ++f)
+        {
+            int crX, crY;
+            device->getClockRegionByLocation(fixedX[f], fixedY[f], crX, crY);
+            fixedPrefixes[f] = device->getSLRBoundaryCount(0, crY);
+        }
+        const double pitch = deviceH / gridH;
+        const double extraY = amf_sa_cross_die::extraVerticalDistance(pitch);
+        saPlacer->setCrossDieCompensation(rowPrefixes, fixedPrefixes, extraY);
+        print_info("SA cross-die compensation enabled: reference_ns=" +
+                   std::to_string(amf_sa_cross_die::referenceDelayNs) +
+                   " equivalent_y=" + std::to_string(amf_sa_cross_die::equivalentVerticalDistance) +
+                   " reference_row_pitch=" + std::to_string(pitch) +
+                   " extra_y_per_seam=" + std::to_string(extraY) +
+                   " seams=" + std::to_string(rowPrefixes.back()));
+    }
+    else
+        print_info("SA cross-die compensation disabled");
     saPlacer->solve();
     cluster2XY = saPlacer->getCluster2XY();
 

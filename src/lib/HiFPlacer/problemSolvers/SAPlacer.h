@@ -76,6 +76,10 @@ class SAPlacer
     // Optional physical coordinates and legal bins. Ordinary callers retain
     // their exact historical objective, initialization and move generator.
     void setPhysicalGrid(const std::vector<std::pair<float,float>> &points,const std::vector<bool> &allowed);
+    // Ordinary grid only. Prefixes count physical seams below each CR row / terminal.
+    // Tables are immutable throughout solve(), including all worker threads.
+    void setCrossDieCompensation(const std::vector<int> &rowSeamPrefixes,
+                                 const std::vector<int> &fixedSeamPrefixes, double extraY);
     void solve();
 
     inline std::vector<std::pair<int, int>> &getCluster2XY()
@@ -94,6 +98,7 @@ class SAPlacer
                                                const std::vector<std::pair<int, int>> &cluster2XY);
 
   private:
+    std::vector<std::vector<double>> crossDieRowCosts, crossDieFixedCosts;
     std::vector<std::pair<float,float>> physicalGrid;
     std::vector<int> allowedBins;
     double evaluatePhysicalGrid(const std::vector<std::vector<std::vector<int>>> &grid,
