@@ -27,7 +27,7 @@ for family,pairs in edges.items():
             remaining.remove(x);group.append(x);todo.extend(adjacency[x]&remaining)
         components.append(sorted(group))
     result[family]=dict(directed_edges=len(pairs),components=components,size_histogram=dict(collections.Counter(map(len,components))))
-result['URAM']['implementation_status']='Full-design legalization currently rejects cascades; next-batch blocker.'
+result['URAM']['implementation_status']='Linear cascades use movable macros with consecutive same-column, same-SLR sites. Inventory alone is not a placement acceptance result.'
 result['SRL']['implementation_status']='Initial packing splits chains at eight cells, with A6LUT external endpoints.'
 result['inventory_hashes']={n:hashlib.sha256((a.inventory/n).read_bytes()).hexdigest() for n in ['cells.tsv','nets.tsv']}
 a.output.write_text(json.dumps(result,indent=2)+'\n');print(json.dumps({k:{kk:vv for kk,vv in v.items() if kk!='components'} for k,v in result.items() if k!='inventory_hashes'}))

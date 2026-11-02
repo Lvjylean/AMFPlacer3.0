@@ -33,7 +33,7 @@ def inspect(root, args, resources=False, initial=False):
                 'cellType2fixedAmo file', 'cellType2sharedCellType file', 'sharedCellType2BELtype file',
                 'resource initial locations file', 'fixed units file', 'DSP registered outputs file',
                 'ASYNC_REG groups file', 'ASYNC_REG proximity pairs file', 'fixed occupied sites file',
-                'SRL control metadata file',
+                'FF control polarities file', 'SRL control metadata file',
                 'SllChannelFile', 'SllReservedResourceFile', 'clock resource capacity file', 'external floorplan membership file',
                 'external floorplan regions file', 'external floorplan manifest file'):
         if config.get(key):

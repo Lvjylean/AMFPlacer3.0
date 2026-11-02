@@ -157,6 +157,8 @@ def main():
             types.write(kind+' '+','.join(aliases)+'\n')
 
     (out/'fixed_occupied_sites.txt').write_text(''.join(name+'\n' for name in sorted(site_types)))
+    from full_ff_controls import materialize as materialize_ff_controls
+    ff_controls = materialize_ff_controls(inventory, inventory/'cells.tsv', out/'ff_controls.txt')
     sync = write_async_metadata(inventory, out)
     netlist = convert(inventory/'cells.tsv', inventory/'nets.tsv', out/'netlist.zip', dcp, inventory/'binding.json')
     cells = {row['cell_id']:row for row in csv.DictReader((inventory/'cells.tsv').open(),delimiter='\t')}
@@ -194,6 +196,7 @@ def main():
                    'fixed occupied sites file':str(out/'fixed_occupied_sites.txt'),
                    'CompositeIOTimingBoundary':'true',
                    'SRL control metadata file':str(inventory/'srl_controls.tsv'),
+                   'FF control polarities file':str(out/'ff_controls.txt'),
                    'ClockRegionFabricGeometry':'true',
                    'dumpDirectory':str(out/'unused-inspection-dump')})
     config.pop('BoundaryReportDirectory', None)
@@ -233,6 +236,7 @@ def main():
         'amf_default_period_ns':default_period, 'vivado_clocks':'unchanged from prepared DCP',
         'vivado_clock_source':'original DCP constraints; no timing constraint rewriting',
         'clock_mapping':str(out/'clock_mapping.json'), 'fixed_interface_cells':len(fixed),
+        'ff_control_polarities':ff_controls,
         'async_cells':sync['async_cells'], 'async_groups':len(sync['groups']),
         'physical_model_extension':report['fixed_interface_extension'],
         'io_policy':'independent digital launch/capture boundaries, per-clock target; estimates are not Vivado slack',

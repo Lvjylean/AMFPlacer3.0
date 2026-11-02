@@ -309,13 +309,7 @@ class AMFPlacer
         // we have to pack cells in design info into placement units in placement info with packer
         InitialPacker *initialPacker = new InitialPacker(designInfo, deviceinfo, placementInfo, JSON);
         initialPacker->pack();
-        std::string interfaceInspectionBlocker;
-        try { HardResourceUtils::validateCascadeMacros(placementInfo); }
-        catch (const std::runtime_error &error) {
-            if (!interfaceInspection || std::string(error.what()).find("URAM cascade is not supported") != 0) throw;
-            interfaceInspectionBlocker = error.what();
-            std::cout << "INTERFACE_INSPECTION_FULL_DESIGN_BLOCKER: " << interfaceInspectionBlocker << "\n";
-        }
+        HardResourceUtils::validateCascadeMacros(placementInfo);
         if (!packingReport.empty())
         {
             std::ofstream report(packingReport);
@@ -384,7 +378,7 @@ class AMFPlacer
                 scope << "scope\tinterface-and-synchronizer-inspection-only\n"
                       << "global_placement_executed\t0\nrouting_executed\t0\n"
                       << "full_design_legalization_ready\t0\n"
-                      << "hard_resource_blocker\t" << interfaceInspectionBlocker << "\n";
+                      << "hard_resource_blocker\t" << "none\n";
                 if (!scope) throw std::runtime_error("Cannot write interface inspection scope");
                 print_status("AMF_INTERFACE_INSPECTION_OK (not full-design legalization)");
             } else print_status("Initial Packing Done");

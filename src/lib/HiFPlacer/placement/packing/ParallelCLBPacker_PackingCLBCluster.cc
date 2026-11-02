@@ -187,8 +187,7 @@ bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::addToFFSet(DesignInfo
                 FFControlSets[i].addFF(curFF);
                 return true;
             }
-            else if (FFControlSets[anotherSetId].getCLK() == curFF->getControlSetInfo()->getCLK() &&
-                     FFControlSets[anotherSetId].getSR() == curFF->getControlSetInfo()->getSR() &&
+            else if (DesignInfo::compatibleClockAndReset(FFControlSets[anotherSetId], *curFF->getControlSetInfo()) &&
                      DesignInfo::FFSRCompatible(FFControlSets[anotherSetId].getFFType(), curFF->getOriCellType()))
             {
                 FFControlSets[i].addFF(curFF);
@@ -217,8 +216,7 @@ bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::compatibleInOneHalfCL
     {
         return true;
     }
-    else if (FFControlSets[anotherHalfCLB].getCLK() == CSPtr->getCLK() &&
-             FFControlSets[anotherHalfCLB].getSR() == CSPtr->getSR() &&
+    else if (DesignInfo::compatibleClockAndReset(FFControlSets[anotherHalfCLB], *CSPtr) &&
              DesignInfo::FFSRCompatible(FFControlSets[anotherHalfCLB].getFFType(), CSPtr->getFFType()))
     {
         return true;
@@ -233,8 +231,7 @@ bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::compatibleInOneHalfCL
     {
         return true;
     }
-    else if (FFControlSets[anotherHalfCLB].getCLK() == FFControlSets[halfCLB].getCLK() &&
-             FFControlSets[anotherHalfCLB].getSR() == FFControlSets[halfCLB].getSR() &&
+    else if (DesignInfo::compatibleClockAndReset(FFControlSets[anotherHalfCLB], FFControlSets[halfCLB]) &&
              DesignInfo::FFSRCompatible(FFControlSets[anotherHalfCLB].getFFType(), FFControlSets[halfCLB].getFFType()))
     {
         return true;
@@ -1146,7 +1143,7 @@ bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::pinAccessCapacityAllo
             auto &set=FFControlSets[order[bank]];
             if(bank%2 && (set.isMustMainSlots() || (order[bank]==group && mustMain)))return false;
             auto a=controls[order[bank]],b=controls[order[bank^1]];
-            if(a && b && (a->getCLK()!=b->getCLK() || a->getSR()!=b->getSR() ||
+            if(a && b && (!DesignInfo::compatibleClockAndReset(*a, *b) ||
                 !DesignInfo::FFSRCompatible(a->getFFType(),b->getFFType())))return false;
             if(bank!=order[bank]) {
                 for(auto ff:set.getFFs())

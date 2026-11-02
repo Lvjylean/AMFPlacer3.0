@@ -90,7 +90,7 @@ def run(root, args):
                 'ASYNC_REG groups file', 'ASYNC_REG proximity pairs file', 'fixed occupied sites file',
                 'SllChannelFile', 'SllReservedResourceFile', 'clock resource capacity file', 'external floorplan membership file',
                 'external floorplan regions file', 'external floorplan manifest file',
-                'SRL control metadata file'):
+                'FF control polarities file', 'SRL control metadata file'):
         if config.get(key):
             p = (root / config[key]).resolve()
             inputs[key] = dict(path=str(p), sha256=digest(p))
@@ -147,6 +147,9 @@ def run(root, args):
     manifest['backend_mode'] = 'global-only' if global_only else 'amf-only' if args.amf_only else 'import-only' if import_only else 'full'
     manifest['release_fixed_clock_buffers'] = bool(getattr(args, 'release_fixed_clock_buffers', False))
     provenance = getattr(args, 'input_provenance', None)
+    if not provenance and args.placement_run and config.get('FF control polarities file'):
+        provenance = root / args.placement_run / 'inputs/input_provenance.json'
+    record = None
     if provenance:
         provenance = (root / provenance).resolve()
         record = json.loads(provenance.read_text())
@@ -156,6 +159,8 @@ def run(root, args):
         manifest['input_provenance'] = record
         manifest['input_provenance_sha256'] = digest(provenance)
         manifest['vivado_clock_source'] = record['vivado_clock_source']
+    from full_design_metadata import validate_ff_binding
+    validate_ff_binding(config, record)
     manifest['grid_update_experiment'] = {
         'mode': os.environ.get('AMF_GRID_UPDATE_MODE', 'legacy'),
         'verify': os.environ.get('AMF_GRID_UPDATE_VERIFY', '0'),

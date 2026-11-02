@@ -66,7 +66,7 @@ static std::vector<Edge> cascadeEdges(PlacementInfo *placement)
                     if (prefix(in, ports.first) && prefix(out, ports.second)) family = "DSP48E2";
             }
             if (cell->isURAM() && source->isURAM() && prefix(in, "CAS_IN") && prefix(out, "CAS_OUT"))
-                throw std::runtime_error("URAM cascade is not supported by the independent-URAM legalizer: " + cell->getName());
+                family = "URAM288";
             if (!family.empty() && seen.insert({source->getCellId(), cell->getCellId()}).second)
             {
                 if (sourceStatic != sinkStatic)

@@ -9,7 +9,7 @@ base=json.loads(a.config.read_text())
 for key in list(base):
     if key.startswith('ClockPeriod:') or key in ('fixed units file','fixed occupied sites file','clock file',
         'DSP registered outputs file','ASYNC_REG groups file','ASYNC_REG proximity pairs file',
-        'SRL control metadata file'):
+        'FF control polarities file','SRL control metadata file'):
         base.pop(key)
 base.update({'allow floating placement':'true','jobs':'1','CompositeIOTimingBoundary':'false'})
 results=[]

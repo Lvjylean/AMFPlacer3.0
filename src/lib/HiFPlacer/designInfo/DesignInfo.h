@@ -178,7 +178,7 @@ class DesignInfo
         return AClass == BClass;
     }
 
-    inline static bool getFFSRType(DesignCellType typeA)
+    inline static int getFFSRType(DesignCellType typeA)
     {
         int AClass = -1;
         if (typeA == CellType_FDCE || typeA == CellType_FDPE)
@@ -1190,6 +1190,13 @@ class DesignInfo
             return timingForwardLevel;
         }
 
+        void setFFControlPolarities(bool clock, bool sr, bool ce) {
+            ffClockInverted=clock; ffSRInverted=sr; ffCEInverted=ce;
+        }
+        bool getClockInverted() const { return ffClockInverted; }
+        bool getSRInverted() const { return ffSRInverted; }
+        bool getCEInverted() const { return ffCEInverted; }
+
       private:
         std::vector<DesignPin *> pinPtrs;
         std::vector<DesignPin *> inputPinPtrs;
@@ -1207,6 +1214,7 @@ class DesignInfo
         bool hasDSPReg = false;
         bool legacyDSPReg = false; // Clustering heuristic only; never a statement about PREG.
         int dspPREG = -1; // -1: no authoritative DCP property.
+        bool ffClockInverted = false, ffSRInverted = false, ffCEInverted = false;
         ControlSetInfo *controlSetInfo = nullptr;
         int timingLength = 0;
         int timingForwardLevel = 0;
@@ -1216,6 +1224,15 @@ class DesignInfo
      * @brief A control set is a combination of CLK, CE and SR signal. It could be nullptr (not related to control set)
      *
      */
+    // UG574: the two four-FF CE banks in a half SLICE share clock/reset,
+    // including their input inversion and synchronous/asynchronous mode.
+    template <typename A, typename B>
+    static bool compatibleClockAndReset(const A &a, const B &b) {
+        return a.getCLK()==b.getCLK() && a.getSR()==b.getSR() &&
+               a.getClockInverted()==b.getClockInverted() && a.getSRInverted()==b.getSRInverted() &&
+               FFSRCompatible(a.getFFType(),b.getFFType());
+    }
+
     class ControlSetInfo
     {
       public:
@@ -1277,7 +1294,9 @@ class DesignInfo
                     assert(false && "undefined FF input pin type.");
                 }
             }
-            if (FFSRCompatible(curFF->getOriCellType(), FFType))
+            if (!FFSRCompatible(curFF->getOriCellType(), FFType) ||
+                clockInverted != curFF->getClockInverted() || srInverted != curFF->getSRInverted() ||
+                ceInverted != curFF->getCEInverted())
                 return false;
             return true;
         }
@@ -1319,8 +1338,12 @@ class DesignInfo
                 }
             }
             FFType = curFF->getOriCellType();
+            clockInverted=curFF->getClockInverted(); srInverted=curFF->getSRInverted(); ceInverted=curFF->getCEInverted();
         }
 
+        bool getClockInverted() const { return clockInverted; }
+        bool getSRInverted() const { return srInverted; }
+        bool getCEInverted() const { return ceInverted; }
         inline DesignInfo::DesignNet *getCLK() const
         {
             return CLK;
@@ -1384,6 +1407,7 @@ class DesignInfo
         DesignInfo::DesignNet *CLK = nullptr;
         DesignInfo::DesignNet *SR = nullptr;
         DesignInfo::DesignNet *CE = nullptr;
+        bool clockInverted=false, srInverted=false, ceInverted=false;
         DesignInfo::DesignCellType FFType;
         std::vector<DesignInfo::DesignCell *> FFs;
         int id = -1;
@@ -1844,7 +1868,7 @@ class DesignInfo
      * @brief the mapping from the tuple of CLK/SR/CE ids and FF type to a unique defined control set id
      *
      */
-    std::map<std::tuple<int, int, int, int>, int> CLKSRCEFFType2ControlSetInfoId;
+    std::map<std::tuple<int, int, int, int, bool, bool, bool>, int> CLKSRCEFFType2ControlSetInfoId;
 
     /**
      * @brief the mapping from FF IDs to a unique defined control set id

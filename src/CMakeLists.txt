@@ -378,3 +378,6 @@ target_link_libraries(checkSllDeferredStart GlobalPlacer DesignInfo DeviceInfo P
 
 add_executable(checkCompositeIOTiming EXCLUDE_FROM_ALL tests/check_composite_io_timing.cc)
 target_link_libraries(checkCompositeIOTiming "-Wl,--start-group" GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} "-Wl,--end-group")
+
+add_executable(checkFFControlPolarity EXCLUDE_FROM_ALL tests/check_ff_control_polarity.cc)
+target_link_libraries(checkFFControlPolarity "-Wl,--start-group" GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} "-Wl,--end-group")

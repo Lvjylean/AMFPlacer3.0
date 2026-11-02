@@ -2,6 +2,7 @@
 from collections import defaultdict, deque
 import csv
 import json
+from pathlib import Path
 
 SITE_ONLY = frozenset(('IBUF IBUFDS IBUF_ANALOG OBUF OBUFT IOBUF IOBUFE3 IOBUFDS '
                        'OBUFDS_DUAL_BUF BUFGCE').split())
@@ -82,9 +83,22 @@ def write_async_metadata(inventory, output):
 
 
 def validate_binary(config, binary):
-    if config.get('CompositeIOTimingBoundary') != 'true' and not config.get('ASYNC_REG groups file'):
+    if config.get('CompositeIOTimingBoundary') != 'true' and not config.get('ASYNC_REG groups file') and not config.get('FF control polarities file'):
         return
     import subprocess
     caps = json.loads(subprocess.check_output([str(binary), '--capabilities'], text=True, timeout=15))
+    if config.get('FF control polarities file') and caps.get('ff_control_polarity_schema') != 1:
+        raise ValueError('Binary lacks FF control polarity compatibility')
+    if config.get('CompositeIOTimingBoundary') == 'true' and not config.get('FF control polarities file'):
+        raise ValueError('Full-interface input requires complete FF control polarity metadata')
     if caps.get('full_interface_adaptation_schema') != 1:
         raise ValueError('Binary lacks full interface/synchronizer adaptation')
+
+
+def validate_ff_binding(config, record):
+    if not config.get('FF control polarities file'):
+        return
+    import hashlib
+    path = Path(config['FF control polarities file'])
+    if not record or record.get('ff_control_polarities', {}).get('sha256') != hashlib.sha256(path.read_bytes()).hexdigest():
+        raise ValueError('FF control metadata is not bound to this input provenance')

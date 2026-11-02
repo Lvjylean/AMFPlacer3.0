@@ -126,6 +126,7 @@ class ParallelCLBPacker
                 SR = anotherControlSet.getSR();
                 CE = anotherControlSet.getCE();
                 FFType = anotherControlSet.getFFType();
+                clockInverted=anotherControlSet.getClockInverted(); srInverted=anotherControlSet.getSRInverted();
             }
             else
             {
@@ -155,6 +156,7 @@ class ParallelCLBPacker
                 SR = anotherControlSet.getSR();
                 CE = anotherControlSet.getCE();
                 FFType = anotherControlSet.getFFType();
+                clockInverted=anotherControlSet.getClockInverted(); srInverted=anotherControlSet.getSRInverted();
             }
             else
             {
@@ -225,6 +227,7 @@ class ParallelCLBPacker
                     SR = curFF->getControlSetInfo()->getSR();
                     CE = curFF->getControlSetInfo()->getCE();
                     FFType = curFF->getOriCellType();
+                    clockInverted=curFF->getClockInverted(); srInverted=curFF->getSRInverted();
                 }
             }
             else
@@ -316,6 +319,8 @@ class ParallelCLBPacker
             CSId = _CSId;
         }
 
+        bool getClockInverted() const { assert(CSId>=0); return clockInverted; }
+        bool getSRInverted() const { assert(CSId>=0); return srInverted; }
         inline DesignInfo::DesignNet *getCLK() const
         {
             assert(CSId >= 0);
@@ -365,6 +370,7 @@ class ParallelCLBPacker
         }
 
       private:
+        bool clockInverted=false, srInverted=false;
         int CSId = -1;
         DesignInfo::DesignNet *CLK = nullptr;
         DesignInfo::DesignNet *SR = nullptr;
@@ -2389,8 +2395,7 @@ class ParallelCLBPacker
             {
                 return true;
             }
-            else if (FFControlSets[anotherHalfCLB].getCLK() == FFControlSets[halfCLB].getCLK() &&
-                     FFControlSets[anotherHalfCLB].getSR() == FFControlSets[halfCLB].getSR() &&
+            else if (DesignInfo::compatibleClockAndReset(FFControlSets[anotherHalfCLB], FFControlSets[halfCLB]) &&
                      DesignInfo::FFSRCompatible(FFControlSets[anotherHalfCLB].getFFType(),
                                                 FFControlSets[halfCLB].getFFType()))
             {

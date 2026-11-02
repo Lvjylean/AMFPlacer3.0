@@ -77,6 +77,7 @@ void InitialPacker::pack(bool hardResourcesOnly)
     if (!hardResourcesOnly) findMuxMacros();
     findBRAMMacros();
     findDSPMacros();
+    findURAMMacros();
     auto dspMetadata = JSONCfg.find("DSP registered outputs file");
     if (dspMetadata != JSONCfg.end())
     {
@@ -290,6 +291,60 @@ std::vector<DesignInfo::DesignCell *> InitialPacker::BFSExpandViaSpecifiedPorts(
 }
 
 // DSP with ACIN*/BCIN*/PCIN* connected to other DSP should be a Macro
+void InitialPacker::findURAMMacros()
+{
+    using Cell = DesignInfo::DesignCell;
+    std::map<Cell *, Cell *> predecessor, successor;
+    std::set<Cell *> linked;
+    const auto &dfx = placementInfo->getIncrementalContext();
+    for (auto sink : designInfo->getCells()) {
+        if (!sink->isURAM()) continue;
+        for (auto pin : sink->getInputPins()) {
+            auto driver = pin->getDriverPin();
+            if (!driver || !driver->getCell()->isURAM() ||
+                pin->getRefPinName().find("CAS_IN") != 0 || driver->getRefPinName().find("CAS_OUT") != 0) continue;
+            auto source = driver->getCell();
+            bool a = dfx.enabled && dfx.staticCellIds.count(source->getCellId());
+            bool b = dfx.enabled && dfx.staticCellIds.count(sink->getCellId());
+            if (a && b) continue;
+            if (a != b) throw std::runtime_error("Dedicated cascade crosses the active RP boundary: " + sink->getName());
+            if (source == sink || (predecessor.count(sink) && predecessor.at(sink) != source) ||
+                (successor.count(source) && successor.at(source) != sink))
+                throw std::runtime_error("URAM cascade is not a linear chain: " + sink->getName());
+            predecessor[sink] = source; successor[source] = sink;
+            linked.insert(source); linked.insert(sink);
+        }
+    }
+    std::set<Cell *> visited;
+    int chains = 0;
+    // Iterate canonical cell order rather than pointer order for reproducibility.
+    for (auto head : designInfo->getCells()) {
+        if (!linked.count(head) || predecessor.count(head)) continue;
+        std::vector<Cell *> chain;
+        for (auto cell = head; cell; cell = successor.count(cell) ? successor.at(cell) : nullptr) {
+            if (!visited.insert(cell).second || cellInMacros.count(cell))
+                throw std::runtime_error("URAM cascade overlaps another macro: " + cell->getName());
+            chain.push_back(cell);
+        }
+        auto macro = new PlacementInfo::PlacementMacro(head->getName(), placementUnits.size(),
+            PlacementInfo::PlacementMacro::PlacementMacroType_URAM);
+        float pitch = HardResourceUtils::resourcePitch(deviceInfo, "URAM288");
+        int weight = 0;
+        for (size_t i = 0; i < chain.size(); ++i) {
+            auto cell = chain[i];
+            macro->addOccupiedSite(i * pitch, 1);
+            macro->addCell(cell, cell->getCellType(), 0, i * pitch);
+            cellId2PlacementUnit[cell->getCellId()] = macro;
+            cellInMacros.insert(cell);
+            weight += compatiblePlacementTable->cellType2sharedBELTypeOccupation[cell->getCellType()];
+        }
+        macro->setWeight(weight);
+        placementMacros.push_back(macro); placementUnits.push_back(macro); ++chains;
+    }
+    if (visited != linked) throw std::runtime_error("URAM cascade contains a directed cycle");
+    print_info("URAM cascade chains: " + std::to_string(chains) + "; members: " + std::to_string(visited.size()));
+}
+
 void InitialPacker::findDSPMacros()
 {
     AMF_PROFILE_FUNCTION("initial_packing");
@@ -727,8 +782,7 @@ std::vector<DesignInfo::DesignCell *> InitialPacker::checkCompatibleFFs(std::vec
 
     typedef struct _CLKSRCombination
     {
-        DesignInfo::DesignNet *CLK = nullptr;
-        DesignInfo::DesignNet *SR = nullptr;
+        DesignInfo::ControlSetInfo *control = nullptr;
         unsigned int cnt = 0;
     } CLKSRCombination;
     CLKSRCombination halfCLBSettings[1];
@@ -739,11 +793,9 @@ std::vector<DesignInfo::DesignCell *> InitialPacker::checkCompatibleFFs(std::vec
         auto curFF = FFCS.getFFs()[0];
         assert(curFF->getControlSetInfo());
         if (halfCLBSettings[0].cnt == 0 || (halfCLBSettings[0].cnt < MaxNum_ControlSet / 2 &&
-                                            halfCLBSettings[0].CLK == curFF->getControlSetInfo()->getCLK() &&
-                                            halfCLBSettings[0].SR == curFF->getControlSetInfo()->getSR()))
+                                            DesignInfo::compatibleClockAndReset(*halfCLBSettings[0].control, *curFF->getControlSetInfo())))
         {
-            halfCLBSettings[0].CLK = curFF->getControlSetInfo()->getCLK();
-            halfCLBSettings[0].SR = curFF->getControlSetInfo()->getSR();
+            halfCLBSettings[0].control = curFF->getControlSetInfo();
             halfCLBSettings[0].cnt++;
             for (auto tmpFF : FFCS.getFFs())
                 resFF.push_back(tmpFF);

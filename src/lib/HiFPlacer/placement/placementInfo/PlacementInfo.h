@@ -1626,7 +1626,8 @@ class PlacementInfo
             PlacementMacroType_MUX8,  // MUXF7, its directly connected MUXF7/LUTs/FFs and routing BELs.
             PlacementMacroType_MUX9,   // MUXF9, its directly connected MUXF7/MUXF8/LUTs/FFs and routing BELs.
             PlacementMacroType_DFXStatic, // Frozen static context; never a movable packing macro.
-            PlacementMacroType_ASYNC // Compatible ASYNC_REG FFs share one SLICE, without reserving LUTs.
+            PlacementMacroType_ASYNC, // Compatible ASYNC_REG FFs share one SLICE, without reserving LUTs.
+            PlacementMacroType_URAM // Dedicated bottom-up, same-column, same-SLR cascade.
         };
 
         PlacementMacro(std::string name, int id, PlacementMacroType macroType)

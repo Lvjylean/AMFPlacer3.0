@@ -46,7 +46,7 @@ bool canPlaceFF(const Mapping &slots, Cell *cell, int half, int lane)
             auto otherCS = other->getControlSetInfo();
             if (!otherCS) return false;
             if (j == lane && otherCS->getId() != cs->getId()) return false;
-            if (otherCS->getCLK() != cs->getCLK() || otherCS->getSR() != cs->getSR() ||
+            if (!DesignInfo::compatibleClockAndReset(*otherCS, *cs) ||
                 !DesignInfo::FFSRCompatible(other->getOriCellType(), cell->getOriCellType()))
                 return false;
         }

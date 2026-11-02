@@ -89,6 +89,7 @@ class InitialPacker
      *
      */
     void findDSPMacros();
+    void findURAMMacros();
     void setDSPRegs(std::vector<DesignInfo::DesignCell *> &DSPTailsToBeCheckedRegisterAttr);
 
     /**

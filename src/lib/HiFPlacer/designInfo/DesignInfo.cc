@@ -325,6 +325,30 @@ DesignInfo::DesignInfo(std::map<std::string, std::string> &JSONCfg, DeviceInfo *
         }
     }
 
+    if (JSONCfg["CompositeIOTimingBoundary"] == "true" && !JSONCfg.count("FF control polarities file"))
+        for (auto cell:cells) if(cell->isFF() && !cell->isVirtualCell())
+            throw std::runtime_error("Full-interface input requires complete FF control polarity metadata");
+    if (JSONCfg.count("FF control polarities file")) {
+        std::ifstream input(JSONCfg.at("FF control polarities file"));
+        std::string line;
+        if (!input || !std::getline(input,line) || line != "AMF_FF_CONTROL_POLARITIES 1")
+            throw std::runtime_error("Invalid FF control polarity metadata header");
+        std::set<DesignCell *> seen;
+        while (std::getline(input,line)) {
+            std::istringstream row(line); std::string name,type,extra; int clock,sr,ce;
+            if (!(row>>name>>type>>clock>>sr>>ce) || (row>>extra) ||
+                (clock!=0 && clock!=1) || (sr!=0 && sr!=1) || ce!=0)
+                throw std::runtime_error("Invalid or unsupported FF control polarity record: " + line);
+            auto found=name2Cell.find(name);
+            if (found==name2Cell.end() || !found->second->isFF() || found->second->isVirtualCell() ||
+                DesignCellTypeStr[found->second->getOriCellType()]!=type || !seen.insert(found->second).second)
+                throw std::runtime_error("Unknown, duplicate or mismatched FF control metadata: " + name);
+            found->second->setFFControlPolarities(clock,sr,ce);
+        }
+        for (auto cell:cells) if (cell->isFF() && !cell->isVirtualCell() && !seen.count(cell))
+            throw std::runtime_error("Missing FF control polarity metadata: " + cell->getName());
+        print_info("DCP-certified FF control polarities: " + std::to_string(seen.size()));
+    }
     updateFFControlSets();
 
     if (JSONCfg.find("clock file") != JSONCfg.end())
@@ -500,7 +524,8 @@ void DesignInfo::updateFFControlSets()
                 continue;
             int CLKId, SRId, CEId;
             getCLKSRCENetId(curCell, CLKId, SRId, CEId);
-            std::tuple<int, int, int, int> CS(CLKId, SRId, CEId, getFFSRType(curCell->getOriCellType()));
+            auto CS = std::make_tuple(CLKId, SRId, CEId, getFFSRType(curCell->getOriCellType()),
+                curCell->getClockInverted(), curCell->getSRInverted(), curCell->getCEInverted());
             ControlSetInfo *curCS = nullptr;
             if (CLKSRCEFFType2ControlSetInfoId.find(CS) != CLKSRCEFFType2ControlSetInfoId.end())
             {

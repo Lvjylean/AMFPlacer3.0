@@ -1,5 +1,7 @@
+source [file join [file dirname [info script]] full_ff_controls.tcl]
 # Preserve synthesis/IP ownership independently of physical fixedness.
 proc amf_full::export_attributes {output} {
+    amf_full::export_ff_controls $output
     set f [open [file join $output protected_cells.tsv] w]
     puts $f "cell\tprimitive\tdont_touch\tasync_reg\tloc_fixed\tbel_fixed"
     foreach c [get_cells -hier -filter {DONT_TOUCH == TRUE || ASYNC_REG == TRUE}] {

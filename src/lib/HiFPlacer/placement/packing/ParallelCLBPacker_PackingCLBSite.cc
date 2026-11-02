@@ -1031,10 +1031,7 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCarrySite(int FFContro
                                 {
                                     if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo())
                                     {
-                                        if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getCLK() !=
-                                                targetFF->getControlSetInfo()->getCLK() ||
-                                            slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getSR() !=
-                                                targetFF->getControlSetInfo()->getSR() ||
+                                        if (!DesignInfo::compatibleClockAndReset(*slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo(), *targetFF->getControlSetInfo()) ||
                                             !DesignInfo::FFSRCompatible(
                                                 slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getFFType(),
                                                 targetFF->getControlSetInfo()->getFFType()))
@@ -1114,10 +1111,7 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCarrySite(int FFContro
                                     {
                                         if (slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo())
                                         {
-                                            if (slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo()->getCLK() !=
-                                                    targetFF->getControlSetInfo()->getCLK() ||
-                                                slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo()->getSR() !=
-                                                    targetFF->getControlSetInfo()->getSR() ||
+                                            if (!DesignInfo::compatibleClockAndReset(*slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo(), *targetFF->getControlSetInfo()) ||
                                                 !DesignInfo::FFSRCompatible(
                                                     slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo()->getFFType(),
                                                     targetFF->getControlSetInfo()->getFFType()))
@@ -1710,10 +1704,7 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int 
                                 {
                                     if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo())
                                     {
-                                        if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getCLK() !=
-                                                targetFF->getControlSetInfo()->getCLK() ||
-                                            slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getSR() !=
-                                                targetFF->getControlSetInfo()->getSR() ||
+                                        if (!DesignInfo::compatibleClockAndReset(*slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo(), *targetFF->getControlSetInfo()) ||
                                             !DesignInfo::FFSRCompatible(
                                                 slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getFFType(),
                                                 targetFF->getControlSetInfo()->getFFType()))
@@ -1793,10 +1784,7 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int 
                                     {
                                         if (slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo())
                                         {
-                                            if (slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo()->getCLK() !=
-                                                    targetFF->getControlSetInfo()->getCLK() ||
-                                                slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo()->getSR() !=
-                                                    targetFF->getControlSetInfo()->getSR() ||
+                                            if (!DesignInfo::compatibleClockAndReset(*slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo(), *targetFF->getControlSetInfo()) ||
                                                 !DesignInfo::FFSRCompatible(
                                                     slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo()->getFFType(),
                                                     targetFF->getControlSetInfo()->getFFType()))
@@ -1919,10 +1907,7 @@ void ParallelCLBPacker::PackingCLBSite::finalMapToSlotsForCommonLUTFFInSite(int 
                                 {
                                     if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo())
                                     {
-                                        if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getCLK() !=
-                                                targetFF->getControlSetInfo()->getCLK() ||
-                                            slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getSR() !=
-                                                targetFF->getControlSetInfo()->getSR() ||
+                                        if (!DesignInfo::compatibleClockAndReset(*slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo(), *targetFF->getControlSetInfo()) ||
                                             !DesignInfo::FFSRCompatible(
                                                 slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getFFType(),
                                                 targetFF->getControlSetInfo()->getFFType()))
@@ -2923,10 +2908,7 @@ void ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite(int FFC
                                 {
                                     if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo())
                                     {
-                                        if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getCLK() !=
-                                                targetFF->getControlSetInfo()->getCLK() ||
-                                            slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getSR() !=
-                                                targetFF->getControlSetInfo()->getSR() ||
+                                        if (!DesignInfo::compatibleClockAndReset(*slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo(), *targetFF->getControlSetInfo()) ||
                                             !DesignInfo::FFSRCompatible(
                                                 slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getFFType(),
                                                 targetFF->getControlSetInfo()->getFFType()))
@@ -3006,10 +2988,7 @@ void ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite(int FFC
                                     {
                                         if (slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo())
                                         {
-                                            if (slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo()->getCLK() !=
-                                                    targetFF->getControlSetInfo()->getCLK() ||
-                                                slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo()->getSR() !=
-                                                    targetFF->getControlSetInfo()->getSR() ||
+                                            if (!DesignInfo::compatibleClockAndReset(*slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo(), *targetFF->getControlSetInfo()) ||
                                                 !DesignInfo::FFSRCompatible(
                                                     slotMapping.FFs[ii][1 - jj][kk]->getControlSetInfo()->getFFType(),
                                                     targetFF->getControlSetInfo()->getFFType()))
@@ -3132,10 +3111,7 @@ void ParallelCLBPacker::PackingCLBSite::greedyMapMuxForCommonLUTFFInSite(int FFC
                                 {
                                     if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo())
                                     {
-                                        if (slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getCLK() !=
-                                                targetFF->getControlSetInfo()->getCLK() ||
-                                            slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getSR() !=
-                                                targetFF->getControlSetInfo()->getSR() ||
+                                        if (!DesignInfo::compatibleClockAndReset(*slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo(), *targetFF->getControlSetInfo()) ||
                                             !DesignInfo::FFSRCompatible(
                                                 slotMapping.FFs[i0][1 - j0][kk]->getControlSetInfo()->getFFType(),
                                                 targetFF->getControlSetInfo()->getFFType()))

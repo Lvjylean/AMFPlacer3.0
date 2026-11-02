@@ -4964,7 +4964,8 @@ void ParallelCLBPacker::addNonCLBPackingSites()
                     }
                 }
             }
-            else if (tmpMacro->getMacroType() == PlacementInfo::PlacementMacro::PlacementMacroType_DSP)
+            else if (tmpMacro->getMacroType() == PlacementInfo::PlacementMacro::PlacementMacroType_DSP ||
+                     tmpMacro->getMacroType() == PlacementInfo::PlacementMacro::PlacementMacroType_URAM)
             {
                 assert(tmpMacro->getCells().size() == DSPBRAM_LegalSitePair.second.size());
                 for (unsigned int i = 0; i < tmpMacro->getCells().size(); i++)
@@ -5115,7 +5116,8 @@ void ParallelCLBPacker::dumpDSPBRAMPlacementTcl(std::ofstream &outfileTcl)
                     }
                 }
             }
-            else if (tmpMacro->getMacroType() == PlacementInfo::PlacementMacro::PlacementMacroType_DSP)
+            else if (tmpMacro->getMacroType() == PlacementInfo::PlacementMacro::PlacementMacroType_DSP ||
+                     tmpMacro->getMacroType() == PlacementInfo::PlacementMacro::PlacementMacroType_URAM)
             {
                 assert(tmpMacro->getCells().size() == DSPBRAM_LegalSitePair.second.size());
                 for (unsigned int i = 0; i < tmpMacro->getCells().size(); i++)
@@ -5125,7 +5127,7 @@ void ParallelCLBPacker::dumpDSPBRAMPlacementTcl(std::ofstream &outfileTcl)
                     if (!curCell->isVirtualCell())
                     {
                         hard_macro_anchor::verify(tmpMacro,curCell,targetSite->X(),targetSite->Y());
-                        placementStr += "  " + curCell->getName() + " " + targetSite->getName() + "/DSP_ALU" + "\n";
+                        placementStr += "  " + curCell->getName() + " " + targetSite->getName() + (curCell->isURAM() ? "/URAM_288K_INST" : "/DSP_ALU") + "\n";
                     }
                     else
                     {
@@ -5161,7 +5163,7 @@ void ParallelCLBPacker::dumpDSPBRAMPlacementTcl(std::ofstream &outfileTcl)
             }
             else if (curCell->getOriCellType() == DesignInfo::CellType_DSP48E2)
             {
-                placementStr += "  " + curCell->getName() + " " + targetSite->getName() + "/DSP_ALU" + "\n";
+                placementStr += "  " + curCell->getName() + " " + targetSite->getName() + (curCell->isURAM() ? "/URAM_288K_INST" : "/DSP_ALU") + "\n";
             }
             else
             {

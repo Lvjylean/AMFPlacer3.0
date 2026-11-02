@@ -32,10 +32,12 @@ def run(args):
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
     root = args.root.resolve()
-    device = root / 'data/devices/u250-vivado-2024.2/exportSiteLocation.zip'
+    device = args.device.resolve() if args.device else root / 'data/devices/u250-vivado-2024.2/exportSiteLocation.zip'
+    if not device.is_file(): raise ValueError('Missing real device fixture: '+str(device))
     base = json.loads((root / 'configs/experiments/getrf-u250-resources.json').read_text())
     base.pop('clock file', None)
     base['jobs'] = '1'
+    base['ClockRegionFabricGeometry'] = 'true'
     for key in list(base):
         if key.endswith(' file') or key == 'mergedSharedCellType2sharedCellType':
             base[key] = str(root / base[key])
@@ -98,8 +100,12 @@ def run(args):
     adjacent(check('carry-seam', carry, seeds='a 0 239\n'))
     adjacent(check('dsp-seam', dsp, seeds='a 3 237.5\n'))
     adjacent(check('dsp-multsign', chain('DSP48E2', 'MULTSIGNOUT', 'MULTSIGNIN'), seeds='a 3 237.5\n'))
-    check('uram-cascade-rejected', chain('URAM288', 'CAS_OUT_DOUT_A[0]', 'CAS_IN_DIN_A[0]'),
-          message='URAM cascade is not supported')
+    uram = chain('URAM288', 'CAS_OUT_DOUT_A[0]', 'CAS_IN_DIN_A[0]')
+    adjacent(check('uram-cascade-seam', uram, seeds='a 56 239\n'))
+    branch = uram + cell('c','URAM288',[('CAS_IN_DIN_A[0]','IN','cascade','a/CAS_OUT_DOUT_A[0]')])
+    check('uram-branch-rejected', branch, message='URAM cascade is not a linear chain')
+    cycle = cell('a','URAM288',[('CAS_OUT_ADDR_A[0]','OUT','ab','a/CAS_OUT_ADDR_A[0]'),('CAS_IN_ADDR_A[0]','IN','ba','b/CAS_OUT_ADDR_A[0]')]) + cell('b','URAM288',[('CAS_OUT_ADDR_A[0]','OUT','ba','b/CAS_OUT_ADDR_A[0]'),('CAS_IN_ADDR_A[0]','IN','ab','a/CAS_OUT_ADDR_A[0]')])
+    check('uram-cycle-rejected',cycle,message='URAM cascade contains a directed cycle')
 
     with zipfile.ZipFile(device) as z:
         lines = z.read(z.namelist()[0]).decode().splitlines(True)
@@ -122,6 +128,10 @@ def run(args):
     check('carry-impossible-seam', carry, seam_carry, message='No contiguous same-SLR resource range')
     seam_dsp = restricted('dsp-only-seam', 'DSP48E2_', {'DSP48E2_X0Y95', 'DSP48E2_X0Y96'})
     check('dsp-impossible-seam', dsp, seam_dsp, message='No contiguous same-SLR resource range')
+    seam_uram = restricted('uram-only-seam', 'URAM288_', {'URAM288_X0Y63','URAM288_X0Y64'})
+    check('uram-impossible-seam',uram,seam_uram,message='No contiguous same-SLR resource range')
+    gap_uram = restricted('uram-only-gap','URAM288_',{'URAM288_X0Y0','URAM288_X0Y2'})
+    check('uram-impossible-gap',uram,gap_uram,message='No contiguous same-SLR resource range')
     one_uram = restricted('one-uram', 'URAM288_', {'URAM288_X0Y0'})
     rows = check('uram-prohibited-sites', cell('a', 'URAM288'), one_uram)
     assert rows['a']['site'] == 'URAM288_X0Y0', rows
@@ -148,4 +158,5 @@ if __name__ == '__main__':
     for name in ['root', 'binary', 'output']:
         parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--legacy-device', type=Path)
+    parser.add_argument('--device', type=Path)
     run(parser.parse_args())

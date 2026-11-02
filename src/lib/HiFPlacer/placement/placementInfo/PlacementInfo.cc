@@ -959,6 +959,8 @@ std::ostream &operator<<(std::ostream &os, PlacementInfo::PlacementMacro *curMac
         os << "  macroType: PlacementMacroType_MCLB\n";
     else if (curMacro->getMacroType() == PlacementInfo::PlacementMacro::PlacementMacroType_CARRY)
         os << "  macroType: PlacementMacroType_CARRY\n";
+    else if (curMacro->getMacroType() == PlacementInfo::PlacementMacro::PlacementMacroType_URAM)
+        os << "  macroType: PlacementMacroType_URAM\n";
     else if (curMacro->getMacroType() == PlacementInfo::PlacementMacro::PlacementMacroType_DSP)
         os << "  macroType: PlacementMacroType_DSP\n";
     else if (curMacro->getMacroType() == PlacementInfo::PlacementMacro::PlacementMacroType_BRAM)
@@ -2016,6 +2018,8 @@ void PlacementInfo::loadPlacementUnitInformation(std::string locFile)
                 macroType = PlacementMacro::PlacementMacroType_MCLB;
             else if (macroTypeStr == "PlacementMacroType_CARRY")
                 macroType = PlacementMacro::PlacementMacroType_CARRY;
+            else if (macroTypeStr == "PlacementMacroType_URAM")
+                macroType = PlacementMacro::PlacementMacroType_URAM;
             else if (macroTypeStr == "PlacementMacroType_DSP")
                 macroType = PlacementMacro::PlacementMacroType_DSP;
             else if (macroTypeStr == "PlacementMacroType_BRAM")
