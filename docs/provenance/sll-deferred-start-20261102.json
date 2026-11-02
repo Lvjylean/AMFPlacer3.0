@@ -1,0 +1,149 @@
+{
+  "release_label": "sll约束优化延后",
+  "project": "AMFplacer3.0",
+  "target_repository": "https://github.com/Lvjylean/AMFPlacer3.0",
+  "target_branch": "codex/sll-edge-compact-snapshot-20261024",
+  "previous_published_commit": "258d117840c61fb7d83f11daca8ed3b8a333dfac",
+  "tested_source_commit": "c425bb98737019694942cd5d8fd6b990ece4a91c",
+  "source_commits": [
+    "82b5a94866fcacfeebcce0bbdbe16dcf37a7ffc6",
+    "c425bb98737019694942cd5d8fd6b990ece4a91c"
+  ],
+  "production_base": "1672cf86c4b029d2550f9d1a465ce12914b8321c",
+  "source": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-sll-deferred-visualization/repo",
+  "release_repository": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261102-sll-deferred-release/repo",
+  "evidence_directory": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-sll-deferred-visualization/repo/experiments/comparisons/getrf-u250-10ns-sll-deferred-spread20-vis-route-20261102",
+  "run": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-sll-deferred-visualization/repo/experiments/runs/getrf-u250-10ns-sll-deferred-spread20-vis-route-20261102-full-20261102-013920-149889",
+  "configuration": {
+    "ClockPeriod": "10",
+    "jobs": "12",
+    "SllDeferredUntilFirstSpread": "true",
+    "CrossDieSpreadMaxBins": "20",
+    "visualization": "true",
+    "SllRouteConstraintEnable": "false",
+    "SllRegionPolicy": "preserve",
+    "SllPlanningAllowSplit": "false",
+    "ProPrimitiveTiming": "false"
+  },
+  "timing": {
+    "wns_ns": 0.157,
+    "tns_ns": 0.0,
+    "setup_failing_endpoints": 0,
+    "setup_total_endpoints": 607963,
+    "whs_ns": 0.019,
+    "ths_ns": 0.0,
+    "hold_failing_endpoints": 0,
+    "hold_total_endpoints": 607963,
+    "wpws_ns": 4.3,
+    "tpws_ns": 0.0,
+    "pulse_failing_endpoints": 0,
+    "pulse_total_endpoints": 405670
+  },
+  "timings": {
+    "amf_process_seconds": 1772.8153044264764,
+    "amf_same_visualization_reference_seconds": 1745.5903642214835,
+    "adapter_seconds": 40.36012390255928,
+    "vivado_process_seconds": 2687.658884764649,
+    "vivado_stages_seconds": {
+      "open": 81.645,
+      "import": 654.594,
+      "import_audit": 22.409,
+      "place": 266.638,
+      "place_audit": 24.053,
+      "placed_checkpoint": 89.987,
+      "route": 1199.117,
+      "route_audit": 24.72,
+      "reports": 186.829,
+      "checkpoint": 54.068,
+      "sll_inventory": 28.306,
+      "boundary_samples": 1.384
+    },
+    "production_total_seconds": 4538.011855873279,
+    "production_reference_total_seconds": 4222.568967244588,
+    "vivado_unscoped_seconds": 53.90888476464852,
+    "runner_other_seconds": 37.17754277959466,
+    "postprocessing_frames_seconds": 84.65447626821697,
+    "postprocessing_pair_final_frames_seconds": 32.574166228063405,
+    "postprocessing_provenance_seconds": 0.7093727802857757
+  },
+  "routing": {
+    "logical nets": 3257293,
+    "nets not needing routing": 2335506,
+    "internally routed nets": 2049507,
+    "nets with no loads": 285696,
+    "implicitly routed ports": 303,
+    "routable nets": 921787,
+    "fully routed nets": 921787,
+    "nets with routing errors": 0
+  },
+  "drc": {
+    "errors": 0,
+    "critical_warnings": 0
+  },
+  "checks": {
+    "production_exit0": true,
+    "all_frames_valid": true,
+    "original_loc_bel": "856998/856998",
+    "import_rejections": 0,
+    "strict_import_verified": false,
+    "import_policy": "repair",
+    "sll_position_constraints_exported": false,
+    "source_and_input_hashes_verified": true
+  },
+  "final_provenance": {
+    "state": "passed",
+    "checked": "2026-11-02T03:07:47.129587+08:00",
+    "source_files": 3539,
+    "source_commit": "c425bb98737019694942cd5d8fd6b990ece4a91c",
+    "git_status": "",
+    "input_hashes_verified": true,
+    "binaries_verified": {
+      "AMFPlacer": "ca9cf491d543f0530f17b896f014fae8624205f8fa8555938d2a700d69a0a3db",
+      "partitionHyperGraph": "70956422f67a1405cf377033ab3af0230d2c4d1c46c8cda52f29c08dcf206268"
+    },
+    "output_dcp_sha256": "b67c6f8a1dd15768d6fa1da8926aa49efabc02f2b88ffedea951ca2bcfe6133b",
+    "config_sha256": "a5d1a53113f3b75fee105c4bb42836bf2a940953455fb2822389c8b8ae50e7f5",
+    "sll_route_constraint_enabled": false,
+    "sll_plan_absent": true,
+    "backend_scripts_equal_reference": true,
+    "seconds": 0.7093727802857757
+  },
+  "production_changes_over_tested_candidate": "none",
+  "default_deferred_enabled": false,
+  "new_experiment_started_for_publication": false,
+  "small_test_summary": {
+    "state": "passed",
+    "build": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261101-sll-deferred-start/repo/builds/build-20261101-195303-282810-82b5a948",
+    "build_seconds": 72.78968900628388,
+    "tests": {
+      "joint": 9.562528792768717,
+      "deferred-absent": 9.45238446071744,
+      "deferred-false": 9.409803500398993,
+      "deferred-true": 9.174976195208728
+    }
+  },
+  "frame_count": 440,
+  "limitations": [
+    "Single serial experiment; time/QoR differences are observations, not stable averages or proof of causal mechanism.",
+    "AMF comparator has same binary, visualization and input; route reference used previous no-visualization binary without the read-only trace overlay but identical backend scripts.",
+    "No fresh routed cap0 run; prior cap0 visualization output was verified identical to its earlier routed-reference layout.",
+    "20-bin cap only activates for cross-die-search PUs; it does not cap every move within a die or total accumulated displacement.",
+    "No separate visualization timer scope; diagnostic_output does not measure all visualization overhead.",
+    "Inherited OOC constraints: HD.CLK_SRC missing and 124 input / 250 output ports without I/O delay; no board timing guarantee.",
+    "Current path has cross-SLR fanout257 and 9.458ns net delay; no new physical branching/detour diagnosis, and no seed attribution.",
+    "Do not restart or inspect the previously stopped old read-only session."
+  ],
+  "evidence_sha256": {
+    "comparison.json": "b6e39ad401799d1dcf54eba0706ed85a6b2b5a74cae0101cc656ef8cd21f2254",
+    "report.md": "f1a9fc039131cf88b410a0d8bb5f10179e89eddfece23d0c2c69ac369d240d75",
+    "frame-validation.json": "cd2e0c2c6bd168493e834c2de278a371cc653078c395d18c88139b90e7429c84",
+    "startup-verification.json": "676d39e7d0d3d85014c9a0460e415b3d4e3c19f8e37e1d67ab75b6a8014757ce",
+    "final-provenance-check.json": "672ee05454e56e86436fb9d1035daaaf16b38463c88fa90dbcca37ab2cf72c10",
+    "matched-frame-comparison.json": "2027d5eeef24f87d087e001131e193517d15265dd575b5868c497a45fcacc947",
+    "final-frame-comparison.json": "cb87a48faed37d6d42ad42d0a2a364ce3efbad764e1da7b67c2c4d75fc827d1b"
+  },
+  "small_test_evidence_sha256": {
+    "trace.log": "f0bb93641b5664079f51b7a588c6924b033d0b5932ab900f5293d517547e6894",
+    "deferred.log": "3ba159d58ce5c2c2e584bd3b4a025464e105ea5ba1107ee2b91c2cb37671036b"
+  }
+}

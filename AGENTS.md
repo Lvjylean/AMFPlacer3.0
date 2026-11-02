@@ -1,3 +1,11 @@
+# 当前 GitHub 发布：sll约束优化延后（2026-11-02）
+
+用户授权将已验收候选 c425bb98737019694942cd5d8fd6b990ece4a91c 发布到 `codex/sll-edge-compact-snapshot-20261024`。独立发布副本 experiments/preflight/20261102-sll-deferred-release/repo 基于上次发布258d1178，生产树与候选逐项一致；仅额外增加发布说明。保留2.0提速和L分段修正。
+
+`SllDeferredUntilFirstSpread` 默认false；显式true时首轮全部资源扩散后、下一次QP才启用虚拟SLL，数量梯度和tau时机不变。独立开关 `SllRouteConstraintEnable=false` 仅关闭位置约束导出，不关闭规划优化。逐帧记录只读planner，未启用帧标记uninitialized，不填充最终位置。最新已验收组合启用既有20bin限幅，但该限幅只对跨die搜索PU激活，不覆盖全部die内扩散；本次没有新增连接感知方向限制。
+
+源码和验收范围见 docs/research/sll-deferred-start-20261102.md。旧实验保持原样，DCP只留服务器，不重新启动实验。下文“当前”按日期保留为历史状态。
+
 # 当前 GitHub 发布：2.0优化加速版本（2026-11-01）
 
 本版按用户要求同步到 `codex/sll-edge-compact-snapshot-20261024`，在独立发布副本 experiments/preflight/20261101-sll-speed-v2-release/repo 整理。已完成验收的生产源码为 1672cf86c4b029d2550f9d1a465ce12914b8321c，基于提速版1.0 d04315a3；发布提交仅补充文档，生产源码、脚本、配置、测试保持不变。网格维护与边界报告优化已完成完整等价核验，同配置 AMF 单次墙钟1291.3094→1231.9773秒。详见 docs/research/sll-speed-v2-20261101.md。

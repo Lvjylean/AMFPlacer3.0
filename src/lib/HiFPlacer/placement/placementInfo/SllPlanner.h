@@ -33,6 +33,10 @@ public:
         WireLengthBatch& operator=(const WireLengthBatch&)=delete;
     };
     void refresh(); // Serial outer-step boundary, never inside parallel readers.
+    // A spread notification only arms activation; no plan is made until the next QP.
+    void notifyGlobalSpreadCompleted(int round);
+    void beginQp();
+    bool active()const;
     bool jointPlacement()const;
     size_t variableCount()const;
     std::vector<amf_sll_plan::Point> virtualPositions()const;

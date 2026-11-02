@@ -44,6 +44,8 @@ struct SllPlanner::Impl {
     double wirePrepareSeconds=0;
     std::ofstream wireLog,refreshLog;
     bool refreshParallel=true, capacityOptimization=true;
+    bool deferredStart=false, planningActive=true;
+    int firstSpreadRound=0;size_t attemptedQps=0;
     size_t refreshAuditStride=0,refreshCalls=0;
     explicit Impl(PlacementInfo*placement,const std::map<std::string,std::string>&cfg):pi(placement) {
         if(pi->getIncrementalContext().enabled) {
@@ -59,6 +61,8 @@ struct SllPlanner::Impl {
         if(!m.plannedTimingCriticalities)m.timingWeight=0;
         m.extraCrossingCost=number(cfg,"SllPlanningExtraCrossingCost",24);m.switchCost=number(cfg,"SllPlanningSwitchCost",.1);
         auto boolean=[&](const std::string&key,bool fallback){auto it=cfg.find(key);if(it==cfg.end())return fallback;if(it->second!="true"&&it->second!="false")throw std::invalid_argument(key+" must be boolean");return it->second=="true";};
+        deferredStart=boolean("SllDeferredUntilFirstSpread",false);
+        planningActive=!deferredStart;
         m.outputLongDelayCorrection=boolean("SllOutputLongDelayCorrection",false);
         m.outputLongDelayThresholdNs=number(cfg,"SllOutputLongDelayThresholdNs",1.5);
         m.outputLongDelaySlope=number(cfg,"SllOutputLongDelaySlope",1.1430759607609453);
@@ -76,6 +80,7 @@ struct SllPlanner::Impl {
         amf_config::validatePlacementFeatures(cfg);
         capacityOptimization=boolean("SllCapacityOptimizationEnable",true);
         m.jointPlacement=boolean("SllJointPlacementEnable",false);
+        if(deferredStart && !m.jointPlacement)throw std::invalid_argument("Deferred SLL start requires joint placement");
         m.sourceNearInitialization=boolean("SllSourceNearInitialization",m.jointPlacement);
         density.rowHeight=number(cfg,"SllDensityRowHeight",1);
         density.targetUtilization=number(cfg,"SllDensityTargetUtilization",.8);
@@ -199,7 +204,28 @@ void SllPlanner::setLocalDelay(LocalDelay f){
     p->m.local=std::move(f);
 }
 void SllPlanner::setReferenceDelay(LocalDelay f){p->referenceDelay=std::move(f);}
-bool SllPlanner::jointPlacement()const{return p->m.jointPlacement;}
+bool SllPlanner::active()const{return p->planningActive;}
+void SllPlanner::notifyGlobalSpreadCompleted(int round) {
+    if(!p->deferredStart || p->firstSpreadRound)return;
+    if(round<=0 || p->wireBatchActive || p->timingBatchActive)
+        throw std::logic_error("Invalid SLL spread activation boundary");
+    p->firstSpreadRound=round;
+    std::cout<<"E2_SLL_STARTUP event=spread_completed round="<<round
+             <<" completed_qps="<<p->attemptedQps<<" active=0 pending=1"<<std::endl;
+}
+void SllPlanner::beginQp() {
+    if(!p->deferredStart)return;
+    if(p->wireBatchActive || p->timingBatchActive)
+        throw std::logic_error("Cannot activate SLL inside read-only batch");
+    ++p->attemptedQps;
+    const bool starting=!p->planningActive && p->firstSpreadRound>0;
+    if(starting)p->planningActive=true;
+    if(!p->planningActive || starting)
+        std::cout<<"E2_SLL_STARTUP event=qp_begin qp="<<p->attemptedQps
+                 <<" active="<<p->planningActive<<" first_spread_round="<<p->firstSpreadRound
+                 <<" retained_plans="<<p->m.plans.size()<<std::endl;
+}
+bool SllPlanner::jointPlacement()const{return active() && p->m.jointPlacement;}
 void SllPlanner::beginTimingBatch(TimingCoordinates mode) {
     if(p->timingBatchActive)throw std::logic_error("Nested SLL timing batch");
     AMF_PROFILE_SCOPE("sll_timing_prefix","prepare immutable SLL timing prefixes");
@@ -270,11 +296,12 @@ void SllPlanner::projectQp(const Eigen::VectorXd&x,const Eigen::VectorXd&y,doubl
     if(p->jointLog)p->jointLog<<p->qpGeneration<<'\t'<<n<<'\t'<<assigned.moved<<'\t'<<assigned.energyBefore<<'\t'<<assigned.energyAfter<<'\t'<<maxMove<<std::endl;
     if(p->projectionLog)p->projectionLog.flush();
 }
-bool SllPlanner::handles(int id)const{return id>=0&&size_t(id)<p->netIndex.size()&&p->netIndex[id]>=0;}
+bool SllPlanner::handles(int id)const{return active() && id>=0&&size_t(id)<p->netIndex.size()&&p->netIndex[id]>=0;}
 bool SllPlanner::crosses(Point a,Point b)const{return p->slr(a)!=p->slr(b);}
 void SllPlanner::refresh() {
     if(p->timingBatchActive)throw std::logic_error("Cannot refresh during a timing batch");
     if(p->wireBatchActive)throw std::logic_error("Cannot refresh SLL topology during a wire batch");
+    if(!active())return;
     AMF_PROFILE_SCOPE("sll_position_planning","virtual SLL lifecycle and capacity allocation");
     using Clock=std::chrono::steady_clock;
     auto seconds=[](Clock::time_point start){return std::chrono::duration<double>(Clock::now()-start).count();};
@@ -423,6 +450,7 @@ void SllPlanner::addWireModel(int id,std::vector<Eigen::Triplet<float>>&trip,std
     }
 }
 bool SllPlanner::pinDelay(int source,int sink,Point a,Point b,double&result)const {
+    if(!active())return false;
     auto entry=p->timingIndex.findPin(sink);if(!entry)return false;
     const auto&plan=p->m.plans.at(entry->plan);if(plan.net.source.id!=source)return false;
     return plannedDelay(entry->plan,entry->sink,a,b,result);
@@ -435,6 +463,7 @@ bool SllPlanner::plannedDelay(int planIndex,int sinkIndex,Point a,Point b,double
                                p->m.pathDelay(plan,s.id,a,b);return true;
 }
 bool SllPlanner::cellDelay(int source,int sink,Point a,Point b,double&result)const {
+    if(!active())return false;
     // Ambiguous cell pairs can have different pin-level trees. Caller must use
     // exact pin IDs; never select an arbitrary net between the two cells.
     int id=p->timingIndex.uniqueSink(source,sink);if(id<0)return false;
@@ -478,6 +507,7 @@ void SllPlanner::addTimingModel(std::vector<Eigen::Triplet<float>>&trip,std::vec
     }
 }
 void SllPlanner::exportPlan(const std::string&path, bool writeConstraints) {
+    if(!active())throw std::runtime_error("SLL final legalization requested before deferred activation");
     const auto exportStart=std::chrono::steady_clock::now();refresh();
     const auto projectionStart=std::chrono::steady_clock::now();
     if(jointPlacement()&&(p->m.columnPolicy.enabled||p->m.allowTransientOverflow)){

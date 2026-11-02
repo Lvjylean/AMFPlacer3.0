@@ -315,6 +315,8 @@ void GlobalPlacer::GlobalPlacement_CLBPhase(int iterNum, bool continuePreviousIt
         // upperBound: Placement Unit Spreading
 
         spreading(i, spreadRegionBinNumLimit, displacementLimit);
+        if(placementInfo->sllPlanner)
+            placementInfo->sllPlanner->notifyGlobalSpreadCompleted(diagnosticRound);
         macro_study::summarize();
         diagnosticSnapshot("after_spreading");
         // if (timingOptimizer)

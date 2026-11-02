@@ -140,6 +140,7 @@ void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool fir
     if (verbose)
         print_status("A QP Iteration Started.");
 
+    if(placementInfo->sllPlanner)placementInfo->sllPlanner->beginQp();
     const bool jointSll=placementInfo->sllPlanner && placementInfo->sllPlanner->jointPlacement();
     if((firstIteration || jointSll) && placementInfo->sllPlanner)placementInfo->sllPlanner->refresh();
     if(jointSll){

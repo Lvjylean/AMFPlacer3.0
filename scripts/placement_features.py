@@ -5,7 +5,7 @@ BOOL_KEYS = (
     'SllQuantityEnable', 'SllDynamicTauEnable', 'SllPlanningEnable',
     'SllCapacityOptimizationEnable', 'SllTimingCorrectionEnable', 'SllRouteConstraintEnable',
     'DieFirstSpreadingEnable', 'TimingDrivenPlacementEnable', 'DetailedDiagnosticsEnable',
-    'IterativeMacroLegalizationEnable', 'SllTauCompletionRequired',
+    'IterativeMacroLegalizationEnable', 'SllTauCompletionRequired', 'SllDeferredUntilFirstSpread',
 )
 CHOICES = {key: ('true', 'false') for key in BOOL_KEYS}
 CHOICES.update(SllTauPolicy=('adaptive', 'periodic', 'drop-or-timeout'),
@@ -34,7 +34,7 @@ def validate(config):
         raise ValueError('SLL column target cannot exceed maximum')
     if 'SllConstraintWorkers' in config and (not config['SllConstraintWorkers'].isdigit() or not 1<=int(config['SllConstraintWorkers'])<=8):
         raise ValueError('SllConstraintWorkers must be an integer in [1,8]')
-    for key in ('SllTimingCorrectionEnable', 'SllRouteConstraintEnable'):
+    for key in ('SllTimingCorrectionEnable', 'SllRouteConstraintEnable', 'SllDeferredUntilFirstSpread'):
         if flag(config, key) and not flag(config, 'SllPlanningEnable'):
             raise ValueError(key + ' requires SllPlanningEnable=true')
 

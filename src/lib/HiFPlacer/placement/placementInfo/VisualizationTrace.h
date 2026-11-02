@@ -1,5 +1,6 @@
 #pragma once
 #include "PlacementInfo.h"
+#include "SllVisualizationTrace.h"
 #include <zlib.h>
 #include <chrono>
 #include <fstream>
@@ -27,6 +28,11 @@ inline void snapshot(PlacementInfo* info, const std::map<std::string,std::string
   else if(auto macro=dynamic_cast<PlacementInfo::PlacementMacro*>(pu))
    for(int i=0;i<macro->getNumOfCells();++i){float dx,dy;DesignInfo::DesignCellType t;macro->getVirtualCellInfo(i,dx,dy,t);auto cell=macro->getCell(i);emit(x+dx,y+dy,cell?cell->getName():"");}
  }
+ // Publish the SLL state before publishing its matching real-cell frame.
+ // Reading the current planner is deliberate: do not refresh it or change QP.
+ auto slash=prefix.find_last_of("/\\");
+ const std::string sllFile=(slash==std::string::npos?"":prefix.substr(0,slash+1))+"DumpSllTrace-"+std::to_string(seq)+".tsv.gz";
+ amf_sll_trace::writeSnapshot(info->sllPlanner && info->sllPlanner->active()?&info->sllPlanner->model():nullptr,sllFile);
  if(gzclose(out)!=Z_OK || std::rename(tmp.c_str(),file.c_str()))throw std::runtime_error("Visualization finalize failed");
  std::ofstream events(prefix+"-events.tsv",std::ios::app);
  events<<seq<<'\t'<<phase<<'\t'<<round<<'\t'<<iteration<<'\t'<<step<<'\t'<<std::setprecision(12)

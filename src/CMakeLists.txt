@@ -366,3 +366,6 @@ target_link_libraries(checkCrossDieSpreadLimitIntegration GlobalPlacer DesignInf
 
 add_executable(checkRuntimeBookkeeping EXCLUDE_FROM_ALL tests/check_runtime_bookkeeping.cc)
 target_link_libraries(checkRuntimeBookkeeping GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkSllDeferredStart EXCLUDE_FROM_ALL tests/check_sll_deferred_start.cc)
+target_link_libraries(checkSllDeferredStart GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
