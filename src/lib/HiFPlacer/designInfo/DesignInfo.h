@@ -947,6 +947,7 @@ class DesignInfo
                    cellType == CellType_LUT4 || cellType == CellType_LUT3 || cellType == CellType_LUT2 ||
                    cellType == CellType_LUT1;
         }
+        // Physical FF/latch resource class; AND2B1L is combinational for timing.
         inline bool isFF()
         {
             return cellType == CellType_FDCE || cellType == CellType_FDPE || cellType == CellType_FDSE ||
@@ -1053,7 +1054,11 @@ class DesignInfo
          */
         inline bool isTimingEndPoint()
         {
-            return (interfaceEndpoint || isFF() || isLUTRAM() || originallyIsLUTRAM() || isBRAM() || isURAM() || isDSP() || isIO() || isClockBuffer() ||
+            // AND2B1L uses a latch BEL, but both DI and SRI propagate to O.
+            // Keep isFF()/control sets for physical packing, without cutting
+            // the combinational path in either timing or clustering graphs.
+            return (interfaceEndpoint || (isFF() && cellType != CellType_AND2B1L) || isLUTRAM() ||
+                    originallyIsLUTRAM() || isBRAM() || isURAM() || isDSP() || isIO() || isClockBuffer() ||
                     isShifter());
         }
 
