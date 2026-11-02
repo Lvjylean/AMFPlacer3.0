@@ -19,8 +19,9 @@ int main()
         assert(rejected);
     }
     std::vector<std::vector<float>> edges{{0,1},{1,0}}, fixed(2);
+    std::vector<std::vector<int>> enhanced;
     std::vector<float> weights{11000,11000}, fx, fy;
-    SAPlacer sa("ratio-test", edges, weights, fixed, fx, fy, 16, 8, 959, 316, 5, eta);
+    SAPlacer sa("ratio-test", edges, enhanced, weights, fixed, fx, fy, 16, 8, 959, 316, 5, eta);
     auto check = [&](std::vector<std::pair<int,int>> xy, double expected) {
         std::vector<std::vector<std::vector<int>>> grid(16, std::vector<std::vector<int>>(8));
         for (unsigned i=0; i<xy.size(); ++i) grid[xy[i].second][xy[i].first].push_back(i);
@@ -35,7 +36,7 @@ int main()
     // eta crosses 39.5/59.9375. Exercise actual optimization, not just parsing.
     for (float ratio : {.32f, eta})
     {
-        SAPlacer solve("ratio-solve", edges, weights, fixed, fx, fy, 16, 8, 959, 316,
+        SAPlacer solve("ratio-solve", edges, enhanced, weights, fixed, fx, fy, 16, 8, 959, 316,
                        5, ratio, 10000, 1, 2);
         solve.solve();
         const auto xy = solve.getCluster2XY();
