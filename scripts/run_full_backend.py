@@ -9,6 +9,7 @@ from placement_features import route_enabled
 from pathlib import Path
 from inspect_amf_inputs import digest
 from srl_cascades import correct_and_validate
+from full_design_metadata import SITE_ONLY, FIXED_LEAF
 
 
 def escape_error_payload(match):
@@ -131,9 +132,8 @@ close $f
                     cell_types[name]=kind
                     counts[kind]+=1
                     if name in fixed_inputs:fixed_kinds[name]=kind
-                    if name in inherited_fixed and kind not in ('IBUF', 'OBUF', 'BUFGCE'):
-                        if kind not in ('IBUFDS_GTE4', 'GTYE4_CHANNEL', 'GTYE4_COMMON',
-                                        'PCIE40E4', 'BUFG_GT', 'BUFG_GT_SYNC'):
+                    if name in inherited_fixed and kind not in SITE_ONLY:
+                        if kind not in FIXED_LEAF:
                             raise ValueError('Unreviewed inherited fixed primitive: ' + kind)
                         fixed = fixed_inputs[name]
                         target = fixed['bel']
@@ -145,6 +145,34 @@ close $f
                     if pin=='Q31':srl_edges.append((driver_cell,name))
     commands = ['place_cell [list {' + name + '} {' + target + '}]'
                 for name, target in inherited_fixed.items()]
+    if cfg.get('CompositeIOTimingBoundary') == 'true':
+        contract = ['cell\tsite\tbel\ttarget_mode']
+        final_locks = []
+        for name, fixed in fixed_inputs.items():
+            kind = fixed_kinds[name]
+            if kind not in SITE_ONLY | FIXED_LEAF:
+                raise ValueError('Unsupported fixed interface contract: ' + kind)
+            site, bel = fixed['site'], fixed['bel'].rsplit('/', 1)[-1]
+            mode = 'site' if kind in SITE_ONLY else 'bel'
+            target = site if mode == 'site' else site+'/'+bel
+            if any(c in name+target for c in '{}\\\n\r'):
+                raise ValueError('Unsupported fixed interface Tcl identifier: ' + name)
+            commands.append('place_cell [list {'+name+'} {'+target+'}]')
+            final_locks.append('set_property IS_LOC_FIXED true [get_cells {'+name+'}]')
+            if mode == 'bel': final_locks.append('set_property IS_BEL_FIXED true [get_cells {'+name+'}]')
+            assignments[name] = target
+            contract.append(f'{name}\t{site}\t{bel}\t{mode}')
+        # Related I/O placement can clear earlier PHY BEL locks. Lock after all placements.
+        commands.extend(final_locks)
+        (directory/'placement/fixed_contract.tsv').write_text('\n'.join(contract)+'\n')
+        shutil.copy2(root/'scripts/full_interface_contract.tcl', directory/'inputs/full_interface_contract.tcl')
+        manifest['interface_contract_sha256'] = digest(directory/'inputs/full_interface_contract.tcl')
+        manifest['fixed_contract_sha256'] = digest(directory/'placement/fixed_contract.tsv')
+        if cfg.get('ASYNC_REG groups file'):
+            group_file = Path(cfg['ASYNC_REG groups file'])
+            expected = json.loads((source/'manifest.json').read_text())['inputs']['ASYNC_REG groups file']['sha256']
+            if digest(group_file) != expected: raise ValueError('ASYNC_REG groups changed after AMF execution')
+            shutil.copy2(group_file, directory/'placement/async_groups.txt')
     adapted += '\n# Reapply declared fixed input targets after legacy unplacement.\n' + '\n'.join(commands) + '\n'
     assignments,name_aliases=canonical_export_names(assignments,cell_types,raw.read_text())
     covered=collections.Counter(cell_types[name] for name in assignments if name in cell_types)
@@ -238,7 +266,7 @@ close $f
         shutil.copy2(diagnostic,directory/'inputs'/diagnostic.name)
         manifest['boundary_diagnostic_sha256']=digest(diagnostic)
     manifest['runner_files_sha256']={}
-    for name in ('run_full_flow.py','run_full_backend.py','summarize_full_flow.py','summarize_face_detect_flow.py','srl_cascades.py','inspect_amf_inputs.py','amf3.py','build_physical_boundaries.py','diagnostics/analyze_boundary_timing_samples.py'):
+    for name in ('run_full_flow.py','run_full_backend.py','summarize_full_flow.py','summarize_face_detect_flow.py','srl_cascades.py','full_design_metadata.py','inspect_amf_inputs.py','amf3.py','build_physical_boundaries.py','diagnostics/analyze_boundary_timing_samples.py'):
         origin=root/'scripts'/name
         if origin.is_file():
             snapshot=directory/'inputs'/name

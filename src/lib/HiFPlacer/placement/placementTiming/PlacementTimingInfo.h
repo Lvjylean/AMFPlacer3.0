@@ -1001,6 +1001,7 @@ class PlacementTimingInfo
     }
 
     void setDSPInnerDelay();
+    std::string getIOPeriodPolicy(int cellId) const { return ioPeriodPolicy.at(cellId); }
 
   private:
     DesignInfo *designInfo;
@@ -1016,6 +1017,8 @@ class PlacementTimingInfo
 
     float clockPeriod = 10.0; // ns
     bool DSPCritical = false;
+    bool compositeIOTimingBoundary = false;
+    std::map<int, std::string> ioPeriodPolicy;
 
     std::map<DesignInfo::DesignNet *, float> clockNet2Period;
     std::map<int, float> cellId2Period;

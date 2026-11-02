@@ -289,7 +289,7 @@ class AMFPlacer
      *
      */
     void run(const std::string &packingReport = "", const std::string &initialReport = "",
-             const std::string &globalReport = "")
+             const std::string &globalReport = "", bool interfaceInspection = false)
     {
         AMF_PROFILE_FUNCTION("placement_orchestration");
         // Full multi-SLR flow remains an explicit experimental opt-in.
@@ -309,7 +309,13 @@ class AMFPlacer
         // we have to pack cells in design info into placement units in placement info with packer
         InitialPacker *initialPacker = new InitialPacker(designInfo, deviceinfo, placementInfo, JSON);
         initialPacker->pack();
-        HardResourceUtils::validateCascadeMacros(placementInfo);
+        std::string interfaceInspectionBlocker;
+        try { HardResourceUtils::validateCascadeMacros(placementInfo); }
+        catch (const std::runtime_error &error) {
+            if (!interfaceInspection || std::string(error.what()).find("URAM cascade is not supported") != 0) throw;
+            interfaceInspectionBlocker = error.what();
+            std::cout << "INTERFACE_INSPECTION_FULL_DESIGN_BLOCKER: " << interfaceInspectionBlocker << "\n";
+        }
         if (!packingReport.empty())
         {
             std::ofstream report(packingReport);
@@ -319,11 +325,26 @@ class AMFPlacer
                     report << macro->getName() << "\t" << fixed.cell->getName() << "\t"
                            << fixed.cell->getOriCellType() << "\t" << fixed.BELName << "\t" << macro->isMCLB() << "\n";
             if (!report) throw std::runtime_error("Cannot write packing report: " + packingReport);
+            // Final BEL assignment consults timing metadata even in inspection mode.
+            placementInfo->buildSimpleTimingGraph();
             // Exercise the trial-commit path used by exception handling and
             // detailed placement, not just initial macro recognition.
             DeviceInfo::DeviceSite *testSite = nullptr;
             for (auto site : deviceinfo->getSites())
                 if (site->getSiteType() == "SLICEL") { testSite = site; break; }
+            unsigned int checkedAsyncGroups = 0;
+            std::vector<ParallelCLBPacker::PackingCLBSite *> asyncUnused;
+            for (auto macro : placementInfo->getPlacementMacros()) {
+                if (macro->getMacroType() != PlacementInfo::PlacementMacro::PlacementMacroType_ASYNC) continue;
+                if (!testSite) throw std::runtime_error("No SLICE for ASYNC_REG packing inspection");
+                ParallelCLBPacker::PackingCLBSite site(placementInfo, testSite, 3, 10, 0.25, 0.5, 6, 10, 0.4, 0.02, asyncUnused);
+                ParallelCLBPacker::PackingCLBSite::PackingCLBCluster cluster(&site);
+                if (!cluster.tryAddPU(macro)) throw std::runtime_error("ASYNC_REG group does not fit one SLICE: " + macro->getName());
+                site.setDeterminedClusterInSite(new ParallelCLBPacker::PackingCLBSite::PackingCLBCluster(&cluster));
+                site.finalMapToSlots();
+                ++checkedAsyncGroups;
+            }
+            std::cout << "ASYNC_REG production SLICE packing checks=" << checkedAsyncGroups << "\n";
             unsigned int checkedMuxClusters = 0;
             std::vector<ParallelCLBPacker::PackingCLBSite *> unused;
             for (auto macro : placementInfo->getPlacementMacros())
@@ -339,10 +360,34 @@ class AMFPlacer
                 copy.removePUToConstructDetCluster(macro);
                 if (copy.getNumMuxes() != 0 || !copy.tryAddPU(macro) || copy.getNumMuxes() != 1 || copy.tryAddPU(macro))
                     throw std::runtime_error("MUX cluster copy/remove/reinsert failed: " + macro->getName());
+                site.setDeterminedClusterInSite(new ParallelCLBPacker::PackingCLBSite::PackingCLBCluster(&cluster));
+                site.finalMapToSlots();
                 ++checkedMuxClusters;
             }
             print_info("MUX cluster trial-commit checks: " + std::to_string(checkedMuxClusters));
-            print_status("Initial Packing Done");
+            if (JSON.count("CompositeIOTimingBoundary") && JSON.at("CompositeIOTimingBoundary") == "true") {
+                auto timing = placementInfo->getTimingInfo();
+                const auto &nodes = timing->getSimplePlacementTimingGraph()->getNodes();
+                std::ofstream model(JSON.at("dumpDirectory") + "/io_boundary_model.tsv");
+                model << "cell\tcapture_edges\tlaunch_edges\tcapture_period_ns\tperiod_policy\n";
+                for (auto cell : designInfo->getCells()) {
+                    if (!cell->isCompositeIO()) continue;
+                    auto node = nodes[cell->getCellId()];
+                    if (!node->checkIsRegister() || node->getInnerDelay() != 0 || node->getClockPeriod() <= 0)
+                        throw std::runtime_error("Invalid composite I/O timing boundary: " + cell->getName());
+                    model << cell->getName() << '\t' << node->getInEdges().size() << '\t' << node->getOutEdges().size()
+                          << '\t' << node->getClockPeriod() << '\t' << timing->getIOPeriodPolicy(cell->getCellId()) << '\n';
+                }
+            }
+            if (interfaceInspection) {
+                std::ofstream scope(packingReport + ".scope.tsv");
+                scope << "scope\tinterface-and-synchronizer-inspection-only\n"
+                      << "global_placement_executed\t0\nrouting_executed\t0\n"
+                      << "full_design_legalization_ready\t0\n"
+                      << "hard_resource_blocker\t" << interfaceInspectionBlocker << "\n";
+                if (!scope) throw std::runtime_error("Cannot write interface inspection scope");
+                print_status("AMF_INTERFACE_INSPECTION_OK (not full-design legalization)");
+            } else print_status("Initial Packing Done");
             return;
         }
         placementInfo->resetLUTFFDeterminedOccupation();

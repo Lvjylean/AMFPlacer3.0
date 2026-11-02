@@ -154,12 +154,18 @@ proc audit {stage} {
 }
 if {[catch {
     timed open {open_checkpoint $input}
+    set interfaceContract [file exists [file join $placement fixed_contract.tsv]]
+    if {$interfaceContract} {
+        source [file join [file dirname [info script]] full_interface_contract.tcl]
+        timed interface_contract_capture {amf_contract::capture}
+    }
     set f [open [file join $out tools.json] w]
     puts $f [format {{"vivado_version":"%s","part":"%s","max_threads":4}} [version -short] [get_property PART [current_design]]]
     close $f
     report_clocks -file [file join $out clocks.rpt]
     timed import {source [file join $placement import_placement.tcl]}
     timed import_audit {audit imported}
+    if {$interfaceContract} {timed imported_interface_contract {amf_contract::check $placement $out imported}}
     set f [open [file join $out import_acceptance.tsv] w]
     dict for {key value} $importMetrics {puts $f "$key\t$value"}
     puts $f "policy\t$importPolicy";close $f
@@ -190,6 +196,7 @@ if {[catch {
     }
     timed place {place_design}
     timed place_audit {audit placed}
+    if {$interfaceContract} {timed placed_interface_contract {amf_contract::check $placement $out placed}}
     if {[info exists ::env(AMF_SLL_ROUTE_CONSTRAINTS)] && $::env(AMF_SLL_ROUTE_CONSTRAINTS)} {
         source [file join [file dirname [info script]] sll_routes.tcl]
         source [file join [file dirname [info script]] sll_parallel.tcl]
@@ -200,6 +207,7 @@ if {[catch {
     timed placed_checkpoint {write_checkpoint [file join $out getrf_placed.dcp]}
     timed route {route_design}
     timed route_audit {audit routed}
+    if {$interfaceContract} {timed routed_interface_contract {amf_contract::check $placement $out routed}}
     timed reports {
         report_route_status -file [file join $out route_status.rpt]
         report_drc -file [file join $out drc.rpt]

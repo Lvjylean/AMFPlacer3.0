@@ -72,6 +72,7 @@ void InitialPacker::pack(bool hardResourcesOnly)
     }
 
     print_status("InitialPacker Finding Macros");
+    if (!hardResourcesOnly) loadAsyncGroups();
     findCARRYMacros();
     if (!hardResourcesOnly) findMuxMacros();
     findBRAMMacros();
@@ -125,6 +126,15 @@ void InitialPacker::pack(bool hardResourcesOnly)
                                                                                             // might lead to
                                                                                             // unpredictable placement.
         assert(false && "No fixed cell in the design. Floating placement is not allowed temporarily.");
+    }
+
+    if (JSONCfg.count("fixed occupied sites file"))
+    {
+        std::ifstream occupied(JSONCfg.at("fixed occupied sites file"));
+        if (!occupied) throw std::runtime_error("Missing fixed occupied sites file");
+        std::string site;
+        while (std::getline(occupied, site))
+            if (!site.empty()) deviceInfo->getSite(site)->setOccupied();
     }
 
     print_info("#Cells In Macro = " + std::to_string(cellInMacros.size()));
@@ -482,19 +492,25 @@ void InitialPacker::findSRLCascadeMacros()
                 throw std::runtime_error("Standalone SRL chain has incompatible CLK/CE: " + head->getName());
             chain.push_back(cur);
         }
-        if (chain.size()>8) throw std::runtime_error("Standalone SRL chain exceeds one SLICEM: " + head->getName());
-        auto macro = new PlacementInfo::PlacementMacro(head->getName(), placementUnits.size(),
-            PlacementInfo::PlacementMacro::PlacementMacroType_MCLB);
-        macro->addOccupiedSite(0,1);
-        for (size_t index=0; index<chain.size(); ++index)
+        // A6LUT exposes MC31 to general routing. End each at-most-eight-cell
+        // segment there, preserving long Q31->D chains without changing logic.
+        for (size_t start=0; start<chain.size(); start+=8)
         {
-            auto cell=chain[index];
-            macro->addCell(cell,cell->getCellType(),0,0);
-            macro->addFixedCellInfo(cell,"SLICEM",std::string(1,static_cast<char>('A'+chain.size()-1-index))+"6LUT");
-            cellInMacros.insert(cell); cellId2PlacementUnit[cell->getCellId()]=macro;
+            const size_t count=std::min<size_t>(8,chain.size()-start);
+            auto macro = new PlacementInfo::PlacementMacro(chain[start]->getName(), placementUnits.size(),
+                PlacementInfo::PlacementMacro::PlacementMacroType_MCLB);
+            macro->addOccupiedSite(0,1);
+            for (size_t index=0; index<count; ++index)
+            {
+                auto cell=chain[start+index];
+                macro->addCell(cell,cell->getCellType(),0,0);
+                macro->addFixedCellInfo(cell,"SLICEM",std::string(1,static_cast<char>('A'+count-1-index))+"6LUT");
+                cellInMacros.insert(cell); cellId2PlacementUnit[cell->getCellId()]=macro;
+            }
+            macro->setWeight(16); placementUnits.push_back(macro); placementMacros.push_back(macro);
+            ++groups;
         }
-        macro->setWeight(16); placementUnits.push_back(macro); placementMacros.push_back(macro);
-        ++groups; members+=chain.size();
+        members+=chain.size();
     }
     print_info("Standalone SRL cascade macros="+std::to_string(groups)+" cells="+std::to_string(members));
 }
@@ -1249,7 +1265,7 @@ void InitialPacker::findCARRYMacros()
                     DesignInfo::DesignCell *theFF = nullptr;
                     for (auto pinBeDriven : curOutputNet->getPinsBeDriven())
                     {
-                        if (pinBeDriven->getCell()->isFF() && placementInfo->sameHardRegion(curCell, pinBeDriven->getCell()))
+                        if (pinBeDriven->getCell()->isFF() && !cellInMacros.count(pinBeDriven->getCell()) && placementInfo->sameHardRegion(curCell, pinBeDriven->getCell()))
                         {
                             FFcnt++;
                             if (pinBeDriven->getRefPinName().find("D") != std::string::npos)
@@ -1305,7 +1321,7 @@ void InitialPacker::findCARRYMacros()
                     DesignInfo::DesignCell *theFF = nullptr;
                     for (auto pinBeDriven : curOutputNet->getPinsBeDriven())
                     {
-                        if (pinBeDriven->getCell()->isFF() && placementInfo->sameHardRegion(curCell, pinBeDriven->getCell()))
+                        if (pinBeDriven->getCell()->isFF() && !cellInMacros.count(pinBeDriven->getCell()) && placementInfo->sameHardRegion(curCell, pinBeDriven->getCell()))
                         {
                             FFcnt++;
                             if (pinBeDriven->getRefPinName().find("D") != std::string::npos)
@@ -1420,7 +1436,7 @@ void InitialPacker::findMuxMacros()
                 if (curOutputNet->getPinsBeDriven().size() != 1)
                     continue;
                 auto pinBeDriven = curOutputNet->getPinsBeDriven()[0];
-                if (pinBeDriven->getCell()->isFF() && placementInfo->sameHardRegion(curCell, pinBeDriven->getCell()))
+                if (pinBeDriven->getCell()->isFF() && !cellInMacros.count(pinBeDriven->getCell()) && placementInfo->sameHardRegion(curCell, pinBeDriven->getCell()))
                 {
                     if (pinBeDriven->getRefPinName().find("D") != std::string::npos)
                     {
@@ -1438,7 +1454,10 @@ void InitialPacker::findMuxMacros()
         {
             if (pinBeDriven->getRefPinName() == "I0" || pinBeDriven->getRefPinName() == "I1")
             {
-                if (!pinBeDriven->getDriverPin())
+                // A fabric-driven F8 input uses the same reserved route-through
+                // resources as an absent dedicated F7 input. Keep its real driver external.
+                if (!pinBeDriven->getDriverPin() ||
+                    pinBeDriven->getDriverPin()->getCell()->getCellType() != DesignInfo::CellType_MUXF7)
                 {
                     auto tmpMuxf7 =
                         curMacro->addVirtualCell(curCell->getName() + "__MUXF7" + pinBeDriven->getRefPinName(),
@@ -1481,7 +1500,7 @@ void InitialPacker::findMuxMacros()
         {
             if (pinBeDriven->getRefPinName() == "I0" || pinBeDriven->getRefPinName() == "I1")
             {
-                if (pinBeDriven->isUnconnected())
+                if (!pinBeDriven->getDriverPin() || !pinBeDriven->getDriverPin()->getCell()->isLUT())
                 {
                     curMacro->addVirtualCell(tmpCell->getName() + "__" + pinBeDriven->getRefPinName(), designInfo,
                                              DesignInfo::CellType_LUT6, 0, 0);
@@ -1514,7 +1533,7 @@ void InitialPacker::findMuxMacros()
             {
                 if (pinBeDriven->getRefPinName() == "I0" || pinBeDriven->getRefPinName() == "I1")
                 {
-                    if (pinBeDriven->isUnconnected())
+                    if (!pinBeDriven->getDriverPin() || !pinBeDriven->getDriverPin()->getCell()->isLUT())
                     {
                         curMacro->addVirtualCell(tmpCell->getName() + "__" + pinBeDriven->getRefPinName(), designInfo,
                                                  DesignInfo::CellType_LUT6, 0, 0);
@@ -1625,7 +1644,7 @@ void InitialPacker::findMuxMacros()
                 if (curOutputNet->getPinsBeDriven().size() != 1)
                     continue;
                 auto pinBeDriven = curOutputNet->getPinsBeDriven()[0];
-                if (pinBeDriven->getCell()->isFF() && placementInfo->sameHardRegion(curCell, pinBeDriven->getCell()))
+                if (pinBeDriven->getCell()->isFF() && !cellInMacros.count(pinBeDriven->getCell()) && placementInfo->sameHardRegion(curCell, pinBeDriven->getCell()))
                 {
                     if (pinBeDriven->getRefPinName().find("D") != std::string::npos)
                     {
@@ -1640,7 +1659,7 @@ void InitialPacker::findMuxMacros()
         {
             if (pinBeDriven->getRefPinName() == "I0" || pinBeDriven->getRefPinName() == "I1")
             {
-                if (pinBeDriven->isUnconnected())
+                if (!pinBeDriven->getDriverPin() || !pinBeDriven->getDriverPin()->getCell()->isLUT())
                 {
                     curMacro->addVirtualCell(curCell->getName() + "__" + pinBeDriven->getRefPinName(), designInfo,
                                              DesignInfo::CellType_LUT6, 0, 0);
@@ -1910,6 +1929,90 @@ void packerUtil_StrReplaceAll(std::string &str, const std::string from, const st
         str.replace(start_pos, from.length(), to);
         start_pos += to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
     }
+}
+
+// Metadata is DCP-bound by the input adapter. Check its netlist-level invariants
+// again here before creating indivisible, movable FF-only packing units.
+void InitialPacker::loadAsyncGroups()
+{
+    auto entry = JSONCfg.find("ASYNC_REG groups file");
+    if (entry == JSONCfg.end()) return;
+    std::ifstream input(entry->second);
+    std::string line;
+    if (!input || !std::getline(input, line) || line != "AMF_ASYNC_GROUPS 1")
+        throw std::runtime_error("Invalid ASYNC_REG groups file");
+    std::map<std::string, std::vector<DesignInfo::DesignCell *>> groups;
+    std::set<DesignInfo::DesignCell *> seen;
+    while (std::getline(input, line))
+    {
+        std::istringstream row(line);
+        std::string group, name, extra;
+        if (!(row >> group >> name) || row >> extra)
+            throw std::runtime_error("Malformed ASYNC_REG group row: " + line);
+        auto cell = designInfo->getCell(name);
+        if (!cell || !cell->isFF() || !seen.insert(cell).second || cellInMacros.count(cell))
+            throw std::runtime_error("Invalid or already packed ASYNC_REG member: " + name);
+        groups[group].push_back(cell);
+    }
+    auto controls = [](DesignInfo::DesignCell *cell) {
+        std::vector<DesignInfo::DesignNet *> result(3, nullptr);
+        for (auto pin : cell->getPins()) {
+            if (pin->getRefPinName() == "C") result[0] = pin->getNet();
+            if (pin->getRefPinName() == "CE") result[1] = pin->getNet();
+            if (pin->getRefPinName() == "R" || pin->getRefPinName() == "S" ||
+                pin->getRefPinName() == "CLR" || pin->getRefPinName() == "PRE") result[2] = pin->getNet();
+        }
+        return result;
+    };
+    std::ofstream audit(JSONCfg.at("dumpDirectory") + "/async_groups_initial.tsv");
+    audit << "group\tcell\tmember_count\n";
+    for (const auto &group : groups)
+    {
+        const auto &cells = group.second;
+        if (cells.size() > 16 || cells.empty()) throw std::runtime_error("ASYNC_REG group exceeds SLICE FF capacity");
+        auto expected = controls(cells[0]);
+        if (!expected[0]) throw std::runtime_error("ASYNC_REG member lacks a clock");
+        auto macro = new PlacementInfo::PlacementMacro(cells[0]->getName(), placementUnits.size(),
+            PlacementInfo::PlacementMacro::PlacementMacroType_ASYNC);
+        int weight = 0;
+        for (auto cell : cells)
+        {
+            if (controls(cell) != expected || cell->getCellType() != cells[0]->getCellType() ||
+                !placementInfo->sameHardRegion(cells[0], cell))
+                throw std::runtime_error("Incompatible ASYNC_REG controls: " + cell->getName());
+            macro->addCell(cell, cell->getCellType(), 0, 0);
+            weight += compatiblePlacementTable->cellType2sharedBELTypeOccupation[cell->getCellType()];
+            cellInMacros.insert(cell);
+            cellId2PlacementUnit[cell->getCellId()] = macro;
+            audit << group.first << '\t' << cell->getName() << '\t' << cells.size() << '\n';
+        }
+        macro->setWeight(weight);
+        placementUnits.push_back(macro);
+        placementMacros.push_back(macro);
+    }
+    if (JSONCfg.count("ASYNC_REG proximity pairs file"))
+    {
+        float weight = JSONCfg.count("AsyncChainProximityWeight") ? std::stof(JSONCfg.at("AsyncChainProximityWeight")) : 4.0f;
+        if (!std::isfinite(weight) || weight < 1.0f) throw std::runtime_error("Invalid ASYNC_REG proximity weight");
+        std::ifstream pairs(JSONCfg.at("ASYNC_REG proximity pairs file"));
+        if (!pairs) throw std::runtime_error("Missing ASYNC_REG proximity pairs");
+        while (std::getline(pairs, line))
+        {
+            std::istringstream row(line);
+            std::string source, sink, extra;
+            if (!(row >> source >> sink) || row >> extra) throw std::runtime_error("Invalid ASYNC_REG proximity pair");
+            auto a = designInfo->getCell(source); auto b = designInfo->getCell(sink);
+            if (!seen.count(a) || !seen.count(b)) throw std::runtime_error("Unknown ASYNC_REG proximity member");
+            bool found = false;
+            for (auto pin : b->getInputPins())
+                if (pin->getRefPinName() == "D" && pin->getNet())
+                    for (auto driver : pin->getNet()->getDriverPins())
+                        if (driver->getCell() == a && driver->getRefPinName() == "Q")
+                        { pin->getNet()->setAsyncProximityWeight(weight); found = true; }
+            if (!found) throw std::runtime_error("ASYNC_REG proximity pair is not directly connected");
+        }
+    }
+    print_info("ASYNC_REG movable SLICE groups: " + std::to_string(groups.size()));
 }
 
 void InitialPacker::loadFixedPlacementUnits(std::string fixedPlacementUnitsFromVivadoFileName)

@@ -969,6 +969,8 @@ std::ostream &operator<<(std::ostream &os, PlacementInfo::PlacementMacro *curMac
         os << "  macroType: PlacementMacroType_MUX8\n";
     else if (curMacro->getMacroType() == PlacementInfo::PlacementMacro::PlacementMacroType_LUTLUTSeires)
         os << "  macroType: PlacementMacroType_LUTLUTSeires\n";
+    else if (curMacro->getMacroType() == PlacementInfo::PlacementMacro::PlacementMacroType_ASYNC)
+        os << "  macroType: PlacementMacroType_ASYNC\n";
     else if (curMacro->getMacroType() == PlacementInfo::PlacementMacro::PlacementMacroType_DFXStatic)
         os << "  macroType: PlacementMacroType_DFXStatic\n";
     else
@@ -2024,6 +2026,8 @@ void PlacementInfo::loadPlacementUnitInformation(std::string locFile)
                 macroType = PlacementMacro::PlacementMacroType_MUX8;
             else if (macroTypeStr == "PlacementMacroType_LUTLUTSeires")
                 macroType = PlacementMacro::PlacementMacroType_LUTLUTSeires;
+            else if (macroTypeStr == "PlacementMacroType_ASYNC")
+                macroType = PlacementMacro::PlacementMacroType_ASYNC;
             else if (macroTypeStr == "PlacementMacroType_DFXStatic" && incremental.enabled)
                 macroType = PlacementMacro::PlacementMacroType_DFXStatic;
             else

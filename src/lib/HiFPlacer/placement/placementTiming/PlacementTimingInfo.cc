@@ -36,6 +36,8 @@ PlacementTimingInfo::PlacementTimingInfo(DesignInfo *designInfo, DeviceInfo *dev
     if (JSONCfg.find("DSPCritical") != JSONCfg.end())
         DSPCritical = JSONCfg["DSPCritical"] == "true";
 
+    compositeIOTimingBoundary = JSONCfg.count("CompositeIOTimingBoundary") &&
+                                JSONCfg.at("CompositeIOTimingBoundary") == "true";
     clockNet2Period.clear();
     cellId2Period.clear();
     for (auto pair : JSONCfg)
@@ -55,7 +57,9 @@ PlacementTimingInfo::PlacementTimingInfo(DesignInfo *designInfo, DeviceInfo *dev
                 auto cell = succPin->getCell();
                 if (cell)
                 {
-                    cellId2Period[cell->getCellId()] = tmpClkPeriod;
+                    auto existing = cellId2Period.find(cell->getCellId());
+                    cellId2Period[cell->getCellId()] = compositeIOTimingBoundary && existing != cellId2Period.end()
+                        ? std::min(existing->second, tmpClkPeriod) : tmpClkPeriod;
                 }
             }
         }
@@ -122,7 +126,8 @@ PlacementTimingInfo::buildCellGraph(bool legacyClustering)
                 }
             }
         }
-        if(curCell->isInterfaceEndpoint())newNode->setInnerDelay(0);
+        if (curCell->isInterfaceEndpoint() || (compositeIOTimingBoundary && curCell->isCompositeIO()))
+            newNode->setInnerDelay(0);
         graph->insertTimingNode(newNode);
     }
 
@@ -152,6 +157,38 @@ PlacementTimingInfo::buildCellGraph(bool legacyClustering)
         }
     }
 
+    if (compositeIOTimingBoundary)
+    {
+        // One physical cell remains one graph boundary. For a shared I/O cell,
+        // use the strictest applicable launch-domain period across capture pins.
+        // Never infer a board I/O delay or create a Vivado timing constraint.
+        for (auto node : graph->getNodes())
+        {
+            if (!node->getDesignNode()->isCompositeIO()) continue;
+            std::set<int> visited;
+            std::vector<int> pending;
+            for (auto edge : node->getInEdges()) pending.push_back(edge->getSource()->getId());
+            float budget = 0;
+            bool fallback = false;
+            while (!pending.empty())
+            {
+                int id = pending.back(); pending.pop_back();
+                if (!visited.insert(id).second) continue;
+                auto upstream = graph->getNodes()[id];
+                if (upstream->checkIsRegister() || upstream->getInEdges().empty())
+                {
+                    auto known = cellId2Period.find(id);
+                    float period = known == cellId2Period.end() ? clockPeriod : known->second;
+                    fallback |= known == cellId2Period.end();
+                    budget = budget == 0 ? period : std::min(budget, period);
+                }
+                else for (auto edge : upstream->getInEdges()) pending.push_back(edge->getSource()->getId());
+            }
+            if (budget == 0) { budget = clockPeriod; fallback = true; }
+            node->setClockPeriod(budget);
+            ioPeriodPolicy[node->getId()] = fallback ? "explicit-default-included" : "minimum-applicable-clock-period";
+        }
+    }
     graph->forwardLevelization();
     graph->backwardLevelization();
     graph->setLongestPathLength(!legacyClustering);
@@ -676,12 +713,21 @@ template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::pr
         {
             if (inEdge->getSource())
             {
-                if (inEdge->getSource()->getForwardLevel() > 0)
+                const bool ioBoundaryEdge = timingInfo->compositeIOTimingBoundary &&
+                    (curNode->getDesignNode()->isCompositeIO() ||
+                     inEdge->getSource()->getDesignNode()->isCompositeIO());
+                if (inEdge->getSource()->getForwardLevel() > 0 || ioBoundaryEdge)
                 {
                     int predId = inEdge->getSource()->getId();
-                    float predDelay = inEdge->getSource()->getLatestInputArrival();
+                    // Launch independently of capture. In particular, a bidirectional
+                    // I/O must never feed I/T arrival back into its O launch time.
+                    float predDelay = inEdge->getSource()->checkIsRegister() ? 0.0f :
+                                      inEdge->getSource()->getLatestInputArrival();
                     float edgeDelay = inEdge->getDelay();
-                    float newDelay = predDelay + edgeDelay + inEdge->getSource()->getInnerDelay();
+                    float sourceDelay = inEdge->getSource()->getInnerDelay();
+                    if (ioBoundaryEdge && inEdge->getSource()->checkIsRegister() && sourceDelay >= 1.0f)
+                        sourceDelay = 0.0f;
+                    float newDelay = predDelay + edgeDelay + sourceDelay;
                     if (newDelay > curNode->getLatestInputArrival())
                     {
                         curNode->setLatestInputArrival(newDelay);
@@ -691,6 +737,59 @@ template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::pr
             }
         }
     }
+
+    if (timingInfo->compositeIOTimingBoundary && timingInfo->JSONCfg.count("dumpDirectory"))
+    {
+        struct IOPath { float delay = 0, period = 0; int endpoint = -1; };
+        std::vector<IOPath> downstream(nodes.size());
+        for (auto node : nodes)
+            if (node->checkIsRegister())
+                downstream[node->getId()] = {0, node->getClockPeriod() > 0 ? node->getClockPeriod() : clockPeriod, node->getId()};
+        // Stop at every timing endpoint. For each combinational cone retain the
+        // path with the smallest period-minus-estimated-delay, including domains
+        // with different periods; never propagate across the I/O itself.
+        for (size_t level = 1; level < backwardlevel2NodeIds.size(); ++level)
+            for (int id : backwardlevel2NodeIds[level])
+                for (auto edge : nodes[id]->getOutEdges()) {
+                    auto candidate = downstream[edge->getSink()->getId()];
+                    if (candidate.endpoint < 0 || edge->getSink()->getBackwardLevel() >= static_cast<int>(level)) continue;
+                    candidate.delay += nodes[id]->getInnerDelay() + edge->getDelay();
+                    auto &best = downstream[id];
+                    if (best.endpoint < 0 || candidate.period-candidate.delay < best.period-best.delay) best = candidate;
+                }
+        std::ofstream out(timingInfo->JSONCfg.at("dumpDirectory") + "/io_boundary_estimates.tsv");
+        out << "cell\tpin\trole\testimated_delay_ns\ttarget_period_ns\testimated_margin_ns\tperiod_policy\n";
+        for (auto node : nodes)
+        {
+            if (!node->getDesignNode()->isCompositeIO()) continue;
+            for (auto edge : node->getInEdges())
+            {
+                auto source = edge->getSource();
+                float arrival = (source->checkIsRegister() ? 0.0f : source->getLatestInputArrival()) +
+                    edge->getDelay() + (source->checkIsRegister() && source->getInnerDelay() >= 1.0f ?
+                                       0.0f : source->getInnerDelay());
+                out << node->getDesignNode()->getName() << '\t' << edge->getSinkPin()->getRefPinName()
+                    << "\tcapture\t" << arrival << '\t' << node->getClockPeriod() << '\t'
+                    << node->getClockPeriod() - arrival << '\t' << timingInfo->ioPeriodPolicy[node->getId()] << '\n';
+            }
+            std::map<std::string, IOPath> receivePaths;
+            for (auto edge : node->getOutEdges()) {
+                auto candidate = downstream[edge->getSink()->getId()];
+                if (candidate.endpoint < 0) continue;
+                candidate.delay += edge->getDelay();
+                auto &best = receivePaths[edge->getSourcePin()->getRefPinName()];
+                if (best.endpoint < 0 || candidate.period-candidate.delay < best.period-best.delay) best = candidate;
+            }
+            for (const auto &entry : receivePaths) {
+                const auto &path = entry.second;
+                out << node->getDesignNode()->getName() << '\t' << entry.first << "\treceive_path\t"
+                    << path.delay << '\t' << path.period << '\t' << path.period-path.delay << '\t'
+                    << (timingInfo->cellId2Period.count(path.endpoint) ? "downstream-capture-clock" : "explicit-default") << '\n';
+            }
+
+        }
+    }
+
 }
 
 template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::backPropogateRequiredArrivalTime()

@@ -32,6 +32,8 @@ def inspect(root, args, resources=False, initial=False):
                 'physical boundary model file', 'special pin offset info file', 'clock file', 'mergedSharedCellType2sharedCellType',
                 'cellType2fixedAmo file', 'cellType2sharedCellType file', 'sharedCellType2BELtype file',
                 'resource initial locations file', 'fixed units file', 'DSP registered outputs file',
+                'ASYNC_REG groups file', 'ASYNC_REG proximity pairs file', 'fixed occupied sites file',
+                'SRL control metadata file',
                 'SllChannelFile', 'SllReservedResourceFile', 'clock resource capacity file', 'external floorplan membership file',
                 'external floorplan regions file', 'external floorplan manifest file'):
         if config.get(key):
@@ -40,6 +42,8 @@ def inspect(root, args, resources=False, initial=False):
             config[key] = str(p)
     from incremental_config import validate_incremental_binary
     validate_incremental_binary(config,binary)
+    from full_design_metadata import validate_binary as validate_full_interfaces
+    validate_full_interfaces(config, binary)
     from paper_boundary_config import validate_paper_boundary_binary
     validate_paper_boundary_binary(config, binary)
     from import_external_floorplan import validate_external_inputs

@@ -31,7 +31,7 @@
         "IBUF", "IBUFDS", "IOBUFDS", "IBUFDS_GTE3", "IBUF_ANALOG", "IOBUFE3", "MMCME3_ADV", "OBUF", "OBUFT",           \
         "PCIE_3_1", "BSCANE2", "SYSMONE1", "RXTX_BITSLICE", "BITSLICE_CONTROL", "TX_BITSLICE_TRI", "OSERDESE3",        \
         "RIU_OR", "PLLE3_ADV", "HPIO_VREF", "OBUFDS_DUAL_BUF", "URAM288", "URAM288_BASE" , \
-        "GTYE4_CHANNEL", "GTYE4_COMMON", "IBUFDS_GTE4", "PCIE40E4", "RAM256X1S"
+        "GTYE4_CHANNEL", "GTYE4_COMMON", "IBUFDS_GTE4", "PCIE40E4", "RAM256X1S", "MMCME4_ADV", "PLLE4_ADV"
 
 /**
  * @brief Information related to FPGA designs, including design cells and their interconnections.
@@ -142,7 +142,9 @@ class DesignInfo
         CellType_GTYE4_COMMON,
         CellType_IBUFDS_GTE4,
         CellType_PCIE40E4,
-        CellType_RAM256X1S
+        CellType_RAM256X1S,
+        CellType_MMCME4_ADV,
+        CellType_PLLE4_ADV
     };
 
     inline static bool FFSRCompatible(DesignCellType typeA, DesignCellType typeB)
@@ -647,7 +649,7 @@ class DesignInfo
          */
         inline float getOverallClusterEnhanceRatio()
         {
-            return overallClusterEnhanceRatio;
+            return overallClusterEnhanceRatio * asyncProximityWeight;
         }
 
         /**
@@ -667,7 +669,7 @@ class DesignInfo
          */
         inline float getOverallEnhanceRatio()
         {
-            return overallClusterEnhanceRatio * overallTimingEnhanceRatio;
+            return overallClusterEnhanceRatio * overallTimingEnhanceRatio * asyncProximityWeight;
         }
 
         /**
@@ -675,6 +677,8 @@ class DesignInfo
          *
          * @param r
          */
+        inline void setAsyncProximityWeight(float r) { asyncProximityWeight = r; }
+
         inline void setOverallClusterNetEnhancement(float r)
         {
             overallClusterEnhanceRatio = r;
@@ -777,6 +781,7 @@ class DesignInfo
         std::vector<DesignPin *> BeDrivenPinPtrs;
         bool containFixedPins = false;
         std::map<std::pair<int, int>, float> pinIdPinIdInNet2EnhanceRatio;
+        float asyncProximityWeight = 1.0f; // Persistent direct-chain proximity objective.
         float overallClusterEnhanceRatio = 1.0;
         float overallTimingEnhanceRatio = 1.0;
         bool virtualNet;
@@ -1015,7 +1020,18 @@ class DesignInfo
                    cellType == CellType_RIU_OR || cellType == CellType_PLLE3_ADV || cellType == CellType_HPIO_VREF ||
                    cellType == CellType_OBUFDS_DUAL_BUF ||
                    cellType == CellType_GTYE4_CHANNEL || cellType == CellType_GTYE4_COMMON ||
-                   cellType == CellType_IBUFDS_GTE4 || cellType == CellType_PCIE40E4;
+                   cellType == CellType_IBUFDS_GTE4 || cellType == CellType_PCIE40E4 ||
+                   cellType == CellType_MMCME4_ADV || cellType == CellType_PLLE4_ADV;
+        }
+
+        // Internal-facing pins are independent launch/capture timing boundaries.
+        inline bool isCompositeIO() const
+        {
+            return cellType == CellType_IBUF || cellType == CellType_IBUFDS ||
+                   cellType == CellType_IBUF_ANALOG || cellType == CellType_OBUF ||
+                   cellType == CellType_OBUFT || cellType == CellType_IOBUF ||
+                   cellType == CellType_IOBUFE3 || cellType == CellType_IOBUFDS ||
+                   cellType == CellType_OBUFDS_DUAL_BUF;
         }
 
         inline bool isClockBuffer()
@@ -1437,7 +1453,8 @@ class DesignInfo
                cellType == CellType_RIU_OR || cellType == CellType_PLLE3_ADV || cellType == CellType_HPIO_VREF ||
                cellType == CellType_OBUFDS_DUAL_BUF ||
                    cellType == CellType_GTYE4_CHANNEL || cellType == CellType_GTYE4_COMMON ||
-                   cellType == CellType_IBUFDS_GTE4 || cellType == CellType_PCIE40E4;
+                   cellType == CellType_IBUFDS_GTE4 || cellType == CellType_PCIE40E4 ||
+                   cellType == CellType_MMCME4_ADV || cellType == CellType_PLLE4_ADV;
     }
 
     inline bool isClockBuffer(DesignCellType cellType)

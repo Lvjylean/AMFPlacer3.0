@@ -168,6 +168,7 @@ class FullBackend(unittest.TestCase):
     def fixture(self, root, body):
         for d in ('placement','inputs','reports','scripts'):(root/d).mkdir()
         (root/'scripts/full_backend.tcl').write_text('# backend\n')
+        (root/'scripts/sll_usage.tcl').write_text('# SLL report helper fixture\n')
         with zipfile.ZipFile(root/'netlist.zip','w') as z:
             z.writestr('allCellPinNet','curCell=> a[0] type=> LUT6\ncurCell=> b type=> SRLC32E\n')
         (root/'config.json').write_text(json.dumps({'vivado extracted design information file':str(root/'netlist.zip')}))

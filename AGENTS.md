@@ -1,3 +1,13 @@
+# 当前独立副本：U250 全设计接口适配（2026-11-03）
+
+本副本基于第 0 批冻结源码 `0a78b00f7cdc56f4428c656256f7462491d0244d`，分支 `codex/llama-u250-interface-adaptation-20261102`，位于 `experiments/preflight/20261102-llama-u250-interface-adaptation/repo`。原 SA 跨 die 补偿副本与历史实验不修改。以下旧任务标题和限制按各自日期理解。
+
+当前第一批包括：以实际 case 为依据的 U250 输入适配、E4 MMCM/PLL 与 DDR/PHY/PCIe/GT/时钟固定接口、复合 I/O 的规范单元边界和双向 pad 侧记录、后端恢复及保护约束核验、ASYNC_REG 同控制链的可移动同 SLICE 打包。I/O 在 AMF 内作为独立发出/接收的时序边界，数字路径按适用周期评估；报告称估计延迟/余量，不称 Vivado slack。默认周期 3.332 ns，保留 benchmark 派生时钟和 Vivado 约束；`ProPrimitiveTiming=false`、`SllRegionPolicy=preserve`，继承既有 U250 坐标及 SA/SLL 参数。
+
+已确认下一批完整布局阻塞：本例 4 条三级 URAM 级联尚未被硬资源合法化器支持；全设计存在 21 类同 CLK/SR 网络但复位极性不同的 FF，通用控制集与混合打包需要显式覆盖极性。ASYNC_REG 组内区分极性不等于全设计混合打包已支持。不得跳过这些检查启动完整布局。
+
+第一批验收只到实际输入加载、初始打包和单个组的 BEL 分配、时序图及固定接口恢复；不能把这些结果当成完成全局布局、完整合法化、布线或时序收敛。后续完整实验另设独立目录。DCP 只留服务器。新增源代码和全部验证入口均在本副本中；小型或完整验收结果见父目录 `validation/` 和最终批次记录。尚未验证的新 case 或固定 fabric 宏必须明确拒绝，不能静默释放约束。
+
 # 当前独立副本：U250 SA 跨 die 纵向补偿（2026-11-02）
 
 用户接受同列、相邻 CR 跨 die 完整分支中位数 1.415 ns 作为单点标定。本副本基于698c7845，分支codex/sa-cross-die-compensation-20261102。仅普通 U250 SA 默认启用，SACrossDieCompensationEnable=false可回到基线；VU095/VCU108及DFX原样保留。按当前模型换算总等效Y=182.69021394，减掉原来已计的一行距后，每道真实SLR接缝增加剩余纵向距离；横向项和连接权重保留。不是新二维拟合，不把1.415解释为固定额外ns。只构建和小型验证，不启动完整布局布线，不推送。不得捎带修改多启动、容量、QP、SLL规划或时序模型。详见docs/research/sa-cross-die-compensation-20261102.md。以下为历史记录。

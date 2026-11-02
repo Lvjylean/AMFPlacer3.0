@@ -80,11 +80,14 @@ def run(root, args):
         raise ValueError("Use amf3.py dfx-run for a locked static shell; full-run unplaces the whole design")
     from sll_planning_inputs import validate as validate_sll_planning
     validate_sll_planning(config,binary)
+    from full_design_metadata import validate_binary as validate_full_interfaces
+    validate_full_interfaces(config, binary)
     inputs = {}
     for key in ('vivado extracted device information file', 'vivado extracted design information file',
                 'physical boundary model file', 'special pin offset info file', 'clock file', 'mergedSharedCellType2sharedCellType',
                 'cellType2fixedAmo file', 'cellType2sharedCellType file', 'sharedCellType2BELtype file',
                 'fixed units file', 'unpredictable macro file', 'designCluster', 'DSP registered outputs file',
+                'ASYNC_REG groups file', 'ASYNC_REG proximity pairs file', 'fixed occupied sites file',
                 'SllChannelFile', 'SllReservedResourceFile', 'clock resource capacity file', 'external floorplan membership file',
                 'external floorplan regions file', 'external floorplan manifest file',
                 'SRL control metadata file'):
@@ -132,6 +135,10 @@ def run(root, args):
                     started=dt.datetime.now().astimezone().isoformat(), stages=[],
                     amf_clock_period_ns=config['ClockPeriod'], amf_clock_source='explicit experiment configuration',
                     vivado_clock_source='not executed' if global_only or args.amf_only else 'original DCP constraints', placement_run=args.placement_run)
+    if config.get('CompositeIOTimingBoundary') == 'true' or config.get('ASYNC_REG groups file'):
+        helper = root/'scripts/full_design_metadata.py'
+        shutil.copy2(helper, directory/'inputs/full_design_metadata.py')
+        manifest['interface_metadata_helper_sha256'] = digest(helper)
     manifest['vivado_executable'] = vivado
     manifest['vivado_version_output'] = vivado_version
     manifest['import_policy'] = import_policy

@@ -217,6 +217,8 @@ DesignInfo::DesignInfo(std::map<std::string, std::string> &JSONCfg, DeviceInfo *
         if (strContains(fill0, "pin=>"))
         {
             iss >> fill3 >> refpinname >> fill0 >> dir >> fill1 >> netName >> fill2 >> drivepinName;
+            if (dir != "IN" && dir != "OUT")
+                throw std::runtime_error("Unnormalized pin direction " + dir + ": " + targetName);
             if(nativeStaticCache)nativeStaticCache->observePin({targetName,refpinname,dir,
                 netName=="drivepin=>"?"":netName,drivepinName});
             DesignPin *curPin = new DesignPin(targetName, refpinname,

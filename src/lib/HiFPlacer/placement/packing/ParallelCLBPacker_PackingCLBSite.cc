@@ -2138,7 +2138,7 @@ void ParallelCLBPacker::PackingCLBSite::mapMuxF8Macro(int muxF8Offset, Placement
         if (pinBeDriven->getRefPinName() == "I0")
         {
             auto I0MuxF7 = pinBeDriven->getDriverPin()->getCell();
-            if (MUXF8Macro->hasCell(I0MuxF7))
+            if (I0MuxF7->getCellType() == DesignInfo::CellType_MUXF7 && MUXF8Macro->hasCell(I0MuxF7))
             {
                 assert(I0MuxF7->getCellType() == DesignInfo::CellType_MUXF7);
                 slotMapping.MuxF7[muxF8Offset][1] = I0MuxF7; // I0 is for the upper one
@@ -2147,7 +2147,7 @@ void ParallelCLBPacker::PackingCLBSite::mapMuxF8Macro(int muxF8Offset, Placement
         else if (pinBeDriven->getRefPinName() == "I1")
         {
             auto I1MuxF7 = pinBeDriven->getDriverPin()->getCell();
-            if (MUXF8Macro->hasCell(I1MuxF7))
+            if (I1MuxF7->getCellType() == DesignInfo::CellType_MUXF7 && MUXF8Macro->hasCell(I1MuxF7))
             {
                 assert(I1MuxF7->getCellType() == DesignInfo::CellType_MUXF7);
                 slotMapping.MuxF7[muxF8Offset][0] = I1MuxF7; // I1 is for the lower one
@@ -2179,7 +2179,7 @@ void ParallelCLBPacker::PackingCLBSite::mapMuxF8Macro(int muxF8Offset, Placement
             if (pinBeDriven->getRefPinName() == "I0")
             {
                 auto I0LUT = pinBeDriven->getDriverPin()->getCell();
-                if (MUXF8Macro->hasCell(I0LUT))
+                if (I0LUT->isLUT() && MUXF8Macro->hasCell(I0LUT))
                 {
                     assert(I0LUT->isLUT6());
                     slotMapping.LUTs[muxF8Offset][0][i * 2 + 1] = I0LUT; // I0 is for the upper one
@@ -2188,7 +2188,7 @@ void ParallelCLBPacker::PackingCLBSite::mapMuxF8Macro(int muxF8Offset, Placement
             else if (pinBeDriven->getRefPinName() == "I1")
             {
                 auto I1LUT = pinBeDriven->getDriverPin()->getCell();
-                if (MUXF8Macro->hasCell(I1LUT))
+                if (I1LUT->isLUT() && MUXF8Macro->hasCell(I1LUT))
                 {
                     assert(I1LUT->isLUT6());
                     slotMapping.LUTs[muxF8Offset][0][i * 2] = I1LUT; // I1 is for the lower one
@@ -2295,7 +2295,7 @@ void ParallelCLBPacker::PackingCLBSite::mapMuxF7Macro(int halfCLBOffset, Placeme
         if (pinBeDriven->getRefPinName() == "I0")
         {
             auto I0LUT = pinBeDriven->getDriverPin()->getCell();
-            if (MUXF7Macro->hasCell(I0LUT))
+            if (I0LUT->isLUT() && MUXF7Macro->hasCell(I0LUT))
             {
                 assert(I0LUT->isLUT6());
                 slotMapping.LUTs[halfCLBOffset][0][F7Offset * 2 + 1] = I0LUT; // I0 is for the upper one
@@ -2310,7 +2310,7 @@ void ParallelCLBPacker::PackingCLBSite::mapMuxF7Macro(int halfCLBOffset, Placeme
 
             assert(pinBeDriven->getDriverPin());
             auto I1LUT = pinBeDriven->getDriverPin()->getCell();
-            if (MUXF7Macro->hasCell(I1LUT))
+            if (I1LUT->isLUT() && MUXF7Macro->hasCell(I1LUT))
             {
                 assert(I1LUT->isLUT6());
                 slotMapping.LUTs[halfCLBOffset][0][F7Offset * 2] = I1LUT; // I1 is for the lower one

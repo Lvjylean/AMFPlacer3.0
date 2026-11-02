@@ -124,6 +124,7 @@ class InitialPacker
      * will be added into the macro to occupy the BEL resources
      *
      */
+    void loadAsyncGroups();
     void findCARRYMacros();
 
     /**
