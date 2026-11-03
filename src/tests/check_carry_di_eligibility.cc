@@ -35,7 +35,7 @@ int main(int argc, char **argv)
         std::vector<Site *> unused(placement.getPlacementUnits().size(), nullptr);
         std::ofstream out(std::string(argv[2]) + ".slots.tsv");
         out << "carry\toffset\tbit\tside\tcell_id\tcell\tvirtual\n";
-        size_t macros = 0, sites = 0, pairs = 0, lut62 = 0, verifiedCells = 0;
+        size_t macros = 0, sites = 0, pairs = 0, lut62 = 0, verifiedCells = 0, diOnlyPromotions = 0;
         double mappingSeconds = 0, addSeconds = 0, finalSeconds = 0;
         std::set<std::string> fixtureChecked;
         for (auto macro : placement.getPlacementMacros()) {
@@ -96,8 +96,19 @@ int main(int argc, char **argv)
                 site.finalMapToSlots();
                 finalSeconds += std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
                 require(CLBSiteLegality::checkControlsAndLUTs(site.getSlotMapping()),"export slot legality: "+carry->getName());
-                for(int bit=0;bit<8;++bit)for(int side=0;side<2;++side)
-                    require(before.LUTs[bit/4][side][bit%4]==site.getSlotMapping().LUTs[bit/4][side][bit%4],"final mapping moved reserved carry LUT");
+                std::set<DesignInfo::DesignCell *> finalSeen;
+                for(int bit=0;bit<8;++bit) {
+                    auto old6=before.LUTs[bit/4][0][bit%4], old5=before.LUTs[bit/4][1][bit%4];
+                    auto new6=site.getSlotMapping().LUTs[bit/4][0][bit%4], new5=site.getSlotMapping().LUTs[bit/4][1][bit%4];
+                    // Existing moveLUTToLUT6Slot may promote an unpaired DI-only
+                    // LUT to the empty 6LUT of the SAME bit. Preserve that behavior.
+                    const bool promotion=!old6 && old5 && new6==old5 && !new5;
+                    require((old6==new6 && old5==new5)||promotion,"final mapping changed carry bit/owner: "+carry->getName());
+                    diOnlyPromotions += promotion;
+                    for(auto cell : {new6,new5}) if(cell)
+                        require(finalSeen.insert(cell).second,"duplicate final LUT slot: "+cell->getName());
+                }
+                require(finalSeen==expected,"final mapping lost macro LUT: "+carry->getName());
             }
         }
         if(cfg.count("CarryDIFixture")) require(fixtureChecked.size()==9,"fixture coverage incomplete");
@@ -107,7 +118,7 @@ int main(int argc, char **argv)
                 <<",\"lut6_2_unique_owners\":"<<lut62<<",\"covered_lut_members\":"<<verifiedCells
                 <<",\"duplicate_slots\":0,\"set_overlaps\":0,\"mapping_seconds\":"<<mappingSeconds
                 <<",\"add_carry_seconds\":"<<addSeconds<<",\"final_slot_mapping_seconds\":"<<finalSeconds
-                <<",\"fixture_carries_checked\":"<<fixtureChecked.size()<<",\"full_placement_executed\":false,\"routing_executed\":false}\n";
+                <<",\"di_only_promotions\":"<<diOnlyPromotions<<",\"fixture_carries_checked\":"<<fixtureChecked.size()<<",\"full_placement_executed\":false,\"routing_executed\":false}\n";
         require(bool(summary),"cannot write summary");
         std::cout<<"PASS carry_sites="<<sites<<" LUT6_2="<<lut62<<" fixed_pairs="<<pairs
                  <<" mapping_seconds="<<mappingSeconds<<" add_seconds="<<addSeconds<<" final_seconds="<<finalSeconds<<std::endl;
