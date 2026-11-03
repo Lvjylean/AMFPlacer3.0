@@ -1,3 +1,7 @@
+# Current isolated fix: preserve LUT6_2 pairs (2026-11-03)
+
+User authorized minimal repair and reuse of existing AMF placement. Only this copy changes. Preserve LUT6_2 internal pairing in the import adapter, add bounded pairing/physical checks, and resume placement-only backend repair verification of the 14 pending cells. No AMF rerun, rebuild, clock/algorithm change or routing in this validation. Prior task restrictions below apply to their historical scopes.
+
 # Current isolated fix: atomic ASYNC import (2026-11-03)
 
 User authorized lightweight repair of ASYNC-linked import collisions. Validate whole-chain placement first; preserve AMF placement, clocks, ASYNC_REG, fixed interfaces and final acceptance checks. Only this code copy may change. Focused import validation reuses attempt-3 placement; no full AMF/place/route restart in this task. Historical scopes below remain historical.

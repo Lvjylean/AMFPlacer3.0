@@ -34,6 +34,9 @@ if {[file exists $fixes]} {
 }
 proc audit {stage} {
     global requested originalOverrides out placement physicalAudit importMetrics amf3_import_error_events releasedClockBuffers
+    if {[llength [info commands amf_lut62::check]]} {
+        amf_lut62::check $stage [expr {$stage ne "imported"}]
+    }
     set cells [get_cells -hierarchical -filter {IS_PRIMITIVE}]
     set names [get_property NAME $cells]
     set locs [get_property LOC $cells]

@@ -130,6 +130,29 @@ def predeclare_async_targets(script, assignments, groups):
     return script.replace(marker, marker+setup, 1), len(targets)
 
 
+def preserve_lut62_pairing(script):
+    """Replace only the known legacy group cleanup, retaining all assignments.
+
+    The children have REF_NAME LUT5/LUT6, so filtering out LUT6_2 parents is
+    insufficient. The helper records composite ownership in the live DCP.
+    Frozen AMF exports can be reused without rebuilding or rerunning AMF.
+    """
+    # Exports with no group operations need no compatibility rewrite.
+    if not any(prop in script for prop in ('HLUTNM', 'SOFT_HLUTNM', 'LUTNM')):
+        return script
+    legacy = r'''foreach amf_prop {HLUTNM SOFT_HLUTNM} {
+  set amf_grouped [get_cells -quiet -hierarchical -filter "$amf_prop != \"\""]
+  if {[llength $amf_grouped]} {set_property $amf_prop {} $amf_grouped}
+}'''
+    if script.count(legacy) != 1:
+        raise ValueError('Expected one known LUT grouping cleanup boundary')
+    replacement = '''# Preserve mandatory LUT6_2 pairs from the original DCP.
+source [file join $script_path .. inputs lut62_pairing.tcl]
+amf_lut62::capture
+amf_lut62::clear_ordinary_groups'''
+    return script.replace(legacy, replacement, 1)
+
+
 def prepare(root, source, directory, manifest):
     upstream = manifest.get('upstream_backend', False)
     source_manifest=directory/'inputs/placement_source_manifest.json'
@@ -275,6 +298,14 @@ close $f
         manifest['async_import_preconstraints'] = dict(
             cells=async_count, targets_changed=False,
             policy='bounded ASYNC suspension for BEL/LOC declaration; restore before place_cell')
+    protected = preserve_lut62_pairing(adapted)
+    if protected != adapted:
+        shutil.copy2(root/'scripts/lut62_pairing.tcl', directory/'inputs/lut62_pairing.tcl')
+        manifest['lut62_pairing'] = dict(
+            policy='preserve original composite-member grouping; audit child BEL occupancy',
+            helper_sha256=digest(directory/'inputs/lut62_pairing.tcl'),
+            assignments_changed=False)
+    adapted = protected
     (directory/'placement/import_placement.tcl').write_text(adapted)
     with (directory/'placement/bel_corrections.tsv').open('w') as f:
         f.write('cell\tbefore\tafter\n')
