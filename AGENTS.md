@@ -1,3 +1,7 @@
+# Current isolated diagnostic: CARRY slot membership (2026-11-03)
+
+The user requested an exact diagnosis of the LUT occupying both single and paired sets. This copy adds only a diagnostic executable calling unchanged production initial packing and slot reconstruction, with an optional deliberate assertion reproduction. It does not modify placement algorithms or run full acceptance. Keep 3.332 ns and all original input/algorithm settings. Outputs and manifests are separate. Earlier task scopes below are historical.
+
 # Current isolated revision: region correction before spreading budget (2026-11-03)
 
 The user authorized region normalization before the shared 20-bin spreading origin, separate correction-distance accounting, and a new complete llama U250 acceptance run. Base 65e9bfa and historical failures remain unchanged. Use 3.332 ns, ordinary Pro, ProPrimitiveTiming=false, SllRegionPolicy=preserve, AMF 12 threads and Vivado 2026.1 four threads. Source changes are confined to this copy. Full acceptance must follow successful focused regressions; logs and results live in the parent validation and experiment directories. See docs/research/llama-region-before-spread-20261103.md. Statements below refer to their historical dates.
