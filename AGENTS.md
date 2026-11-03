@@ -1,3 +1,7 @@
+# Current isolated fix: CARRY half-slice route-through reservation (2026-11-03)
+
+The user authorized completing the shared half-slice reservation rules with a lightweight implementation. Only this independent copy changes. Extend initial CARRY packing for absorbed LUT6_2 O5/fabric-output conflicts, reuse existing virtual FF slots, and retain prior O/CO and dynamic-CI rules. Build and run focused fixtures plus native llama/GETRF initial packing and slot reconstruction. No full AMF placement, Vivado placement or routing is started by this task. Keep historical runs, original constraints and source inputs unchanged. Previous restrictions below refer to their historical scopes.
+
 # Current isolated fix: preserve LUT6_2 pairs (2026-11-03)
 
 User authorized minimal repair and reuse of existing AMF placement. Only this copy changes. Preserve LUT6_2 internal pairing in the import adapter, add bounded pairing/physical checks, and resume placement-only backend repair verification of the 14 pending cells. No AMF rerun, rebuild, clock/algorithm change or routing in this validation. Prior task restrictions below apply to their historical scopes.

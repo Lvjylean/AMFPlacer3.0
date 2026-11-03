@@ -350,7 +350,7 @@ class InitialPacker
     bool DSPCritical = false;
 
     void mapCarryRelatedRouteThru(PlacementInfo::PlacementMacro *CARRYChain, DesignInfo::DesignCell *coreCell,
-                                  float CARRYChainSiteOffset);
+                                  float CARRYChainSiteOffset, const bool routeThroughHalf[2]);
 };
 
 #endif

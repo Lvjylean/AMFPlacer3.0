@@ -34,8 +34,11 @@ int main(int argc, char **argv)
         require(probe != nullptr, "no unoccupied SLICEL");
         std::vector<Site *> unused(placement.getPlacementUnits().size(), nullptr);
         std::ofstream out(std::string(argv[2]) + ".slots.tsv");
+        std::ofstream ffOut(std::string(argv[2]) + ".ff-reservations.tsv");
+        ffOut << "carry\toffset\thalf\tvirtual_ff_mask\treal_ff_mask\n";
         out << "carry\toffset\tbit\tside\tcell_id\tcell\tvirtual\n";
         size_t macros = 0, sites = 0, pairs = 0, lut62 = 0, verifiedCells = 0, diOnlyPromotions = 0;
+        size_t reservedFFs = 0, reservedHalves = 0;
         double mappingSeconds = 0, addSeconds = 0, finalSeconds = 0;
         std::set<std::string> fixtureChecked;
         for (auto macro : placement.getPlacementMacros()) {
@@ -50,6 +53,19 @@ int main(int argc, char **argv)
                 site.mapCarryRelatedCellsToSlots(macro, offset);
                 mappingSeconds += std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
                 const auto before = site.getSlotMapping();
+                for (int half=0; half<2; ++half) {
+                    unsigned virtualMask=0, realMask=0;
+                    for (int side=0; side<2; ++side) for (int row=0; row<4; ++row) {
+                        auto ff=before.FFs[half][side][row];
+                        if (!ff) continue;
+                        const unsigned mask=1u<<(side*4+row);
+                        if(ff->isVirtualCell()) {virtualMask|=mask; ++reservedFFs;}
+                        else realMask|=mask;
+                    }
+                    reservedHalves += virtualMask==255;
+                    ffOut << carry->getName() << '\t' << offset << '\t' << half << '\t'
+                          << virtualMask << '\t' << realMask << '\n';
+                }
                 std::set<DesignInfo::DesignCell *> seen, expected, paired;
                 for (auto cell : macro->getCells())
                     if (cell->isLUT() && std::fabs(macro->getCellOffsetYInMacro(cell)-offset) < 0.01) expected.insert(cell);
@@ -96,6 +112,11 @@ int main(int argc, char **argv)
                 site.finalMapToSlots();
                 finalSeconds += std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
                 require(CLBSiteLegality::checkControlsAndLUTs(site.getSlotMapping()),"export slot legality: "+carry->getName());
+                for(int half=0;half<2;++half) for(int side=0;side<2;++side) for(int row=0;row<4;++row) {
+                    auto ff=before.FFs[half][side][row];
+                    if(ff && ff->isVirtualCell())
+                        require(site.getSlotMapping().FFs[half][side][row]==ff,"lost carry FF reservation: "+carry->getName());
+                }
                 std::set<DesignInfo::DesignCell *> finalSeen;
                 for(int bit=0;bit<8;++bit) {
                     auto old6=before.LUTs[bit/4][0][bit%4], old5=before.LUTs[bit/4][1][bit%4];
@@ -112,12 +133,13 @@ int main(int argc, char **argv)
             }
         }
         if(cfg.count("CarryDIFixture")) require(fixtureChecked.size()==9,"fixture coverage incomplete");
-        require(bool(out), "cannot write slot report");
+        require(bool(out) && bool(ffOut), "cannot write slot report");
         std::ofstream summary(std::string(argv[2])+".summary.json");
         summary << "{\"carry_macros\":"<<macros<<",\"carry_sites\":"<<sites<<",\"valid_fixed_pairs\":"<<pairs
                 <<",\"lut6_2_unique_owners\":"<<lut62<<",\"covered_lut_members\":"<<verifiedCells
                 <<",\"duplicate_slots\":0,\"set_overlaps\":0,\"mapping_seconds\":"<<mappingSeconds
                 <<",\"add_carry_seconds\":"<<addSeconds<<",\"final_slot_mapping_seconds\":"<<finalSeconds
+                <<",\"reserved_ff_slots\":"<<reservedFFs<<",\"fully_reserved_halves\":"<<reservedHalves
                 <<",\"di_only_promotions\":"<<diOnlyPromotions<<",\"fixture_carries_checked\":"<<fixtureChecked.size()<<",\"full_placement_executed\":false,\"routing_executed\":false}\n";
         require(bool(summary),"cannot write summary");
         std::cout<<"PASS carry_sites="<<sites<<" LUT6_2="<<lut62<<" fixed_pairs="<<pairs

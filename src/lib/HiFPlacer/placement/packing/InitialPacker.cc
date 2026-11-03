@@ -807,7 +807,8 @@ std::vector<DesignInfo::DesignCell *> InitialPacker::checkCompatibleFFs(std::vec
 }
 
 void InitialPacker::mapCarryRelatedRouteThru(PlacementInfo::PlacementMacro *CARRYChain,
-                                             DesignInfo::DesignCell *coreCell, float CARRYChainSiteOffset)
+                                           DesignInfo::DesignCell *coreCell, float CARRYChainSiteOffset,
+                                           const bool routeThroughHalf[2])
 {
     SiteBELMapping slotMapping;
     std::set<DesignInfo::DesignCell *> mappedCells;
@@ -968,9 +969,10 @@ void InitialPacker::mapCarryRelatedRouteThru(PlacementInfo::PlacementMacro *CARR
     {
         for (int k = 0; k < 4; k++)
         {
-            if (slotMapping.FFs[i][0][k] && slotMapping.FFs[i][1][k])
+            if (routeThroughHalf[i] || (slotMapping.FFs[i][0][k] && slotMapping.FFs[i][1][k]))
             {
-                if (slotMapping.FFs[i][0][k]->isVirtualCell() && slotMapping.FFs[i][1][k]->isVirtualCell())
+                if (routeThroughHalf[i] ||
+                    (slotMapping.FFs[i][0][k]->isVirtualCell() && slotMapping.FFs[i][1][k]->isVirtualCell()))
                 {
                     for (int jj = 0; jj < 2; jj++)
                     {
@@ -1282,6 +1284,7 @@ void InitialPacker::findCARRYMacros()
             // virtual O/CO FFs below make mapCarryRelatedRouteThru reserve it.
             bool routeThroughHalf[2] = {false, false};
             bool usedO[8] = {}, fabricCO[8] = {};
+            DesignInfo::DesignPin *carryOutputs[2][8] = {};
             for (auto output : coreCell->getOutputPins())
             {
                 if (output->isUnconnected() || !output->getNet()) continue;
@@ -1290,10 +1293,16 @@ void InitialPacker::findCARRYMacros()
                 if (bracket == std::string::npos) continue;
                 int bit = ref[bracket+1]-'0';
                 if (bit<0 || bit>=8) continue;
-                if (ref.find("O[")==0) usedO[bit] = !output->getNet()->getPinsBeDriven().empty();
+                if (ref.find("O[")==0) {
+                    carryOutputs[0][bit] = output;
+                    usedO[bit] = !output->getNet()->getPinsBeDriven().empty();
+                }
                 else if (ref.find("CO[")==0)
+                {
+                    carryOutputs[1][bit] = output;
                     for (auto sink : output->getNet()->getPinsBeDriven())
                         if (!HardResourceUtils::isCarryCascade(output,sink)) fabricCO[bit]=true;
+                }
             }
             for (int bit=0;bit<8;++bit)
                 if (usedO[bit] && fabricCO[bit]) routeThroughHalf[bit/4]=true;
@@ -1341,12 +1350,51 @@ void InitialPacker::findCARRYMacros()
             std::set<DesignInfo::DesignCell *> addedFFs;
             addedFFs.clear();
             drivenBottomFFs = checkCompatibleFFs(drivenBottomFFs);
+            drivenTopFFs = checkCompatibleFFs(drivenTopFFs);
+
+            // An absorbed LUT6_2 can consume OUTMUX with its O5 output even
+            // when CO is unused. A carry output that must also reach fabric
+            // then uses a transparent latch, whose mode is shared by all eight
+            // FFs in the half. Inspect only these eight bits during initial
+            // packing; retain directly registered outputs and dedicated DI/CI.
+            for (int bit = 0; bit < 8; ++bit)
+            {
+                const int half = bit / 4;
+                auto lut = SPinCell[bit].second;
+                if (routeThroughHalf[half] || !lut ||
+                    lut->getOriCellType() != DesignInfo::CellType_LUT6_2 ||
+                    !curMacro->hasCell(lut) || curMacro->getCellOffsetYInMacro(lut) != coreOffset ||
+                    SPinCell[bit].first->getDriverPin()->getRefPinName() != "O6") continue;
+                bool fabricO5 = false;
+                for (auto output : lut->getOutputPins())
+                    if (output->getRefPinName() == "O5" && output->getNet())
+                        for (auto sink : output->getNet()->getPinsBeDriven())
+                            if (sink != DIPinCell[bit].first) { fabricO5 = true; break; }
+                if (!fabricO5) continue;
+                const auto &selectedFFs = half ? drivenTopFFs : drivenBottomFFs;
+                for (auto output : {carryOutputs[0][bit], carryOutputs[1][bit]})
+                {
+                    if (!output) continue;
+                    for (auto sink : output->getNet()->getPinsBeDriven())
+                    {
+                        if (HardResourceUtils::isCarryCascade(output, sink)) continue;
+                        if (sink->getRefPinName() == "D" &&
+                            std::find(selectedFFs.begin(), selectedFFs.end(), sink->getCell()) != selectedFFs.end())
+                            continue;
+                        routeThroughHalf[half] = true;
+                        break;
+                    }
+                    if (routeThroughHalf[half]) break;
+                }
+            }
+            // Decide the shared mode before adding any real FF to this macro.
+            if (routeThroughHalf[0]) drivenBottomFFs.clear();
+            if (routeThroughHalf[1]) drivenTopFFs.clear();
             for (auto theFF : drivenBottomFFs)
             {
                 curMacro->addCell(theFF, theFF->getCellType(), 0, coreOffset);
                 addedFFs.insert(theFF);
             }
-            drivenTopFFs = checkCompatibleFFs(drivenTopFFs);
             for (auto theFF : drivenTopFFs)
             {
                 curMacro->addCell(theFF, theFF->getCellType(), 0, coreOffset);
@@ -1424,7 +1472,7 @@ void InitialPacker::findCARRYMacros()
                     }
                 }
             }
-            mapCarryRelatedRouteThru(curMacro, coreCell, coreOffset);
+            mapCarryRelatedRouteThru(curMacro, coreCell, coreOffset, routeThroughHalf);
             coreOffset++;
         }
         int totalWeight = 0;
