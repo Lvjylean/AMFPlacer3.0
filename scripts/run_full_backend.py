@@ -51,11 +51,14 @@ def canonical_export_names(assignments, cell_types, raw):
 
 
 def predeclare_async_targets(script, assignments, groups):
-    """Declare all ASYNC BELs/LOCs before place_cell can infer linked placement.
+    """Install ASYNC targets in a bounded transaction before partial placement.
 
     Packing groups intentionally split at clocks/control sets. They are not
     Vivado's import linkage boundary, so even one place_cell per group is unsafe.
     Reuse their complete member inventory without traversing the netlist again.
+    LOC setters also trigger linkage: temporarily suspend ASYNC only while
+    writing the targets, then restore it even on failure. No optimization,
+    place_cell, checkpoint, or backend operation runs with ASYNC suspended.
     """
     lines = groups.read_text().splitlines()
     if not lines or lines[0] != 'AMF_ASYNC_GROUPS 1':
@@ -97,17 +100,29 @@ def predeclare_async_targets(script, assignments, groups):
         }
         dict set members $name $cell
     }
-    # Complete BEL declarations first; then complete LOC declarations. No
-    # place_cell, attribute relaxation, or partial-chain retry in these passes.
-    dict for {name target} $targets {
-        set_property BEL [lindex [split $target /] 1] [dict get $members $name]
+    set allMembers [get_cells -quiet [dict keys $targets]]
+    if {[llength $allMembers] != [dict size $targets]} {error "Incomplete ASYNC collection"}
+    set failed [catch {
+        set_property ASYNC_REG false $allMembers
+        dict for {name target} $targets {
+            set_property BEL [lindex [split $target /] 1] [dict get $members $name]
+        }
+        dict for {name target} $targets {
+            set_property LOC [lindex [split $target /] 0] [dict get $members $name]
+        }
+    } failure options]
+    # Restore before returning or propagating an error. A restore failure is
+    # fatal too: the caller must never continue to placement/routing in that case.
+    set_property ASYNC_REG true $allMembers
+    set restored [get_property ASYNC_REG $allMembers]
+    if {[llength $restored] != [dict size $members]} {error "Incomplete ASYNC restore"}
+    foreach value $restored {
+        if {![string is boolean -strict $value] || !$value} {error "ASYNC restore failed"}
     }
-    dict for {name target} $targets {
-        set_property LOC [lindex [split $target /] 0] [dict get $members $name]
-    }
+    if {$failed} {return -options $options $failure}
     set elapsed [expr {[clock milliseconds]-$started}]
     set report [open [file join $::script_path .. reports async_preconstraints.tsv] w]
-    puts $report "cells\t[dict size $targets]\nelapsed_ms\t$elapsed\ntargets_changed\t0"
+    puts $report "cells\t[dict size $targets]\nelapsed_ms\t$elapsed\ntargets_changed\t0\nasync_restored\t1"
     close $report
     puts "AMF_ASYNC_PRECONSTRAINTS cells=[dict size $targets] elapsed_ms=$elapsed"
 }}
@@ -259,7 +274,7 @@ close $f
         adapted, async_count = predeclare_async_targets(adapted, assignments, groups)
         manifest['async_import_preconstraints'] = dict(
             cells=async_count, targets_changed=False,
-            policy='all BELs then all LOCs before legacy place_cell batches')
+            policy='bounded ASYNC suspension for BEL/LOC declaration; restore before place_cell')
     (directory/'placement/import_placement.tcl').write_text(adapted)
     with (directory/'placement/bel_corrections.tsv').open('w') as f:
         f.write('cell\tbefore\tafter\n')

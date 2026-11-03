@@ -30,10 +30,18 @@ class AsyncPreconstraints(unittest.TestCase):
             (directory/'placement').mkdir(); (directory/'reports').mkdir()
             harness = r'''
 array set props {}
-proc get_cells args {return [list [lindex $args end]]}
+proc get_cells args {return [lindex $args end]}
 proc get_property {key cell} {
     set name [lindex $cell 0]
-    if {$key eq "ASYNC_REG"} {return 1}
+    if {$key eq "ASYNC_REG"} {
+        set values {}
+        foreach name $cell {
+            if {[info exists ::props(ASYNC_REG,$name)]} {
+                lappend values $::props(ASYNC_REG,$name)
+            } else {lappend values 1}
+        }
+        return $values
+    }
     if {$key in {IS_LOC_FIXED IS_BEL_FIXED}} {return 0}
     error "Unexpected property $key"
 }
@@ -43,13 +51,14 @@ proc set_property {key value cell} {
     if {$key eq "LOC" && ![info exists {::props(BEL,ff[1])}]} {
         error "Partial BEL inventory before LOC"
     }
-    set ::props($key,[lindex $cell 0]) $value
+    foreach name $cell {set ::props($key,$name) $value}
 }
 proc place_cell args {
     foreach {name site bel} {ff[0] SLICE_X0Y0 AFF2 ff[1] SLICE_X2Y3 BFF2} {
         if {$::props(LOC,$name) ne $site || $::props(BEL,$name) ne $bel} {
             error "Partial chain imported before targets are known"
         }
+        if {!$::props(ASYNC_REG,$name)} {error "ASYNC not restored before placement"}
     }
     puts VERIFIED
 }
@@ -59,6 +68,17 @@ proc place_cell args {
             result = subprocess.run(['tclsh', str(test)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn('VERIFIED', result.stdout)
+
+            # A setter error must restore every member and stop before placement.
+            failing = harness.replace('set ::props($key,$name) $value',
+                'if {$key eq "LOC"} {error INJECTED_LOC_ERROR};set ::props($key,$name) $value')
+            test.write_text('set script_path {'+str(directory/'placement')+'}\n'+failing+
+                '\nset rc [catch {\n'+script+'\n} message]\n'+
+                'if {!$rc || ![string match *INJECTED_LOC_ERROR* $message]} {error "Expected failure"}\n'+
+                'foreach name {ff[0] ff[1]} {if {!$::props(ASYNC_REG,$name)} {error "Restore missed member"}}\n')
+            result = subprocess.run(['tclsh', str(test)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn('VERIFIED', result.stdout)
 
     def test_empty_inventory_leaves_legacy_import_unchanged(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -75,7 +95,7 @@ proc place_cell args {
                 with self.subTest(mode=mode):
                     stub = r'''
 proc place_design args {}
-proc get_cells args {return [list [lindex $args end]]}
+proc get_cells args {return [lindex $args end]}
 proc get_property {key cell} {
     switch $key {
         ASYNC_REG {return [expr {$::mode ne "ATTRIBUTE"}]}
