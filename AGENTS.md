@@ -1,3 +1,7 @@
+# Current isolated fix: atomic ASYNC import (2026-11-03)
+
+User authorized lightweight repair of ASYNC-linked import collisions. Validate whole-chain placement first; preserve AMF placement, clocks, ASYNC_REG, fixed interfaces and final acceptance checks. Only this code copy may change. Focused import validation reuses attempt-3 placement; no full AMF/place/route restart in this task. Historical scopes below remain historical.
+
 # Current isolated fix: lightweight CARRY DI eligibility (2026-11-03)
 
 The user authorized a lightweight runtime fix for duplicate LUT ownership. Share the existing direct-DI absorption predicate between initial packing, route-through reservation, and final slot reconstruction. Keep original constraints, input files, and algorithms otherwise unchanged. This copy performs build and focused fixture/real-netlist validation only; no automatic full acceptance restart. Prior diagnostic and failed runs remain immutable. Evidence lives in the parent validation directory. Older task scopes below are historical.

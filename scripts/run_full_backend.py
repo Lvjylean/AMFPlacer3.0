@@ -50,6 +50,71 @@ def canonical_export_names(assignments, cell_types, raw):
     return resolved, aliases
 
 
+def predeclare_async_targets(script, assignments, groups):
+    """Declare all ASYNC BELs/LOCs before place_cell can infer linked placement.
+
+    Packing groups intentionally split at clocks/control sets. They are not
+    Vivado's import linkage boundary, so even one place_cell per group is unsafe.
+    Reuse their complete member inventory without traversing the netlist again.
+    """
+    lines = groups.read_text().splitlines()
+    if not lines or lines[0] != 'AMF_ASYNC_GROUPS 1':
+        raise ValueError('Invalid synchronization group schema')
+    targets = {}
+    for line in lines[1:]:
+        if not line.strip():
+            continue
+        _, name = line.split()
+        if name in targets:
+            raise ValueError('Duplicate ASYNC import member: ' + name)
+        target = assignments.get(name, '')
+        if not re.fullmatch(r'SLICE_X\d+Y\d+/[A-H]FF2?', target):
+            raise ValueError('Missing/invalid ASYNC target: ' + name)
+        if any(c in name for c in '{}\\\r\n'):
+            raise ValueError('Unsupported ASYNC Tcl identifier: ' + name)
+        targets[name] = target
+    if not targets:
+        return script, 0
+    marker = 'place_design -unplace\n'
+    if script.count(marker) != 1:
+        raise ValueError('Expected one unplacement boundary for ASYNC targets')
+    pairs = '\n'.join('    {'+name+'} {'+target+'}' for name, target in targets.items())
+    setup = '\n# Declare the complete ASYNC inventory before any partial placement.\napply {{} {\n'
+    setup += '    set started [clock milliseconds]\n    set targets {\n'+pairs+'\n    }\n'
+    setup += r'''
+    set members [dict create]
+    dict for {name target} $targets {
+        set cell [get_cells -quiet $name]
+        if {[llength $cell] != 1 || ![get_property ASYNC_REG $cell]} {
+            error "Missing/non-ASYNC preconstraint member: $name"
+        }
+        lassign [split $target /] site bel
+        if {[get_property IS_LOC_FIXED $cell] && [get_property LOC $cell] ne $site} {
+            error "ASYNC preconstraint conflicts with fixed LOC: $name"
+        }
+        if {[get_property IS_BEL_FIXED $cell] && [lindex [split [get_property BEL $cell] .] end] ne $bel} {
+            error "ASYNC preconstraint conflicts with fixed BEL: $name"
+        }
+        dict set members $name $cell
+    }
+    # Complete BEL declarations first; then complete LOC declarations. No
+    # place_cell, attribute relaxation, or partial-chain retry in these passes.
+    dict for {name target} $targets {
+        set_property BEL [lindex [split $target /] 1] [dict get $members $name]
+    }
+    dict for {name target} $targets {
+        set_property LOC [lindex [split $target /] 0] [dict get $members $name]
+    }
+    set elapsed [expr {[clock milliseconds]-$started}]
+    set report [open [file join $::script_path .. reports async_preconstraints.tsv] w]
+    puts $report "cells\t[dict size $targets]\nelapsed_ms\t$elapsed\ntargets_changed\t0"
+    close $report
+    puts "AMF_ASYNC_PRECONSTRAINTS cells=[dict size $targets] elapsed_ms=$elapsed"
+}}
+'''
+    return script.replace(marker, marker+setup, 1), len(targets)
+
+
 def prepare(root, source, directory, manifest):
     upstream = manifest.get('upstream_backend', False)
     source_manifest=directory/'inputs/placement_source_manifest.json'
@@ -189,6 +254,12 @@ close $f
         # Replace its target in both the placement command and diagnostic dump.
         if change['before'] not in adapted:raise ValueError('SRL export target absent from Tcl')
         adapted=adapted.replace(change['before'],change['after'])
+    groups = directory/'placement/async_groups.txt'
+    if groups.exists():
+        adapted, async_count = predeclare_async_targets(adapted, assignments, groups)
+        manifest['async_import_preconstraints'] = dict(
+            cells=async_count, targets_changed=False,
+            policy='all BELs then all LOCs before legacy place_cell batches')
     (directory/'placement/import_placement.tcl').write_text(adapted)
     with (directory/'placement/bel_corrections.tsv').open('w') as f:
         f.write('cell\tbefore\tafter\n')
