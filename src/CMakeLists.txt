@@ -387,3 +387,6 @@ target_link_libraries(checkAND2B1LTiming "-Wl,--start-group" GlobalPlacer Design
 
 add_executable(checkCarrySlotMembership EXCLUDE_FROM_ALL tests/check_carry_slot_membership.cc)
 target_link_libraries(checkCarrySlotMembership Packing GlobalPlacer Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkCarryDIEligibility EXCLUDE_FROM_ALL tests/check_carry_di_eligibility.cc)
+target_link_libraries(checkCarryDIEligibility Packing GlobalPlacer Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})

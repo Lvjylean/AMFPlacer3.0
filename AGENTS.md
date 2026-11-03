@@ -1,3 +1,7 @@
+# Current isolated fix: lightweight CARRY DI eligibility (2026-11-03)
+
+The user authorized a lightweight runtime fix for duplicate LUT ownership. Share the existing direct-DI absorption predicate between initial packing, route-through reservation, and final slot reconstruction. Keep original constraints, input files, and algorithms otherwise unchanged. This copy performs build and focused fixture/real-netlist validation only; no automatic full acceptance restart. Prior diagnostic and failed runs remain immutable. Evidence lives in the parent validation directory. Older task scopes below are historical.
+
 # Current isolated diagnostic: CARRY slot membership (2026-11-03)
 
 The user requested an exact diagnosis of the LUT occupying both single and paired sets. This copy adds only a diagnostic executable calling unchanged production initial packing and slot reconstruction, with an optional deliberate assertion reproduction. It does not modify placement algorithms or run full acceptance. Keep 3.332 ns and all original input/algorithm settings. Outputs and manifests are separate. Earlier task scopes below are historical.

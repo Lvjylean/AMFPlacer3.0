@@ -13,6 +13,7 @@
  */
 
 #include "ParallelCLBPacker.h"
+#include "CarryLUTRules.h"
 
 void ParallelCLBPacker::PackingCLBSite::refreshPrioryQueue()
 {
@@ -3331,7 +3332,7 @@ void ParallelCLBPacker::PackingCLBSite::mapCarryRelatedCellsToSlots(PlacementInf
                     {
                         if (placementInfo->getPlacementUnitByCell(pinBeDriven->getDriverPin()->getCell()) ==
                                 CARRYChain &&
-                            pinBeDriven->getDriverPin()->getCell()->isLUT())
+                            CarryLUTRules::canUseDirectDI(pinBeDriven->getDriverPin()->getCell(), pinBeDriven->getNet()))
                         {
                             char DIPinCellId =
                                 pinBeDriven->getRefPinName()[pinBeDriven->getRefPinName().find("[") + 1] - '0';

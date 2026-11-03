@@ -13,6 +13,7 @@
  */
 
 #include "InitialPacker.h"
+#include "CarryLUTRules.h"
 #include "DSPRegisteredOutputs.h"
 #include "../legalization/HardResourceUtils.h"
 
@@ -857,7 +858,7 @@ void InitialPacker::mapCarryRelatedRouteThru(PlacementInfo::PlacementMacro *CARR
                     else if (pinBeDriven->getRefPinName().find("DI[") == 0)
                     {
                         if (CARRYChain->hasCell(pinBeDriven->getDriverPin()->getCell()) &&
-                            pinBeDriven->getDriverPin()->getCell()->isLUT())
+                            CarryLUTRules::canUseDirectDI(pinBeDriven->getDriverPin()->getCell(), pinBeDriven->getNet()))
                         {
                             char DIPinCellId =
                                 pinBeDriven->getRefPinName()[pinBeDriven->getRefPinName().find("[") + 1] - '0';
@@ -1166,8 +1167,8 @@ void InitialPacker::findCARRYMacros()
                 {
                     if (DIPinCell[i].second && SPinCell[i].second)
                     {
-                        bool DICanBeInSlice = DIPinCell[i].second->isLUT() && placementInfo->sameHardRegion(coreCell, DIPinCell[i].second) && !DIPinCell[i].second->isLUT6() &&
-                                              DIPinCell[i].first->getNet()->getPinsBeDriven().size() == 1;
+                        bool DICanBeInSlice = CarryLUTRules::canUseDirectDI(DIPinCell[i].second, DIPinCell[i].first->getNet()) &&
+                                              placementInfo->sameHardRegion(coreCell, DIPinCell[i].second);
                         bool SCanBeInSlice =
                             SPinCell[i].second->isLUT() && placementInfo->sameHardRegion(coreCell, SPinCell[i].second) && SPinCell[i].first->getNet()->getPinsBeDriven().size() == 1;
                         if (DICanBeInSlice && SCanBeInSlice)
@@ -1217,8 +1218,8 @@ void InitialPacker::findCARRYMacros()
                 }
                 else if (DIPinCell[i].second && SPinCell[i].second)
                 {
-                    bool DICanBeInSlice = DIPinCell[i].second->isLUT() && placementInfo->sameHardRegion(coreCell, DIPinCell[i].second) && !DIPinCell[i].second->isLUT6() &&
-                                          DIPinCell[i].first->getNet()->getPinsBeDriven().size() == 1;
+                    bool DICanBeInSlice = CarryLUTRules::canUseDirectDI(DIPinCell[i].second, DIPinCell[i].first->getNet()) &&
+                                          placementInfo->sameHardRegion(coreCell, DIPinCell[i].second);
                     bool SCanBeInSlice =
                         SPinCell[i].second->isLUT() && placementInfo->sameHardRegion(coreCell, SPinCell[i].second) && SPinCell[i].first->getNet()->getPinsBeDriven().size() == 1;
                     if (DICanBeInSlice && SCanBeInSlice)
@@ -1245,8 +1246,8 @@ void InitialPacker::findCARRYMacros()
                 }
                 else if (DIPinCell[i].second && !SPinCell[i].first)
                 {
-                    bool DICanBeInSlice = DIPinCell[i].second->isLUT() && placementInfo->sameHardRegion(coreCell, DIPinCell[i].second) && !DIPinCell[i].second->isLUT6() &&
-                                          DIPinCell[i].first->getNet()->getPinsBeDriven().size() == 1;
+                    bool DICanBeInSlice = CarryLUTRules::canUseDirectDI(DIPinCell[i].second, DIPinCell[i].first->getNet()) &&
+                                          placementInfo->sameHardRegion(coreCell, DIPinCell[i].second);
                     if (DICanBeInSlice)
                     {
                         curMacro->addCell(DIPinCell[i].second, DIPinCell[i].second->getCellType(), 0, coreOffset);
