@@ -1,0 +1,148 @@
+{
+  "schema": "amf3-branch-publication-v1",
+  "date": "2026-11-04",
+  "repository_url": "https://github.com/Lvjylean/AMFPlacer3.0.git",
+  "branch": "硬件资源适配版本",
+  "source_branch": "codex/sa-cross-die-compensation-20261102",
+  "source_commit": "0a78b00f7cdc56f4428c656256f7462491d0244d",
+  "saved_head_before_publication_docs": "934a475deca293fb9ae0c9eab8498c95cc1f2f27",
+  "production_reference_commit": "540d0077701991afabe4ec139df8fc5d700fa395",
+  "major_changes": "继承两项 SA floorplan 修改，补齐 llama U250 的固定接口、I/O 时序、同步链、专用级联、控制极性、MUX/SRL、CARRY/LUT6_2 和区域纠正/扩散预算适配。",
+  "detailed_change_summary": "docs/research/branch-lineage-20261104.md",
+  "implementation_document": "docs/research/hardware-resource-adaptation-20261104.md",
+  "publication_changes": "Documentation only; no production code, configuration, test or variant changes.",
+  "historical_scope_note": "Source hashes define the development lineage; independently appended publication documentation commits are not the source commits of later branches.",
+  "commits_since_source": [
+    {
+      "commit": "6380c11be2536dcd7507e9142d469c1be8537215",
+      "subject": "Adapt U250 full-design interfaces, I/O timing boundaries and synchronizer packing"
+    },
+    {
+      "commit": "76070fc21cf141f3969bde05841393417d5b8e4d",
+      "subject": "Support movable URAM cascades and polarity-aware FF packing"
+    },
+    {
+      "commit": "65e9bfab842868878700ce8f09da41305f63ac9c",
+      "subject": "Treat AND2B1L as combinational in timing graphs"
+    },
+    {
+      "commit": "14d07af08f40224ae6ea99997a34ea6501e46c38",
+      "subject": "Normalize region placement before shared spreading budget"
+    },
+    {
+      "commit": "73fab091c169204daddd4c63d9562385b24e0bec",
+      "subject": "Add isolated CARRY slot membership diagnostic"
+    },
+    {
+      "commit": "7f274367d6665494fdf68d780b18796ec0d796c6",
+      "subject": "Fix carry DI slot ownership with shared constant-time eligibility"
+    },
+    {
+      "commit": "a05c8323e362cbe5c415847031aa638e15d3d125",
+      "subject": "Test existing DI-only slot promotion while preserving unique ownership"
+    },
+    {
+      "commit": "90a98c7ae68342c331e44d9b2a2827c3af0d896e",
+      "subject": "Predeclare ASYNC BEL and LOC targets before partial import"
+    },
+    {
+      "commit": "be9a3328fd672781e1920abc523b25dbac6fc2aa",
+      "subject": "Restore ASYNC attributes around bounded target declaration transaction"
+    },
+    {
+      "commit": "284664caaeff27e610740108b48ff87416cccc4d",
+      "subject": "Preserve composite LUT6_2 pairing during full backend import"
+    },
+    {
+      "commit": "540d0077701991afabe4ec139df8fc5d700fa395",
+      "subject": "Reserve carry half-slice FFs for LUT6_2 output route-through"
+    },
+    {
+      "commit": "934a475deca293fb9ae0c9eab8498c95cc1f2f27",
+      "subject": "归档硬件资源适配版本并汇总 llama U250 适配与验收"
+    }
+  ],
+  "changed_paths_since_source": [
+    "M\tAGENTS.md",
+    "M\tREADME.md",
+    "A\tdocs/provenance/hardware-resource-adaptation-20261104.json",
+    "A\tdocs/research/carry-di-eligibility-20261103.md",
+    "A\tdocs/research/hardware-resource-adaptation-20261104.md",
+    "A\tdocs/research/llama-region-before-spread-20261103.md",
+    "A\tdocs/research/llama-u250-and2b1l-timing-20261103.md",
+    "A\tdocs/research/llama-u250-uram-controls-20261103.md",
+    "A\tscripts/diagnostics/audit_full_ff_polarities.tcl",
+    "A\tscripts/diagnostics/audit_uram_cascade_placement.tcl",
+    "A\tscripts/diagnostics/compile_and2b1l_timing_check.py",
+    "A\tscripts/diagnostics/export_full_ff_controls.tcl",
+    "A\tscripts/diagnostics/run_uram_export_check.py",
+    "A\tscripts/diagnostics/summarize_full_cascades.py",
+    "A\tscripts/diagnostics/summarize_full_ff_polarities.py",
+    "A\tscripts/diagnostics/verify_full_interface_replay.tcl",
+    "A\tscripts/export_full_attributes.tcl",
+    "A\tscripts/export_full_inventory.tcl",
+    "M\tscripts/full_backend.tcl",
+    "A\tscripts/full_design_interfaces.tcl",
+    "A\tscripts/full_design_metadata.py",
+    "A\tscripts/full_ff_controls.py",
+    "A\tscripts/full_ff_controls.tcl",
+    "A\tscripts/full_interface_contract.tcl",
+    "M\tscripts/inspect_amf_inputs.py",
+    "A\tscripts/lut62_pairing.tcl",
+    "A\tscripts/prepare_full_amf.py",
+    "A\tscripts/prepare_full_design.tcl",
+    "M\tscripts/run_full_backend.py",
+    "M\tscripts/run_full_flow.py",
+    "M\tsrc/CMakeLists.txt",
+    "M\tsrc/app/AMFPlacer/AMFPlacer.h",
+    "M\tsrc/app/AMFPlacer/main.cc",
+    "M\tsrc/lib/HiFPlacer/designInfo/DesignInfo.cc",
+    "M\tsrc/lib/HiFPlacer/designInfo/DesignInfo.h",
+    "M\tsrc/lib/HiFPlacer/placement/globalPlacement/CrossDieSpreadLimit.h",
+    "M\tsrc/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.cc",
+    "M\tsrc/lib/HiFPlacer/placement/globalPlacement/GeneralSpreader.h",
+    "M\tsrc/lib/HiFPlacer/placement/globalPlacement/GlobalPlacer.cc",
+    "M\tsrc/lib/HiFPlacer/placement/legalization/HardResourceUtils.cc",
+    "M\tsrc/lib/HiFPlacer/placement/packing/CLBSiteLegality.h",
+    "A\tsrc/lib/HiFPlacer/placement/packing/CarryLUTRules.h",
+    "M\tsrc/lib/HiFPlacer/placement/packing/InitialPacker.cc",
+    "M\tsrc/lib/HiFPlacer/placement/packing/InitialPacker.h",
+    "M\tsrc/lib/HiFPlacer/placement/packing/ParallelCLBPacker.cc",
+    "M\tsrc/lib/HiFPlacer/placement/packing/ParallelCLBPacker.h",
+    "M\tsrc/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBCluster.cc",
+    "M\tsrc/lib/HiFPlacer/placement/packing/ParallelCLBPacker_PackingCLBSite.cc",
+    "M\tsrc/lib/HiFPlacer/placement/placementInfo/PlacementInfo.cc",
+    "M\tsrc/lib/HiFPlacer/placement/placementInfo/PlacementInfo.h",
+    "M\tsrc/lib/HiFPlacer/placement/placementTiming/PlacementTimingInfo.cc",
+    "M\tsrc/lib/HiFPlacer/placement/placementTiming/PlacementTimingInfo.h",
+    "A\tsrc/tests/check_and2b1l_timing.cc",
+    "A\tsrc/tests/check_carry_di_eligibility.cc",
+    "A\tsrc/tests/check_carry_slot_membership.cc",
+    "A\tsrc/tests/check_composite_io_timing.cc",
+    "M\tsrc/tests/check_cross_die_spread_limit_integration.cc",
+    "A\tsrc/tests/check_ff_control_polarity.cc",
+    "A\tsrc/tests/check_uram_cascade_export.cc",
+    "A\ttests/check_and2b1l_timing.py",
+    "A\ttests/check_carry_half_routethrough.py",
+    "A\ttests/check_ff_control_polarity.py",
+    "A\ttests/check_interface_inspection_scope.py",
+    "A\ttests/check_long_srl_chains.py",
+    "A\ttests/check_mux_fabric_inputs.py",
+    "M\ttests/check_resource_legalization.py",
+    "A\ttests/test_async_import_preconstraints.py",
+    "A\ttests/test_full_ff_controls.py",
+    "M\ttests/test_full_flow.py",
+    "A\ttests/test_full_interface_adaptation.py",
+    "A\ttests/test_lut62_pairing.py"
+  ],
+  "component_tree_oids": {
+    "src": "80a8f7cf2498bee957f6b7fbd4d0ae76483c6634",
+    "scripts": "bbe4020260f230378db85209b51f314856534935",
+    "configs": "fdbb9851084a0ab6b9a04a74f7053470a3a24419",
+    "tests": "7b808642fcd78825c9191ae5af294271f7ed29eb",
+    "variants": "d1a2f3814c36a07aacdc84653598267c7597e059"
+  },
+  "new_full_experiment_executed": false,
+  "dcp_downloaded": false,
+  "historical_validation_reference": "docs/provenance/hardware-resource-adaptation-20261104.json"
+}

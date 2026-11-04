@@ -1,3 +1,7 @@
+# 当前 GitHub 分支发布（2026-11-04）
+
+用户已明确授权将 `硬件资源适配版本` 推送至 `https://github.com/Lvjylean/AMFPlacer3.0.git`，并注明来源与相对来源的主要修改。本次只补充文档，生产版本保持 `934a475deca293fb9ae0c9eab8498c95cc1f2f27` 原样；直接来源为 `0a78b00f7cdc56f4428c656256f7462491d0244d`。详见 `docs/research/branch-lineage-20261104.md` 及 `docs/provenance/branch-publication-20261104.json`。下文历史任务中的“不推送”限制已被本次用户授权覆盖；其他无关工作、历史实验和 DCP 保留规则继续适用。
+
 # 当前分支 硬件资源适配版本（2026-11-04）
 
 用户指定分支名为 `硬件资源适配版本`，本工作区是正式主仓库的独立 worktree。主体源码、脚本、配置和测试保持 `540d0077701991afabe4ec139df8fc5d700fa395` 原样，完整保留基线 `0a78b00f` 后 11 个 llama 适配提交。当前能力、历史验收及限制以 `docs/research/hardware-resource-adaptation-20261104.md` 和对应 provenance 为准。

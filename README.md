@@ -1,3 +1,16 @@
+# 硬件资源适配版本 GitHub 分支说明
+
+- 分支：`硬件资源适配版本`。
+- 直接来源：`codex/sa-cross-die-compensation-20261102` 的提交 `0a78b00f7cdc56f4428c656256f7462491d0244d`。
+- 本次发布前保存的版本：`934a475deca293fb9ae0c9eab8498c95cc1f2f27`。
+- 继承两项 SA floorplan 修改，补齐 llama U250 的固定接口、I/O 时序、同步链、专用级联、控制极性、MUX/SRL、CARRY/LUT6_2 和区域纠正/扩散预算适配。
+
+[各分支来源、全部主要改动与验证范围](docs/research/branch-lineage-20261104.md) · [本版本详细说明](docs/research/hardware-resource-adaptation-20261104.md) · [机器可读来源清单](docs/provenance/branch-publication-20261104.json)
+
+本次补充发布文档，生产源码保持原样。下方旧版本说明按历史日期理解。
+
+---
+
 # 硬件资源适配版本（2026-11-04）
 
 本分支保存 llama-fpga U250 的全设计硬件资源适配代码，主体源码与已验证提交 `540d0077` 一致。覆盖固定接口与时钟资源、复合 I/O、ASYNC 同步链、URAM 级联、FF 控制极性、MUX/SRL、CARRY 与 LUT6_2 打包和导入。
