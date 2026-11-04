@@ -1,0 +1,76 @@
+{
+  "schema": "amf3-branch-publication-v1",
+  "date": "2026-11-04",
+  "repository_url": "https://github.com/Lvjylean/AMFPlacer3.0.git",
+  "branch": "codex/sa-cross-die-compensation-20261102",
+  "source_branch": "codex/sa-device-policy-20261102",
+  "source_commit": "698c78453bb77f9c47c488a0a7b64b9d6cdb8192",
+  "saved_head_before_publication_docs": "0a78b00f7cdc56f4428c656256f7462491d0244d",
+  "production_reference_commit": "0a78b00f7cdc56f4428c656256f7462491d0244d",
+  "major_changes": "继承 U250 第三列策略，以 1.415 ns 完整分支统计参考增加普通 U250 SA 的跨 die 纵向等效距离；使用预计算查表，保留器件/DFX 隔离并补齐测试。",
+  "detailed_change_summary": "docs/research/branch-lineage-20261104.md",
+  "implementation_document": "docs/research/sa-cross-die-compensation-20261102.md",
+  "publication_changes": "Documentation only; no production code, configuration, test or variant changes.",
+  "historical_scope_note": "Source hashes define the development lineage; independently appended publication documentation commits are not the source commits of later branches.",
+  "commits_since_source": [
+    {
+      "commit": "d7ba5b284ea399983da49f5c4e6832678b0b212b",
+      "subject": "U250 SA: calibrate cross-die vertical compensation at 1.415 ns"
+    },
+    {
+      "commit": "0a78b00f7cdc56f4428c656256f7462491d0244d",
+      "subject": "Update legacy SA ratio test for current constructor and clarify calibration"
+    }
+  ],
+  "changed_paths_since_source": [
+    "M\tAGENTS.md",
+    "A\tdocs/research/sa-cross-die-compensation-20261102.md",
+    "M\tsrc/CMakeLists.txt",
+    "M\tsrc/app/AMFPlacer/main.cc",
+    "M\tsrc/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+    "A\tsrc/lib/HiFPlacer/problemSolvers/SACrossDieCompensation.h",
+    "M\tsrc/lib/HiFPlacer/problemSolvers/SAPlacer.cc",
+    "M\tsrc/lib/HiFPlacer/problemSolvers/SAPlacer.h",
+    "A\tsrc/tests/check_sa_cross_die_compensation.cc",
+    "A\tsrc/tests/check_sa_cross_die_geometry.cc",
+    "M\tsrc/tests/check_sa_y2x_ratio.cc"
+  ],
+  "component_tree_oids": {
+    "src": "00dbdec925ddaf328200c86e0a72c20e3444b520",
+    "scripts": "642d850241140b9b261b7f067a1c031c9cc66355",
+    "configs": "fdbb9851084a0ab6b9a04a74f7053470a3a24419",
+    "tests": "b5bc550fcabdda4cec6ec6860a473e8ae91ec844",
+    "variants": "d1a2f3814c36a07aacdc84653598267c7597e059"
+  },
+  "new_full_experiment_executed": false,
+  "dcp_downloaded": false,
+  "historical_validation": {
+    "source_path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261102-sa-cross-die-compensation/validation/summary.json",
+    "state": "validated",
+    "build_id": "build-20261102-142409-896389-0a78b00f",
+    "source_snapshot_matches": true,
+    "checks": [
+      {
+        "name": "checkSACrossDieCompensation",
+        "exit_code": 0
+      },
+      {
+        "name": "checkSACrossDieGeometry",
+        "exit_code": 0
+      },
+      {
+        "name": "checkSADevicePolicy",
+        "exit_code": 0
+      },
+      {
+        "name": "checkDevicePlacementPolicy",
+        "exit_code": 0
+      },
+      {
+        "name": "checkSAY2XRatio",
+        "exit_code": 0
+      }
+    ],
+    "full_experiment_started": false
+  }
+}

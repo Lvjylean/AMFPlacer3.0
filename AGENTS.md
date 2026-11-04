@@ -1,3 +1,7 @@
+# 当前 GitHub 分支发布（2026-11-04）
+
+用户已明确授权将 `codex/sa-cross-die-compensation-20261102` 推送至 `https://github.com/Lvjylean/AMFPlacer3.0.git`，并注明来源与相对来源的主要修改。本次只补充文档，生产版本保持 `0a78b00f7cdc56f4428c656256f7462491d0244d` 原样；直接来源为 `698c78453bb77f9c47c488a0a7b64b9d6cdb8192`。详见 `docs/research/branch-lineage-20261104.md` 及 `docs/provenance/branch-publication-20261104.json`。下文历史任务中的“不推送”限制已被本次用户授权覆盖；其他无关工作、历史实验和 DCP 保留规则继续适用。
+
 # 当前独立副本：U250 SA 跨 die 纵向补偿（2026-11-02）
 
 用户接受同列、相邻 CR 跨 die 完整分支中位数 1.415 ns 作为单点标定。本副本基于698c7845，分支codex/sa-cross-die-compensation-20261102。仅普通 U250 SA 默认启用，SACrossDieCompensationEnable=false可回到基线；VU095/VCU108及DFX原样保留。按当前模型换算总等效Y=182.69021394，减掉原来已计的一行距后，每道真实SLR接缝增加剩余纵向距离；横向项和连接权重保留。不是新二维拟合，不把1.415解释为固定额外ns。只构建和小型验证，不启动完整布局布线，不推送。不得捎带修改多启动、容量、QP、SLL规划或时序模型。详见docs/research/sa-cross-die-compensation-20261102.md。以下为历史记录。
