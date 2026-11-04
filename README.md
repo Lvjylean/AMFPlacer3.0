@@ -1,3 +1,16 @@
+# SA 器件策略版本 GitHub 分支说明
+
+- 分支：`codex/sa-device-policy-20261102`。
+- 直接来源：`codex/sll-edge-compact-snapshot-20261024` 的提交 `b0c4ad1e4838d662c2ff9c49c93570586eca7608`。
+- 本次发布前保存的版本：`698c78453bb77f9c47c488a0a7b64b9d6cdb8192`。
+- 相对已发布的 SLL 延后版本，仅按器件选择 SA 第三列水平附加罚：U250 关闭，VU095/VCU108 保留；补齐能力标识、日志和测试。
+
+[各分支来源、全部主要改动与验证范围](docs/research/branch-lineage-20261104.md) · [本版本详细说明](docs/research/sa-device-policy-20261102.md) · [机器可读来源清单](docs/provenance/branch-publication-20261104.json)
+
+本次补充发布文档，生产源码保持原样。下方旧版本说明按历史日期理解。
+
+---
+
 # sll约束优化延后（2026-11-02）
 
 基于“2.0优化加速版本”，加入已验收的虚拟 SLL 延后启用与只读逐帧记录。`SllDeferredUntilFirstSpread=true` 在首轮完整资源扩散之后的下一次 QP 才创建虚拟 SLL 规划；当前 GETRF 流程对应 QP9。数量梯度与动态 tau 的启用时机不变。开关默认 `false`，保留既有行为。

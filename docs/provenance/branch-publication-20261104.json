@@ -1,0 +1,59 @@
+{
+  "schema": "amf3-branch-publication-v1",
+  "date": "2026-11-04",
+  "repository_url": "https://github.com/Lvjylean/AMFPlacer3.0.git",
+  "branch": "codex/sa-device-policy-20261102",
+  "source_branch": "codex/sll-edge-compact-snapshot-20261024",
+  "source_commit": "b0c4ad1e4838d662c2ff9c49c93570586eca7608",
+  "saved_head_before_publication_docs": "698c78453bb77f9c47c488a0a7b64b9d6cdb8192",
+  "production_reference_commit": "698c78453bb77f9c47c488a0a7b64b9d6cdb8192",
+  "major_changes": "相对已发布的 SLL 延后版本，仅按器件选择 SA 第三列水平附加罚：U250 关闭，VU095/VCU108 保留；补齐能力标识、日志和测试。",
+  "detailed_change_summary": "docs/research/branch-lineage-20261104.md",
+  "implementation_document": "docs/research/sa-device-policy-20261102.md",
+  "publication_changes": "Documentation only; no production code, configuration, test or variant changes.",
+  "historical_scope_note": "Source hashes define the development lineage; independently appended publication documentation commits are not the source commits of later branches.",
+  "commits_since_source": [
+    {
+      "commit": "698c78453bb77f9c47c488a0a7b64b9d6cdb8192",
+      "subject": "fix(sa): select legacy column penalty by device"
+    }
+  ],
+  "changed_paths_since_source": [
+    "M\tAGENTS.md",
+    "A\tdocs/research/sa-device-policy-20261102.md",
+    "M\tsrc/CMakeLists.txt",
+    "M\tsrc/app/AMFPlacer/main.cc",
+    "M\tsrc/lib/HiFPlacer/deviceInfo/DevicePlacementPolicy.h",
+    "M\tsrc/lib/HiFPlacer/placement/globalPlacement/ClusterPlacer.cc",
+    "M\tsrc/lib/HiFPlacer/problemSolvers/SAPlacer.cc",
+    "M\tsrc/lib/HiFPlacer/problemSolvers/SAPlacer.h",
+    "M\tsrc/tests/check_device_placement_policy.cc",
+    "A\tsrc/tests/check_sa_device_policy.cc"
+  ],
+  "component_tree_oids": {
+    "src": "8900fb470aabac158afc440a119a91bffcbd9800",
+    "scripts": "642d850241140b9b261b7f067a1c031c9cc66355",
+    "configs": "fdbb9851084a0ab6b9a04a74f7053470a3a24419",
+    "tests": "b5bc550fcabdda4cec6ec6860a473e8ae91ec844",
+    "variants": "d1a2f3814c36a07aacdc84653598267c7597e059"
+  },
+  "new_full_experiment_executed": false,
+  "dcp_downloaded": false,
+  "historical_validation": {
+    "source_path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261102-sa-device-policy/validation/summary.json",
+    "state": "validated",
+    "build_id": "build-20261102-104035-026284-698c7845",
+    "source_snapshot_matches": true,
+    "checks": [
+      {
+        "name": "checkDevicePlacementPolicy",
+        "exit_code": 0
+      },
+      {
+        "name": "checkSADevicePolicy",
+        "exit_code": 0
+      }
+    ],
+    "full_experiment_started": false
+  }
+}

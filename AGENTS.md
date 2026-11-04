@@ -1,3 +1,7 @@
+# 当前 GitHub 分支发布（2026-11-04）
+
+用户已明确授权将 `codex/sa-device-policy-20261102` 推送至 `https://github.com/Lvjylean/AMFPlacer3.0.git`，并注明来源与相对来源的主要修改。本次只补充文档，生产版本保持 `698c78453bb77f9c47c488a0a7b64b9d6cdb8192` 原样；直接来源为 `b0c4ad1e4838d662c2ff9c49c93570586eca7608`。详见 `docs/research/branch-lineage-20261104.md` 及 `docs/provenance/branch-publication-20261104.json`。下文历史任务中的“不推送”限制已被本次用户授权覆盖；其他无关工作、历史实验和 DCP 保留规则继续适用。
+
 # 当前独立副本：SA 器件分派（2026-11-02）
 
 用户授权从 b0c4ad1 新建代码备份，仅按现有 device 配置禁用 U250 的 SA 第三列水平距离附加罚，保留 VU095/VCU108 原行为。副本分支 codex/sa-device-policy-20261102。修改前归档在父目录 baseline-source.tar.gz。只构建和小型验证，不启动完整布局布线，不推送；不捎带修正 SA 多启动或新增容量/跨 SLR 成本。详见 docs/research/sa-device-policy-20261102.md。以下为历史记录。
