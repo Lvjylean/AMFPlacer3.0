@@ -1,3 +1,16 @@
+# 硬件资源适配版本（2026-11-04）
+
+本分支保存 llama-fpga U250 的全设计硬件资源适配代码，主体源码与已验证提交 `540d0077` 一致。覆盖固定接口与时钟资源、复合 I/O、ASYNC 同步链、URAM 级联、FF 控制极性、MUX/SRL、CARRY 与 LUT6_2 打包和导入。
+
+- [适配清单、验证结果与保留限制](docs/research/hardware-resource-adaptation-20261104.md)
+- [源码及实验来源记录](docs/provenance/hardware-resource-adaptation-20261104.json)
+
+已完成 AMF 布局和 Vivado 2026.1 布线：可布线网络全部布通，DRC Error/Critical Warning 为 0；3.332 ns 下 setup WNS 为 −6.207 ns，时序尚未收敛。8 项既有半区占用按授权暂缓，SRL share4 上限和已诊断的打包/区域选择问题仍保留。此次归档未改算法、未重跑实验。
+
+以下版本标题及验收结论按各自历史日期理解。
+
+---
+
 # sll约束优化延后（2026-11-02）
 
 基于“2.0优化加速版本”，加入已验收的虚拟 SLL 延后启用与只读逐帧记录。`SllDeferredUntilFirstSpread=true` 在首轮完整资源扩散之后的下一次 QP 才创建虚拟 SLL 规划；当前 GETRF 流程对应 QP9。数量梯度与动态 tau 的启用时机不变。开关默认 `false`，保留既有行为。

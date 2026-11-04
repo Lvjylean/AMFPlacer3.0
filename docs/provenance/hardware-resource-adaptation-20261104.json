@@ -1,0 +1,255 @@
+{
+  "schema": "amf3-hardware-resource-adaptation-release-v1",
+  "recorded_date": "2026-11-04",
+  "branch": "硬件资源适配版本",
+  "source_commit": "540d0077701991afabe4ec139df8fc5d700fa395",
+  "adaptation_base_commit": "0a78b00f7cdc56f4428c656256f7462491d0244d",
+  "source_repo": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261102-llama-u250-interface-adaptation/fixes/20261103-carry-half-routethrough/repo",
+  "main_repo": "/Projects/jinyang/workspace/AMFplacer3.0",
+  "release_worktree": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261104-hardware-resource-adaptation-release/repo",
+  "scope": "Capture the existing verified source unchanged; add release documentation and provenance only. No new algorithm change or experiment.",
+  "production_code_changed_by_release": false,
+  "validation_scripts_scope": "Later boolean/report/dependency/supervision fixes remain in their independent frozen validation directories; case-specific eight-half exception policy is not promoted to a general full-run rule.",
+  "history_recovery": "Imported original SA base ancestry into main object database; retained all 11 adaptation commits; no change to historical copies.",
+  "parameters": {
+    "ClockPeriod_ns": 3.332,
+    "derived_clocks": "benchmark originals preserved",
+    "ProPrimitiveTiming": false,
+    "SllRegionPolicy": "preserve",
+    "SRLMaxPerSLICEM": 4,
+    "CrossDieSpreadMaxBins": 20,
+    "spreading_budget_origin": "post_region_correction",
+    "region_correction_in_budget": false,
+    "amf_threads": 12,
+    "vivado_version": "2026.1",
+    "vivado_threads": 4
+  },
+  "historical_route_evidence": {
+    "completed_at": "2026-11-03T22:34:41.973482+08:00",
+    "run_directory": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261102-llama-u250-interface-adaptation/fixes/20261103-route-script-dependencies/validation/route-20261103-214618",
+    "tool_exit_code": 0,
+    "route_command_return_code": 0,
+    "routing_invocations": 1,
+    "routing_complete": true,
+    "route_counts": {
+      "logical_nets": 2487117,
+      "routable_nets": 1062896,
+      "fully_routed_nets": 1062896,
+      "remaining_routable_nets": 0,
+      "routing_error_nets": 0
+    },
+    "drc": {
+      "errors": 0,
+      "critical_warnings": 0,
+      "warnings": 725,
+      "advisories": 88,
+      "default_ruledeck": true
+    },
+    "timing": {
+      "WNS_ns": -6.207,
+      "TNS_ns": -111761.648,
+      "setup_failing_endpoints": 140486,
+      "setup_total_endpoints": 2131760,
+      "WHS_ns": 0.001,
+      "THS_ns": 0.0,
+      "hold_failing_endpoints": 0,
+      "hold_total_endpoints": 2127918,
+      "WPWS_ns": 0.0,
+      "TPWS_ns": 0.0,
+      "pulse_failing_endpoints": 0,
+      "pulse_total_endpoints": 790343,
+      "setup_pass": false,
+      "hold_pass": true,
+      "pulse_pass": true,
+      "all_constraints_met": false,
+      "unconstrained_internal_endpoints": 0,
+      "ports_without_input_delay": 2,
+      "ports_without_output_delay": 4,
+      "no_clock_pins": 0
+    },
+    "physical_audits": {
+      "placement": {
+        "requested": 1156542,
+        "present": 1156542,
+        "placed": 1156542,
+        "exact_loc_bel_matches": 1149394,
+        "site_matches": 1156510,
+        "exact_original_loc_bel_matches": 1149394,
+        "primary_bel_matches": 1149169,
+        "composite_bel_alias_matches": 225,
+        "design_primitive_cells": 1409312,
+        "unrequested_primitive_cells": 252770,
+        "exact_loc_bel_matches_percent": 99.38195067710468,
+        "site_matches_percent": 99.99723313117897,
+        "different_loc_bel_from_AMF": 7148,
+        "different_site_from_AMF": 32
+      },
+      "pending": {
+        "count": 27,
+        "physically_placed": 27,
+        "type_changes": 0,
+        "async_cells": 0
+      },
+      "async": {
+        "count": 4171,
+        "exact": 4171,
+        "physically_placed": 4171,
+        "async_reg_true": 4171
+      },
+      "async_groups": {
+        "groups": 1785,
+        "members": 4171,
+        "different_slice_groups": 0
+      },
+      "lut62": {
+        "pairs": 2236,
+        "physical_pairs": 2236,
+        "pairing_changes": 0,
+        "member_type_errors": 0,
+        "require_placed": 1,
+        "elapsed_ms": 685
+      },
+      "reserved_halves": {
+        "halves": 2744,
+        "new_halves": 520,
+        "missing_carry_halves": 0,
+        "moved_carry_halves": 0,
+        "conflicting_halves": 8,
+        "new_conflicting_halves": 0,
+        "require_placed": 0
+      },
+      "half_exception_policy": {
+        "authorized_source_exceptions": 8,
+        "known_conflicting_halves": 8,
+        "unexpected_conflicting_halves": 0,
+        "missing_carry_halves": 0,
+        "policy": "user-authorized routing trial; known eight recorded, not treated as routing proof"
+      },
+      "srl_cascades": {
+        "checked": 720,
+        "violations": 0
+      },
+      "cascades": {
+        "checked": 4419,
+        "violations": 0
+      },
+      "drc_counts": {
+        "errors": 0,
+        "critical_warnings": 0
+      },
+      "route_status": {
+        "routed_fully": 1,
+        "errors_in_routes": 0
+      },
+      "interface_contract": {
+        "fixed_interfaces": 1286,
+        "protected_clock_port_records": 10042,
+        "contract_unchanged": 1
+      }
+    },
+    "physical_audits_pass_with_authorized_exceptions": true,
+    "blanket_no_occupant_rule_satisfied": false,
+    "strict_import_claimed": false,
+    "wall_times": {
+      "stages_seconds": {
+        "open": 236.648,
+        "baseline": 52.417,
+        "pre_route_audit": 86.855,
+        "pre_route_drc": 40.733,
+        "route": 1925.842,
+        "route_status": 58.819,
+        "routed_drc": 74.58,
+        "timing": 123.111,
+        "routed_checkpoint": 79.222,
+        "route_audits": 90.205
+      },
+      "timed_stages_sum_seconds": 2768.432,
+      "validation_tcl_wall_seconds": 2796.972,
+      "batch_entry_wall_seconds": 2807.918,
+      "supervisor_observed_process_wall_seconds": 2820.6401640120894,
+      "wall_note": "Supervisor observes exit at five-second sampling intervals. This is the current route continuation only; historical stages excluded.",
+      "not_individually_timed_in_tcl_seconds": 28.54000000000042,
+      "reused_AMF_seconds": 2545.332267961465,
+      "reused_adapter_seconds": 38.05022814590484,
+      "reused_placement_seconds": 1555.156,
+      "this_run_AMF_seconds": 0,
+      "this_run_import_seconds": 0,
+      "this_run_placement_seconds": 0
+    },
+    "final_dcp": {
+      "path": "/Projects/jinyang/workspace/AMFplacer3.0/experiments/preflight/20261102-llama-u250-interface-adaptation/fixes/20261103-route-script-dependencies/validation/route-20261103-214618/reports/llama_routed.dcp",
+      "bytes": 485458061,
+      "sha256": "1498b4a8ee231b820e8b834c19437570914a4e4845ad3131426524b3f5c3bc4c",
+      "modified_at": "2026-11-03T22:33:04.861195+08:00"
+    }
+  },
+  "not_implemented_by_this_release": [
+    "SRL share8",
+    "CLB compaction improvements",
+    "region choice corrected for high-fanout endpoints",
+    "new driver replication strategy",
+    "generic exemption for occupied reserved halves"
+  ],
+  "dcp_in_git": false,
+  "dcp_downloaded": false,
+  "new_full_experiment_executed": false,
+  "adaptation_commits": [
+    {
+      "commit": "6380c11be2536dcd7507e9142d469c1be8537215",
+      "subject": "Adapt U250 full-design interfaces, I/O timing boundaries and synchronizer packing"
+    },
+    {
+      "commit": "76070fc21cf141f3969bde05841393417d5b8e4d",
+      "subject": "Support movable URAM cascades and polarity-aware FF packing"
+    },
+    {
+      "commit": "65e9bfab842868878700ce8f09da41305f63ac9c",
+      "subject": "Treat AND2B1L as combinational in timing graphs"
+    },
+    {
+      "commit": "14d07af08f40224ae6ea99997a34ea6501e46c38",
+      "subject": "Normalize region placement before shared spreading budget"
+    },
+    {
+      "commit": "73fab091c169204daddd4c63d9562385b24e0bec",
+      "subject": "Add isolated CARRY slot membership diagnostic"
+    },
+    {
+      "commit": "7f274367d6665494fdf68d780b18796ec0d796c6",
+      "subject": "Fix carry DI slot ownership with shared constant-time eligibility"
+    },
+    {
+      "commit": "a05c8323e362cbe5c415847031aa638e15d3d125",
+      "subject": "Test existing DI-only slot promotion while preserving unique ownership"
+    },
+    {
+      "commit": "90a98c7ae68342c331e44d9b2a2827c3af0d896e",
+      "subject": "Predeclare ASYNC BEL and LOC targets before partial import"
+    },
+    {
+      "commit": "be9a3328fd672781e1920abc523b25dbac6fc2aa",
+      "subject": "Restore ASYNC attributes around bounded target declaration transaction"
+    },
+    {
+      "commit": "284664caaeff27e610740108b48ff87416cccc4d",
+      "subject": "Preserve composite LUT6_2 pairing during full backend import"
+    },
+    {
+      "commit": "540d0077701991afabe4ec139df8fc5d700fa395",
+      "subject": "Reserve carry half-slice FFs for LUT6_2 output route-through"
+    }
+  ],
+  "source_component_tree_oids": {
+    "src": "80a8f7cf2498bee957f6b7fbd4d0ae76483c6634",
+    "scripts": "bbe4020260f230378db85209b51f314856534935",
+    "configs": "fdbb9851084a0ab6b9a04a74f7053470a3a24419",
+    "tests": "7b808642fcd78825c9191ae5af294271f7ed29eb",
+    "variants": "d1a2f3814c36a07aacdc84653598267c7597e059"
+  },
+  "source_tree_oid": "88acf2511d654283a7ba29ef5fe4709aacd169a0",
+  "capture_verification": {
+    "production_tree_identical_to_source": true,
+    "object_history_complete_without_alternate": true,
+    "new_full_experiment_executed": false
+  }
+}

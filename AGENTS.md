@@ -1,3 +1,11 @@
+# 当前分支 硬件资源适配版本（2026-11-04）
+
+用户指定分支名为 `硬件资源适配版本`，本工作区是正式主仓库的独立 worktree。主体源码、脚本、配置和测试保持 `540d0077701991afabe4ec139df8fc5d700fa395` 原样，完整保留基线 `0a78b00f` 后 11 个 llama 适配提交。当前能力、历史验收及限制以 `docs/research/hardware-resource-adaptation-20261104.md` 和对应 provenance 为准。
+
+本次只整理版本与来源，不启动新实验，不改写原主工作区或历史实验。后续代码修改继续在独立副本进行。保留 3.332 ns 及原派生时钟、普通 Pro/ProPrimitiveTiming=false、SllRegionPolicy=preserve。已布通不等于 setup 通过；8 项具体半区占用是用户暂缓的实验例外，不得升级为通用豁免。SRL share8、CLB 紧凑化和高扇出区域优化尚未实现。后续独立验收脚本的报告/依赖修复不冒充已并入主体生产入口。
+
+以下任务限制和“当前”标题均是历史记录；新用户授权优先。
+
 # Current isolated fix: CARRY half-slice route-through reservation (2026-11-03)
 
 The user authorized completing the shared half-slice reservation rules with a lightweight implementation. Only this independent copy changes. Extend initial CARRY packing for absorbed LUT6_2 O5/fabric-output conflicts, reuse existing virtual FF slots, and retain prior O/CO and dynamic-CI rules. Build and run focused fixtures plus native llama/GETRF initial packing and slot reconstruction. No full AMF placement, Vivado placement or routing is started by this task. Keep historical runs, original constraints and source inputs unchanged. Previous restrictions below refer to their historical scopes.
