@@ -103,6 +103,16 @@ class GridView {
         auto next=at(x,y); if (old==next) return;
         old->removeCell(cell,weights[id]); next->addCell(cell,weights[id]); cellBins[id]=next;
     }
+    Bin *memberBin(int id) const { return cellBins.at(id); }
+    // Restore exact membership of a rejected serialized whole-PU trial,
+    // including virtual-member accounting and members of other resource types.
+    void restoreMemberBin(DesignInfo::DesignCell *cell,Bin *original) {
+        const int id=cell->getCellId(); auto current=cellBins.at(id);
+        if(current==original)return;
+        if(!current || !original)throw std::logic_error("Spreading resource membership changed");
+        current->removeCell(cell,weights[id]);
+        original->addCell(cell,weights[id]); cellBins[id]=original;
+    }
     std::pair<int,int> rowRange(int row) const {
         int a=row,b=row; const int die=rowDie.at(row);
         while(a>0 && rowDie[a-1]==die)--a;
@@ -114,7 +124,7 @@ class GridView {
         std::vector<Supply> out(seams.size()+1);
         for(size_t y=0;y<rows.size();++y) for(auto b:rows[y]) {
             auto &s=out[rowDie[y]]; s.demand+=b->getUtilization();
-            s.effective+=b->getCapacity();
+            s.effective+=b->getSpreadingCapacity();
         }
         for(size_t i=0;i<out.size();++i) out[i].nominal=nominal[i];
         return out;

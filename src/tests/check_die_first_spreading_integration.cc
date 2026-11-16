@@ -15,11 +15,16 @@ static std::vector<std::map<std::string,std::string>> rows(std::filesystem::path
         for(size_t i=0;i<v.size();++i)r[hdr[i]]=v[i];out.push_back(r);}
     return out;
 }
+#include "directional_residual_fixture.h"
+#include "empty_logic_fixture.h"
 int main(int argc,char **argv){try{
     check(argc==3||argc==4,"usage: checkDieFirstSpreadingIntegration fixture.json NEW_OUTPUT [macro]");
-    bool macroMode=argc==4;
+    bool directional=argc==4 && std::string(argv[3])=="directional";
+    const bool emptyLogic = argc==4 && std::string(argv[3])=="empty-logic";
+    bool macroMode=argc==4 && !emptyLogic;
     auto root=std::filesystem::path(argv[2]);check(std::filesystem::create_directory(root),"refuse output overwrite");
     auto cfg=parseJSONFile(argv[1]);cfg["jobs"]="2";cfg["SllReportDirectory"]=(root/"local").string();
+    cfg["DirectionalResidualSpreading"]=directional?"true":"false";
     DeviceInfo dev(cfg,cfg["device"]);DesignInfo design(cfg,&dev);PI pi(&design,&dev,cfg);
     std::vector<float> seams;for(auto &b:dev.getPhysicalBoundaryModel()->getBoundaries())if(b.active&&b.kind=="SLR"&&b.orientation=='Y')seams.push_back(b.coordinate);
     std::sort(seams.begin(),seams.end());check(!seams.empty(),"multi-die fixture required");float seam=seams[0];
@@ -40,6 +45,10 @@ int main(int argc,char **argv){try{
     }
     check(pi.getPlacementUnits().size()==(macroMode?3:4),"synthetic PU count");
     pi.updateCells2PlacementUnits();pi.reloadNets();pi.setBELTypeForCells(&design);
+    if (emptyLogic) {
+        checkEmptyLogicPlacement(pi,seams,cfg.count("logic empty bins file")!=0);
+        return 0;
+    }
     // Synthetic demand forces a small local overflow without running a placer flow.
     pi.createGridBins(5,5);
     std::string type="SLICEL_LUT";
@@ -48,6 +57,17 @@ int main(int argc,char **argv){try{
     const float load=std::max(100,seed->getNominalCapacity()+1);
     for(auto &v:pi.getCompatiblePlacementTable()->getcellId2Occupation())v=load;
     pi.updateElementBinGrid(false);
+    if(directional) {
+        for(const std::string mode:{"local","partial","tie","reserved","rollback","cross","group","shared","shared-zero"})
+            CrossDieSpreadLimitTestAccess::run(mode,pi,cfg,seam,root/mode);
+        for(auto &v:pi.getCompatiblePlacementTable()->getcellId2Occupation()) v=load;
+        pi.updateElementBinGrid(false);
+        cfg["SharedResidualSpreading"]="true";
+        cfg["SllReportDirectory"]=(root/"full-entry").string();
+        { GeneralSpreader spread(&pi,cfg,type,0,.8,false); spread.spreadPlacementUnits(1,false,-1,100); }
+        check(!rows(root/"full-entry/spreading-passes.tsv").empty(),"no real resource pass");
+        return 0;
+    }
     {GeneralSpreader spread(&pi,cfg,type,0,.8,false);spread.spreadPlacementUnits(.2,false,-10,200);}
     auto local=rows(root/"local/spreading-regions.tsv");check(!local.empty(),"fixture must exercise spreading");
     size_t localCount=0;

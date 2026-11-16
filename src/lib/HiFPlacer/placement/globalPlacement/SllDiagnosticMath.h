@@ -41,6 +41,20 @@ inline NetDetail detail(const Model& m, const Net& n, const std::vector<double>&
     d.y.resize(count);d.z.assign(count,0);d.dz.assign(count,0);
     d.pplus.resize(count);d.pminus.resize(count);d.gradient.assign(count,0);
     if(!count)return d;
+    if(m.sllSTE){
+        Model::SteScratch scratch;
+        d.value=m.steNet(n,positions,true,scratch);
+        d.y=std::move(scratch.pinY);d.gradient=std::move(scratch.gradient);
+        d.minimum=*std::min_element(d.y.begin(),d.y.end());
+        d.maximum=*std::max_element(d.y.begin(),d.y.end());
+        d.discrete=m.slr(d.maximum)-m.slr(d.minimum);
+        for(size_t j=0;j<count;++j){
+            d.z[j]=m.slr(d.y[j]);
+            // No single soft z or WA extremum weight exists in boundary-wise STE.
+            d.dz[j]=d.pplus[j]=d.pminus[j]=std::numeric_limits<double>::quiet_NaN();
+        }
+        return d;
+    }
     for(size_t j=0;j<count;++j) {
         auto &p=m.pins[n.begin+j];d.y[j]=positions[p.unit]+p.offsetY;
         for(size_t b=0;b<m.boundaries.size();++b) {

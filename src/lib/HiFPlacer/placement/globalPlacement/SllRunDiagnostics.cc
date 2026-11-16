@@ -61,6 +61,7 @@ struct SllRunDiagnostics::Impl {
     double seconds()const{return std::chrono::duration<double>(std::chrono::steady_clock::now()-origin).count();}
     Impl(PlacementInfo*pi,const std::map<std::string,std::string>&cfg,double r):placement(pi),ratio(r) {
         enabled=flag(cfg,"SllQuantityEnable");flag(cfg,"SllQuantityDiagnostics");
+        model.sllSTE=flag(cfg,"sllSTE");
         dynamicTau=flag(cfg,"SllDynamicTauEnable");shortSpan=flag(cfg,"SllShortSpanEnable");
         detailed=flag(cfg,"DetailedDiagnosticsEnable",true);
         tauPolicy=cfg.count("SllTauPolicy")?cfg.at("SllTauPolicy"):"adaptive";
@@ -104,10 +105,15 @@ struct SllRunDiagnostics::Impl {
         open(shortReport,"short-span.tsv","qp\tphase\tround\titeration\ttau\tpolicy_applied\texcluded_nets\tentered\tresumed\texcluded_S\tS_full\tinvalid_nets\tdiscrete_count_seconds\tlist_update_seconds\texcluded_same_die_nets\texcluded_cross_die_nets");
         open(perf,"sll-overhead.tsv","event\tqp\tphase\tround\titeration\tstate\ttau\tcategory\twall_seconds");
         std::ofstream meta(directory+"/parameters.tsv");meta<<std::setprecision(17)
-            <<"model\tsigmoid_wa_first_order_original_writeback_v1\nenabled\t"<<enabled<<"\ntau\t"<<model.tau[0]<<"\ngamma\t"<<model.gamma
+            <<"model\t"<<(model.sllSTE?"hard_boundary_ste_first_order_v1":"sigmoid_wa_first_order_original_writeback_v1")<<"\nenabled\t"<<enabled<<"\ntau\t"<<model.tau[0]<<"\ngamma\t"<<model.gamma
             <<"\nsll_length_tiles\t60\ny2x_ratio\t"<<ratio<<"\nlength_coefficient\t"<<coefficient<<"\nextra_y_limit\tfalse\nbacktracking\tfalse\nJ_increase_policy\trecord_only\ninjection_scope\tglobal_placement_after_common_initial_QP\nregion_policy\tpreserve\nnet_selection\t64_common_stratified_plus_8_dynamic\n"
             <<"tau_policy\t"<<tauPolicy<<"\ndetailed_diagnostics\t"<<detailed<<"\ndynamic_tau_enabled\t"<<dynamicTau<<"\nshort_span_enabled\t"<<shortSpan
             <<"\ntau_floor\t0.2\ntau_factor\t0.5\nrule_parameters\tsee_selected_SllTauPolicy_and_adaptive_rounds_decisions\nshort_span_enter_y\t2\nshort_span_resume_y\t3\nshort_span_rule_version\t2\nshort_span_boundary_distance_enter_y\t2\nshort_span_boundary_distance_resume_y\t3\nshort_span_required_crossings\tnone\nshort_span_boundary_retention\tsame_physical_boundary_as_entry\nshort_span_list_update_scope\tboundary_radius_and_hysteresis_mask_without_second_pin_scan\nmask_update\tbefore_each_QP_frozen_through_writeback\nfull_statistics\tinclude_temporarily_excluded_nets\nround_statistic\tafter_legalization\nS_meaning\tdiscrete_vertical_boundary_demand_not_routed_usage\ntiming_scope\twall_seconds_nonoverlapping_categories_except_explicit_total\n";
+        meta<<"sllSTE\t"<<model.sllSTE
+            <<"\nF_meaning\t"<<(model.sllSTE?"weighted_hard_boundary_demand":"sigmoid_wa_surrogate")
+            <<"\ngamma_used\t"<<!model.sllSTE
+            <<"\nquantity_gradient\t"<<(model.sllSTE?"crossed_seams_only_equal_side_ties_times_sigmoid_derivative":"analytic_sigmoid_wa")
+            <<"\npin_detail_ste_columns\twhen_STE:z=hard_die;dz_dy,p_plus,p_minus=nan;dF_dpin_y=surrogate_before_activity_mask\n";
     }
     ~Impl() {
         if(!detailed)return;

@@ -1,3 +1,5 @@
+#include "../../../utils/IncrementalSTAProfile.h"
+#include "../../../utils/PhaseWaitProfile.h"
 #include "../../../utils/RuntimeProfiler.h"
 /**
  * @file PlacementTimingOptimizer.cc
@@ -38,6 +40,7 @@ PlacementTimingOptimizer::PlacementTimingOptimizer(PlacementInfo *placementInfo,
       placementInfo(placementInfo), timingInfo(placementInfo->getTimingInfo()), JSONCfg(JSONCfg)
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     if (JSONCfg.find("PlacementTimingOptimizerVerbose") != JSONCfg.end())
         verbose = JSONCfg["PlacementTimingOptimizerVerbose"] == "true";
     if (JSONCfg.find("y2xRatio") != JSONCfg.end())
@@ -90,6 +93,7 @@ PlacementTimingOptimizer::PlacementTimingOptimizer(PlacementInfo *placementInfo,
 void PlacementTimingOptimizer::setPinsLocation()
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     using PinClock = std::chrono::steady_clock;
     const auto started = PinClock::now();
     auto secondsSince = [](PinClock::time_point t) {
@@ -97,13 +101,12 @@ void PlacementTimingOptimizer::setPinsLocation()
     };
     auto &cellLoc = placementInfo->getCellId2location();
     auto &pinLoc = placementInfo->getPinId2location();
-    if (grid_update::mode() == grid_update::Mode::legacy)
-        pinLoc = std::vector<PlacementInfo::Location>(designInfo->getPins().size());
-    else
-        // Keep -10 sentinels for pins without a cell, while reusing capacity.
-        pinLoc.assign(designInfo->getPins().size(), PlacementInfo::Location{});
+    // Reuse the existing buffer; still reset every unowned pin to its sentinel.
+    // Cell/pin ownership is disjoint, so the existing static parallel loop
+    // writes exactly the same per-pin expressions as the serial path.
+    pinLoc.assign(designInfo->getPins().size(), PlacementInfo::Location{});
     const auto &cells = placementInfo->getCells();
-#pragma omp parallel for if(grid_update::parallel()) schedule(static)
+#pragma omp parallel for schedule(static)
     for (size_t ci = 0; ci < cells.size(); ++ci)
     {
         auto tmpCell = cells[ci];
@@ -185,6 +188,7 @@ float PlacementTimingOptimizer::getWorstSlackOfCell(DesignInfo::DesignCell *srcC
 std::vector<int> PlacementTimingOptimizer::findCriticalPath()
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
 
     assert(timingInfo);
     auto timingGraph = timingInfo->getSimplePlacementTimingGraph();
@@ -210,6 +214,7 @@ std::vector<std::vector<int>> PlacementTimingOptimizer::findCriticalPaths(float 
                                                                           bool backwardSearch)
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
 
     assert(timingInfo);
     auto timingGraph = timingInfo->getSimplePlacementTimingGraph();
@@ -569,6 +574,7 @@ std::vector<std::vector<int>>
 PlacementTimingOptimizer::findCriticalPaths(float criticalRatio, std::vector<bool> &FFDirectlyDrivenButNotInOneSlot)
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
 
     assert(timingInfo);
     auto timingGraph = timingInfo->getSimplePlacementTimingGraph();
@@ -616,6 +622,7 @@ PlacementTimingOptimizer::findCriticalPaths(float criticalRatio, std::vector<boo
 float PlacementTimingOptimizer::conductStaticTimingAnalysis(bool disableOptimisticTiming)
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     TimingConfigBatch configBatch(*this);
     print_status("PlacementTimingOptimizer: conducting Static Timing Analysis");
 
@@ -993,6 +1000,7 @@ float PlacementTimingOptimizer::conductStaticTimingAnalysis(bool disableOptimist
 float PlacementTimingOptimizer::getSlackThr()
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     TimingConfigBatch configBatch(*this);
     SllPlanner::TimingBatch timingBatch(useSllTiming()?placementInfo->sllPlanner.get():nullptr,
                                       SllPlanner::TimingCoordinates::CellCenters);
@@ -1170,6 +1178,8 @@ void PlacementTimingOptimizer::incrementalStaticTimingAnalysis(
     std::set<PlacementInfo::PlacementUnit *, Packing_PUcompare> movedPUs, bool noBackPropogation)
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
+    incremental_profile::Call incrementalObservation(movedPUs.size(), noBackPropogation);
     incrementalNodeSnapshot.clear();
     incrementalEdgeSnapshot.clear();
     incrementalPinSnapshot.clear();
@@ -1193,6 +1203,11 @@ void PlacementTimingOptimizer::incrementalStaticTimingAnalysis(
         }
     }
 
+    if (incrementalObservation.on) {
+        incrementalObservation.row.pins = incrementalPinSnapshot.size();
+        incrementalObservation.row.edges = incrementalEdgeSnapshot.size();
+    }
+    incrementalObservation.mark(0);
     // update pin location
     std::vector<PlacementInfo::Location> &cellLoc = placementInfo->getCellId2location();
     auto &pinLoc = placementInfo->getPinId2location();
@@ -1248,6 +1263,7 @@ void PlacementTimingOptimizer::incrementalStaticTimingAnalysis(
         }
     }
 
+    incrementalObservation.mark(1);
     // update delay
     auto &timingNodes = timingInfo->getSimplePlacementTimingInfo();
     auto updatedNodes = std::vector<int>(0);
@@ -1270,7 +1286,11 @@ void PlacementTimingOptimizer::incrementalStaticTimingAnalysis(
         }
     }
 
+    if (incrementalObservation.on) incrementalObservation.row.cells = updatedNodes.size();
+    incrementalObservation.mark(2);
     forwardBFSToFindNodesToBeUpdated(updatedNodes);
+    if (incrementalObservation.on) incrementalObservation.row.nodes = incrementalUpdatedNodes.size();
+    incrementalObservation.mark(3);
     // std::cout << "updatedNodes info (before):\n";
     // if (updatedNodes.size() > 0 && updatedNodes.size() < 5)
     // {
@@ -1290,6 +1310,7 @@ void PlacementTimingOptimizer::incrementalStaticTimingAnalysis(
     // }
 
     incremental_propogateArrivalTime();
+    incrementalObservation.mark(4);
     // std::cout << "updatedNodes info (after):\n";
     // if (updatedNodes.size() > 0 && updatedNodes.size() < 5)
     // {
@@ -1311,7 +1332,9 @@ void PlacementTimingOptimizer::incrementalStaticTimingAnalysis(
     if (!noBackPropogation)
     {
         backwardBFSToFindNodesToBeUpdated();
+        incrementalObservation.mark(5);
         incremental_backPropogateRequiredArrivalTime();
+        incrementalObservation.mark(6);
     }
 
     incr_maxDelay = 0.0;
@@ -1390,6 +1413,7 @@ void PlacementTimingOptimizer::incrementalStaticTimingAnalysis(
 void PlacementTimingOptimizer::clusterLongPathInOneClockRegion(int pathLenThr, float clusterThrRatio)
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
 
     if (noBlockAware)
     {
@@ -1767,6 +1791,7 @@ void PlacementTimingOptimizer::clusterLongPathInOneClockRegion(int pathLenThr, f
 void PlacementTimingOptimizer::stretchClockRegionColumns()
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     const auto policy = deviceInfo->getPlacementPolicy();
     if (!policy.shouldStretch(placementInfo->boundaryClusteringEnabled(), noBlockAware))
     {
@@ -1888,6 +1913,7 @@ void PlacementTimingOptimizer::stretchClockRegionColumns()
 void PlacementTimingOptimizer::dumpClockRegionClusters()
 {
     AMF_PROFILE_FUNCTION("diagnostic_output");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     std::string dumpClockRegionClustersFile = JSONCfg["Dump Cluster file"] + "-clockRegion";
     if (dumpClockRegionClustersFile != "")
     {
@@ -1927,6 +1953,7 @@ void PlacementTimingOptimizer::dumpClockRegionClusters()
 void PlacementTimingOptimizer::propogateArrivalTime()
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     assert(timingInfo);
     // auto timingGraph = timingInfo->getSimplePlacementTimingGraph();
 }
@@ -1934,6 +1961,7 @@ void PlacementTimingOptimizer::propogateArrivalTime()
 std::vector<float> &PlacementTimingOptimizer::getPUId2Slack(bool update)
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     if(!amf_config::feature(JSONCfg,"TimingDrivenPlacementEnable",true)) {
         PUId2Slack.assign(placementInfo->getPlacementUnits().size(),0); return PUId2Slack;
     }
@@ -2023,6 +2051,7 @@ std::vector<float> &PlacementTimingOptimizer::getPUId2Slack(bool update)
 void PlacementTimingOptimizer::clusterCriticalPathsByPhysicalRegion(bool deferSLRSpreading)
 {
     AMF_PROFILE_FUNCTION("boundary_clustering");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     placementInfo->updateElementBinGrid();
     placementInfo->clearRegionPreferences();
     conductStaticTimingAnalysis();
@@ -2046,11 +2075,13 @@ void PlacementTimingOptimizer::advancePaperBoundaryStage()
 void PlacementTimingOptimizer::auditPhysicalBoundaries(const std::string &stage)
 {
     AMF_PROFILE_FUNCTION("diagnostic_output");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     if(deviceInfo->getPhysicalBoundaryModel())BoundaryAwareClusterer(placementInfo,this,JSONCfg).audit(stage);
 }
 
 void PlacementTimingOptimizer::forwardBFSToFindNodesToBeUpdated(std::vector<int> &initialNodeIds)
 {
+    auto *incrementalObserver = incremental_profile::active();
     auto &nodes = timingInfo->getSimplePlacementTimingInfo();
     incremental_forwardLevel2NodeIds.assign(
         timingInfo->getSimplePlacementTimingGraph()->getForwardlevel2NodeIds().size(), {});
@@ -2069,6 +2100,7 @@ void PlacementTimingOptimizer::forwardBFSToFindNodesToBeUpdated(std::vector<int>
     while (!queue.empty())
     {
         int id = queue.front(); queue.pop();
+        if (incrementalObserver) incrementalObserver->row.forwardEdges += nodes[id]->getOutEdges().size();
         for (auto edge : nodes[id]->getOutEdges())
             add(edge->getSink()->getId(), !edge->getSink()->checkIsRegister());
     }
@@ -2081,6 +2113,7 @@ void PlacementTimingOptimizer::forwardBFSToFindNodesToBeUpdated(std::vector<int>
 
 void PlacementTimingOptimizer::backwardBFSToFindNodesToBeUpdated()
 {
+    auto *incrementalObserver = incremental_profile::active();
     auto &nodes = timingInfo->getSimplePlacementTimingInfo();
     incremental_backwardLevel2NodeIds.assign(
         timingInfo->getSimplePlacementTimingGraph()->getBackwardlevel2NodeIds().size(), {});
@@ -2099,6 +2132,7 @@ void PlacementTimingOptimizer::backwardBFSToFindNodesToBeUpdated()
     while (!queue.empty())
     {
         int id = queue.front(); queue.pop();
+        if (incrementalObserver) incrementalObserver->row.backwardEdges += nodes[id]->getInEdges().size();
         for (auto edge : nodes[id]->getInEdges())
             add(edge->getSource()->getId(), !edge->getSource()->checkIsRegister());
     }
@@ -2118,13 +2152,21 @@ void PlacementTimingOptimizer::incremental_propogateArrivalTime()
     for (unsigned int i = 1; i < incremental_forwardLevel2NodeIds.size(); i++)
     {
         int numNodeInLayer = incremental_forwardLevel2NodeIds[i].size();
-#pragma omp parallel for
-        for (int j = 0; j < numNodeInLayer; j++)
+{ // Incremental STA: no team for empty or at-most-12-node layers.
+if (numNodeInLayer == 0) {
+ if (auto *observer = incremental_profile::active()) { incremental_profile::Layer row; row.direction = 0; row.index =  i; observer->layers.push_back(row); }
+} else if (numNodeInLayer <= 12) {
+ incremental_profile::Parallel incrementalParallel(0, i, numNodeInLayer);
+ auto &incrementalWorker = incrementalParallel.workers[0];
+ incrementalWorker.begin(incrementalParallel.call != nullptr);
+for (int j = 0; j < numNodeInLayer; j++)
         {
             auto curNodeId = incremental_forwardLevel2NodeIds[i][j];
             auto curNode = nodes[curNodeId];
 
             assert(curNode->getLatestInputArrival() < 0.01);
+
+            if (incrementalWorker.on) incrementalWorker.edges += curNode->getInEdges().size();
 
             for (auto inEdge : curNode->getInEdges())
             {
@@ -2158,18 +2200,80 @@ void PlacementTimingOptimizer::incremental_propogateArrivalTime()
                 }
             }
         }
+ incrementalWorker.wait();
+ incrementalWorker.finish = incrementalWorker.waitStart;
+} else { incremental_profile::Parallel incrementalParallel(0, i, numNodeInLayer);
+#pragma omp parallel
+{ auto &incrementalWorker = incrementalParallel.workers.at(omp_get_thread_num());
+  incrementalWorker.begin(incrementalParallel.call != nullptr);
+#pragma omp for nowait
+for (int j = 0; j < numNodeInLayer; j++)
+        {
+            auto curNodeId = incremental_forwardLevel2NodeIds[i][j];
+            auto curNode = nodes[curNodeId];
+
+            assert(curNode->getLatestInputArrival() < 0.01);
+
+            if (incrementalWorker.on) incrementalWorker.edges += curNode->getInEdges().size();
+
+            for (auto inEdge : curNode->getInEdges())
+            {
+                int predId = inEdge->getSource()->getId();
+                float predDelay = inEdge->getSource()->getLatestInputArrival();
+                float edgeDelay = inEdge->getDelay();
+                float newDelay;
+
+                if (inEdge->getSource()->getInnerDelay() < 1.0 || inEdge->getSource()->getForwardLevel() > 0)
+                {
+                    if (inEdge->getSource()->getForwardLevel() == 0)
+                        newDelay = edgeDelay + inEdge->getSource()->getInnerDelay();
+                    else
+                        newDelay = predDelay + edgeDelay + inEdge->getSource()->getInnerDelay();
+                }
+                else
+                {
+                    // Full STA propagates from level-zero launch nodes before
+                    // accumulating their input arrivals. Incremental STA may
+                    // retain that captured arrival outside the update cone.
+                    newDelay = edgeDelay;
+                }
+
+                if (newDelay > curNode->getLatestInputArrival())
+                {
+                    assert(inEdge->getSource()->getForwardLevel() < curNode->getForwardLevel());
+                    curNode->setLatestInputArrival(newDelay);
+                    curNode->setSlowestPredecessorId(predId);
+                    // curNode->setLatestOutputArrival(newDelay + curNode->getInnerDelay());
+                    curNode->setLatestOutputArrival(newDelay);
+                }
+            }
+        }
+  incrementalWorker.wait();
+#pragma omp barrier
+  incrementalWorker.end();
+}
+}
+}
     }
 
     if (incremental_forwardLevel2NodeIds.empty()) return;
     int numNodeInLayer = incremental_forwardLevel2NodeIds[0].size();
-#pragma omp parallel for
-    for (int j = 0; j < numNodeInLayer; j++)
+{ // Incremental STA: no team for empty or at-most-12-node layers.
+if (numNodeInLayer == 0) {
+ if (auto *observer = incremental_profile::active()) { incremental_profile::Layer row; row.direction = 0; row.index =  0; observer->layers.push_back(row); }
+} else if (numNodeInLayer <= 12) {
+ incremental_profile::Parallel incrementalParallel(0, 0, numNodeInLayer);
+ auto &incrementalWorker = incrementalParallel.workers[0];
+ incrementalWorker.begin(incrementalParallel.call != nullptr);
+for (int j = 0; j < numNodeInLayer; j++)
     {
         auto curNodeId = incremental_forwardLevel2NodeIds[0][j];
         assert(curNodeId < nodes.size());
         auto curNode = nodes[curNodeId];
         if (curNode->getDesignNode()->isVirtualCell())
             continue;
+
+        if (incrementalWorker.on) incrementalWorker.edges += curNode->getInEdges().size();
 
         for (auto inEdge : curNode->getInEdges())
         {
@@ -2190,6 +2294,48 @@ void PlacementTimingOptimizer::incremental_propogateArrivalTime()
             }
         }
     }
+ incrementalWorker.wait();
+ incrementalWorker.finish = incrementalWorker.waitStart;
+} else { incremental_profile::Parallel incrementalParallel(0, 0, numNodeInLayer);
+#pragma omp parallel
+{ auto &incrementalWorker = incrementalParallel.workers.at(omp_get_thread_num());
+  incrementalWorker.begin(incrementalParallel.call != nullptr);
+#pragma omp for nowait
+for (int j = 0; j < numNodeInLayer; j++)
+    {
+        auto curNodeId = incremental_forwardLevel2NodeIds[0][j];
+        assert(curNodeId < nodes.size());
+        auto curNode = nodes[curNodeId];
+        if (curNode->getDesignNode()->isVirtualCell())
+            continue;
+
+        if (incrementalWorker.on) incrementalWorker.edges += curNode->getInEdges().size();
+
+        for (auto inEdge : curNode->getInEdges())
+        {
+            if (inEdge->getSource())
+            {
+                if (inEdge->getSource()->getForwardLevel() > 0)
+                {
+                    int predId = inEdge->getSource()->getId();
+                    float predDelay = inEdge->getSource()->getLatestInputArrival();
+                    float edgeDelay = inEdge->getDelay();
+                    float newDelay = predDelay + edgeDelay + inEdge->getSource()->getInnerDelay();
+                    if (newDelay > curNode->getLatestInputArrival())
+                    {
+                        curNode->setLatestInputArrival(newDelay);
+                        curNode->setSlowestPredecessorId(predId);
+                    }
+                }
+            }
+        }
+    }
+  incrementalWorker.wait();
+#pragma omp barrier
+  incrementalWorker.end();
+}
+}
+}
 }
 
 void PlacementTimingOptimizer::incremental_backPropogateRequiredArrivalTime()
@@ -2208,12 +2354,19 @@ void PlacementTimingOptimizer::incremental_backPropogateRequiredArrivalTime()
     for (unsigned int i = 1; i < incremental_backwardLevel2NodeIds.size(); i++)
     {
         int numNodeInLayer = incremental_backwardLevel2NodeIds[i].size();
-#pragma omp parallel for
-        for (int j = 0; j < numNodeInLayer; j++)
+{ // Incremental STA: no team for empty or at-most-12-node layers.
+if (numNodeInLayer == 0) {
+ if (auto *observer = incremental_profile::active()) { incremental_profile::Layer row; row.direction = 1; row.index =  i; observer->layers.push_back(row); }
+} else if (numNodeInLayer <= 12) {
+ incremental_profile::Parallel incrementalParallel(1, i, numNodeInLayer);
+ auto &incrementalWorker = incrementalParallel.workers[0];
+ incrementalWorker.begin(incrementalParallel.call != nullptr);
+for (int j = 0; j < numNodeInLayer; j++)
         {
             auto curNodeId = incremental_backwardLevel2NodeIds[i][j];
             auto curNode = nodes[curNodeId];
             assert(!curNode->checkIsRegister());
+            if (incrementalWorker.on) incrementalWorker.edges += curNode->getOutEdges().size();
             for (auto outEdge : curNode->getOutEdges())
             {
                 int succId = outEdge->getSink()->getId();
@@ -2227,16 +2380,55 @@ void PlacementTimingOptimizer::incremental_backPropogateRequiredArrivalTime()
                 }
             }
         }
+ incrementalWorker.wait();
+ incrementalWorker.finish = incrementalWorker.waitStart;
+} else { incremental_profile::Parallel incrementalParallel(1, i, numNodeInLayer);
+#pragma omp parallel
+{ auto &incrementalWorker = incrementalParallel.workers.at(omp_get_thread_num());
+  incrementalWorker.begin(incrementalParallel.call != nullptr);
+#pragma omp for nowait
+for (int j = 0; j < numNodeInLayer; j++)
+        {
+            auto curNodeId = incremental_backwardLevel2NodeIds[i][j];
+            auto curNode = nodes[curNodeId];
+            assert(!curNode->checkIsRegister());
+            if (incrementalWorker.on) incrementalWorker.edges += curNode->getOutEdges().size();
+            for (auto outEdge : curNode->getOutEdges())
+            {
+                int succId = outEdge->getSink()->getId();
+                float succRequiredArrival = outEdge->getSink()->getRequiredArrivalTime();
+                float edgeDelay = outEdge->getDelay();
+                float newRequiredArrival = succRequiredArrival - edgeDelay - outEdge->getSink()->getInnerDelay();
+                if (newRequiredArrival < curNode->getRequiredArrivalTime())
+                {
+                    curNode->setRequiredArrivalTime(newRequiredArrival);
+                    curNode->setEarlestSuccessorId(succId);
+                }
+            }
+        }
+  incrementalWorker.wait();
+#pragma omp barrier
+  incrementalWorker.end();
+}
+}
+}
     }
 
     if (incremental_backwardLevel2NodeIds.empty()) return;
     int numNodeInLayer = incremental_backwardLevel2NodeIds[0].size();
-#pragma omp parallel for
-    for (int j = 0; j < numNodeInLayer; j++)
+{ // Incremental STA: no team for empty or at-most-12-node layers.
+if (numNodeInLayer == 0) {
+ if (auto *observer = incremental_profile::active()) { incremental_profile::Layer row; row.direction = 1; row.index =  0; observer->layers.push_back(row); }
+} else if (numNodeInLayer <= 12) {
+ incremental_profile::Parallel incrementalParallel(1, 0, numNodeInLayer);
+ auto &incrementalWorker = incrementalParallel.workers[0];
+ incrementalWorker.begin(incrementalParallel.call != nullptr);
+for (int j = 0; j < numNodeInLayer; j++)
     {
         auto curNodeId = incremental_backwardLevel2NodeIds[0][j];
         auto curNode = nodes[curNodeId];
         assert(curNode->checkIsRegister());
+        if (incrementalWorker.on) incrementalWorker.edges += curNode->getOutEdges().size();
         for (auto outEdge : curNode->getOutEdges())
         {
             int succId = outEdge->getSink()->getId();
@@ -2251,6 +2443,39 @@ void PlacementTimingOptimizer::incremental_backPropogateRequiredArrivalTime()
             }
         }
     }
+ incrementalWorker.wait();
+ incrementalWorker.finish = incrementalWorker.waitStart;
+} else { incremental_profile::Parallel incrementalParallel(1, 0, numNodeInLayer);
+#pragma omp parallel
+{ auto &incrementalWorker = incrementalParallel.workers.at(omp_get_thread_num());
+  incrementalWorker.begin(incrementalParallel.call != nullptr);
+#pragma omp for nowait
+for (int j = 0; j < numNodeInLayer; j++)
+    {
+        auto curNodeId = incremental_backwardLevel2NodeIds[0][j];
+        auto curNode = nodes[curNodeId];
+        assert(curNode->checkIsRegister());
+        if (incrementalWorker.on) incrementalWorker.edges += curNode->getOutEdges().size();
+        for (auto outEdge : curNode->getOutEdges())
+        {
+            int succId = outEdge->getSink()->getId();
+            float succRequiredArrival = outEdge->getSink()->getRequiredArrivalTime();
+            float edgeDelay = outEdge->getDelay();
+            float newRequiredArrival = succRequiredArrival - edgeDelay - outEdge->getSink()->getInnerDelay();
+            if (newRequiredArrival < curNode->getEndpointCriticality())
+            {
+                curNode->setEndpointCriticality(newRequiredArrival);
+                assert(succId >= 0);
+                curNode->setEarlestSuccessorId(succId);
+            }
+        }
+    }
+  incrementalWorker.wait();
+#pragma omp barrier
+  incrementalWorker.end();
+}
+}
+}
 }
 
 void PlacementTimingOptimizer::checkCrossRegionDegree()

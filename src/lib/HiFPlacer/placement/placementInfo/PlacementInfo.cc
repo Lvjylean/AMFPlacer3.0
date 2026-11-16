@@ -27,11 +27,107 @@
 #include <queue>
 #include <sys/stat.h>
 
+int PlacementInfo::ramSharingClockPolarity(DesignInfo::DesignCell *cell)
+{
+    if (!ramControlsLoaded) {
+        auto path=JSONCfg.find("RAM sharing controls file");
+        if (path==JSONCfg.end()) return -1;
+        std::ifstream input(path->second);
+        std::string line;
+        if (!std::getline(input,line) || line!="cell\tref\twclk_inverted\tloc_fixed\tbel_fixed")
+            throw std::runtime_error("Invalid RAM sharing control metadata header");
+        while (std::getline(input,line)) {
+            std::istringstream stream(line);
+            std::string name,ref,inv,loc,bel;
+            if (!std::getline(stream,name,'\t') || !std::getline(stream,ref,'\t') ||
+                !std::getline(stream,inv,'\t') || !std::getline(stream,loc,'\t') ||
+                !std::getline(stream,bel) || name.empty() || ramClockControls.count(name))
+                throw std::runtime_error("Malformed or duplicate RAM sharing control record");
+            int polarity=(loc=="0" && bel=="0" && (inv=="0" || inv=="1")) ? inv[0]-'0' : -1;
+            ramClockControls.emplace(name,std::make_pair(ref,polarity));
+        }
+        ramControlsLoaded=true;
+    }
+    auto it=ramClockControls.find(cell->getName());
+    if (it==ramClockControls.end() || it->second.first!=getDesignInfo()->DesignCellTypeStr[cell->getOriCellType()]) return -1;
+    return it->second.second;
+}
+
+const std::map<std::string,std::vector<std::string>> &PlacementInfo::getSRLControlMetadata()
+{
+    if (!srlControlsLoaded) {
+        if (!JSONCfg.count("SRL control metadata file")) throw std::runtime_error("Missing SRL control metadata file");
+        std::ifstream input(JSONCfg.at("SRL control metadata file"));
+        if (!input) throw std::runtime_error("Cannot open SRL control metadata");
+        const auto policy=JSONCfg.find("SRLMaxPerSLICEM");
+        const bool physicalRows=deviceInfo->getDeviceName()=="U250" && policy!=JSONCfg.end() && policy->second=="8";
+        decltype(srlControlMetadata) loaded;
+        std::string line;
+        std::getline(input,line);
+        while (std::getline(input,line)) {
+            std::vector<std::string> fields;
+            size_t begin=0;
+            for (size_t pos=0;pos<=line.size();++pos) if(pos==line.size() || line[pos]=='\t') {
+                fields.push_back(line.substr(begin,pos-begin));begin=pos+1;
+            }
+            if (fields.size()!=8 || fields[0].empty() || loaded.count(fields[0]))
+                throw std::runtime_error("Malformed/duplicate SRL metadata row");
+            // Vivado exports an unset, available property as blank (default 0).
+            // UNKNOWN denotes an unavailable property and remains ineligible.
+            if (physicalRows) {
+                auto &inv=fields[4];
+                if (inv.empty() || inv=="1'b0" || inv=="FALSE") inv="0";
+                else if (inv=="1'b1" || inv=="TRUE") inv="1";
+            }
+            loaded[fields[0]]=fields;
+        }
+        srlControlMetadata.swap(loaded);
+        srlControlsLoaded=true;
+    }
+    return srlControlMetadata;
+}
+
+// Canonical AMF net identities include tied constants. D, Q and INIT are
+// independent between the two halves of the LUT.
+std::string PlacementInfo::srl16PairKey(DesignInfo::DesignCell *cell)
+{
+    if (cell->getOriCellType()!=DesignInfo::CellType_SRL16E) return {};
+    const auto &metadata = getSRLControlMetadata();
+    auto found = metadata.find(cell->getName());
+    if (found==metadata.end()) return {};
+    const auto &fields = found->second;
+    if (fields[1]!="SRL16E" || fields[5]!="0" || fields[6]!="0") return {};
+    std::string key=fields[4];
+    if (key!="0" && key!="1") return {};
+    const std::array<std::string,6> names = {{"CLK","CE","A0","A1","A2","A3"}};
+    std::array<DesignInfo::DesignNet*,6> inputs{};
+    for (auto pin : cell->getInputPins()) {
+        auto pos = std::find(names.begin(),names.end(),pin->getRefPinName());
+        if (pos==names.end()) continue;
+        auto &net = inputs[pos-names.begin()];
+        if (net || !pin->getNet()) return {};
+        net=pin->getNet();
+    }
+    for (auto net : inputs) {
+        if (!net) return {};
+        key += "/" + std::to_string(net->getElementIdInType());
+    }
+    return key;
+}
+
 PlacementInfo::PlacementInfo(DesignInfo *designInfo, DeviceInfo *deviceInfo,
                              std::map<std::string, std::string> &JSONCfg)
     : designInfo(designInfo), deviceInfo(deviceInfo), JSONCfg(JSONCfg), incremental(JSONCfg), hardRegions(JSONCfg)
 {
     AMF_PROFILE_FUNCTION("placement_bookkeeping");
+
+    const auto table = JSONCfg.find("logic empty bins file");
+    if (table != JSONCfg.end() && !incremental.enabled) {
+        const auto part = JSONCfg.find("physical device part");
+        const auto name = JSONCfg.find("device");
+        logicEmptyBins.read(table->second, part != JSONCfg.end() ? part->second :
+                            (name != JSONCfg.end() ? name->second : "VCU108"));
+    }
 
     const auto strategyName = boundary_strategy::resolve(JSONCfg);
     if (boundaryClusteringEnabled())
@@ -455,6 +551,7 @@ void PlacementInfo::createGridBins(float _binWidth, float _binHeight)
     endX = round(globalMaxX) + deviceInfo->getBoundaryTolerance();
     endY = round(globalMaxY) + deviceInfo->getBoundaryTolerance();
     eps = 1e-6;
+    logicEmptyBins.resetGrid();
     binWidth = _binWidth;
     binHeight = _binHeight;
 

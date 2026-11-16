@@ -88,7 +88,7 @@ class WirelengthOptimizer
                                 bool forwardSolutionToNextIteration = false, bool enableMacroPseudoNet2Site = false,
                                 bool considerNetNum = true, bool enableUserDefinedClusterOpt = false,
                                 float displacementLimit = -10, PlacementTimingOptimizer *timingOptimizer = nullptr,
-                               bool enableFFClusterOpt = false);
+                               bool enableFFClusterOpt = false, int globalRound = 0);
 
     /**
      * @brief update the net weights in the quadratic model according to B2B net HPWL model.
@@ -108,7 +108,7 @@ class WirelengthOptimizer
     void updateB2BNetWeight(float pesudoNetWeight, bool enableMacroPseudoNet2Site = false, bool considerNetNum = true,
                             bool enableUserDefinedClusterOpt = false,
                             PlacementTimingOptimizer *timingOptimizer = nullptr,
-                            bool enableFFClusterOpt = false);
+                            bool enableFFClusterOpt = false, bool boostOrdinaryAnchor = false);
 
     /**
      * @brief a worker funtion for multi-threading net weight updating
@@ -236,7 +236,15 @@ class WirelengthOptimizer
      * @param pesudoNetWeight the common weight factor for pseudo nets
      * @param considerNetNum whether add the interconnection-density-aware factor to pseudo net weights
      */
-    void addPseudoNet2LoctionForAllPUs(float pesudoNetWeight, bool considerNetNum);
+    friend struct EarlyAnchorFixture;
+    bool earlyOrdinaryAnchorBoost = false;
+    bool ordinaryAnchorAllGPRounds = false;
+    float ordinaryAnchorMultiplier = 1.25f;
+    bool boostInRound(int round) const {
+        return earlyOrdinaryAnchorBoost && round >= 1 && (ordinaryAnchorAllGPRounds || round <= 6);
+    }
+    static bool ordinaryMovableSingle(PlacementInfo::PlacementUnit *pu);
+    void addPseudoNet2LoctionForAllPUs(float pesudoNetWeight, bool considerNetNum, bool boostOrdinaryAnchor);
 
     /**
      * @brief add pseudo net for user-defined clusters

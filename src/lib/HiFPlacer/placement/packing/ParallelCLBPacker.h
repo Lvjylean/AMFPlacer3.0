@@ -1,3 +1,4 @@
+#include "PackingDieScope.h"
 #include "../../../utils/PlacementFeatureConfig.h"
 #include "FfQPinMask.h"
 /**
@@ -30,12 +31,15 @@
 #include "strPrint.h"
 #include "stringCheck.h"
 #include <algorithm>
+#include <cstdint>
 #include <assert.h>
 #include <cmath>
 #include <fstream>
 #include <iostream>
 #include <limits.h>
 #include <map>
+#include <memory>
+#include <unordered_set>
 #include <omp.h>
 #include <queue>
 #include <random>
@@ -414,6 +418,10 @@ class ParallelCLBPacker
               HPWLWeight(HPWLWeight), PUId2PackingCLBSite(PUId2PackingCLBSite), determinedClusterInSite(nullptr)
         {
             ffQBlockedMask=placementInfo->getFfQBlockedMask(CLBSite->getName());
+            // Cache the architecture gate once, not once per candidate.
+            for(auto bel:CLBSite->getChildrenBELs())
+                if(bel->getName().size()>=6 && bel->getName().compare(bel->getName().size()-6,6,"CARRY8")==0)
+                    macroLocalRoutesEnabled=true;
             slotMapping.blockedFFMask=ffQBlockedMask;
             neighborPUs.clear();
             seedClusters.clear();
@@ -425,6 +433,7 @@ class ParallelCLBPacker
 
         ~PackingCLBSite()
         {
+            delete globalBestDeterminedClusterInSite;
             delete bestDeterminedClusterInSite;
             if (determinedClusterInSite)
             {
@@ -611,7 +620,9 @@ class ParallelCLBPacker
                 singleLUTs = anotherPackingCLBCluster->getSingleLUTs();
                 pairedLUTs = anotherPackingCLBCluster->getPairedLUTs();
                 PUs = anotherPackingCLBCluster->getPUs();
-                scoreInSite = anotherPackingCLBCluster->getScoreInSite();
+                scoreInSite = anotherPackingCLBCluster->scoreInSite;
+                directMemoryPairMembers = anotherPackingCLBCluster->directMemoryPairMembers;
+                srlRowOwners = anotherPackingCLBCluster->srlRowOwners;
                 parentPackingCLB = anotherPackingCLBCluster->getParentPackingCLB();
                 placementInfo = parentPackingCLB->getPlacementInfo();
                 // net2ConnectivityScore = anotherPackingCLBCluster->getNet2ConnectivityScore();
@@ -1071,7 +1082,12 @@ class ParallelCLBPacker
                         // assert(false && "unexpected type.");
                     }
                 }
+                const unsigned removedDirectMembers = parentPackingCLB->memoryPairDirectMembers(tmpPU);
+                assert(directMemoryPairMembers >= removedDirectMembers);
+                directMemoryPairMembers -= removedDirectMembers;
                 PUs.erase(tmpPU);
+                if (parentPackingCLB->hasSRLRowOutputs())
+                    refreshMemoryFFMapping();
                 if (auto tmpMacro = dynamic_cast<PlacementInfo::PlacementMacro *>(tmpPU))
                 {
                     if (tmpMacro->getMacroType() == PlacementInfo::PlacementMacro::PlacementMacroType_MUX7 ||
@@ -1136,6 +1152,8 @@ class ParallelCLBPacker
                     singleLUTs = fakeCluster->getSingleLUTs();
                     pairedLUTs = fakeCluster->getPairedLUTs();
                     PUs.insert(tmpPU);
+                    directMemoryPairMembers = fakeCluster->directMemoryPairMembers;
+                    srlRowOwners = std::move(fakeCluster->srlRowOwners);
                     // Commit all packing state from the successful trial. Without
                     // the MUX count, finalMapToSlots treats this as an ordinary
                     // LUT/FF site and silently drops the dedicated MUX BELs.
@@ -1288,6 +1306,8 @@ class ParallelCLBPacker
 
                 return res;
             }
+
+            void restoreControlSets(const std::vector<PackedControlSet> &saved) { FFControlSets=saved; }
 
             inline const std::vector<PackedControlSet> &getFFControlSets() const
             {
@@ -1452,9 +1472,12 @@ class ParallelCLBPacker
             {
                 for (auto tmpPU : PUs)
                 {
+                    if (!parentPackingCLBSite->packingDieAllows(tmpPU)) return false;
                     if (PUId2PackingCLBSite[tmpPU->getId()])
                     {
-                        if (PUId2PackingCLBSite[tmpPU->getId()] != parentPackingCLBSite)
+                        const auto &candidateOwners = parentPackingCLBSite->getCandidateOwners();
+                        if (candidateOwners[tmpPU->getId()] &&
+                            candidateOwners[tmpPU->getId()] != parentPackingCLBSite)
                         {
                             return false;
                         }
@@ -1474,7 +1497,21 @@ class ParallelCLBPacker
              */
             inline float getScoreInSite() const
             {
-                return scoreInSite;
+                float score = scoreInSite + directMemberReward * directMemoryPairMembers;
+                for (auto pu : srlRowOwners)
+                    if (parentPackingCLB->withinSRLRewardRadius(pu)) score += srlRowReward;
+                return score;
+            }
+
+            bool refreshMemoryFFMapping()
+            {
+                srlRowOwners.clear();
+                return parentPackingCLB->mapMemoryFFCandidate(this, nullptr, &srlRowOwners);
+            }
+
+            unsigned directSRLRowsFor(PlacementInfo::PlacementUnit *pu) const
+            {
+                return std::count(srlRowOwners.begin(), srlRowOwners.end(), pu);
             }
 
             /**
@@ -1483,6 +1520,8 @@ class ParallelCLBPacker
              */
             void updateScoreInSite();
 
+            float baseScoreInSite() const { return scoreInSite; }
+
             /**
              * @brief incrementally update the score of this cluster by considering that only a given PlacementUnit will
              * be added into this cluster
@@ -1490,6 +1529,30 @@ class ParallelCLBPacker
              * @param tmpPU a given PlacementUnit
              */
             void incrementalUpdateScoreInSite(PlacementInfo::PlacementUnit *tmpPU);
+            // Scratch state is local to one immutable seed's expansion. Never retained
+            // across iterations, coordinate/timing updates, or membership changes.
+            struct ScorePUContribution
+            {
+                PlacementInfo::PlacementUnit *pu;
+                float distance, negativeSlack;
+                int halfNets, pathLength, cells;
+            };
+            struct ScoreNetContribution
+            {
+                PlacementInfo::PlacementNet *net;
+                int internalInputs;
+                float value;
+            };
+            struct ScoreExtensionState
+            {
+                PackingCLBSite *site = nullptr;
+                std::vector<ScorePUContribution> pus;
+                std::vector<ScoreNetContribution> nets;
+            };
+            ScorePUContribution getScorePUContribution(PlacementInfo::PlacementUnit *pu);
+            void prepareScoreExtension(ScoreExtensionState &state);
+            void incrementalUpdateScoreInSite(PlacementInfo::PlacementUnit *pu,
+                                             const ScoreExtensionState &state);
 
             /**
              * @brief Get the Parent Packing CLB site of this cluster (this can be used to get more device information)
@@ -1869,6 +1932,9 @@ class ParallelCLBPacker
              * @brief the evaluation score of packing for this cluster
              *
              */
+            unsigned directMemoryPairMembers = 0;
+            // One entry per occupied direct SRL lane in the legal FF assignment.
+            std::vector<PlacementInfo::PlacementUnit *> srlRowOwners;
             float scoreInSite = -100000000;
 
             /**
@@ -2109,6 +2175,66 @@ class ParallelCLBPacker
         inline float getDetScore()
         {
             return detScore;
+        }
+
+        // Refresh once per site in the serial auction; this is not a cross-round score cache.
+        inline void refreshAuctionBidScore()
+        {
+            assert(!priorityQueue.empty());
+            // The cluster reward ranks candidates locally. Only the PU being
+            // auctioned can claim its own reward against another site.
+            auctionBidScore = priorityQueue[0]->baseScoreInSite() - detScore;
+            if (isCarrySite || isLUTRAMSite || isNonCLBSite || priorityQueue[0]->getNumMuxes() > 0)
+                return;
+            if (determinedClusterInSite)
+                for (auto pu : determinedClusterInSite->getPUs())
+                {
+                    if (pu->getType() == PlacementInfo::PlacementUnitType_Macro)
+                    {
+                        auto macro = static_cast<PlacementInfo::PlacementMacro *>(pu);
+                        for (auto cell : macro->getCells())
+                            if (!cell->isVirtualCell()) return;
+                    }
+                    else if (!static_cast<PlacementInfo::PlacementUnpackedCell *>(pu)->getCell()->isVirtualCell())
+                        return;
+                }
+            // Opening an ordinary CLB has a small fixed cost; admission and queue scores are unchanged.
+            auctionBidScore -= 0.2f;
+        }
+
+        inline float getAuctionBidScore() const { return auctionBidScore; }
+        float getAuctionBidScore(PlacementInfo::PlacementUnit *pu) const {
+            const unsigned members = memoryPairDirectMembers(pu);
+            const unsigned rows = hasSRLRowOutputs() && !priorityQueue.empty() && withinSRLRewardRadius(pu)
+                                  ? priorityQueue.front()->directSRLRowsFor(pu) : 0;
+            return auctionBidScore + directMemberReward * members + srlRowReward * rows;
+        }
+        static constexpr float directMemberReward = 2.5f;
+        static constexpr float srlRowReward = 5.0f;
+        bool withinSRLRewardRadius(PlacementInfo::PlacementUnit *pu) const
+        {
+            return std::fabs(CLBSite->X() - pu->X()) + y2xRatio * std::fabs(CLBSite->Y() - pu->Y()) <= curD
+                   && packingDieAllows(pu);
+        }
+        unsigned memoryPairDirectMembers(PlacementInfo::PlacementUnit *pu) const {
+            return memoryFFPackingReady ? countDirectMemoryPairMembers(pu) : 0;
+        }
+
+        void setPackingDieScope(const PackingDieScope *scope) { packingDieScope = scope; }
+        bool packingDieAllows(PlacementInfo::PlacementUnit *pu) const
+        {
+            return !packingDieScope || packingDieScope->allows(pu, CLBSite);
+        }
+
+        // During candidate construction, only committed ownership excludes a PU.
+        // The immutable round-start snapshot avoids reading another worker's cluster.
+        void setCandidateOwners(const std::vector<PackingCLBSite *> *owners)
+        {
+            candidateOwnersSnapshot = owners;
+        }
+        const std::vector<PackingCLBSite *> &getCandidateOwners() const
+        {
+            return candidateOwnersSnapshot ? *candidateOwnersSnapshot : PUId2PackingCLBSite;
         }
 
         inline PackingCLBCluster *getDeterminedClusterInSite()
@@ -2363,7 +2489,7 @@ class ParallelCLBPacker
         }
 
         void mapCarryRelatedCellsToSlots(PlacementInfo::PlacementMacro *_CARRYChain, float siteOffset);
-        void mapLUTRAMRelatedCellsToSlots(PlacementInfo::PlacementMacro *_LUTRAMMacro);
+        void mapLUTRAMRelatedCellsToSlots(PlacementInfo::PlacementMacro *_LUTRAMMacro, unsigned srlLimit);
 
         /**
          * @brief find the slots in the site for Muxes
@@ -2435,7 +2561,7 @@ class ParallelCLBPacker
          * @param FFControlSetOrderId control the order of FF Control sets
          *
          */
-        void greedyMapMuxForCommonLUTFFInSite(int FFControlSetOrderId);
+        void greedyMapMuxForCommonLUTFFInSite(int FFControlSetOrderId, bool optimize = true);
 
         /**
          * @brief find the slots in the site for Muxes by enumeration
@@ -2488,9 +2614,33 @@ class ParallelCLBPacker
         bool assignAccessibleFFSlots();
         void verifyFfQAccess() const;
         bool chooseLocalPinMapping(amf_native::LutPinAssignment::Result *chosen=nullptr) const;
+        bool macroLocalRoutesCompatible() const;
+        bool macroLocalRoutesEnabled=false;
+        // A positive witness for the immutable, fixed CARRY footprint only.
+        // Never cache a rejection or reuse it after macro membership/mask changes.
+        PlacementInfo::PlacementMacro *carryRouteOwner=nullptr;
+        std::size_t carryRouteOwnerSize=0;
+        float carryRouteOffset=0;
+        unsigned carryRouteQMask=0;
+        bool carryFixedRoutesValid=false;
+        std::set<DesignInfo::DesignCell*> carryFixedRouteLUTs;
+        bool carryCandidateUsesFixedLUTsOnly(PackingCLBCluster *candidate) const;
+        void requireLegalSlotMapping(const char *kind) const;
+        std::size_t intrinsicCarryFastAccepts=0,intrinsicSlowProbes=0;
         bool localCandidateAllows(PackingCLBCluster *candidate);
+        bool canRelocateFrom(PlacementInfo::PlacementUnit *pu);
         unsigned ffQBlockedMask=0;
         void moveLUTToLUT6Slot();
+        // Phase 1: standalone real FFs only; existing memory macros stay intact.
+        void prepareMemoryFFPacking(bool enabled, bool srlLogic = false);
+        bool acceptsMemoryPU(PlacementInfo::PlacementUnit *pu) const;
+        bool acceptsMemoryFFPU(PlacementInfo::PlacementUnit *pu) const;
+        bool mapMemoryFFCandidate(PackingCLBCluster *candidate, SiteBELMapping *result=nullptr,
+                                  std::vector<PlacementInfo::PlacementUnit *> *rowOwners=nullptr) const;
+        bool hasSRLRowOutputs() const { return memoryFFPackingReady && memoryNets && !memoryNets->srlOutputSlots.empty(); }
+        bool hasCompositeRAM() const { return memoryNets && !memoryNets->profiles.empty(); }
+        void prepareSharedRAMSite();
+        void finalMapMemoryFFs();
 
         /**
          * @brief finally map the elements (CARRY/MUX/LUT/FF) packed in this site into the slots in the site
@@ -2500,6 +2650,12 @@ class ParallelCLBPacker
         {
             if (determinedClusterInSite && !isNonCLBSite)
             {
+                const auto savedSlots=slotMapping,savedBest=best_SlotMapping;
+                const auto savedCells=mappedCells,savedLuts=mappedLUTs,savedFfs=mappedFFs;
+                const auto savedBestCells=best_mappedCells,savedBestLuts=best_mappedLUTs,savedBestFfs=best_mappedFFs;
+                const float savedScore=best_DirectConnect;
+                const auto savedControls=determinedClusterInSite->getFFControlSets();
+                try {
                 best_DirectConnect = -100000000;
 
                 slotMapping = SiteBELMapping(ffQBlockedMask);
@@ -2516,6 +2672,7 @@ class ParallelCLBPacker
                 }
                 else if (checkIsLUTRAMSite())
                 {
+                    finalMapMemoryFFs();
                 }
                 else if (checkIsMuxSite())
                 {
@@ -2555,10 +2712,18 @@ class ParallelCLBPacker
                                 }
                             }
                         }
-                        assert(FFCnt == mappedFFs.size());
+                        throw std::runtime_error("AMF_FF_MAPPING_COUNT_MISMATCH site="+CLBSite->getName()+"; previous mapping preserved");
                     }
                     verifyFfQAccess();
                     determinedClusterInSite->setControlSet(slotMapping);
+                }
+                } catch(...) {
+                    slotMapping=savedSlots;best_SlotMapping=savedBest;
+                    mappedCells=savedCells;mappedLUTs=savedLuts;mappedFFs=savedFfs;
+                    best_mappedCells=savedBestCells;best_mappedLUTs=savedBestLuts;best_mappedFFs=savedBestFfs;
+                    best_DirectConnect=savedScore;
+                    determinedClusterInSite->restoreControlSets(savedControls);
+                    throw;
                 }
             }
         }
@@ -2711,6 +2876,27 @@ class ParallelCLBPacker
             return std::array<int, 3>{-1, -1, -1};
         }
 
+        // Accepted whole-packing state is never written by a local swap.
+        inline void recordGlobalBestPacking()
+        {
+            delete globalBestDeterminedClusterInSite;
+            globalBestDeterminedClusterInSite = determinedClusterInSite
+                ? new PackingCLBCluster(determinedClusterInSite) : nullptr;
+            globalBestNonCLBCell = nonCLBCell;
+            hasGlobalBestPacking = true;
+        }
+
+        inline void recoverGlobalBestPacking()
+        {
+            assert(hasGlobalBestPacking);
+            delete determinedClusterInSite;
+            determinedClusterInSite = globalBestDeterminedClusterInSite
+                ? new PackingCLBCluster(globalBestDeterminedClusterInSite) : nullptr;
+            nonCLBCell = globalBestNonCLBCell;
+            // Subsequent local rejection must restore this recovered state.
+            recordBestPacking();
+        }
+
         inline void recordBestPacking()
         {
             if (bestDeterminedClusterInSite)
@@ -2813,12 +2999,51 @@ class ParallelCLBPacker
         std::map<PlacementInfo::PlacementUnit *, int, Packing_PUcompare> PU2TopCnt;
         const std::vector<PackingCLBSite *> &PUId2PackingCLBSite;
         PackingCLBCluster *determinedClusterInSite = nullptr;
+        float auctionBidScore = 0.0f;
         PackingCLBCluster *bestDeterminedClusterInSite = nullptr;
+        PackingCLBCluster *globalBestDeterminedClusterInSite = nullptr;
+        DesignInfo::DesignCell *globalBestNonCLBCell = nullptr;
+        bool hasGlobalBestPacking = false;
 
         float detScore = 0;
 
         bool isCarrySite = false;
         bool isLUTRAMSite = false;
+        struct RAMSlotProfile {
+            unsigned independent = 0;
+            std::array<DesignInfo::DesignNet *,16> local = {};
+            unsigned allowed(DesignInfo::DesignNet *data) const {
+                if (!data) return 0;
+                unsigned result = independent;
+                for (unsigned slot=0; slot<local.size(); ++slot)
+                    if (local[slot]==data) result |= 1u << slot;
+                return result;
+            }
+        };
+        struct RAMReadClock {
+            DesignInfo::DesignNet *clock = nullptr;
+            bool inverted = false;
+            unsigned slots = 0;
+        };
+        struct MemoryFFSiteNets {
+            std::unordered_set<DesignInfo::DesignNet *> inputs, outputs;
+            std::array<DesignInfo::DesignNet*,8> primaryQ{}, secondaryQ{};
+            std::unordered_map<DesignInfo::DesignNet *, unsigned> srlOutputSlots;
+            std::vector<DesignInfo::DesignCell *> directSRLFFs;
+            std::vector<RAMSlotProfile> profiles;
+            std::unordered_map<DesignInfo::DesignNet *, RAMReadClock> ramReadClocks;
+        };
+        std::unique_ptr<MemoryFFSiteNets> memoryNets;
+        unsigned countDirectMemoryPairMembers(PlacementInfo::PlacementUnit *pu) const;
+        void recordMemoryPins(DesignInfo::DesignCell *memory);
+        void recordRAMReadClock(DesignInfo::DesignCell *memory, unsigned row, const std::string &port);
+        unsigned ramReadClockSlots(DesignInfo::DesignCell *ff, DesignInfo::DesignNet *data) const;
+        bool memoryFFPackingReady = false;
+        unsigned memoryLogicRows = 0; // complete physical LUT rows available for single ordinary LUTs
+        unsigned memoryLocalOnlySecondaryRows = 0;
+        unsigned memoryMuxSelectMask = 0;
+        unsigned memoryLocalOnlyPrimaryRows = 0;
+        unsigned pendingSRL5Rows = 0;
         bool isNonCLBSite = false;
         PlacementInfo::PlacementMacro *CARRYChain = nullptr;
         PlacementInfo::PlacementMacro *LUTRAMMacro = nullptr;
@@ -2844,6 +3069,17 @@ class ParallelCLBPacker
         std::set<DesignInfo::DesignCell *> best_mappedCells;
         std::set<DesignInfo::DesignCell *> best_mappedLUTs;
         std::set<DesignInfo::DesignCell *> best_mappedFFs;
+        friend class ParallelCLBPacker;
+        friend struct BoundedRefillFixture;
+        enum class RefillAction { None, Scan, Reuse, Oversize };
+        RefillAction refillAction = RefillAction::None;
+        uint64_t currentRefillGeneration = 0, savedRefillGeneration = 0;
+        std::array<int, 10> savedRefillIds;
+        unsigned savedRefillSize = 0;
+        void refillNeighbors(float radius);
+        void addNearbySRLConsumers();
+        const std::vector<PackingCLBSite *> *candidateOwnersSnapshot = nullptr;
+        const PackingDieScope *packingDieScope = nullptr;
     };
 
     /**
@@ -2953,6 +3189,7 @@ class ParallelCLBPacker
     void updatePUCell2PackingSite();
 
     void recordBestPacking();
+    void recordLocalPacking();
     void recoverToBestPacking();
     void partiallyRecoverToBestPacking(std::set<PackingCLBSite *> &selectedPackingSites);
     void partiallyRecordBestPacking(std::set<PackingCLBSite *> &selectedPackingSites);
@@ -3126,6 +3363,26 @@ class ParallelCLBPacker
     std::vector<PackingCLBSite *> PUId2PackingCLBSite;
     std::vector<PackingCLBSite *> packingSites;
     std::vector<std::vector<PackingCLBSite *>> clockColumns2PackingSites;
+    friend struct BoundedRefillFixture;
+    struct RefillUnitState
+    {
+        PlacementInfo::PlacementUnit *unit = nullptr;
+        PackingCLBSite *owner = nullptr;
+        float x = 0, y = 0;
+        bool available = false;
+    };
+    struct RefillCellState
+    {
+        PlacementInfo::PlacementUnit *unit = nullptr;
+        int sharedType = -1, x = -1, y = -1;
+    };
+    unsigned srlSharingLimit = 1;
+    bool boundedRefillReuse = false;
+    bool reportRefills = false;
+    uint64_t refillGeneration = 0;
+    std::vector<RefillUnitState> refillUnits;
+    std::vector<RefillCellState> refillCells;
+    void prepareRefillGeneration(const std::vector<PackingCLBSite *> &owners, bool reset);
     std::vector<PackingCLBSite *> PUId2PackingCLBSiteCandidate;
     std::vector<PlacementInfo::PlacementUnit *> &placementUnits;
     std::vector<PlacementInfo::PlacementUnpackedCell *> &placementUnpackedCells;
@@ -3146,6 +3403,7 @@ class ParallelCLBPacker
     bool useBigWindow = false;
     float criticalPathThr = 0.9;
 
+    float bestFullPackingDelay = -1;
     bool useLocalFineTune = false;
     bool noTimingPathLenFactor = false;
 

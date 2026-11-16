@@ -47,6 +47,19 @@ struct SllPlanner::Impl {
     bool deferredStart=false, planningActive=true;
     int firstSpreadRound=0;size_t attemptedQps=0;
     size_t refreshAuditStride=0,refreshCalls=0;
+    // Only mutable plan/history state is copied, never the physical inventory.
+    struct PackingCheckpoint {
+        std::vector<Plan> plans;
+        std::map<std::string,int> previous;
+        std::set<int> transientBoundaries;
+        std::map<int,size_t> boundaryDemand;
+        std::vector<Point> densityTargets;
+        bool planningActive;
+        explicit PackingCheckpoint(const Impl&v):plans(v.m.plans),previous(v.m.previous),
+            transientBoundaries(v.m.transientBoundaries),boundaryDemand(v.m.boundaryDemand),
+            densityTargets(v.densityTargets),planningActive(v.planningActive){}
+    };
+    std::unique_ptr<PackingCheckpoint> packingCheckpoint;
     explicit Impl(PlacementInfo*placement,const std::map<std::string,std::string>&cfg):pi(placement) {
         if(pi->getIncrementalContext().enabled) {
             if(!cfg.count("SllIncrementalScope") || cfg.at("SllIncrementalScope")!="internal-active-nets" ||
@@ -298,6 +311,39 @@ void SllPlanner::projectQp(const Eigen::VectorXd&x,const Eigen::VectorXd&y,doubl
 }
 bool SllPlanner::handles(int id)const{return active() && id>=0&&size_t(id)<p->netIndex.size()&&p->netIndex[id]>=0;}
 bool SllPlanner::crosses(Point a,Point b)const{return p->slr(a)!=p->slr(b);}
+void SllPlanner::recordPackingCheckpoint() {
+    if(p->timingBatchActive || p->wireBatchActive)
+        throw std::logic_error("Cannot record SLL packing checkpoint inside a reader batch");
+    p->packingCheckpoint.reset(new Impl::PackingCheckpoint(*p));
+}
+void SllPlanner::restorePackingCheckpoint() {
+    if(p->timingBatchActive || p->wireBatchActive)
+        throw std::logic_error("Cannot restore SLL packing checkpoint inside a reader batch");
+    if(!p->packingCheckpoint)throw std::logic_error("Missing SLL packing checkpoint");
+    const auto&saved=*p->packingCheckpoint;
+    p->m.plans=saved.plans;p->m.previous=saved.previous;
+    p->m.transientBoundaries=saved.transientBoundaries;p->m.boundaryDemand=saved.boundaryDemand;
+    p->densityTargets=saved.densityTargets;p->planningActive=saved.planningActive;
+    // Indexes belong to the restored plan, including before the next STA refresh
+    // reads its previous-plan delays. Rebuild them without replanning crossings.
+    auto&di=*p->pi->getDesignInfo();
+    p->netIndex.assign(di.getNets().size(),-1);p->virtualBase.clear();
+    size_t sinks=0;for(const auto&plan:p->m.plans)sinks+=plan.net.sinks.size();
+    p->timingIndex.reset(di.getPins().size(),sinks);
+    size_t cells=0;
+    for(size_t i=0;i<p->m.plans.size();++i) {
+        const auto&plan=p->m.plans[i];p->netIndex.at(plan.net.id)=i;
+        p->virtualBase[plan.net.id]=cells;cells+=plan.crossings.size();
+        const int source=di.getPins().at(plan.net.source.id)->getCell()->getCellId();
+        for(size_t j=0;j<plan.net.sinks.size();++j) {
+            const auto&sink=plan.net.sinks[j];
+            p->timingIndex.add(sink.id,i,j,source,di.getPins().at(sink.id)->getCell()->getCellId());
+        }
+    }
+    // These are read-batch caches, not checkpoint state. The next reader rebuilds
+    // them normally. Keep diagnostic generations monotonic across rollback.
+    p->timingPrefixes.clear();p->wireSnapshots.clear();
+}
 void SllPlanner::refresh() {
     if(p->timingBatchActive)throw std::logic_error("Cannot refresh during a timing batch");
     if(p->wireBatchActive)throw std::logic_error("Cannot refresh SLL topology during a wire batch");

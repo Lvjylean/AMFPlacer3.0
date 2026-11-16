@@ -1,3 +1,6 @@
+// CLB_PROFILE_BEGIN
+#include "../../../utils/ClbLegalProfile.h"
+// CLB_PROFILE_END
 #include "LegalizationTrace.h"
 #include "SRLSiteSharing.h"
 #include <algorithm>
@@ -150,15 +153,29 @@ class CLBLegalizer
   private:
     friend class SRLSharingProbe;
     void buildSRLSharingGroups();
+    void buildRAMSharingGroups();
     void expandSharedSRLTargets();
     PlacementInfo::Location sharingCenter(PlacementInfo::PlacementUnit *pu) const;
     bool sharingLocationLegal(PlacementInfo::PlacementUnit *pu, float x, float y) const;
     float sharingHPWLChange(PlacementInfo::PlacementUnit *pu, float x, float y);
     float sharingAverageDisplacement() const;
     std::map<PlacementInfo::PlacementUnit*,std::vector<PlacementInfo::PlacementUnit*>> sharedSRLGroups;
-    std::map<PlacementInfo::PlacementMacro*,std::vector<PlacementInfo::PlacementMacro::fixedPlacementInfo_inMacro>> originalSRLFixed;
-    std::map<std::string,std::vector<std::string>> srlControlMetadata;
-    bool srlControlsLoaded=false;
+    // Cost snapshots live for one legalize() call only. That call updates legal
+    // targets, but never moves PU anchors or refreshes net bounding boxes.
+    struct CandidateNetCost {
+        PlacementInfo::PlacementNet *net = nullptr;
+        float original = 0;
+        float minX = 1e5, maxX = -1e5, minY = 1e5, maxY = -1e5;
+        std::vector<PlacementInfo::PlacementNet::pinOffset> movingOffsets;
+        bool originalSinglePath = false;
+    };
+    struct CandidateCostContext {
+        bool ready = false, shared = false, finite = true;
+        std::vector<CandidateNetCost> nets;
+    };
+    std::map<PlacementInfo::PlacementUnit *, CandidateCostContext> candidateCostContexts;
+    CandidateCostContext &prepareCandidateCost(PlacementInfo::PlacementUnit *pu);
+    float candidateHPWLChange(PlacementInfo::PlacementUnit *pu, float x, float y);
     std::string legalizerName;
     PlacementInfo *placementInfo;
     DeviceInfo *deviceInfo;
@@ -607,6 +624,10 @@ class CLBLegalizer
      */
     void findPU2SitesInDistance()
     {
+// CLB_PROFILE_BEGIN
+    clb_profile::Stage clbStage("findPU2SitesInDistance");
+// CLB_PROFILE_END
+
         PU2SitesInDisplacementThreshold.clear();
 
         int PUsNum = PUsToLegalize.size();
@@ -616,7 +637,16 @@ class CLBLegalizer
             PU2SitesInDisplacementThreshold[PUsToLegalize[i]] = nullptr;
         }
 
-#pragma omp parallel for
+// CLB_PROFILE_BEGIN
+    clb_profile::Team clbTeam("neighborSearch");
+// CLB_PROFILE_END
+// CLB_PROFILE_ORIGINAL #pragma omp parallel for
+// CLB_PROFILE_BEGIN
+#pragma omp parallel
+    {
+        clb_profile::WorkerScope clbWorker(clbTeam);
+#pragma omp for schedule(dynamic, 1) nowait
+// CLB_PROFILE_END
         for (int i = 0; i < PUsNum; i++)
         {
             PlacementInfo::PlacementUnit *curPU = PUsToLegalize[i];
@@ -637,7 +667,18 @@ class CLBLegalizer
                 curCell, shared?center.X:cellLoc[curCell->getCellId()].X,
                 shared?center.Y:cellLoc[curCell->getCellId()].Y, displacementThreshold,
                 candidateFactor * maxNumCandidate);
+// CLB_PROFILE_BEGIN
+        if(auto w=clb_profile::current){++w->items;w->raw+=PU2SitesInDisplacementThreshold[curPU]->size();}
+// CLB_PROFILE_END
+
         }
+// CLB_PROFILE_BEGIN
+        clbWorker.beforeBarrier();
+#pragma omp barrier
+        clbWorker.afterBarrier();
+    }
+// CLB_PROFILE_END
+
     }
 
     /**
@@ -646,6 +687,10 @@ class CLBLegalizer
      */
     void resetPU2SitesInDistance()
     {
+// CLB_PROFILE_BEGIN
+    clb_profile::Stage clbStage("resetPU2SitesInDistance");
+// CLB_PROFILE_END
+
         int PUsNum = PUsToLegalize.size();
         for (int i = 0; i < PUsNum; i++)
         {
@@ -693,33 +738,19 @@ class CLBLegalizer
      */
     inline float getHPWLChange(PlacementInfo::PlacementUnit *curPU, DeviceInfo::DeviceSite *curSite)
     {
-        assert(PU2Site2HPWLIncrease.find(curPU) != PU2Site2HPWLIncrease.end());
-        if (PU2Site2HPWLIncrease[curPU].find(curSite) != PU2Site2HPWLIncrease[curPU].end())
-        {
-            return PU2Site2HPWLIncrease[curPU][curSite];
-        }
+// CLB_PROFILE_BEGIN
+        clb_profile::lookup();
+// CLB_PROFILE_END
+        auto &costs = PU2Site2HPWLIncrease.at(curPU);
+        const auto found = costs.find(curSite);
+        if (found != costs.end()) return found->second;
         legalization_trace::CostScope traceCost;
-        if(sharedSRLGroups.count(curPU)) {
-            float cost=sharingHPWLChange(curPU,curSite->X(),curSite->Y());
-            PU2Site2HPWLIncrease[curPU][curSite]=cost;
-            return cost;
-        }
-        float oriHPWL = 0.0;
-        float newHPWL = 0.0;
-        float PUX = curSite->X();
-        float PUY = curSite->Y();
-        auto nets = placementInfo->getPlacementUnitId2Nets()[curPU->getId()];
-
-        for (auto curNet : nets)
-        {
-            if (curNet->getDesignNet()->getPins().size() > 10000) // it could be clock
-                continue;
-            oriHPWL += curNet->getHPWL(y2xRatio);
-            newHPWL += curNet->getNewHPWLByTrying(curPU, PUX, PUY, y2xRatio);
-        }
-
-        PU2Site2HPWLIncrease[curPU][curSite] = (newHPWL - oriHPWL);
-        return (newHPWL - oriHPWL);
+// CLB_PROFILE_BEGIN
+        clb_profile::Cost profileCost;
+// CLB_PROFILE_END
+        const float cost = candidateHPWLChange(curPU, curSite->X(), curSite->Y());
+        costs.emplace(curSite, cost);
+        return cost;
     }
 
     /**
@@ -736,12 +767,15 @@ class CLBLegalizer
 
         float oriHPWL = 0.0;
         float newHPWL = 0.0;
-        auto nets = placementInfo->getPlacementUnitId2Nets()[tmpPU->getId()];
+        const auto &nets = placementInfo->getPlacementUnitId2Nets()[tmpPU->getId()];
 
         for (auto curNet : nets)
         {
             if (curNet->getDesignNet()->getPins().size() > 10000) // it could be clock
                 continue;
+// CLB_PROFILE_BEGIN
+            clb_profile::net(curNet->getDesignNet()->getPins().size());
+// CLB_PROFILE_END
             oriHPWL += curNet->getHPWL(y2xRatio);
             newHPWL += curNet->getNewHPWLByTrying(tmpPU, PUX, PUY, y2xRatio);
         }
@@ -756,47 +790,36 @@ class CLBLegalizer
         *siteB = tmp;
     }
 
-    inline int sortPartition(PlacementInfo::PlacementUnit *curPU, std::vector<DeviceInfo::DeviceSite *> &sites, int low,
-                             int high)
+    // Identical middle-pivot quicksort, strict comparison and tie permutations.
+    // Carry each site's already evaluated float through every swap, avoiding
+    // repeated tree lookups inside the comparisons.
+    void quickSortCandidateCosts(std::vector<DeviceInfo::DeviceSite *> &sites,
+                                 std::vector<float> &costs, int low, int high)
     {
-        int pivot, index, i;
-        index = low;
-        pivot = high;
-        for (i = low; i < high; i++)
-        {
-            // finding index of pivot.
-            // if (a[i] < a[pivot])
-            // if (getDisplacement(PULoc, sites[i]) < getDisplacement(PULoc, sites[pivot]))
-            if (getHPWLChange(curPU, sites[i]) < getHPWLChange(curPU, sites[pivot]))
-            {
+        if (low >= high) return;
+        const int middle = (high + low) / 2;
+        swapSitePtr(&sites[high], &sites[middle]);
+        std::swap(costs[high], costs[middle]);
+        int index = low;
+        for (int i = low; i < high; ++i) {
+            if (costs[i] < costs[high]) {
                 swapSitePtr(&sites[i], &sites[index]);
-                index++;
+                std::swap(costs[i], costs[index]);
+                ++index;
             }
         }
-        swapSitePtr(&sites[pivot], &sites[index]);
-        return index;
+        swapSitePtr(&sites[high], &sites[index]);
+        std::swap(costs[high], costs[index]);
+        quickSortCandidateCosts(sites, costs, low, index - 1);
+        quickSortCandidateCosts(sites, costs, index + 1, high);
     }
-    inline int RandomPivotPartition(PlacementInfo::PlacementUnit *curPU, std::vector<DeviceInfo::DeviceSite *> &sites,
-                                    int low, int high)
+    void quick_sort_WLChange(PlacementInfo::PlacementUnit *curPU,
+                             std::vector<DeviceInfo::DeviceSite *> &sites, int low, int high)
     {
-        // Random selection of pivot.
-        int pvt;
-        pvt = (high + low) / 2; // Randomizing the pivot value from sub-array.
-        swapSitePtr(&sites[high], &sites[pvt]);
-        return sortPartition(curPU, sites, low, high);
-    }
-    void quick_sort_WLChange(PlacementInfo::PlacementUnit *curPU, std::vector<DeviceInfo::DeviceSite *> &sites, int p,
-                             int q)
-    {
-        // recursively sort the list
-        int pindex;
-        if (p < q)
-        {
-            pindex = RandomPivotPartition(curPU, sites, p, q); // randomly choose pivot
-            // Recursively implementing QuickSort.
-            quick_sort_WLChange(curPU, sites, p, pindex - 1);
-            quick_sort_WLChange(curPU, sites, pindex + 1, q);
-        }
+        if (low >= high) return;
+        std::vector<float> costs(sites.size());
+        for (int i = low; i <= high; ++i) costs[i] = getHPWLChange(curPU, sites[i]);
+        quickSortCandidateCosts(sites, costs, low, high);
     }
 
     inline void swapPUs(PlacementInfo::PlacementUnit **siteA, PlacementInfo::PlacementUnit **siteB)

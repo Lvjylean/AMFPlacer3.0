@@ -10,6 +10,7 @@ from pathlib import Path
 from inspect_amf_inputs import digest
 from srl_cascades import correct_and_validate
 from full_design_metadata import SITE_ONLY, FIXED_LEAF
+from carry_site_import import install as install_carry_site_import
 
 
 def escape_error_payload(match):
@@ -150,7 +151,17 @@ def preserve_lut62_pairing(script):
 source [file join $script_path .. inputs lut62_pairing.tcl]
 amf_lut62::capture
 amf_lut62::clear_ordinary_groups'''
-    return script.replace(legacy, replacement, 1)
+    # Apply the original DCP's protected-pair policy before the first native
+    # import batch. Placing even a single ordinary LUT can pull its old partner
+    # into a BEL requested by a different member of the same CARRY site.
+    first_batch = 'set result [catch {place_cell {'
+    first = re.search(r'^' + re.escape(first_batch), script, re.M)
+    if first is None:
+        raise ValueError('Missing native placement batch for LUT group cleanup')
+    if script.index(legacy) < first.start():
+        return script.replace(legacy, replacement, 1)
+    return (script[:first.start()] + replacement + '\n' +
+            script[first.start():].replace(legacy, '', 1))
 
 
 def prepare(root, source, directory, manifest):
@@ -306,6 +317,9 @@ close $f
             helper_sha256=digest(directory/'inputs/lut62_pairing.tcl'),
             assignments_changed=False)
     adapted = protected
+    adapted, carry_plan = install_carry_site_import(root, directory, adapted, assignments, cell_types)
+    if carry_plan:
+        manifest['carry_site_import'] = carry_plan
     (directory/'placement/import_placement.tcl').write_text(adapted)
     with (directory/'placement/bel_corrections.tsv').open('w') as f:
         f.write('cell\tbefore\tafter\n')
@@ -383,7 +397,7 @@ close $f
         shutil.copy2(diagnostic,directory/'inputs'/diagnostic.name)
         manifest['boundary_diagnostic_sha256']=digest(diagnostic)
     manifest['runner_files_sha256']={}
-    for name in ('run_full_flow.py','run_full_backend.py','summarize_full_flow.py','summarize_face_detect_flow.py','srl_cascades.py','full_design_metadata.py','inspect_amf_inputs.py','amf3.py','build_physical_boundaries.py','diagnostics/analyze_boundary_timing_samples.py'):
+    for name in ('run_full_flow.py','run_full_backend.py','carry_site_import.py','carry_site_import.tcl','summarize_full_flow.py','summarize_face_detect_flow.py','srl_cascades.py','full_design_metadata.py','inspect_amf_inputs.py','amf3.py','build_physical_boundaries.py','diagnostics/analyze_boundary_timing_samples.py'):
         origin=root/'scripts'/name
         if origin.is_file():
             snapshot=directory/'inputs'/name

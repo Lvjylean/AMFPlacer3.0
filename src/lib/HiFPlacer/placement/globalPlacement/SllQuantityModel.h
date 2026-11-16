@@ -39,6 +39,8 @@ struct DiscreteResult {
 struct Result {
     std::int64_t discrete = 0, discreteOptimized = 0;
     std::size_t invalidNets = 0, validNets = 0;
+    // Historical field names: weighted hard boundary demand when sllSTE=true;
+    // otherwise the original sigmoid/weighted-average surrogate. See parameters.tsv.
     double smooth = 0, activeSmooth = 0;
     double discreteSeconds=0, smoothGradientSeconds=0;
     std::vector<std::int64_t> seams;
@@ -53,6 +55,7 @@ inline double sigmoid(double v) {
 
 struct Model {
     std::vector<double> boundaries, tau;
+    bool sllSTE = false; // Hard boundary value; surrogate gradient only on crossed seams.
     double gamma = 0.25;
     double minY = 0, maxY = 1;
     std::size_t units = 0;
@@ -127,6 +130,45 @@ struct Model {
         result.seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();return result;
     }
 
+    struct SteScratch {
+        std::vector<double> pinY, gradient;
+        std::vector<std::size_t> upper;
+    };
+    // Forward: sum_b(max h_ib - min h_ib), h_ib = [pinY_i > boundary_b].
+    // Backward: equal tie weights within each side, times the existing sigmoid
+    // derivative. Same-side seams contribute exactly zero. This is a surrogate,
+    // not a derivative of discrete demand and not a crossing acceptance guard.
+    // Scratch belongs to one evaluator chunk; no cross-net/iteration cache.
+    double steNet(const Net &net, const std::vector<double> &y,
+                  bool needGradient, SteScratch &scratch) const {
+        const auto count=net.end-net.begin;
+        scratch.pinY.resize(count);
+        scratch.upper.assign(boundaries.size(),0);
+        if(needGradient)scratch.gradient.assign(count,0);else scratch.gradient.clear();
+        for(std::size_t j=0;j<count;++j){
+            const auto &pin=pins[net.begin+j];
+            const double py=y[pin.unit]+pin.offsetY;
+            if(!std::isfinite(py))throw std::runtime_error("Non-finite SLL STE pin coordinate");
+            scratch.pinY[j]=py;
+            for(std::size_t b=0;b<boundaries.size();++b)
+                scratch.upper[b]+=py>boundaries[b]; // Exact seam remains in lower die.
+        }
+        double value=0;
+        for(std::size_t b=0;b<boundaries.size();++b){
+            const auto high=scratch.upper[b],low=count-high;
+            if(!high || !low)continue;
+            value+=net.weight;
+            if(!needGradient || net.weight==0)continue;
+            const double upWeight=1.0/double(high),lowWeight=-1.0/double(low);
+            for(std::size_t j=0;j<count;++j){
+                const double py=scratch.pinY[j];
+                const double p=sigmoid((py-boundaries[b])/tau[b]);
+                scratch.gradient[j]+=net.weight*(py>boundaries[b]?upWeight:lowWeight)*p*(1-p)/tau[b];
+            }
+        }
+        return value;
+    }
+
     Result evaluate(const std::vector<double> &y, const std::vector<unsigned char> &movable,
                     int threads, bool needGradient, std::vector<double> *netStrength = nullptr,
                     const DiscreteResult *samePositionCount = nullptr) const {
@@ -157,6 +199,7 @@ struct Model {
         for (int chunk = 0; chunk < chunks; ++chunk) {
             auto &out = partial[chunk];
             std::vector<double> z, dz, plus, minus;
+            SteScratch steScratch;
             const std::size_t begin = nets.size() * chunk / chunks;
             const std::size_t end = nets.size() * (chunk + 1) / chunks;
             for (std::size_t ni = begin; ni < end; ++ni) {
@@ -167,6 +210,20 @@ struct Model {
                 // Keep the smooth cost even outside the known physical domain;
                 // moving a pin out of bounds must never erase an objective term.
                 if (count < 2 || net.weight == 0) continue;
+                if(sllSTE){
+                    const bool active=needGradient && net.gradientActive;
+                    const double value=steNet(net,y,active,steScratch);
+                    out.smooth+=value;
+                    if(net.gradientActive)out.activeSmooth+=value;
+                    if(active)for(std::size_t j=0;j<count;++j){
+                        const auto &pin=pins[net.begin+j];
+                        if(!movable[pin.unit])continue;
+                        const double contribution=steScratch.gradient[j];
+                        out.gradient[pin.unit]+=contribution;
+                        if(netStrength)(*netStrength)[ni]=std::max((*netStrength)[ni],std::abs(contribution));
+                    }
+                    continue;
+                }
                 z.assign(count, 0); dz.assign(count, 0);
                 plus.resize(count); minus.resize(count);
                 double zlo = std::numeric_limits<double>::infinity(), zhi = -zlo;

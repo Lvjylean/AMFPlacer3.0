@@ -82,11 +82,31 @@ def run(root, args):
     validate_sll_planning(config,binary)
     from full_design_metadata import validate_binary as validate_full_interfaces
     validate_full_interfaces(config, binary)
+    table_key = 'logic empty bins file'
+    device_name = config.get('device', 'VCU108')
+    part = config.get('physical device part') or device_name
+    device = device_name.lower()
+    table = root / 'configs/devices' / device / (part + '.logic-empty.tsv')
+    if not args.placement_run and (config.get(table_key) or table.is_file()):
+        try:
+            caps = json.loads(subprocess.check_output([str(binary), '--capabilities'], text=True, timeout=15))
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
+            if config.get(table_key):
+                raise ValueError('Could not verify support for the explicit empty logic bins file')
+            caps = {}
+        if caps.get('logic_empty_bins_schema') == 1:
+            config.setdefault(table_key, str(table))
+        elif config.get(table_key):
+            raise ValueError('Selected AMF binary does not support the explicit empty logic bins file')
+    dcp = (root / args.dcp).resolve()
+    if not args.placement_run and device == 'u250':
+        from carry_shape_ff import configure
+        configure(config, root, dcp, binary, directory / 'inputs')
     inputs = {}
     for key in ('vivado extracted device information file', 'vivado extracted design information file',
-                'physical boundary model file', 'special pin offset info file', 'clock file', 'mergedSharedCellType2sharedCellType',
+                'physical boundary model file', 'logic empty bins file', 'special pin offset info file', 'clock file', 'mergedSharedCellType2sharedCellType',
                 'cellType2fixedAmo file', 'cellType2sharedCellType file', 'sharedCellType2BELtype file',
-                'fixed units file', 'unpredictable macro file', 'designCluster', 'DSP registered outputs file',
+                'fixed units file', 'unpredictable macro file', 'designCluster', 'DSP registered outputs file', 'CARRY shape FF file',
                 'ASYNC_REG groups file', 'ASYNC_REG proximity pairs file', 'fixed occupied sites file',
                 'SllChannelFile', 'SllReservedResourceFile', 'clock resource capacity file', 'external floorplan membership file',
                 'external floorplan regions file', 'external floorplan manifest file',
@@ -127,7 +147,6 @@ def run(root, args):
             shutil.copy2(model_dir/name,physical/name)
         save(physical/'effective_parameters.json', {k:v for k,v in config.items() if k.startswith(('Boundary','Physical','SLR','TimingMax','QP')) or k in ('ClockPeriod','physical device part','physical boundary model file')})
     save(directory / 'config.json', config)
-    dcp = (root / args.dcp).resolve()
     manifest = dict(schema='amf-full-flow-v1', source_commit=git('rev-parse', 'HEAD'),
                     git_status=git('status', '--porcelain'), inputs=inputs, binary=str(binary),
                     binary_sha256=digest(binary), input_dcp=str(dcp), input_dcp_sha256=digest(dcp),

@@ -1,3 +1,4 @@
+#include "../../../utils/PhaseWaitProfile.h"
 #include "../../../utils/PlacementFeatureConfig.h"
 #include "../placementTiming/HierarchicalBoundaryPolicy.h"
 #include "../../../utils/RuntimeProfiler.h"
@@ -26,6 +27,21 @@ WirelengthOptimizer::WirelengthOptimizer(PlacementInfo *placementInfo, std::map<
     : placementInfo(placementInfo), JSONCfg(JSONCfg), verbose(verbose)
 {
     AMF_PROFILE_FUNCTION("qp_model");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
+    ordinaryAnchorAllGPRounds = amf_config::feature(JSONCfg, "OrdinaryAnchorAllGPRounds", false);
+    if (JSONCfg.count("GPOrdinaryAnchorMultiplier")) {
+        const auto &value = JSONCfg.at("GPOrdinaryAnchorMultiplier");
+        size_t used = 0;
+        ordinaryAnchorMultiplier = std::stof(value, &used);
+        if (used != value.size() || !std::isfinite(ordinaryAnchorMultiplier) || ordinaryAnchorMultiplier <= 0)
+            throw std::invalid_argument("GPOrdinaryAnchorMultiplier must be finite and positive");
+    }
+    if (JSONCfg.count("EarlyOrdinaryAnchorBoost")) {
+        const auto &value = JSONCfg.at("EarlyOrdinaryAnchorBoost");
+        if (value != "true" && value != "false")
+            throw std::invalid_argument("EarlyOrdinaryAnchorBoost must be true or false");
+        earlyOrdinaryAnchorBoost = value == "true";
+    }
     if (JSONCfg.find("MKL") != JSONCfg.end())
     {
         MKLorNot = JSONCfg["MKL"] == "true";
@@ -97,6 +113,7 @@ void WirelengthOptimizer::recordSllStage(const char* phase, int round, int itera
 void WirelengthOptimizer::reloadPlacementInfo()
 {
     AMF_PROFILE_FUNCTION("qp_model");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     if (xSolver)
         delete xSolver;
     if (ySolver)
@@ -133,10 +150,11 @@ void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool fir
                                                  bool forwardSolutionToNextIteration, bool enableMacroPseudoNet2Site,
                                                  bool considerNetNum, bool enableUserDefinedClusterOpt,
                                                  float displacementLimit, PlacementTimingOptimizer *timingOptimizer,
-                                                 bool enableFFClusterOpt)
+                                                 bool enableFFClusterOpt, int globalRound)
 {
     if(!amf_config::feature(JSONCfg,"TimingDrivenPlacementEnable",true)) timingOptimizer=nullptr;
     AMF_PROFILE_FUNCTION("qp_model");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     if (verbose)
         print_status("A QP Iteration Started.");
 
@@ -164,7 +182,7 @@ void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool fir
     }
 
     updateB2BNetWeight(pesudoNetWeight, enableMacroPseudoNet2Site, considerNetNum, enableUserDefinedClusterOpt,
-                       timingOptimizer, enableFFClusterOpt);
+                       timingOptimizer, enableFFClusterOpt, boostInRound(globalRound));
     if (firstIteration)
         solverLoadData();
 
@@ -175,10 +193,11 @@ void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool fir
     if (verbose)
         print_status("Solver Running.");
     AMF_PROFILE_NAMED(qpParallel, "qp_solve_wait", "QP X/Y solve including thread join");
-    std::thread t1(QPSolverWrapper::QPSolve, std::ref(xSolver));
-    std::thread t2(QPSolverWrapper::QPSolve, std::ref(ySolver));
+    std::thread t1([&]{phase_wait::Scope p("QP_X_compute",CLOCK_THREAD_CPUTIME_ID);QPSolverWrapper::QPSolve(xSolver);});
+    std::thread t2([&]{phase_wait::Scope p("QP_Y_compute",CLOCK_THREAD_CPUTIME_ID);QPSolverWrapper::QPSolve(ySolver);});
+    { phase_wait::Scope wait("QP_join",CLOCK_THREAD_CPUTIME_ID);
     t1.join();
-    t2.join();
+    t2.join(); }
     AMF_PROFILE_STOP(qpParallel);
     if (qpStabilityGuard) {
         for (const auto &axis : {std::make_pair("X", xSolver), std::make_pair("Y", ySolver)}) {
@@ -215,6 +234,7 @@ void WirelengthOptimizer::GlobalPlacementQPSolve(float pesudoNetWeight, bool fir
 void WirelengthOptimizer::solverLoadData()
 {
     AMF_PROFILE_FUNCTION("qp_model");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     for (unsigned int tmpPUId = 0; tmpPUId < placementInfo->getPlacementUnits().size(); tmpPUId++)
     {
         auto tmpPU = placementInfo->getPlacementUnits()[tmpPUId];
@@ -234,6 +254,7 @@ void WirelengthOptimizer::solverLoadData()
 void WirelengthOptimizer::solverLoadFixedData()
 {
     AMF_PROFILE_FUNCTION("qp_model");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     assert(xSolver->solverSettings.solutionForward == ySolver->solverSettings.solutionForward);
     if (xSolver->solverSettings.solutionForward)
     {
@@ -264,6 +285,7 @@ void WirelengthOptimizer::solverLoadFixedData()
 void WirelengthOptimizer::solverWriteBackData(float displacementLimit)
 {
     AMF_PROFILE_FUNCTION("qp_model");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     bool displacementLimitEnable = displacementLimit > 0;
     assert(xSolver->solverSettings.solutionForward == ySolver->solverSettings.solutionForward);
     unsigned int numPUs = placementInfo->getPlacementUnits().size();
@@ -351,9 +373,10 @@ void WirelengthOptimizer::solverWriteBackData(float displacementLimit)
 
 void WirelengthOptimizer::updateB2BNetWeight(float pesudoNetWeight, bool enableMacroPseudoNet2Site, bool considerNetNum,
                                              bool enableUserDefinedClusterOpt,
-                                             PlacementTimingOptimizer *timingOptimizer, bool enableFFClusterOpt)
+                                             PlacementTimingOptimizer *timingOptimizer, bool enableFFClusterOpt, bool boostOrdinaryAnchor)
 {
     AMF_PROFILE_FUNCTION("qp_model");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     if (verbose)
         print_status("update B2B Net Weight Start.");
 
@@ -366,8 +389,9 @@ void WirelengthOptimizer::updateB2BNetWeight(float pesudoNetWeight, bool enableM
                    std::ref(ySolver->solverData.objectiveMatrixTripletList),
                    std::ref(ySolver->solverData.objectiveMatrixDiag), std::ref(ySolver->solverData.objectiveVector),
                    std::ref(generalNetWeight), std::ref(y2xRatio), std::ref(updateFalse), std::ref(updateTrue));
+    { phase_wait::Scope wait("QP_join",CLOCK_THREAD_CPUTIME_ID);
     t1.join();
-    t2.join();
+    t2.join(); }
     if(sllDiagnostics)sllDiagnostics->beginModelAudit(*xSolver,*ySolver,generalNetWeight,y2xRatio);
 
     if (enableMacroPseudoNet2Site && !directMacroLegalize)
@@ -397,7 +421,7 @@ void WirelengthOptimizer::updateB2BNetWeight(float pesudoNetWeight, bool enableM
     updatePseudoNetsForClusters(pesudoNetWeight, enableUserDefinedClusterOpt, enableFFClusterOpt);
 
     if(sllDiagnostics)sllDiagnostics->auditCheckpoint("anchor_clusters",*xSolver,*ySolver);
-    addPseudoNet2LoctionForAllPUs(pesudoNetWeight, considerNetNum);
+    addPseudoNet2LoctionForAllPUs(pesudoNetWeight, considerNetNum, boostOrdinaryAnchor);
     if(placementInfo->sllPlanner){
         placementInfo->sllPlanner->addDensityModel(xSolver->solverData.objectiveMatrixDiag,xSolver->solverData.objectiveVector,true);
         placementInfo->sllPlanner->addDensityModel(ySolver->solverData.objectiveMatrixDiag,ySolver->solverData.objectiveVector,false);
@@ -434,6 +458,7 @@ void WirelengthOptimizer::updateB2BNetWeightWorker(PlacementInfo *placementInfo,
                                                    float y2xRatio, bool updateX, bool updateY)
 {
     AMF_PROFILE_FUNCTION("qp_model");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     objectiveMatrixTripletList.clear();
     objectiveMatrixDiag.clear();
     const size_t n=placementInfo->getPlacementUnits().size()+(placementInfo->sllPlanner?placementInfo->sllPlanner->variableCount():0);
@@ -458,6 +483,7 @@ void WirelengthOptimizer::updateB2BNetWeightWorker(PlacementInfo *placementInfo,
 void WirelengthOptimizer::addPseudoNetForMacros(float pesudoNetWeight, bool considerNetNum)
 {
     AMF_PROFILE_FUNCTION("qp_model");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     std::map<PlacementInfo::PlacementUnit *, float> &PUX = placementInfo->getPULegalXY().first;
     std::map<PlacementInfo::PlacementUnit *, float> &PUY = placementInfo->getPULegalXY().second;
     if(macro_study::active("macro-weight-x8")) pesudoNetWeight *= 8.0f;
@@ -539,6 +565,7 @@ void WirelengthOptimizer::addPseudoNet_SlackBased(float timingWeight, double sla
                                                   PlacementTimingOptimizer *timingOptimizer, bool calculate)
 {
     AMF_PROFILE_FUNCTION("qp_model");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     if (calculate)
     {
         auto &PUsSkewRisky = placementInfo->getPUsSkewRisky();
@@ -844,6 +871,7 @@ void WirelengthOptimizer::LUTLUTPairing_TimingDriven(float timingWeight, float d
                                                      PlacementTimingOptimizer *timingOptimizer)
 {
     AMF_PROFILE_FUNCTION("qp_model");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     float w = 2 * timingWeight / std::pow(2, 0.5);
     if (disThreshold < 0)
         return;
@@ -1015,9 +1043,24 @@ void WirelengthOptimizer::LUTLUTPairing_TimingDriven(float timingWeight, float d
     }
 }
 
-void WirelengthOptimizer::addPseudoNet2LoctionForAllPUs(float pesudoNetWeight, bool considerNetNum)
+bool WirelengthOptimizer::ordinaryMovableSingle(PlacementInfo::PlacementUnit *pu)
 {
+    if (pu->getType() != PlacementInfo::PlacementUnitType_UnpackedCell ||
+        pu->isFixed() || pu->isLocked() || pu->isPacked()) return false;
+    auto *cell = static_cast<PlacementInfo::PlacementUnpackedCell *>(pu)->getCell();
+    if (cell->isVirtualCell() || cell->isInterfaceEndpoint()) return false;
+    const auto t = cell->getOriCellType();
+    return DesignInfo::isLUT(t) || t == DesignInfo::CellType_FDRE || t == DesignInfo::CellType_FDSE ||
+           t == DesignInfo::CellType_FDCE || t == DesignInfo::CellType_FDPE;
+}
+
+void WirelengthOptimizer::addPseudoNet2LoctionForAllPUs(float pesudoNetWeight, bool considerNetNum, bool boostOrdinaryAnchor)
+{
+    const auto weight = [this, boostOrdinaryAnchor](PlacementInfo::PlacementUnit *pu, float w) {
+        return boostOrdinaryAnchor && ordinaryMovableSingle(pu) ? ordinaryAnchorMultiplier * w : w;
+    };
     AMF_PROFILE_FUNCTION("qp_model");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     int numPUs = placementInfo->getPlacementUnits().size();
     float minDist = 0.5;
     float powFactor = placementInfo->getProgress() * 0.5 + 0.5;
@@ -1077,7 +1120,7 @@ void WirelengthOptimizer::addPseudoNet2LoctionForAllPUs(float pesudoNetWeight, b
                         placementInfo->addPseudoNetsInPlacementInfo(
                             xSolver->solverData.objectiveMatrixTripletList, xSolver->solverData.objectiveMatrixDiag,
                             xSolver->solverData.objectiveVector, curPU, curX,
-                            std::pow(size, powFactor) * pesudoNetWeight / std::max(minDist, std::fabs(lastX - curX)),
+                            weight(curPU, std::pow(size, powFactor) * pesudoNetWeight / std::max(minDist, std::fabs(lastX - curX))),
                             y2xRatio, true, false);
                     }
                 }
@@ -1099,7 +1142,7 @@ void WirelengthOptimizer::addPseudoNet2LoctionForAllPUs(float pesudoNetWeight, b
                         placementInfo->addPseudoNetsInPlacementInfo(
                             ySolver->solverData.objectiveMatrixTripletList, ySolver->solverData.objectiveMatrixDiag,
                             ySolver->solverData.objectiveVector, curPU, curY,
-                            std::pow(size, powFactor) * pesudoNetWeight / std::max(minDist, std::fabs(lastY - curY)),
+                            weight(curPU, std::pow(size, powFactor) * pesudoNetWeight / std::max(minDist, std::fabs(lastY - curY))),
                             y2xRatio, false, true);
                     }
                 }
@@ -1124,7 +1167,7 @@ void WirelengthOptimizer::addPseudoNet2LoctionForAllPUs(float pesudoNetWeight, b
                         placementInfo->addPseudoNetsInPlacementInfo(
                             xSolver->solverData.objectiveMatrixTripletList, xSolver->solverData.objectiveMatrixDiag,
                             xSolver->solverData.objectiveVector, curPU, curX,
-                            pesudoNetWeight / std::max(minDist, std::fabs(lastX - curX)), y2xRatio, true, false);
+                            weight(curPU, pesudoNetWeight / std::max(minDist, std::fabs(lastX - curX))), y2xRatio, true, false);
                     }
                 }
             }
@@ -1142,7 +1185,7 @@ void WirelengthOptimizer::addPseudoNet2LoctionForAllPUs(float pesudoNetWeight, b
                         placementInfo->addPseudoNetsInPlacementInfo(
                             ySolver->solverData.objectiveMatrixTripletList, ySolver->solverData.objectiveMatrixDiag,
                             ySolver->solverData.objectiveVector, curPU, curY,
-                            pesudoNetWeight / std::max(minDist, std::fabs(lastY - curY)), y2xRatio, false, true);
+                            weight(curPU, pesudoNetWeight / std::max(minDist, std::fabs(lastY - curY))), y2xRatio, false, true);
                     }
                 }
             }
@@ -1182,6 +1225,7 @@ WirelengthOptimizer::ClusterPseudoNetStats
 WirelengthOptimizer::updatePseudoNetForUserDefinedClusters(float pesudoNetWeight)
 {
     AMF_PROFILE_FUNCTION("qp_model");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     ClusterPseudoNetStats stats;
     auto &predefinedCellClusters = placementInfo->getDesignInfo()->getPredefinedClusters();
     stats.inputClusters = predefinedCellClusters.size();
@@ -1277,6 +1321,7 @@ WirelengthOptimizer::ClusterPseudoNetStats
 WirelengthOptimizer::updatePseudoNetForFFClusters(float pesudoNetWeight)
 {
     AMF_PROFILE_FUNCTION("qp_model");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     ClusterPseudoNetStats stats;
     stats.inputClusters = placementInfo->getFFBasedClusters().size();
     // Do not consume the FF fade window before FFPartitioning creates groups.
@@ -1455,6 +1500,7 @@ void WirelengthOptimizer::updatePseudoNetForDataPathClusters(float pesudoNetWeig
 void WirelengthOptimizer::updatePseudoNetForClockRegion(float pesudoNetWeight)
 {
     AMF_PROFILE_FUNCTION("qp_model");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     if (pesudoNetWeight <= 0)
         return;
     if(placementInfo->boundaryClusteringEnabled())

@@ -1,3 +1,4 @@
+#include "RAMSiteSharing.h"
 #include "../../../utils/RuntimeProfiler.h"
 /**
  * @file CLBLegalizer.cc
@@ -13,6 +14,10 @@
  */
 
 #include "CLBLegalizer.h"
+// CLB_PROFILE_BEGIN
+#include "../../../utils/ClbLegalProfile.h"
+// CLB_PROFILE_END
+
 #include <algorithm>
 #include <array>
 #include <iomanip>
@@ -70,9 +75,18 @@ CLBLegalizer::CLBLegalizer(std::string legalizerName, PlacementInfo *placementIn
 void CLBLegalizer::legalize(bool exactLegalization)
 {
     AMF_PROFILE_FUNCTION("clb_legalization");
+// CLB_PROFILE_BEGIN
+    clb_profile::Call clbCall(exactLegalization);
+// CLB_PROFILE_END
     if (verbose)
         print_status("CLBLegalizer Started Legalization.");
     PU2Site2HPWLIncrease.clear();
+    candidateCostContexts.clear();
+    // Own the snapshot only during this invocation, including early returns.
+    struct SnapshotRelease {
+        decltype(candidateCostContexts) &contexts;
+        ~SnapshotRelease() { contexts.clear(); }
+    } releaseSnapshot{candidateCostContexts};
     resetSettings();
     findSiteType2AvailableSites();
     getPUsToLegalize();
@@ -120,6 +134,10 @@ void CLBLegalizer::legalize(bool exactLegalization)
 
 void CLBLegalizer::roughlyLegalize()
 {
+// CLB_PROFILE_BEGIN
+    clb_profile::Stage clbStage("roughlyLegalize");
+// CLB_PROFILE_END
+
     AMF_PROFILE_FUNCTION("clb_legalization");
     int traceAttempt=0;
     while (PUsToLegalize.size())
@@ -151,7 +169,14 @@ void CLBLegalizer::roughlyLegalize()
 
         const double traceConstruct=legalization_trace::seconds(traceMark);
         traceMark=legalization_trace::Clock::now();
+// CLB_PROFILE_BEGIN
+        { clb_profile::Stage stage("matchingSolve");
+// CLB_PROFILE_END
         minCostBipartiteMatcher->solve();
+// CLB_PROFILE_BEGIN
+        }
+// CLB_PROFILE_END
+
         const double traceSolve=legalization_trace::seconds(traceMark);
         traceMark=legalization_trace::Clock::now();
         updateMatchingAndUnmatchedPUs();
@@ -184,6 +209,10 @@ void CLBLegalizer::roughlyLegalize()
 
 void CLBLegalizer::fixedColumnLegalize()
 {
+// CLB_PROFILE_BEGIN
+    clb_profile::Stage clbStage("fixedColumnLegalize");
+// CLB_PROFILE_END
+
     AMF_PROFILE_FUNCTION("clb_legalization");
     mapPUsToColumns();
     resolveOverflowColumns();
@@ -219,7 +248,14 @@ void CLBLegalizer::fixedColumnLegalize()
 
         const double traceConstruct=legalization_trace::seconds(traceMark);
         traceMark=legalization_trace::Clock::now();
+// CLB_PROFILE_BEGIN
+        { clb_profile::Stage stage("matchingSolve");
+// CLB_PROFILE_END
         minCostBipartiteMatcher->solve();
+// CLB_PROFILE_BEGIN
+        }
+// CLB_PROFILE_END
+
         const double traceSolve=legalization_trace::seconds(traceMark);
         traceMark=legalization_trace::Clock::now();
         updateMatchingAndUnmatchedPUs();
@@ -252,6 +288,10 @@ void CLBLegalizer::fixedColumnLegalize()
 
 void CLBLegalizer::finalLegalizeBasedOnDP()
 {
+// CLB_PROFILE_BEGIN
+    clb_profile::Stage clbStage("finalLegalizeBasedOnDP");
+// CLB_PROFILE_END
+
     AMF_PROFILE_FUNCTION("clb_legalization");
     PU2X.clear();
     PU2Y.clear();
@@ -275,6 +315,10 @@ void CLBLegalizer::finalLegalizeBasedOnDP()
 float CLBLegalizer::DPForMinHPWL(int colNum, std::vector<std::vector<DeviceInfo::DeviceSite *>> &Column2Sites,
                                  std::vector<std::deque<PlacementInfo::PlacementUnit *>> &Column2PUs)
 {
+// CLB_PROFILE_BEGIN
+    clb_profile::Stage clbStage("DPForMinHPWL");
+// CLB_PROFILE_END
+
     AMF_PROFILE_FUNCTION("clb_legalization");
     // final Legalization DP
     // i th macro (start from 0), j th row (start from 0)
@@ -299,10 +343,23 @@ float CLBLegalizer::DPForMinHPWL(int colNum, std::vector<std::vector<DeviceInfo:
         }
     }
 
-#pragma omp parallel for
+// CLB_PROFILE_BEGIN
+    clb_profile::Team clbTeam("columnDP");
+// CLB_PROFILE_END
+// CLB_PROFILE_ORIGINAL #pragma omp parallel for
+// CLB_PROFILE_BEGIN
+#pragma omp parallel
+    {
+        clb_profile::WorkerScope clbWorker(clbTeam);
+#pragma omp for schedule(dynamic, 1) nowait
+// CLB_PROFILE_END
     for (int c = 0; c < colNum; c++)
     {
         int numPUs = Column2PUs[c].size();
+// CLB_PROFILE_BEGIN
+        if(clb_profile::current){++clb_profile::current->items;clb_profile::current->raw+=numPUs;clb_profile::current->kept+=Column2Sites[c].size();}
+// CLB_PROFILE_END
+
         if (!numPUs)
             continue;
 
@@ -325,6 +382,9 @@ float CLBLegalizer::DPForMinHPWL(int colNum, std::vector<std::vector<DeviceInfo:
         float minHPWLChange = 1100000000.0;
         for (unsigned int j = heightPURow - 1; j < curColSites.size(); j++)
         {
+// CLB_PROFILE_BEGIN
+            if(clb_profile::current)++clb_profile::current->dpStates;
+// CLB_PROFILE_END
             float curHPWLChange = getHPWLChange(curColPU[0], curColSites[j - heightPURow + 1]);
                 if(!placementInfo->hardRegionAllows(curColPU[0],curColSites[j-heightPURow+1]))curHPWLChange=1100000000.0;
             if (curColSites[j]->getSiteY() - curColSites[j - heightPURow + 1]->getSiteY() != heightPURow - 1)
@@ -353,6 +413,9 @@ float CLBLegalizer::DPForMinHPWL(int colNum, std::vector<std::vector<DeviceInfo:
             for (unsigned int j = totalMacroCellNum - 1; j < curColSites.size();
                  j++) // j start from heightPURow because PU0 must occupy 1+ site(s)
             {
+// CLB_PROFILE_BEGIN
+                if(clb_profile::current)++clb_profile::current->dpStates;
+// CLB_PROFILE_END
                 float curHPWLChange = getHPWLChange(curColPU[i], curColSites[j - heightPURow + 1]);
                 if(!placementInfo->hardRegionAllows(curColPU[i],curColSites[j-heightPURow+1]))curHPWLChange=1100000000.0;
                 if (curColSites[j]->getSiteY() - curColSites[j - heightPURow + 1]->getSiteY() != heightPURow - 1)
@@ -402,6 +465,13 @@ float CLBLegalizer::DPForMinHPWL(int colNum, std::vector<std::vector<DeviceInfo:
             //          << " locY:" << curSite->Y() << " HPWLIncrease:" << getHPWLChange(curColPU[i], curSite) << "\n";
         }
     }
+// CLB_PROFILE_BEGIN
+        clbWorker.beforeBarrier();
+#pragma omp barrier
+        clbWorker.afterBarrier();
+    }
+// CLB_PROFILE_END
+
 
     for (auto &PUDeque : Column2PUs)
     {
@@ -426,6 +496,10 @@ float CLBLegalizer::DPForMinHPWL(int colNum, std::vector<std::vector<DeviceInfo:
 
 void CLBLegalizer::getPUsToLegalize()
 {
+// CLB_PROFILE_BEGIN
+    clb_profile::Stage clbStage("getPUsToLegalize");
+// CLB_PROFILE_END
+
     AMF_PROFILE_FUNCTION("clb_legalization");
     PUsToLegalize.clear();
     PUsToLegalizeSet.clear();
@@ -457,15 +531,21 @@ void CLBLegalizer::getPUsToLegalize()
         }
     }
     buildSRLSharingGroups();
+    buildRAMSharingGroups();
     initialPUsToLegalize = PUsToLegalize;
     for (auto curPU : PUsToLegalize)
     {
         PU2Site2HPWLIncrease[curPU] = std::map<DeviceInfo::DeviceSite *, float>();
+        candidateCostContexts.emplace(curPU, CandidateCostContext{});
     }
 }
 
 void CLBLegalizer::findSiteType2AvailableSites()
 {
+// CLB_PROFILE_BEGIN
+    clb_profile::Stage clbStage("findSiteType2AvailableSites");
+// CLB_PROFILE_END
+
     AMF_PROFILE_FUNCTION("clb_legalization");
     siteType2Sites.clear();
     for (auto siteTypeToLegalize : siteTypesToLegalize)
@@ -565,6 +645,10 @@ void CLBLegalizer::findSiteType2AvailableSites()
 
 void CLBLegalizer::findPossibleLegalLocation(bool fixedColumn)
 {
+// CLB_PROFILE_BEGIN
+    clb_profile::Stage clbStage("findPossibleLegalLocation");
+// CLB_PROFILE_END
+
     AMF_PROFILE_FUNCTION("clb_legalization");
     PU2Sites.clear();
 
@@ -576,7 +660,16 @@ void CLBLegalizer::findPossibleLegalLocation(bool fixedColumn)
     int numPUs = PUsToLegalize.size();
     std::vector<legalization_trace::Candidate> traceRows(numPUs);
 
-#pragma omp parallel for
+// CLB_PROFILE_BEGIN
+    clb_profile::Team clbTeam("candidateFilterSort");
+// CLB_PROFILE_END
+// CLB_PROFILE_ORIGINAL #pragma omp parallel for
+// CLB_PROFILE_BEGIN
+#pragma omp parallel
+    {
+        clb_profile::WorkerScope clbWorker(clbTeam);
+#pragma omp for schedule(dynamic, 1) nowait
+// CLB_PROFILE_END
     for (int i = 0; i < numPUs; i++)
     {
         auto curPU = PUsToLegalize[i];
@@ -655,7 +748,19 @@ void CLBLegalizer::findPossibleLegalLocation(bool fixedColumn)
         tr.kept=PU2Sites[curPU].size();
         tr.sortWithCostSeconds=legalization_trace::seconds(traceStart);
         tr.costSeconds=legalization_trace::costSeconds;tr.misses=legalization_trace::costMisses;
+// CLB_PROFILE_BEGIN
+        if(auto w=clb_profile::current){++w->items;w->raw+=tr.raw;w->legal+=tr.legal;w->kept+=tr.kept;
+            w->rejected+=tr.raw-tr.legal;w->filterWall+=tr.filterSeconds;w->sortWall+=tr.sortWithCostSeconds;}
+// CLB_PROFILE_END
+
     }
+// CLB_PROFILE_BEGIN
+        clbWorker.beforeBarrier();
+#pragma omp barrier
+        clbWorker.afterBarrier();
+    }
+// CLB_PROFILE_END
+
     if(legalization_trace::enabled()) {
         legalization_trace::Candidate sum;
         for(const auto &a:traceRows){sum.raw+=a.raw;sum.distanceRejected+=a.distanceRejected;sum.illegal+=a.illegal;
@@ -675,6 +780,10 @@ void CLBLegalizer::findPossibleLegalLocation(bool fixedColumn)
 
 void CLBLegalizer::createBipartiteGraph()
 {
+// CLB_PROFILE_BEGIN
+    clb_profile::Stage clbStage("createBipartiteGraph");
+// CLB_PROFILE_END
+
     AMF_PROFILE_FUNCTION("clb_legalization");
     rightSiteIds.clear();
     adjList.resize(PUsToLegalize.size());
@@ -720,6 +829,10 @@ void CLBLegalizer::createBipartiteGraph()
 
 void CLBLegalizer::updateMatchingAndUnmatchedPUs()
 {
+// CLB_PROFILE_BEGIN
+    clb_profile::Stage clbStage("updateMatchingAndUnmatchedPUs");
+// CLB_PROFILE_END
+
     AMF_PROFILE_FUNCTION("clb_legalization");
     for (unsigned int leftCellId = 0; leftCellId < PUsToLegalize.size(); leftCellId++)
     {
@@ -749,6 +862,10 @@ void CLBLegalizer::updateMatchingAndUnmatchedPUs()
 
 void CLBLegalizer::dumpMatching(bool fixedColumn, bool enforce)
 {
+// CLB_PROFILE_BEGIN
+    clb_profile::Stage clbStage("dumpMatching");
+// CLB_PROFILE_END
+
     AMF_PROFILE_FUNCTION("diagnostic_output");
     if (noTarget)
         return;
@@ -845,6 +962,10 @@ void CLBLegalizer::sortSitesBySiteY(std::vector<DeviceInfo::DeviceSite *> &sites
 
 void CLBLegalizer::updatePUMatchingLocation(bool isRoughLegalization, bool updateDisplacement)
 {
+// CLB_PROFILE_BEGIN
+    clb_profile::Stage clbStage("updatePUMatchingLocation");
+// CLB_PROFILE_END
+
     AMF_PROFILE_FUNCTION("clb_legalization");
     PU2X.clear();
     PU2Y.clear();
@@ -1037,6 +1158,10 @@ void CLBLegalizer::spreadPUs(int columnNum, std::vector<int> &columnUntilization
 
 void CLBLegalizer::resolveOverflowColumns()
 {
+// CLB_PROFILE_BEGIN
+    clb_profile::Stage clbStage("resolveOverflowColumns");
+// CLB_PROFILE_END
+
     AMF_PROFILE_FUNCTION("clb_legalization");
     if (enableMCLBLegalization)
     {
@@ -1073,6 +1198,10 @@ int CLBLegalizer::findIdMaxWithRecurence(int minId, int maxId, std::vector<int> 
 
 void CLBLegalizer::mapPUsToColumns()
 {
+// CLB_PROFILE_BEGIN
+    clb_profile::Stage clbStage("mapPUsToColumns");
+// CLB_PROFILE_END
+
     AMF_PROFILE_FUNCTION("clb_legalization");
 
     MCLBColumn2PUs.clear();
@@ -1156,30 +1285,15 @@ void CLBLegalizer::resetSitesMapped()
 // represent compatible site-sharing groups, rebuilt from current locations.
 void CLBLegalizer::buildSRLSharingGroups()
 {
+// CLB_PROFILE_BEGIN
+    clb_profile::Stage clbStage("buildSRLSharingGroups");
+// CLB_PROFILE_END
+
     AMF_PROFILE_SCOPE("clb_legalization", "SRL site-sharing groups");
     sharedSRLGroups.clear();
-    if (!JSONCfg.count("SRLMaxPerSLICEM") || JSONCfg.at("SRLMaxPerSLICEM") == "1") return;
-    if (JSONCfg.at("SRLMaxPerSLICEM") != "4") throw std::runtime_error("SRLMaxPerSLICEM must be 1 or 4");
-    if (!srlControlsLoaded) {
-        if (!JSONCfg.count("SRL control metadata file")) throw std::runtime_error("Missing SRL control metadata file");
-        std::ifstream input(JSONCfg.at("SRL control metadata file"));
-        if (!input) throw std::runtime_error("Cannot open SRL control metadata");
-        std::string line;
-        std::getline(input,line);
-        while (std::getline(input,line)) {
-            std::vector<std::string> fields;
-            size_t begin=0;
-            for (size_t pos=0;pos<=line.size();++pos) if(pos==line.size() || line[pos]=='\t') {
-                fields.push_back(line.substr(begin,pos-begin));begin=pos+1;
-            }
-            if (fields.size()!=8 || fields[0].empty() || srlControlMetadata.count(fields[0]))
-                throw std::runtime_error("Malformed/duplicate SRL metadata row");
-            // Empty inversion is Vivado's unspecified/default value. Compare it
-            // as a distinct raw class; never conflate it with an explicit value.
-            srlControlMetadata[fields[0]]=fields;
-        }
-        srlControlsLoaded=true;
-    }
+    const int limit=srl_site_sharing::siteLimit(JSONCfg,deviceInfo->getDeviceName());
+    if (limit==1) return;
+    const auto &srlControlMetadata = placementInfo->getSRLControlMetadata();
     using PU=PlacementInfo::PlacementUnit;
     using Macro=PlacementInfo::PlacementMacro;
     struct Group { PU *representative; srl_site_sharing::Layout layout; std::vector<PU*> members; };
@@ -1192,10 +1306,9 @@ void CLBLegalizer::buildSRLSharingGroups()
     for (auto pu:ordered) {
         auto macro=dynamic_cast<Macro*>(pu);
         if (!macro || !pu->isMCLB() || pu->isLocked() || pu->isFixed()) {++rejected["not_movable_srl_macro"];continue;}
-        if (!originalSRLFixed.count(macro)) originalSRLFixed[macro]=macro->getFixedCellInfoVec();
-        macro->getFixedCellInfoVec()=originalSRLFixed.at(macro);
+        macro->restoreOriginalSRLBELs();
         std::map<DesignInfo::DesignCell*,std::string> original;
-        for (const auto &fixed:originalSRLFixed.at(macro)) original[fixed.cell]=fixed.BELName;
+        for (const auto &fixed:macro->getFixedCellInfoVec()) original[fixed.cell]=fixed.BELName;
         std::set<DesignInfo::DesignCell*> members(macro->getCells().begin(),macro->getCells().end());
         srl_site_sharing::Unit descriptor;descriptor.id=pu->getId();
         bool valid=true;
@@ -1217,6 +1330,10 @@ void CLBLegalizer::buildSRLSharingGroups()
                 std::string controls=clk+"\t"+ce+"\t"+meta->second[4];
                 if(!descriptor.controls.empty() && descriptor.controls!=controls) {valid=false;break;}
                 descriptor.controls=controls;
+                if (limit==8) {
+                    auto key=placementInfo->srl16PairKey(cell);
+                    if (!key.empty()) descriptor.pairKeys.emplace(index,std::move(key));
+                }
                 for(auto pin:cell->getOutputPins()) if(pin->getRefPinName()=="Q31" && pin->getNet())
                     for(auto sink:pin->getNet()->getPinsBeDriven())
                         if(!members.count(sink->getCell())) descriptor.externalQ31.insert(index);
@@ -1227,7 +1344,7 @@ void CLBLegalizer::buildSRLSharingGroups()
                 descriptor.bels.push_back(original.at(cell));
             } else {valid=false;break;}
         }
-        if(!valid || descriptor.srlCount<1 || descriptor.srlCount>4) {++rejected["type_controls_or_bel"];continue;}
+        if(!valid || descriptor.srlCount<1 || (limit!=8 && descriptor.srlCount>limit)) {++rejected["type_controls_or_bel"];continue;}
         int crX=-1,crY=-1;
         deviceInfo->getClockRegionByLocation(pu->X(),pu->Y(),crX,crY);
         int region=-1;
@@ -1238,6 +1355,8 @@ void CLBLegalizer::buildSRLSharingGroups()
         srl_site_sharing::Layout bestLayout;
         for(size_t index:buckets[key]) {
             auto &group=groups[index];
+            const int maximumPrimitives = limit==8 ? 16 : limit;
+            if (group.layout.srlCount + descriptor.srlCount > maximumPrimitives) continue;
             bool close=true;float distance=0;
             for(auto other:group.members) {
                 float d=std::fabs(pu->X()-other->X())+y2xRatio*std::fabs(pu->Y()-other->Y());
@@ -1247,19 +1366,19 @@ void CLBLegalizer::buildSRLSharingGroups()
             if(!close) {++rejected["existing_search_radius"];continue;}
             distance/=group.members.size();
             srl_site_sharing::Layout candidate;
-            if(distance<bestDistance && srl_site_sharing::append(descriptor,group.layout,candidate)) {
+            if(distance<bestDistance && srl_site_sharing::append(descriptor,group.layout,candidate,limit)) {
                 best=index;bestDistance=distance;bestLayout=std::move(candidate);
             }
         }
         if(best==groups.size()) {
             srl_site_sharing::Layout layout;
-            if(!srl_site_sharing::append(descriptor,{},layout)) {++rejected["unsupported_bel_layout"];continue;}
+            if(!srl_site_sharing::append(descriptor,{},layout,limit)) {++rejected["unsupported_bel_layout"];continue;}
             buckets[key].push_back(groups.size());groups.push_back({pu,std::move(layout),{pu}});
         } else {groups[best].layout=std::move(bestLayout);groups[best].members.push_back(pu);}
         descriptors[pu]=std::move(descriptor);
     }
     std::set<PU*> followers;
-    size_t histogram[5]={}, shared=0, saved=0;
+    size_t histogram[17]={}, shared=0, saved=0;
     for(auto &group:groups) {
         ++histogram[group.layout.srlCount];
         if(group.members.size()<2) continue;
@@ -1281,8 +1400,79 @@ void CLBLegalizer::buildSRLSharingGroups()
       <<" matching_objects="<<PUsToLegalize.size()<<" shared_sites="<<shared<<" sites_saved="<<saved
       <<" eligible_srl_pus="<<descriptors.size()<<" srl1="<<histogram[1]<<" srl2="<<histogram[2]
       <<" srl3="<<histogram[3]<<" srl4="<<histogram[4]<<" pu_count_unchanged="<<placementInfo->getPlacementUnits().size();
+    if (limit==8) for(int n=5;n<=16;++n) message<<" srl"<<n<<"="<<histogram[n];
     for(const auto &r:rejected)message<<" reject_"<<r.first<<"="<<r.second;
     print_info(message.str());
+}
+
+void CLBLegalizer::buildRAMSharingGroups()
+{
+// CLB_PROFILE_BEGIN
+    clb_profile::Stage clbStage("buildRAMSharingGroups");
+// CLB_PROFILE_END
+
+    if (deviceInfo->getDeviceName()!="U250" || placementInfo->localPinAccess.enabled ||
+        !JSONCfg.count("RAM sharing controls file")) return;
+    using namespace ram_site_sharing;
+    using PU=PlacementInfo::PlacementUnit;
+    struct Group { std::vector<Unit> members; std::vector<std::string> anchors; };
+    std::map<std::vector<int>,std::vector<Group>> buckets;
+    auto ordered=PUsToLegalize;
+    std::sort(ordered.begin(),ordered.end(),[](PU *a,PU *b){return a->getId()<b->getId();});
+    for (auto pu:ordered) {
+        if (!pu->isMCLB() || pu->isLocked() || pu->isFixed()) continue;
+        auto macro=dynamic_cast<Macro*>(pu);
+        Unit unit;
+        if (!describe(macro,placementInfo,unit)) continue;
+        macro->restoreOriginalSRLBELs();
+        const auto &fixed=macro->getFixedCellInfoVec();
+        if (!fixed.empty() && (fixed.size()!=1 || fixed[0].cell!=macro->getCells()[0] ||
+            fixed[0].BELName!="H6LUT")) continue;
+        int crX,crY;
+        deviceInfo->getClockRegionByLocation(pu->X(),pu->Y(),crX,crY);
+        auto pref=placementInfo->getRegionPreferences().find(pu);
+        auto key=unit.writeKey;
+        key.insert(key.end(),{placementInfo->hardRegionForPU(pu),crX,crY,
+            pref==placementInfo->getRegionPreferences().end()?-1:pref->second.region});
+        auto &groups=buckets[key];
+        Group *best=nullptr;
+        float bestDistance=std::numeric_limits<float>::max();
+        std::vector<std::string> anchors;
+        for (auto &group:groups) {
+            float total=0;
+            bool nearby=true;
+            for (const auto &other:group.members) {
+                float d=std::fabs(pu->X()-other.macro->X())+y2xRatio*std::fabs(pu->Y()-other.macro->Y());
+                if (d>initialDisplacementThreshold) {nearby=false;break;}
+                total+=d;
+            }
+            float distance=total/group.members.size();
+            if (!nearby || distance>=bestDistance) continue;
+            auto proposed=group.members;
+            proposed.push_back(unit);
+            std::vector<std::string> layout;
+            if (assign(proposed,layout)) {best=&group; bestDistance=distance; anchors=std::move(layout);}
+        }
+        if (!best) groups.push_back({{unit},{}});
+        else {best->members.push_back(unit);best->anchors=std::move(anchors);}
+    }
+    std::set<PU*> followers;
+    unsigned sites=0;
+    for (auto &bucket:buckets) for (auto &group:bucket.second) {
+        if (group.members.size()<2) continue;
+        ++sites;
+        auto &owners=sharedSRLGroups[group.members.front().macro];
+        for (unsigned i=0;i<group.members.size();++i) {
+            auto macro=group.members[i].macro;
+            owners.push_back(macro);
+            macro->getFixedCellInfoVec().clear();
+            macro->addFixedCellInfo(macro->getCells().front(),"SLICEM",group.anchors[i]);
+            if (i) {followers.insert(macro); PUsToLegalizeSet.erase(macro); MCLBPUs.erase(macro);}
+        }
+    }
+    PUsToLegalize.erase(std::remove_if(PUsToLegalize.begin(),PUsToLegalize.end(),
+        [&](PU *pu){return followers.count(pu);}),PUsToLegalize.end());
+    print_info("AMF_RAM_SHARING shared_sites="+std::to_string(sites)+" sites_saved="+std::to_string(followers.size()));
 }
 
 PlacementInfo::Location CLBLegalizer::sharingCenter(PlacementInfo::PlacementUnit *pu) const
@@ -1301,6 +1491,91 @@ bool CLBLegalizer::sharingLocationLegal(PlacementInfo::PlacementUnit *pu, float 
         if(!placementInfo->isLegalLocation(member,x,y)) return false;
     return true;
 }
+CLBLegalizer::CandidateCostContext &CLBLegalizer::prepareCandidateCost(PlacementInfo::PlacementUnit *pu)
+{
+    // Entries are preinserted before workers start. Each complete PU is owned
+    // by one worker; later matching/DP reuse the same immutable snapshot.
+    auto &context = candidateCostContexts.at(pu);
+    if (context.ready) return context;
+    const auto group = sharedSRLGroups.find(pu);
+    context.shared = group != sharedSRLGroups.end();
+    std::set<PlacementInfo::PlacementUnit *> moved;
+    std::vector<PlacementInfo::PlacementNet *> nets;
+    if (context.shared) {
+        moved.insert(group->second.begin(), group->second.end());
+        std::map<int, PlacementInfo::PlacementNet *> ordered;
+        for (auto member : group->second)
+            for (auto net : placementInfo->getPlacementUnitId2Nets()[member->getId()])
+                ordered[net->getId()] = net;
+        for (const auto &entry : ordered) nets.push_back(entry.second);
+    } else {
+        moved.insert(pu);
+        nets = placementInfo->getPlacementUnitId2Nets()[pu->getId()];
+    }
+    context.nets.reserve(nets.size());
+    for (auto net : nets) {
+        if (net->getDesignNet()->getPins().size() > 10000) continue;
+        CandidateNetCost cost;
+        cost.net = net;
+        cost.original = net->getHPWL(y2xRatio);
+        cost.originalSinglePath = !context.shared && placementInfo->sllPlanner &&
+            placementInfo->sllPlanner->handles(net->getDesignNet()->getElementIdInType());
+        const auto &units = net->getUnits();
+        const auto &offsets = net->getPinOffsetsInUnit();
+        bool finite = std::isfinite(cost.original);
+        for (size_t i = 0; i < units.size(); ++i) {
+            finite = finite && std::isfinite(offsets[i].x) && std::isfinite(offsets[i].y);
+            if (moved.count(units[i])) {
+                cost.movingOffsets.push_back(offsets[i]);
+            } else {
+                const float px = units[i]->X() + offsets[i].x;
+                const float py = units[i]->Y() + offsets[i].y;
+                finite = finite && std::isfinite(px) && std::isfinite(py);
+                cost.minX = std::min(cost.minX, px); cost.maxX = std::max(cost.maxX, px);
+                cost.minY = std::min(cost.minY, py); cost.maxY = std::max(cost.maxY, py);
+            }
+        }
+        // Keep original exceptional-value handling and the SLL planner path.
+        cost.originalSinglePath = cost.originalSinglePath || !finite;
+        context.finite = context.finite && finite;
+        context.nets.push_back(std::move(cost));
+    }
+    context.ready = true;
+    return context;
+}
+
+float CLBLegalizer::candidateHPWLChange(PlacementInfo::PlacementUnit *pu, float x, float y)
+{
+    const auto &context = prepareCandidateCost(pu);
+    if (context.shared && (!context.finite || !std::isfinite(x) || !std::isfinite(y)))
+        return sharingHPWLChange(pu, x, y);
+    float original = 0, next = 0, sharedChange = 0;
+    for (const auto &cost : context.nets) {
+// CLB_PROFILE_BEGIN
+        clb_profile::net(cost.net->getDesignNet()->getPins().size());
+// CLB_PROFILE_END
+        float newHPWL;
+        if (!context.shared && (cost.originalSinglePath || !std::isfinite(x) || !std::isfinite(y))) {
+            newHPWL = cost.net->getNewHPWLByTrying(pu, x, y, y2xRatio);
+        } else {
+            float minX = cost.minX, maxX = cost.maxX, minY = cost.minY, maxY = cost.maxY;
+            for (const auto &offset : cost.movingOffsets) {
+                // Shared groups originally use float addition. The single-PU
+                // API promotes its target to double before adding the offset.
+                const float px = context.shared ? x + offset.x : float(double(x) + offset.x);
+                const float py = context.shared ? y + offset.y : float(double(y) + offset.y);
+                minX = std::min(minX, px); maxX = std::max(maxX, px);
+                minY = std::min(minY, py); maxY = std::max(maxY, py);
+            }
+            newHPWL = std::fabs(maxX-minX) + y2xRatio*std::fabs(maxY-minY);
+            if (!context.shared) newHPWL += 0.0f; // original clockRegionOverhead
+        }
+        if (context.shared) sharedChange += newHPWL - cost.original;
+        else { original += cost.original; next += newHPWL; }
+    }
+    return context.shared ? sharedChange : next - original;
+}
+
 float CLBLegalizer::sharingHPWLChange(PlacementInfo::PlacementUnit *pu,float x,float y)
 {
     const auto &members=sharedSRLGroups.at(pu);
@@ -1311,6 +1586,9 @@ float CLBLegalizer::sharingHPWLChange(PlacementInfo::PlacementUnit *pu,float x,f
     for(const auto &entry:nets) {
         auto net=entry.second;
         if(net->getDesignNet()->getPins().size()>10000) continue;
+// CLB_PROFILE_BEGIN
+        clb_profile::net(net->getDesignNet()->getPins().size());
+// CLB_PROFILE_END
         float minX=1e5,maxX=-1e5,minY=1e5,maxY=-1e5;
         const auto &units=net->getUnits();const auto &offsets=net->getPinOffsetsInUnit();
         for(size_t i=0;i<units.size();++i) {

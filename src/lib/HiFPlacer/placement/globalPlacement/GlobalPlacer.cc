@@ -291,12 +291,13 @@ void GlobalPlacer::GlobalPlacement_CLBPhase(int iterNum, bool continuePreviousIt
         // lowerBound: Quadratic Programming based Wirelength Optimization
         lowerBoundIterNum = (placementInfo->getProgress() < 0.965 && !macroCloseToSite) ? 2 : 2;
 
+        const float qpStepLimit = amf_config::feature(JSONCfg, "GPAlwaysLimitQPStep", false) ? 10.0f : displacementLimit;
         for (int j = 0; j < lowerBoundIterNum; j++)
         {
             WLOptimizer->GlobalPlacementQPSolve(
                 pseudoNetWeight, j == 0, true, enableMacroPseudoNet2Site, pseudoNetWeightConsiderNetNum,
-                (i > 1 || continuePreviousIteration) && hasUserDefinedClusterInfo, displacementLimit, timingOptimizer,
-                i > 1 || continuePreviousIteration);
+                (i > 1 || continuePreviousIteration) && hasUserDefinedClusterInfo, qpStepLimit, timingOptimizer,
+                i > 1 || continuePreviousIteration, diagnosticRound);
             diagnosticSnapshot(j == 0 ? "after_qp1" : "after_qp2");
             if (progressRatio > 0.5)
                 timingOptEnabled = true;
@@ -314,7 +315,13 @@ void GlobalPlacer::GlobalPlacement_CLBPhase(int iterNum, bool continuePreviousIt
 
         // upperBound: Placement Unit Spreading
 
-        spreading(i, spreadRegionBinNumLimit, displacementLimit);
+        const auto regionBinBudget = amf_config::feature(JSONCfg, "GPHalfSpreadBinBudget", false)
+            ? std::max(1u, spreadRegionBinNumLimit / 2) : spreadRegionBinNumLimit;
+        if (amf_config::feature(JSONCfg, "GPHalfSpreadBinBudget", false))
+            print_info("GP_SPREAD_BUDGET round=" + std::to_string(diagnosticRound) +
+                       " original=" + std::to_string(spreadRegionBinNumLimit) +
+                       " effective=" + std::to_string(regionBinBudget));
+        spreading(i, regionBinBudget, displacementLimit);
         if(placementInfo->sllPlanner)
             placementInfo->sllPlanner->notifyGlobalSpreadCompleted(diagnosticRound);
         macro_study::summarize();
@@ -470,6 +477,7 @@ void GlobalPlacer::GlobalPlacement_fixedCLB(int iterNum, float pseudoNetWeight)
     dumpCoord();
     visualization_trace::snapshot(placementInfo, JSONCfg, "initial", 0, -1, "before_qp");
     WLOptimizer->recordSllStage("initial", 0, -1, "before_qp");
+    const float qpStepLimit = amf_config::feature(JSONCfg, "GPAlwaysLimitQPStep", false) ? 10.0f : -10.0f;
     int lowerBoundIterNum = 6;
     for (auto curCell : placementInfo->getCells())
     {
@@ -487,7 +495,7 @@ void GlobalPlacer::GlobalPlacement_fixedCLB(int iterNum, float pseudoNetWeight)
     {
         for (int j = 0; j < lowerBoundIterNum; j++) {
             WLOptimizer->recordSllStage("initial", i, j, "before_qp");
-            WLOptimizer->GlobalPlacementQPSolve(pseudoNetWeight, j == 0, false);
+            WLOptimizer->GlobalPlacementQPSolve(pseudoNetWeight, j == 0, false, false, true, false, qpStepLimit);
             visualization_trace::snapshot(placementInfo, JSONCfg, "initial", i, j, "after_qp");
             WLOptimizer->recordSllStage("initial", i, j, "after_qp");
         }
@@ -800,6 +808,22 @@ void GlobalPlacer::spreading(int currentIteration, int spreadRegionSizeLimit, fl
         new GeneralSpreader(placementInfo, JSONCfg, sharedCellType_SLICEL_FF, currentIteration, supplyRatio, verbose, &roundLimit);
     generalSpreader->spreadPlacementUnits(spreadingForgetRatio, enableClockRegionAware, displacementLimit,
                                             spreadRegionSizeLimit);
+    // Sample after the final spread writeback, while the coarse FF reserve scope is still active.
+    if (amf_config::feature(JSONCfg, "GPResidualObservation", false)) {
+        for (const auto &resource : {sharedCellType_SLICEL_LUT, sharedCellType_SLICEL_FF}) {
+            const auto &grid = placementInfo->getBinGrid(placementInfo->getSharedBELTypeId(resource));
+            long bins = 0;
+            double excess = 0;
+            for (const auto &row : grid) for (auto *bin : row) {
+                if (!bin->isSpreadingOverflow(supplyRatio)) continue;
+                ++bins;
+                excess += std::max(0.0, double(bin->getUtilization()) - bin->spreadingDemandLimit(supplyRatio, true));
+            }
+            print_info("GP_RESIDUAL round=" + std::to_string(macro_mechanism::round) + " resource=" + resource +
+                       " bins=" + std::to_string(bins) + " excess=" + std::to_string(excess) +
+                       " q=" + std::to_string(supplyRatio) + " width=" + std::to_string(placementInfo->getBinGridW()));
+        }
+    }
     delete generalSpreader;
 
     generalSpreader = nullptr;

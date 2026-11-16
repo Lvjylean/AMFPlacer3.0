@@ -13,6 +13,16 @@ struct CrossDieSpreadLimitTestAccess {
         auto bin = s.dieView->at(x,y);
         auto region = new GeneralSpreader::SpreadRegion(bin,&pi,s.binGrid,.8,200);
         region->decision.local=local;
+        // This fixture constructs a post-selection region by hand. Supply the
+        // same explicit source PU membership as the real fallback planner.
+        if (!local && s.directionalResidual) {
+            const int die=s.dieView->rowDie[bin->Y()];
+            region->decision.targetDie=die==0?1:die-1;
+            for(auto cell:bin->getCells()) {
+                auto pu=pi.getPlacementUnitByCell(cell);
+                if(!pu->isFixed() && !pu->isLocked()) region->decision.crossEligible.insert(pu->getId());
+            }
+        }
         s.expandedRegions.push_back(region);
         s.activateCrossDieLimits();
         delete region; s.expandedRegions.clear();
@@ -108,6 +118,13 @@ static void checkRegionNormalization(std::map<std::string,std::string> cfg,
     pi.setPaperSLRStage(slr);pi.createGridBins(5,5);pi.updateElementBinGrid(false);
     const double originalLoad=total(pi,"SLICEL_FF");
     std::string type="SLICEL_FF";
+    // The new rule forbids using a pre-spread soft preference to bypass the
+    // hotspot gate. This synthetic preference is on the other side of the seam.
+    cfg["DirectionalResidualSpreading"]="true";
+    CrossDieSpreadLimit guarded;GeneralSpreader::prepareRoundLimit(&pi,cfg,guarded,0);
+    for(auto pu:units)check(pu->X()==x && pu->Y()==y,"preference crossed a die before local search");
+    // Also retain the separate, opt-out regression for the historical policy.
+    cfg["DirectionalResidualSpreading"]="false";
     // The captured llama state is impossible with a raw post-QP origin.
     CrossDieSpreadLimit raw;GeneralSpreader::initializeRoundLimit(&pi,cfg,raw);
     for(auto pu:units)if(pu!=protectedPU)raw.activate(pu->getId());

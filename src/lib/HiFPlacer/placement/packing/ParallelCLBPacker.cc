@@ -15,7 +15,10 @@
 
 #include "ParallelCLBPacker.h"
 #include "HardMacroAnchor.h"
+#include "../legalization/SRLSiteSharing.h"
 #include <memory>
+#include <exception>
+#include <chrono>
 #define TIMINGDP
 
 void ParallelCLBPacker::prePackLegalizedMacros(PlacementInfo::PlacementMacro *tmpMacro)
@@ -39,7 +42,7 @@ void ParallelCLBPacker::prePackLegalizedMacros(PlacementInfo::PlacementMacro *tm
         std::vector<DeviceInfo::DeviceSite *> &legalSites = PULegalSite[tmpMacro];
         for (unsigned int i = 0; i < legalSites.size(); i++)
         {
-            deviceSite2PackingSite[legalSites[i]]->mapLUTRAMRelatedCellsToSlots(tmpMacro);
+            deviceSite2PackingSite[legalSites[i]]->mapLUTRAMRelatedCellsToSlots(tmpMacro, srlSharingLimit);
             deviceSite2PackingSite[legalSites[i]]->addLUTRAMMacro();
             placementInfo->addPUIntoClockColumn(tmpMacro, legalSites[i]);
         }
@@ -61,6 +64,9 @@ ParallelCLBPacker::ParallelCLBPacker(DesignInfo *designInfo, DeviceInfo *deviceI
       placementMacros(placementInfo->getPlacementMacros()), cellInMacros(placementInfo->getCellInMacros()),
       cellId2PlacementUnit(placementInfo->getCellId2PlacementUnit())
 {
+    srlSharingLimit = srl_site_sharing::siteLimit(JSONCfg, deviceInfo->getDeviceName());
+    boundedRefillReuse = amf_config::feature(JSONCfg, "PackingBoundedRefillReuse");
+    reportRefills = JSONCfg.count("PackingBoundedRefillReuse") != 0;
     if (JSONCfg.find("y2xRatio") != JSONCfg.end())
     {
         y2xRatio = std::stof(JSONCfg["y2xRatio"]);
@@ -116,6 +122,12 @@ ParallelCLBPacker::ParallelCLBPacker(DesignInfo *designInfo, DeviceInfo *deviceI
         prePackLegalizedMacros(tmpMacro);
     }
 
+    // Build the small immutable memory footprint once, after every owner is known.
+    const bool memoryFF = JSONCfg.count("SLICEMFFPacking") && JSONCfg.at("SLICEMFFPacking") == "true";
+    const bool srlLogic = JSONCfg.count("SLICEMSRLLogicPacking") && JSONCfg.at("SLICEMSRLLogicPacking") == "true";
+    for (auto site : packingSites) if (site->checkIsLUTRAMSite())
+        site->prepareMemoryFFPacking(memoryFF, srlLogic);
+
     print_status("ParallelCLBPacker: CARRY macros are mapped to sites.");
 
     int numPackingSites = packingSites.size();
@@ -138,9 +150,81 @@ ParallelCLBPacker::ParallelCLBPacker(DesignInfo *designInfo, DeviceInfo *deviceI
     print_status("ParallelCLBPacker: initialized.");
 }
 
+// The cell-to-bin assignment can change during a rebuild even when the PU
+// anchor is stationary. Observe the actual shared-resource grid assignment.
+void ParallelCLBPacker::prepareRefillGeneration(const std::vector<PackingCLBSite *> &owners, bool reset)
+{
+    const auto &bins = placementInfo->getCellId2CellBinInfo();
+    const auto &cellUnits = placementInfo->getCellId2PlacementUnitVec();
+    const auto &cells = designInfo->getCells();
+    assert(bins.size() == cells.size() && cellUnits.size() == cells.size());
+    bool changed = reset || refillUnits.size() != placementUnits.size() || refillCells.size() != cells.size();
+    refillUnits.resize(placementUnits.size());
+    refillCells.resize(cells.size());
+    for (auto *unit : placementUnits)
+    {
+        int id = unit->getId();
+        auto &previous = refillUnits[id];
+        bool available = !unit->isFixed() && !unit->isPacked();
+        if (previous.unit != unit ||
+            (available && (!previous.available || previous.x != unit->X() || previous.y != unit->Y() ||
+                           (previous.owner && previous.owner != owners[id]))))
+            changed = true;
+        previous.unit = unit;
+        previous.owner = owners[id];
+        previous.x = unit->X();
+        previous.y = unit->Y();
+        previous.available = available;
+    }
+    for (size_t i = 0; i < cells.size(); ++i)
+    {
+        if (!cells[i]->isLUT() && !cells[i]->isFF()) continue;
+        auto *unit = cellUnits[i];
+        auto &previous = refillCells[i];
+        const auto &bin = bins[i];
+        if (previous.unit != unit ||
+            (unit && refillUnits[unit->getId()].available &&
+             (previous.sharedType != bin.sharedTypeId || previous.x != bin.X || previous.y != bin.Y)))
+            changed = true;
+        previous.unit = unit;
+        previous.sharedType = bin.sharedTypeId;
+        previous.x = bin.X;
+        previous.y = bin.Y;
+    }
+    if (changed || !refillGeneration) ++refillGeneration;
+}
+
 void ParallelCLBPacker::packCLBsIteration(bool initial, bool debug)
 {
     AMF_PROFILE_FUNCTION("final_packing");
+    // Candidate exploration remains competitive until a PU is committed. Keep
+    // the ordinary owner map for bidding and the original stability criterion.
+    std::vector<PackingCLBSite *> committedOwners(PUId2PackingCLBSite.size(), nullptr);
+    for (auto *site : packingSites)
+        if (site && site->getDeterminedClusterInSite())
+            for (auto *pu : site->getDeterminedClusterInSite()->getPUs())
+            {
+                assert(!committedOwners[pu->getId()]);
+                committedOwners[pu->getId()] = site;
+            }
+    bool checkGeneration = false;
+    for (auto *site : packingSites)
+        if (site)
+        {
+            site->setCandidateOwners(&committedOwners);
+            if (initial) site->savedRefillGeneration = 0;
+            if (boundedRefillReuse && !initial && site->curD + site->deltaD >= site->maxD)
+                checkGeneration = true;
+        }
+    double generationSeconds = 0;
+    if (checkGeneration)
+    {
+        auto begin = std::chrono::steady_clock::now();
+        prepareRefillGeneration(committedOwners, false);
+        generationSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now()-begin).count();
+    }
+    for (auto *site : packingSites)
+        if (site) site->currentRefillGeneration = checkGeneration ? refillGeneration : 0;
     {
         // updateStep changes candidate clusters, not real PU positions or SLL topology.
         SllPlanner::WireLengthBatch sllWireBatch(placementInfo->sllPlanner.get());
@@ -156,6 +240,20 @@ void ParallelCLBPacker::packCLBsIteration(bool initial, bool debug)
         }
 
     } // Joined candidate readers end before packing assignments are updated.
+    unsigned requests = 0, hits = 0, oversize = 0;
+    for (auto *site : packingSites)
+        if (site)
+        {
+            site->setCandidateOwners(nullptr);
+            site->currentRefillGeneration = 0;
+            requests += site->refillAction != PackingCLBSite::RefillAction::None;
+            hits += site->refillAction == PackingCLBSite::RefillAction::Reuse;
+            oversize += site->refillAction == PackingCLBSite::RefillAction::Oversize;
+        }
+    if (reportRefills)
+        std::cout << "PACKING_REFILL max_requests=" << requests << " full_queries=" << requests-hits
+                  << " reused=" << hits << " oversize=" << oversize << " generation=" << refillGeneration
+                  << " generation_seconds=" << generationSeconds << std::endl;
 
     //     int numPackingSites = packingSites.size();
     // #pragma omp parallel for schedule(dynamic, 16)
@@ -196,12 +294,14 @@ void ParallelCLBPacker::packCLBsIteration(bool initial, bool debug)
     {
         if (tmpPackingSite->hasValidPQTop())
         {
+            tmpPackingSite->refreshAuctionBidScore();
             const ParallelCLBPacker::PackingCLBSite::PackingCLBCluster *tmpTop = tmpPackingSite->getPriorityQueueTop();
             for (auto tmpPU : tmpTop->getPUs())
             {
                 if (!PUId2PackingCLBSite[tmpPU->getId()])
                 {
 
+                    if (!tmpPackingSite->packingDieAllows(tmpPU)) continue;
                     if (!placementInfo->checkClockColumnLegalization(tmpPU, tmpPackingSite->getCLBSite()))
                         continue;
 
@@ -239,11 +339,8 @@ void ParallelCLBPacker::packCLBsIteration(bool initial, bool debug)
                     }
                     else
                     {
-                        float oriDeltaScore =
-                            PUId2PackingCLBSiteCandidate[tmpPU->getId()]->getPriorityQueueTop()->getScoreInSite() -
-                            PUId2PackingCLBSiteCandidate[tmpPU->getId()]->getDetScore();
-                        float newDeltaScore =
-                            tmpPackingSite->getPriorityQueueTop()->getScoreInSite() - tmpPackingSite->getDetScore();
+                        float oriDeltaScore = PUId2PackingCLBSiteCandidate[tmpPU->getId()]->getAuctionBidScore(tmpPU);
+                        float newDeltaScore = tmpPackingSite->getAuctionBidScore(tmpPU);
                         if (newDeltaScore > oriDeltaScore)
                         {
                             PUId2PackingCLBSiteCandidate[tmpPU->getId()] = tmpPackingSite;
@@ -611,7 +708,7 @@ void ParallelCLBPacker::partiallyRecordBestPacking(std::set<PackingCLBSite *> &s
     // print_status("ParallelCLBPacker: updated selected PUCell2PackingSite");
 }
 
-void ParallelCLBPacker::recordBestPacking()
+void ParallelCLBPacker::recordLocalPacking()
 {
     for (auto packingSite : packingSites)
     {
@@ -624,17 +721,27 @@ void ParallelCLBPacker::recordBestPacking()
     setPULocationToPackedSite();
 }
 
+void ParallelCLBPacker::recordBestPacking()
+{
+    for (auto packingSite : packingSites)
+        if (packingSite) packingSite->recordGlobalBestPacking();
+    if (placementInfo->sllPlanner) placementInfo->sllPlanner->recordPackingCheckpoint();
+    bestFullPackingDelay = timingOptimizer->getMaxDelay();
+    recordLocalPacking();
+}
+
 void ParallelCLBPacker::recoverToBestPacking()
 {
     for (auto packingSite : packingSites)
     {
         if (packingSite)
         {
-            packingSite->recoverToBestPacking();
+            packingSite->recoverGlobalBestPacking();
         }
     }
     updatePUCell2PackingSite();
     setPULocationToPackedSite();
+    if (placementInfo->sllPlanner) placementInfo->sllPlanner->restorePackingCheckpoint();
 }
 
 void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool debug)
@@ -644,6 +751,19 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
     placementInfo->updateElementBinGrid(false); // we don't need utilization information here, we can update LUT/FF
                                                 // utilization when needed.
 
+    // Keep the packing-entry die through candidate packing and fallback only.
+    PackingDieScope packingDieScope(placementInfo);
+    for (auto site : packingSites) site->setPackingDieScope(&packingDieScope);
+    // Also clear stack-owned scope pointers on no-fallback returns or exceptions.
+    struct ResetPackingDieScope
+    {
+        const std::vector<PackingCLBSite *> &sites;
+        ~ResetPackingDieScope()
+        {
+            for (auto site : sites) site->setPackingDieScope(nullptr);
+        }
+    } resetPackingDieScope{packingSites};
+    std::cout << "PACKING_DIE_SCOPE begin units=" << packingDieScope.size() << std::endl;
     timingOptimizer->enablePackingTiming();
     int iterCnt = 0;
 
@@ -731,6 +851,13 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
             print_status("ParallelCLBPacker: Move unfixed elements with WLOptimizer");
             WLOptimizer->GlobalPlacementQPSolve(placementInfo->getPseudoNetWeight() * 2 * (1 + fixedRatio), true, true,
                                                 true, true, false, 1, timingOptimizer);
+            const auto projected = packingDieScope.project();
+            if (projected)
+            {
+                placementInfo->updateElementBinGrid(false);
+                if (placementInfo->sllPlanner) placementInfo->sllPlanner->refresh();
+            }
+            std::cout << "PACKING_DIE_SCOPE qp_projected=" << projected << std::endl;
             dumpAllCellsCoordinate();
             dumpVisualizationSnapshot("packing", iterCnt, "after_unfixed_qp");
         }
@@ -778,6 +905,17 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
         placementInfo->updateElementBinGrid(false);
         timingOptimizer->conductStaticTimingAnalysis();
         exceptionHandling(true);
+        size_t checked = 0;
+        for (auto site : packingSites) if (site->getDeterminedClusterInSite())
+            for (auto pu : site->getDeterminedClusterInSite()->getPUs())
+            {
+                if (!site->packingDieAllows(pu)) throw std::runtime_error("Packing crossed entry die");
+                ++checked;
+            }
+        // Detailed timing optimization retains its original cross-die freedom.
+        for (auto site : packingSites) site->setPackingDieScope(nullptr);
+        std::cout << "PACKING_DIE_SCOPE end checked=" << checked
+                  << " violations=0 detailed_cross_die=allowed" << std::endl;
         placementInfo->updateElementBinGrid(false);
         timingOptimizer->conductStaticTimingAnalysis();
 
@@ -785,7 +923,22 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
         addNonCLBPackingSites();
         recordBestPacking();
 
-        int packNum = packingSites.size();
+        auto mapAllSites = [&]() {
+            std::exception_ptr failure;
+#pragma omp parallel for schedule(dynamic)
+            for (int i = 0; i < static_cast<int>(packingSites.size()); ++i)
+            {
+                try { packingSites[i]->finalMapToSlots(); }
+                catch (...)
+                {
+#pragma omp critical(amf_slot_mapping_failure)
+                    {
+                        if (!failure) failure = std::current_exception();
+                    }
+                }
+            }
+            if (failure) std::rethrow_exception(failure);
+        };
 
 #ifdef TIMINGDP
         if(amf_config::feature(JSONCfg,"TimingDrivenPlacementEnable",true)) {
@@ -806,14 +959,11 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
 
             if (DPCnt == 20 || DPCnt == 40 || DPCnt == 60)
             {
-                packNum = packingSites.size();
                 recoverToBestPacking();
                 timingOptimizer->conductStaticTimingAnalysis();
-#pragma omp parallel for schedule(dynamic)
-                for (int i = 0; i < packNum; i++)
-                    packingSites[i]->finalMapToSlots();
+                mapAllSites();
                 timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSlotMapping();
-                recordBestPacking();
+                recordLocalPacking();
                 bestPackingUpdated = true;
             }
             else
@@ -828,7 +978,6 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
                         timingDrivenDetailedPlacement_shortestPath(succCnt * 2, 1.0 - i / 105.0, pathCriticalRatio);
                 if (replaceCnt == 0)
                     pathCriticalRatio = 0.8;
-                packNum = packingSites.size();
             }
             setPULocationToPackedSite();
             if (replaceCnt)
@@ -854,13 +1003,17 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
                     pathBasedReplaceCnt = timingDrivenDetailedPlacement_swap(0.5, 80, true);
                     failPathOpt += (pathBasedReplaceCnt == 0);
                 }
-                recordBestPacking();
                 updatePUCell2PackingSite();
                 setPULocationToPackedSite();
                 timingOptimizer->conductStaticTimingAnalysis();
                 newCP = timingOptimizer->getMaxDelay();
-                minCP = newCP;
-                bestPackingUpdated = true;
+                // A locally accepted swap still needs the existing full-STA gate.
+                if (newCP < minCP + 0.015)
+                {
+                    minCP = newCP;
+                    recordBestPacking();
+                    bestPackingUpdated = true;
+                }
             }
             if (i > 50 && newCP > minCP * 1.05)
             {
@@ -898,7 +1051,7 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
         newCP = 10000;
         for (int i = 0; i < 2; i++)
         {
-            recordBestPacking();
+            recordLocalPacking();
             updatePUCell2PackingSite();
             replaceCnt = timingDrivenDetailedPlacement_swap(0.5, 50, true, pathCriticalRatio);
             setPULocationToPackedSite();
@@ -969,7 +1122,7 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
         resetCnt = 0;
         for (int i = 0; i < 4 && newCP > clockPeriod * 0.9 && resetCnt < 3; i++)
         {
-            recordBestPacking();
+            recordLocalPacking();
             updatePUCell2PackingSite();
             replaceCnt = timingDrivenDetailedPlacement_swap(disOffset + 0.01 * (random() % 100),
                                                             2 * succCnt + (random() % 5), true);
@@ -1010,7 +1163,7 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
 
         for (int i = 0; i < 5; i++)
         {
-            recordBestPacking();
+            recordLocalPacking();
             updatePUCell2PackingSite();
             replaceCnt = timingDrivenDetailedPlacement_swap(0.5, 100, true, pathCriticalRatio);
             if (replaceCnt == 0)
@@ -1037,7 +1190,7 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
             useLocalFineTune = true;
             for (int i = 0; i < 5; i++)
             {
-                recordBestPacking();
+                recordLocalPacking();
                 updatePUCell2PackingSite();
                 replaceCnt = timingDrivenDetailedPlacement_swap(0.5, 100, true, pathCriticalRatio);
                 if (replaceCnt == 0)
@@ -1090,19 +1243,20 @@ void ParallelCLBPacker::packCLBs(int packIterNum, bool doExceptionHandling, bool
         updatePUCell2PackingSite();
         setPULocationToPackedSite();
         timingOptimizer->conductStaticTimingAnalysis();
+        print_info("ParallelCLBPacker: global checkpoint restored expected=" +
+                   std::to_string(bestFullPackingDelay) + " actual=" +
+                   std::to_string(timingOptimizer->getMaxDelay()));
+        assert(std::fabs(bestFullPackingDelay - timingOptimizer->getMaxDelay()) < 1e-4 &&
+               "Global checkpoint layout and full STA must agree");
 
         }
 #endif
-#pragma omp parallel for schedule(dynamic)
-        for (int i = 0; i < packNum; i++)
-            packingSites[i]->finalMapToSlots();
+        mapAllSites();
 #ifdef TIMINGDP
         if(amf_config::feature(JSONCfg,"TimingDrivenPlacementEnable",true)) {
         timingOptimizer->conductStaticTimingAnalysis();
         timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSlotMapping();
-#pragma omp parallel for schedule(dynamic)
-        for (int i = 0; i < packNum; i++)
-            packingSites[i]->finalMapToSlots();
+        mapAllSites();
         }
 #endif
     }
@@ -1762,7 +1916,8 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
                 }
                 else
                 {
-                    if (!targetPackingSite->getDeterminedClusterInSite()->checkAddPU(curPU))
+                    if (!targetPackingSite->getDeterminedClusterInSite()->checkAddPU(curPU) ||
+                        !cellId2CandidateSites[curCellId][0]->canRelocateFrom(curPU))
                     {
                         bestEndChoice = shortestPath_LayerSite_backtrace[i][bestEndChoice];
                         continue;
@@ -2471,7 +2626,8 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_shortestPath(int iterId, fl
                 }
                 else
                 {
-                    if (!targetPackingSite->getDeterminedClusterInSite()->checkAddPU(curPU))
+                    if (!targetPackingSite->getDeterminedClusterInSite()->checkAddPU(curPU) ||
+                        !cellId2CandidateSites[curCellId][0]->canRelocateFrom(curPU))
                     {
                         bestEndChoice = shortestPath_LayerSite_backtrace[i][bestEndChoice];
                         continue;
@@ -2808,7 +2964,7 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_LUTFFPairReloacationAfterSl
             }
         }
 
-        if (bestEndChoice > 0)
+        if (bestEndChoice > 0 && srcSite->canRelocateFrom(LUTFFPair))
         {
             srcSite->getDeterminedClusterInSite()->removePUToConstructDetCluster(LUTFFPair);
             srcSite->getSlotMappingRef().removeLUTFFPair(targetLUT, targetFF);
@@ -3080,7 +3236,8 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(float disOffset, int i
                     }
                 }
 
-                if (bestOverheadSlack > -10000)
+                if (bestOverheadSlack > -10000 &&
+                    (bestSwapCandidatePU || PUId2PackingCLBSite[curPU->getId()]->canRelocateFrom(curPU)))
                 {
 
                     std::set<PackingCLBSite *> local_changedPackingSites;
@@ -3317,7 +3474,8 @@ int ParallelCLBPacker::timingDrivenDetailedPlacement_swap(float disOffset, int i
                     }
                 }
 
-                if (bestOverheadSlack > -10000)
+                if (bestOverheadSlack > -10000 &&
+                    (bestSwapCandidatePU || PUId2PackingCLBSite[curPU->getId()]->canRelocateFrom(curPU)))
                 {
 
                     std::set<PackingCLBSite *> local_changedPackingSites;
@@ -4062,6 +4220,7 @@ bool ParallelCLBPacker::exceptionPULegalize(PlacementInfo::PlacementUnit *curPU,
         float lambda3 = 4.0;
         assert(deviceSite2PackingSite.find(tmpSite) != deviceSite2PackingSite.end());
         PackingCLBSite *packingSite = deviceSite2PackingSite[tmpSite];
+        if (!packingSite->packingDieAllows(curPU)) continue;
 
         // if (involvedPackingSite2PU.find(packingSite) != involvedPackingSite2PU.end())
         // {
@@ -4165,6 +4324,7 @@ bool ParallelCLBPacker::ripUpAndLegalizae(
     std::map<PackingCLBSite *, PackingCLBSite::PackingCLBCluster *> &packingSite2DeterminedCluster, bool verbose)
 {
     AMF_PROFILE_FUNCTION("final_packing");
+    if (!curTargetPackingSite->packingDieAllows(curPU)) return false;
     PackingCLBSite::PackingCLBCluster *backup_determinedCluster = nullptr;
 
     if (curTargetPackingSite->getDeterminedClusterInSite())
@@ -4468,7 +4628,7 @@ ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCell
             int curbinIdX = curXY.first, curbinIdY = curXY.second;
 
             PlacementInfo::PlacementBinInfo *curBin = curBinGrid[curbinIdY][curbinIdX];
-            float bin2TargetXYDistance = curBin->getManhattanDistanceTo(targetX, targetY);
+            float bin2TargetXYDistance = curBin->getManhattanDistanceTo(targetX, targetY, y2xRatio);
             if (bin2TargetXYDistance > displacementUpperbound)
                 continue;
             for (auto tmpSite : curBin->getCorrespondingSites())
@@ -4518,7 +4678,7 @@ ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCell
                         continue;
 
                     PlacementInfo::PlacementBinInfo *nextBin = curBinGrid[nextY][nextX];
-                    float nextBin2TargetXYDistance = nextBin->getManhattanDistanceTo(targetX, targetY);
+                    float nextBin2TargetXYDistance = nextBin->getManhattanDistanceTo(targetX, targetY, y2xRatio);
                     if (nextBin2TargetXYDistance > displacementUpperbound)
                         continue;
 
@@ -4618,7 +4778,7 @@ ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCell
             int curbinIdX = curXY.first, curbinIdY = curXY.second;
 
             PlacementInfo::PlacementBinInfo *curBin = curBinGrid[curbinIdY][curbinIdX];
-            float bin2TargetXYDistance = curBin->getManhattanDistanceTo(targetX, targetY);
+            float bin2TargetXYDistance = curBin->getManhattanDistanceTo(targetX, targetY, y2xRatio);
             if (bin2TargetXYDistance > displacementUpperbound)
                 continue;
             for (auto tmpSite : curBin->getCorrespondingSites())
@@ -4652,7 +4812,7 @@ ParallelCLBPacker::findNeiborSitesFromBinGrid(DesignInfo::DesignCellType curCell
                     if (!((unsigned int)nextX < curBinGrid[binIdY].size()))
                         continue;
                     PlacementInfo::PlacementBinInfo *nextBin = curBinGrid[nextY][nextX];
-                    float nextBin2TargetXYDistance = nextBin->getManhattanDistanceTo(targetX, targetY);
+                    float nextBin2TargetXYDistance = nextBin->getManhattanDistanceTo(targetX, targetY, y2xRatio);
                     if (nextBin2TargetXYDistance > displacementUpperbound)
                         continue;
                     std::pair<int, int> nextXY(nextX, nextY);

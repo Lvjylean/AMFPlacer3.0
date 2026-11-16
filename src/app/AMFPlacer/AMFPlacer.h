@@ -458,8 +458,12 @@ class AMFPlacer
                                                      globalPlacer->getMacroLegalizationWeight() * 0.8);
         globalPlacer->setNeighborDisplacementUpperbound(3.0);
 
+        // Keep a 25-bin late-stage window after the optional budget reduction.
+        const unsigned int lateSpreadBinBudget =
+            amf_config::feature(JSON, "GPHalfSpreadBinBudget", false) ? 50u : 25u;
+
         globalPlacer->GlobalPlacement_CLBElements(std::stoi(JSON["GlobalPlacementIteration"]) * 2 / 9, true, 5, true,
-                                                  true, 25, timingOptimizer);
+                                                  true, lateSpreadBinBudget, timingOptimizer);
         // placementInfo->getPU2ClockRegionCenters().clear();
 
         globalPlacer->setPseudoNetWeight(globalPlacer->getPseudoNetWeight() * 0.9);
@@ -473,11 +477,11 @@ class AMFPlacer
 
         // timingOptimizer->moveDriverIntoBetterClockRegion(longPathThr, 0.75);
         globalPlacer->GlobalPlacement_CLBElements(std::stoi(JSON["GlobalPlacementIteration"]) * 2 / 9, true, 5, true,
-                                                  true, 25, timingOptimizer);
+                                                  true, lateSpreadBinBudget, timingOptimizer);
         JSON["SpreaderSimpleExpland"] = "true";
         // placementInfo->getPU2ClockRegionCenters().clear();
         globalPlacer->GlobalPlacement_CLBElements(std::stoi(JSON["GlobalPlacementIteration"]) / 2, true, 5, true, false,
-                                                  25, timingOptimizer);
+                                                  lateSpreadBinBudget, timingOptimizer);
 
         // // currently, some fixed/packed flag cannot be stored in the check-point (TODO)
         // clearSomeAttributesCannotRecord();

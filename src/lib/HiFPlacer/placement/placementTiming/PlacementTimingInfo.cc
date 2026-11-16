@@ -1,3 +1,4 @@
+#include "../../../utils/PhaseWaitProfile.h"
 #include "../../../utils/RuntimeProfiler.h"
 /**
  * @file PlacementTimingInfo.cc
@@ -27,6 +28,7 @@ PlacementTimingInfo::PlacementTimingInfo(DesignInfo *designInfo, DeviceInfo *dev
     : designInfo(designInfo), deviceInfo(deviceInfo), JSONCfg(JSONCfg)
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     if (JSONCfg.find("PlacementTimingInfoVerbose") != JSONCfg.end())
         verbose = JSONCfg["PlacementTimingInfoVerbose"] == "true";
 
@@ -69,6 +71,7 @@ PlacementTimingInfo::PlacementTimingInfo(DesignInfo *designInfo, DeviceInfo *dev
 void PlacementTimingInfo::setDSPInnerDelay()
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     if (!DSPCritical)
         return;
     auto &nodes = simpleTimingGraph->getNodes();
@@ -89,6 +92,7 @@ PlacementTimingInfo::TimingGraph<DesignInfo::DesignCell> *
 PlacementTimingInfo::buildCellGraph(bool legacyClustering)
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     print_status("PlacementTimingInfo: building simple timing graph (TimingNode is DesignCell)");
     auto graph = new TimingGraph<DesignInfo::DesignCell>(this);
     graph->setClockPeriod(clockPeriod);
@@ -239,6 +243,7 @@ void PlacementTimingInfo::reduceClockPeriodToRatio(float ratio)
 template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::forwardLevelization()
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     print_status("PlacementTimingInfo: Timing graph starts forward levalization");
     forwardlevel2NodeIds.clear();
 
@@ -363,6 +368,7 @@ template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::fo
 template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::backwardLevelization()
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     print_status("PlacementTimingInfo: Timing graph starts backward levalization");
     backwardlevel2NodeIds.clear();
 
@@ -474,6 +480,7 @@ template <typename nodeType>
 std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::traceBackFromNode(int targetId)
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     std::vector<int> resPath;
     resPath.clear();
     resPath.push_back(targetId);
@@ -505,6 +512,7 @@ template <typename nodeType>
 std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::traceForwardFromNode(int targetId)
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     std::vector<int> resPath;
     resPath.clear();
     resPath.push_back(targetId);
@@ -539,6 +547,7 @@ std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::DFSFromNode(int sta
                                                                          std::set<int> &exceptionCells, int fanoutThr)
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     std::vector<int> resSucessors;
     std::stack<int> nodeStack;
     std::set<int> nodeSet;
@@ -598,6 +607,7 @@ std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::BFSFromNode(int sta
                                                                          std::set<int> &exceptionCells)
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     std::vector<int> resSucessors;
     std::queue<int> nodeQ;
     std::set<int> nodeSet;
@@ -659,9 +669,13 @@ std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::BFSFromNode(int sta
 template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::propogateArrivalTime()
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     invArrivalNotUpdated = true;
     int nodeNum = nodes.size();
-#pragma omp parallel for
+{ phase_wait::Parallel phaseParallel("PlacementTimingInfo.cc:1:");
+#pragma omp parallel
+{auto &phaseWorker=phaseParallel.workers.at(omp_get_thread_num());phaseWorker.begin();
+#pragma omp for nowait
     for (int j = 0; j < nodeNum; j++)
     {
         auto curNode = nodes[j];
@@ -669,10 +683,18 @@ template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::pr
         curNode->setLatestOutputArrival(0.0);
         curNode->setSlowestPredecessorId(-1);
     }
+phaseWorker.wait();
+#pragma omp barrier
+phaseWorker.end();}
+}
+
     for (unsigned int i = 1; i < forwardlevel2NodeIds.size(); i++)
     {
         int numNodeInLayer = forwardlevel2NodeIds[i].size();
-#pragma omp parallel for
+{ phase_wait::Parallel phaseParallel("PlacementTimingInfo.cc:2:");
+#pragma omp parallel
+{auto &phaseWorker=phaseParallel.workers.at(omp_get_thread_num());phaseWorker.begin();
+#pragma omp for nowait
         for (int j = 0; j < numNodeInLayer; j++)
         {
             auto curNodeId = forwardlevel2NodeIds[i][j];
@@ -697,10 +719,18 @@ template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::pr
                 }
             }
         }
+phaseWorker.wait();
+#pragma omp barrier
+phaseWorker.end();}
+}
+
     }
 
     int numNodeInLayer = forwardlevel2NodeIds[0].size();
-#pragma omp parallel for
+{ phase_wait::Parallel phaseParallel("PlacementTimingInfo.cc:3:");
+#pragma omp parallel
+{auto &phaseWorker=phaseParallel.workers.at(omp_get_thread_num());phaseWorker.begin();
+#pragma omp for nowait
     for (int j = 0; j < numNodeInLayer; j++)
     {
         auto curNodeId = forwardlevel2NodeIds[0][j];
@@ -737,6 +767,11 @@ template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::pr
             }
         }
     }
+phaseWorker.wait();
+#pragma omp barrier
+phaseWorker.end();}
+}
+
 
     if (timingInfo->compositeIOTimingBoundary && timingInfo->JSONCfg.count("dumpDirectory"))
     {
@@ -795,8 +830,12 @@ template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::pr
 template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::backPropogateRequiredArrivalTime()
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     int nodeNum = nodes.size();
-#pragma omp parallel for
+{ phase_wait::Parallel phaseParallel("PlacementTimingInfo.cc:4:");
+#pragma omp parallel
+{auto &phaseWorker=phaseParallel.workers.at(omp_get_thread_num());phaseWorker.begin();
+#pragma omp for nowait
     for (int j = 0; j < nodeNum; j++)
     {
         auto curNode = nodes[j];
@@ -804,10 +843,18 @@ template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::ba
         curNode->setEarlestSuccessorId(-1);
         curNode->setEndpointCriticality(1000.0);
     }
+phaseWorker.wait();
+#pragma omp barrier
+phaseWorker.end();}
+}
+
     for (unsigned int i = 1; i < backwardlevel2NodeIds.size(); i++)
     {
         int numNodeInLayer = backwardlevel2NodeIds[i].size();
-#pragma omp parallel for
+{ phase_wait::Parallel phaseParallel("PlacementTimingInfo.cc:5:");
+#pragma omp parallel
+{auto &phaseWorker=phaseParallel.workers.at(omp_get_thread_num());phaseWorker.begin();
+#pragma omp for nowait
         for (int j = 0; j < numNodeInLayer; j++)
         {
             auto curNodeId = backwardlevel2NodeIds[i][j];
@@ -826,10 +873,18 @@ template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::ba
                 }
             }
         }
+phaseWorker.wait();
+#pragma omp barrier
+phaseWorker.end();}
+}
+
     }
 
     int numNodeInLayer = backwardlevel2NodeIds[0].size();
-#pragma omp parallel for
+{ phase_wait::Parallel phaseParallel("PlacementTimingInfo.cc:6:");
+#pragma omp parallel
+{auto &phaseWorker=phaseParallel.workers.at(omp_get_thread_num());phaseWorker.begin();
+#pragma omp for nowait
     for (int j = 0; j < numNodeInLayer; j++)
     {
         auto curNodeId = backwardlevel2NodeIds[0][j];
@@ -849,12 +904,18 @@ template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::ba
             }
         }
     }
+phaseWorker.wait();
+#pragma omp barrier
+phaseWorker.end();}
+}
+
 }
 
 template <typename nodeType>
 std::vector<int> PlacementTimingInfo::TimingGraph<nodeType>::backTraceDelayLongestPathFromNode(int curNodeId)
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     int slowestPredecessorId = curNodeId;
     std::vector<int> resPath;
     resPath.clear();
@@ -875,6 +936,7 @@ bool PlacementTimingInfo::TimingGraph<nodeType>::backTraceDelayLongestPathFromNo
     int curNodeId, std::vector<int> &isCovered, std::vector<int> &resPath, int coverThr, int backTraceCheckFanoutLevel)
 {
     AMF_PROFILE_FUNCTION("timing");
+    phase_wait::Scope phaseWaitScope(__PRETTY_FUNCTION__);
     int levelThr = backTraceCheckFanoutLevel;
     if (mediumPathThresholdLevel < 5)
     {
@@ -950,7 +1012,10 @@ template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::so
         print_status("sortedEndpointByDelay_inv\n");
         invArrivalNotUpdated = false;
         int nodeNum = nodes.size();
-#pragma omp parallel for
+{ phase_wait::Parallel phaseParallel("PlacementTimingInfo.cc:7:");
+#pragma omp parallel
+{auto &phaseWorker=phaseParallel.workers.at(omp_get_thread_num());phaseWorker.begin();
+#pragma omp for nowait
         for (int j = 0; j < nodeNum; j++)
         {
             auto curNode = nodes[j];
@@ -958,10 +1023,18 @@ template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::so
             curNode->setLatestOutputArrival_inv(0.0);
             curNode->setSlowestPredecessorId_inv(-1);
         }
+phaseWorker.wait();
+#pragma omp barrier
+phaseWorker.end();}
+}
+
         for (unsigned int i = 1; i < backwardlevel2NodeIds.size(); i++)
         {
             int numNodeInLayer = backwardlevel2NodeIds[i].size();
-#pragma omp parallel for
+{ phase_wait::Parallel phaseParallel("PlacementTimingInfo.cc:8:");
+#pragma omp parallel
+{auto &phaseWorker=phaseParallel.workers.at(omp_get_thread_num());phaseWorker.begin();
+#pragma omp for nowait
             for (int j = 0; j < numNodeInLayer; j++)
             {
                 auto curNodeId = backwardlevel2NodeIds[i][j];
@@ -986,11 +1059,19 @@ template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::so
                     }
                 }
             }
+phaseWorker.wait();
+#pragma omp barrier
+phaseWorker.end();}
+}
+
         }
 
         int numNodeInLayer = backwardlevel2NodeIds[0].size();
 
-#pragma omp parallel for
+{ phase_wait::Parallel phaseParallel("PlacementTimingInfo.cc:9:");
+#pragma omp parallel
+{auto &phaseWorker=phaseParallel.workers.at(omp_get_thread_num());phaseWorker.begin();
+#pragma omp for nowait
         for (int j = 0; j < numNodeInLayer; j++)
         {
             auto curNodeId = backwardlevel2NodeIds[0][j];
@@ -1018,6 +1099,11 @@ template <typename nodeType> void PlacementTimingInfo::TimingGraph<nodeType>::so
                 }
             }
         }
+phaseWorker.wait();
+#pragma omp barrier
+phaseWorker.end();}
+}
+
     }
     delaySortedTimingEndpointNodes_inv.clear();
     for (auto id : forwardlevel2NodeIds[0])

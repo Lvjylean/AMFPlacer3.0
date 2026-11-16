@@ -517,30 +517,25 @@ void SAPlacer::randomShuffleRowColumn(const std::vector<std::vector<std::vector<
     return;
 }
 
-float SAPlacer::probabilituFunc(double oriE, double newE, float T)
+float SAPlacer::probabilituFunc(double oriE, double newE, float T, double initialCost)
 {
     if (newE < oriE)
         return 1.0;
-    return exp(-10 * (newE / SACalibrationOffset - oriE / SACalibrationOffset) / T);
+    return exp(-10 * (newE / initialCost - oriE / initialCost) / T);
 }
 
-void SAPlacer::worker(SAPlacer *saPlacer, std::vector<std::vector<std::vector<int>>> &init_grid2clusters,
-                      std::vector<std::pair<int, int>> &init_cluster2XY,
-                      std::vector<std::vector<std::vector<int>>> &opt_grid2clusters,
-                      std::vector<std::pair<int, int>> &opt_cluster2XY, int &totalIterNum, int &workers_randomSeed,
-                      double &resE)
+void SAPlacer::worker(RestartResult &result, int totalIterNum, int randomSeed)
 {
     AMF_PROFILE_FUNCTION("sa");
-    std::vector<std::pair<int, int>> cur_cluster2XY = init_cluster2XY;
-    std::vector<std::vector<std::vector<int>>> cur_grid2clusters = init_grid2clusters;
+    auto cur_cluster2XY = result.cluster2XY;
+    auto cur_grid2clusters = result.grid2clusters;
     std::vector<std::pair<int, int>> new_cluster2XY;
     std::vector<std::vector<std::vector<int>>> new_grid2clusters;
 
-    boost::mt19937 rng(workers_randomSeed);
-
-    double oriE = saPlacer->evaluateClusterPlacement(init_grid2clusters, init_cluster2XY);
-    resE = oriE;
-    // double inputE = oriE;
+    boost::mt19937 rng(randomSeed);
+    result.initialCost = evaluateClusterPlacement(cur_grid2clusters, cur_cluster2XY);
+    result.bestCost = result.initialCost;
+    double oriE = result.initialCost;
 
     int SAIterNum = (totalIterNum - 1);
     for (int k = SAIterNum; k >= 0; k--)
@@ -551,14 +546,14 @@ void SAPlacer::worker(SAPlacer *saPlacer, std::vector<std::vector<std::vector<in
         new_grid2clusters.clear();
 
         if (k > SAIterNum)
-            saPlacer->randomShuffleRowColumn(cur_grid2clusters, new_grid2clusters, cur_cluster2XY, new_cluster2XY, rng);
+            randomShuffleRowColumn(cur_grid2clusters, new_grid2clusters, cur_cluster2XY, new_cluster2XY, rng);
         else
-            saPlacer->randomSwapInWideRange(cur_grid2clusters, new_grid2clusters, cur_cluster2XY, new_cluster2XY,
-                                            temperature, rng);
-        double newE = saPlacer->evaluateClusterPlacement(new_grid2clusters, new_cluster2XY);
+            randomSwapInWideRange(cur_grid2clusters, new_grid2clusters, cur_cluster2XY, new_cluster2XY,
+                                  temperature, rng);
+        double newE = evaluateClusterPlacement(new_grid2clusters, new_cluster2XY);
 
         float thr = (float)rng() / (float)rng.max();
-        float P = saPlacer->probabilituFunc(oriE, newE, temperature);
+        float P = probabilituFunc(oriE, newE, temperature, result.initialCost);
         if (P >= thr || k > SAIterNum)
         {
             oriE = newE;
@@ -566,15 +561,13 @@ void SAPlacer::worker(SAPlacer *saPlacer, std::vector<std::vector<std::vector<in
             cur_cluster2XY = new_cluster2XY;
         }
 
-        if (resE > newE)
+        if (result.bestCost > newE)
         {
-            resE = newE;
-            opt_grid2clusters = new_grid2clusters;
-            opt_cluster2XY = new_cluster2XY;
+            result.bestCost = newE;
+            result.grid2clusters = new_grid2clusters;
+            result.cluster2XY = new_cluster2XY;
         }
     }
-
-    // assert(inputE > resE);
 }
 
 void SAPlacer::greedyPlaceACluster(const std::vector<std::pair<int, int>> &init_cluster2XY,
@@ -792,109 +785,60 @@ void SAPlacer::greedyInitialize(std::vector<std::pair<int, int>> &init_cluster2X
 void SAPlacer::solve()
 {
     AMF_PROFILE_FUNCTION("sa");
-    resE = 1e13;
-    std::string dumpSAFile = "";
-    if (verbose)
-        dumpSAFile = placerName + "DumpFile";
-
-    std::ofstream outfile0;
-    // bool dump = false;
-    // if (dumpSAFile != "")
-    // {
-    //     dump = true;
-    //     outfile0 = std::ofstream(dumpSAFile.c_str());
-    // }
-
-    std::vector<std::pair<int, int>> init_cluster2XY;
-    std::vector<std::vector<std::vector<int>>> init_grid2clusters;
-
-    std::vector<std::thread> threads;
-    std::vector<std::vector<std::pair<int, int>>> workers_cluster2XY;
-    std::vector<std::vector<std::vector<std::vector<int>>>> workers_grid2clusters;
-    std::vector<double> works_E;
-    std::vector<int> workers_randomSeed;
-
-    // assign each restarted task to a thread
-    int workerIterNum = Kmax / restartNum;
+    resE = std::numeric_limits<double>::infinity();
+    double winningInitialCost = 0;
+    const int workerIterNum = Kmax / restartNum;
     std::vector<std::pair<int, double>> seedAndE;
-    seedAndE.clear();
 
     int initOffset = 0;
     if (nJobs > 8)
         nJobs = 8;
     for (int restartI = restartNum; restartI > 0; restartI -= nJobs)
     {
-
         printProgress(1 - ((double)restartI / restartNum));
 
-        threads.clear();
-        workers_cluster2XY.clear();
-        workers_grid2clusters.clear();
-        works_E.clear();
-        workers_randomSeed.clear();
-
-        for (int threadId = restartI; threadId > 0 && threadId > restartI - nJobs; threadId--)
+        std::vector<RestartResult> restarts(std::min(nJobs, restartI));
+        for (auto &result : restarts)
         {
-
-            // generate initial cluster placement
-            init_cluster2XY.clear();
-            init_grid2clusters = std::vector<std::vector<std::vector<int>>>(
-                gridH, std::vector<std::vector<int>>(gridW, std::vector<int>()));
-
-            initOffset++;
-            greedyInitialize(init_cluster2XY, init_grid2clusters, initOffset / 8);
-
-            for (unsigned int clusterA = 0; clusterA < clusterAdjMat.size(); clusterA++)
+            result.grid2clusters.resize(gridH, std::vector<std::vector<int>>(gridW));
+            ++initOffset;
+            greedyInitialize(result.cluster2XY, result.grid2clusters, initOffset / 8);
+            for (const auto &xy : result.cluster2XY)
             {
-                assert(init_cluster2XY[clusterA].first >= 0 && init_cluster2XY[clusterA].second >= 0);
+                assert(xy.first >= 0 && xy.second >= 0);
             }
-            for (int gridY = 0; gridY < gridH; gridY++)
+            for (auto &row : result.grid2clusters)
+                for (auto &bin : row)
+                    std::sort(bin.begin(), bin.end());
+        }
+
+        std::vector<std::thread> threads;
+        for (size_t i = 0; i < restarts.size(); ++i)
+        {
+            const int seed = restartI - static_cast<int>(i);
+            threads.emplace_back(&SAPlacer::worker, this, std::ref(restarts[i]), workerIterNum, seed);
+        }
+        for (size_t i = 0; i < restarts.size(); ++i)
+        {
+            threads[i].join();
+            auto &result = restarts[i];
+            seedAndE.emplace_back(restartI - static_cast<int>(i), result.bestCost);
+            if (result.bestCost < resE)
             {
-                for (int gridX = 0; gridX < gridW; gridX++)
-                {
-                    std::sort(init_grid2clusters[gridY][gridX].begin(), init_grid2clusters[gridY][gridX].end());
-                }
-            }
-            SACalibrationOffset = evaluateClusterPlacement(init_grid2clusters, init_cluster2XY);
-
-            workers_cluster2XY.push_back(init_cluster2XY);
-            workers_grid2clusters.push_back(init_grid2clusters);
-            works_E.push_back(0);
-            workers_randomSeed.push_back(threadId);
-        }
-        for (unsigned int threadId = 0; threadId < workers_cluster2XY.size(); threadId++)
-        {
-            threads.push_back(std::thread(worker, this, std::ref(init_grid2clusters), std::ref(init_cluster2XY),
-                                          std::ref(workers_grid2clusters[threadId]),
-                                          std::ref(workers_cluster2XY[threadId]), std::ref(workerIterNum),
-                                          std::ref(workers_randomSeed[threadId]), std::ref(works_E[threadId])));
-        }
-        for (unsigned int threadId = 0; threadId < threads.size(); threadId++)
-        {
-            threads[threadId].join();
-            seedAndE.emplace_back(workers_randomSeed[threadId], works_E[threadId]);
-        }
-
-        if (works_E[0] < resE)
-        {
-            resE = works_E[0];
-            res_grid2clusters = workers_grid2clusters[0];
-            res_cluster2XY = workers_cluster2XY[0];
-        }
-
-        for (unsigned int threadId = 1; threadId < threads.size(); threadId++)
-        {
-            if (works_E[threadId] < resE)
-            {
-                resE = works_E[threadId];
-                res_grid2clusters = workers_grid2clusters[threadId];
-                res_cluster2XY = workers_cluster2XY[threadId];
+                resE = result.bestCost;
+                winningInitialCost = result.initialCost;
+                res_grid2clusters = std::move(result.grid2clusters);
+                res_cluster2XY = std::move(result.cluster2XY);
             }
         }
     }
+    if (!std::isfinite(resE) || evaluateClusterPlacement(res_grid2clusters, res_cluster2XY) != resE)
+        throw std::logic_error("SA returned placement does not match its best score");
+
     printf("\n");
-    print_info("SA optimization ratio (finalE/initE) = " + std::to_string(resE / SACalibrationOffset));
-    print_info("SA optimization initE = " + std::to_string(SACalibrationOffset));
+    const auto ratio = winningInitialCost != 0 ? std::to_string(resE / winningInitialCost) : "undefined";
+    print_info("SA optimization ratio (finalE/initE) = " + ratio);
+    print_info("SA optimization initE = " + std::to_string(winningInitialCost));
     for (int restartI = restartNum - 1; restartI >= 0; restartI--)
     {
         std::cout << " " << seedAndE[restartI].first << "(" << seedAndE[restartI].second << ")";
@@ -913,9 +857,7 @@ void SAPlacer::solve()
         }
     print_info("SA final occupied region num = " + std::to_string(occupiedRegionNum));
 
-    if (dumpSAFile != "")
-        outfile0.close();
-    print_info("SAPlace handle " + std::to_string(init_cluster2XY.size()) +
+    print_info("SAPlace handle " + std::to_string(res_cluster2XY.size()) +
                " cluster(s) and the final placement cost is " + std::to_string(resE));
 }
 

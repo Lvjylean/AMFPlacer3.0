@@ -17,6 +17,8 @@
 
 #include "DesignInfo.h"
 #include "DieFirstSpreading.h"
+#include "ResidualSpreadSearch.h"
+#include "SharedResidualPlan.h"
 #include "CrossDieSpreadLimit.h"
 #include "DeviceInfo.h"
 #include "PlacementInfo.h"
@@ -62,6 +64,7 @@ class GeneralSpreader
         const std::map<std::string,std::string> &config, CrossDieSpreadLimit &limit, int iteration);
     ~GeneralSpreader()
     {
+        if (reserveFirst) for (auto &row : binGrid) for (auto b : row) b->setSpreadingReserveRatio(0);
     }
 
     /**
@@ -117,10 +120,24 @@ class GeneralSpreader
                 cellsInRegion.insert(curCell);
                 cellsInRegionVec.push_back(curCell);
             }
-            totalCapacity = curBin->getCapacity();
+            totalCapacity = curBin->getSpreadingCapacity();
             totalUtilization = curBin->getUtilization();
             overflowRatio = totalCapacity > 0 ? totalUtilization / totalCapacity :
                 (totalUtilization > 0 ? std::numeric_limits<float>::infinity() : 0);
+        }
+        void claimResidualBox(residual_spread::Rect box, std::set<die_spread::Bin*> &claimed)
+        {
+            auto seed=binsInRegion.front();
+            const int x=seed->X(), y=seed->Y();
+            if (!box.contains(residual_spread::pointBox({x,y})) || !claimed.insert(seed).second)
+                throw std::logic_error("Invalid seed for shared residual rectangle");
+            if (box.l<x) addBinRegion(y,y,box.l,x-1,claimed);
+            if (box.r>x) addBinRegion(y,y,x+1,box.r,claimed);
+            if (box.b<y) addBinRegion(y-1,box.b,box.l,box.r,claimed);
+            if (box.t>y) addBinRegion(box.t,y+1,box.l,box.r,claimed);
+            if (int(binsInRegion.size())!=box.area() || left()!=box.l || right()!=box.r ||
+                bottom()!=box.b || top()!=box.t)
+                throw std::logic_error("Shared residual rectangle registration is incomplete");
         }
         ~SpreadRegion()
         {
@@ -333,7 +350,7 @@ class GeneralSpreader
                 //  for (int binY = newBottomBinY; binY <= newTopBinY; binY++)
                 for (int binX = newLeftBinX; binX <= newRightBinX; binX++)
                 {
-                    tmpCapacity += binGrid[newTopBinY][binX]->getCapacity();
+                    tmpCapacity += binGrid[newTopBinY][binX]->getSpreadingCapacity();
                     tmpUtilization += binGrid[newTopBinY][binX]->getUtilization();
                 }
             }
@@ -342,7 +359,7 @@ class GeneralSpreader
                 //  for (int binY = newBottomBinY; binY <= newTopBinY; binY++)
                 for (int binX = newLeftBinX; binX <= newRightBinX; binX++)
                 {
-                    tmpCapacity += binGrid[newBottomBinY][binX]->getCapacity();
+                    tmpCapacity += binGrid[newBottomBinY][binX]->getSpreadingCapacity();
                     tmpUtilization += binGrid[newBottomBinY][binX]->getUtilization();
                 }
             }
@@ -351,7 +368,7 @@ class GeneralSpreader
                 for (int binY = newBottomBinY; binY <= newTopBinY; binY++)
                 //       for (int binX = newLeftBinX; binX <= newRightBinX; binX++)
                 {
-                    tmpCapacity += binGrid[binY][newLeftBinX]->getCapacity();
+                    tmpCapacity += binGrid[binY][newLeftBinX]->getSpreadingCapacity();
                     tmpUtilization += binGrid[binY][newLeftBinX]->getUtilization();
                 }
             }
@@ -360,7 +377,7 @@ class GeneralSpreader
                 for (int binY = newBottomBinY; binY <= newTopBinY; binY++)
                 //         for (int binX = newLeftBinX; binX <= newRightBinX; binX++)
                 {
-                    tmpCapacity += binGrid[binY][newRightBinX]->getCapacity();
+                    tmpCapacity += binGrid[binY][newRightBinX]->getSpreadingCapacity();
                     tmpUtilization += binGrid[binY][newRightBinX]->getUtilization();
                 }
             }
@@ -852,11 +869,16 @@ class GeneralSpreader
              */
             SubBox(PlacementInfo *placementInfo, SpreadRegion *curRegion,
                    std::vector<std::vector<PlacementInfo::PlacementBinInfo *>> &binGrid,
-                   float capacityShrinkRatio = 1.0, int level = 100, bool dirIsH = true)
+                   float capacityShrinkRatio = 1.0, int level = 100, bool dirIsH = true,
+                   const empty_logic::Mask *logicMask = nullptr)
                 : placementInfo(placementInfo), binGrid(binGrid), capacityShrinkRatio(capacityShrinkRatio),
                   topBinY(curRegion->top()), bottomBinY(curRegion->bottom()), leftBinX(curRegion->left()),
-                  rightBinX(curRegion->right()), level(level), dirIsH(dirIsH), seamAware(curRegion->decision.die>=0)
+                  rightBinX(curRegion->right()), level(level), dirIsH(dirIsH), seamAware(curRegion->decision.die>=0),
+                  logicMask(logicMask)
             {
+                const auto resource = binGrid[bottomBinY][leftBinX]->getType();
+                skipEmptyLogicStrips = curRegion->decision.residualBins.empty() &&
+                                       (resource == "SLICEL_LUT" || resource == "SLICEL_FF");
                 cellIds.clear();
                 std::vector<DesignInfo::DesignCell *> tmpCells;
                 tmpCells.clear();
@@ -889,7 +911,8 @@ class GeneralSpreader
                    int cellRangeEnd)
                 : placementInfo(parentBox->placementInfo), binGrid(parentBox->binGrid),
                   capacityShrinkRatio(parentBox->capacityShrinkRatio), topBinY(topBinY), bottomBinY(bottomBinY),
-                  leftBinX(leftBinX), rightBinX(rightBinX), level(parentBox->getLevel() - 1), dirIsH(!parentBox->dirIsH), seamAware(parentBox->seamAware)
+                  leftBinX(leftBinX), rightBinX(rightBinX), level(parentBox->getLevel() - 1), dirIsH(!parentBox->dirIsH), seamAware(parentBox->seamAware),
+                  skipEmptyLogicStrips(parentBox->skipEmptyLogicStrips), logicMask(parentBox->logicMask)
             {
                 if (cellRangeBegin <= cellRangeEnd)
                     cellIds = std::vector<int>(
@@ -1088,15 +1111,27 @@ class GeneralSpreader
              */
             bool seamAware = false;
             int minExpandSize = 2;
+
+          private:
+            bool skipEmptyLogicStrips = false;
+            const empty_logic::Mask *logicMask;
+            bool physicallyEmptyStrip(bool horizontal, int strip) const;
+            void absorbAdjacentEmptyStrips(bool horizontal, int strip);
         };
 
         struct Decision {
-            bool local = false, boundedLocal = false;
+            bool local = false, boundedLocal = false, batchWindow = false;
             int seedX=0, seedY=0, die=-1;
             size_t localBins=0;
             float localCapacity=0, localDemand=0;
             double dieDemand=0, dieNominal=0, dieEffective=0;
             std::string reason="single_die", localStop="not_applicable";
+            std::vector<PlacementInfo::PlacementBinInfo *> residualBins;
+            std::vector<double> movableTarget;
+            double plannedRelief = 0;
+            std::set<int> crossEligible;
+            double initialResidual=0;
+            int targetDie=-1;
         } decision;
         mutable bool budgetBlocked = false;
         static constexpr float eps = 1e-4;
@@ -1193,7 +1228,7 @@ class GeneralSpreader
         PlacementInfo *placement, die_spread::Grid &grid, float ratio, unsigned limit,
         std::set<PlacementInfo::PlacementBinInfo *> &covered, int minRow, int maxRow,
         int die, const die_spread::Failure &failure, const die_spread::GridView::Supply &supply,
-        bool simple=false);
+        bool simple=false, bool firstLocalOnly=false);
 
     /**
      * @brief update the information of the involved PlacementUnit(s)
@@ -1226,11 +1261,21 @@ class GeneralSpreader
      * @param startId the PlacementUnit range begin for this worker
      * @param endId  the PlacementUnit range end for this worker
      */
+    struct ResidualWriteScope {
+        const die_spread::GridView *view = nullptr;
+        int width = 0;
+        std::vector<unsigned char> bins;
+        bool contains(DesignInfo::DesignCell *cell) const {
+            if (!view) return false;
+            auto bin = view->memberBin(cell->getCellId());
+            return bin && bins[bin->Y() * width + bin->X()];
+        }
+    };
     static void updatePlacementUnitsWithSpreadedCellLocationsWorker(
         PlacementInfo *placementInfo, std::set<PlacementInfo::PlacementUnit *> &involvedPUs,
         std::set<DesignInfo::DesignCell *> &involvedCells, std::vector<PlacementInfo::PlacementUnit *> &involvedPUVec,
         float forgetRatio, float displacementLimit, int startId, int endId,
-        const CrossDieSpreadLimit *roundLimit = nullptr);
+        const CrossDieSpreadLimit *roundLimit = nullptr, const ResidualWriteScope *scope = nullptr);
 
     /**
      * @brief ensure the X/Y is in the legal range of the target device
@@ -1290,9 +1335,28 @@ class GeneralSpreader
      */
     std::vector<std::vector<PlacementInfo::PlacementBinInfo *>> binGrid;
     std::unique_ptr<die_spread::GridView> dieView;
+    const empty_logic::Mask *logicMask = nullptr;
     std::map<std::pair<int,int>, die_spread::Failure> localFailures;
+    bool sharedResidual = false;
+    std::vector<double> preWriteOverflow, fixedDemand;
+    std::vector<shared_residual::History> residualHistory;
+    std::ofstream quotaLog;
+    void spreadInBatches(int call, int limit, float forgetRatio, bool clockAware, float stepLimit);
+    void planSharedRegions(int budget, std::set<die_spread::Bin*>& handled);
+    void partitionShared(SpreadRegion &region);
+    void finishShared(const std::map<int,PlacementInfo::Location>& before, int call, int inner);
     std::vector<die_spread::GridView::Supply> dieSupply;
     std::ofstream regionLog, passLog, crossingLog;
+    bool directionalResidual=false;
+    struct FailedPlan { residual_spread::Rect box; double residual; int inner; };
+    std::map<std::pair<int,int>, FailedPlan> failedPlans;
+    std::map<int,int> crossTargetDie;
+    std::ofstream residualLog;
+    void planResidualRegions(int inner, int budget, std::set<die_spread::Bin*> &handled);
+    bool reserveFirst = false, triggerStats = false;
+    struct TriggerCount { unsigned checks=0, overflow=0, seeds=0; };
+    std::vector<std::vector<TriggerCount>> triggerCounts;
+    void writeTriggerStats(int call);
     void finishDieFirstIteration(int call, int inner,
         const std::vector<PlacementInfo::PlacementUnit *> &units,
         const std::map<int,PlacementInfo::Location> &before);

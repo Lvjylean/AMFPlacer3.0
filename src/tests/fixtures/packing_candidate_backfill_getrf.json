@@ -1,0 +1,246 @@
+{
+  "source": "20261105-packing-candidate-trace/run-trace-20261105-014933",
+  "semantics": "Observed round-start unowned, unfixed, previously removed inner candidates; query-window replay only, not full packing replay.",
+  "events": [
+    {
+      "site": "SLICE_X189Y115",
+      "iteration": 3,
+      "pu_id": 53939,
+      "distance": 0.1822511999999989,
+      "radius": 0.5,
+      "neighbors": 46
+    },
+    {
+      "site": "SLICE_X189Y115",
+      "iteration": 4,
+      "pu_id": 314315,
+      "distance": 0.45624200000000315,
+      "radius": 0.5,
+      "neighbors": 39
+    },
+    {
+      "site": "SLICE_X189Y115",
+      "iteration": 8,
+      "pu_id": 314297,
+      "distance": 0.6119994000000049,
+      "radius": 0.75,
+      "neighbors": 3
+    },
+    {
+      "site": "SLICE_X189Y115",
+      "iteration": 8,
+      "pu_id": 314238,
+      "distance": 0.5467528000000073,
+      "radius": 0.75,
+      "neighbors": 3
+    },
+    {
+      "site": "SLICE_X189Y115",
+      "iteration": 9,
+      "pu_id": 314318,
+      "distance": 0.668151800000004,
+      "radius": 1.0,
+      "neighbors": 2
+    },
+    {
+      "site": "SLICE_X189Y115",
+      "iteration": 10,
+      "pu_id": 314302,
+      "distance": 0.7276166000000046,
+      "radius": 1.25,
+      "neighbors": 1
+    },
+    {
+      "site": "SLICE_X170Y366",
+      "iteration": 4,
+      "pu_id": 274117,
+      "distance": 0.4565016000000071,
+      "radius": 0.5,
+      "neighbors": 28
+    },
+    {
+      "site": "SLICE_X170Y366",
+      "iteration": 6,
+      "pu_id": 274097,
+      "distance": 0.486760199999992,
+      "radius": 0.5,
+      "neighbors": 13
+    },
+    {
+      "site": "SLICE_X170Y366",
+      "iteration": 7,
+      "pu_id": 274097,
+      "distance": 0.486760199999992,
+      "radius": 0.5,
+      "neighbors": 5
+    },
+    {
+      "site": "SLICE_X170Y366",
+      "iteration": 8,
+      "pu_id": 274110,
+      "distance": 0.15767800000001272,
+      "radius": 0.75,
+      "neighbors": 1
+    },
+    {
+      "site": "SLICE_X170Y366",
+      "iteration": 9,
+      "pu_id": 274092,
+      "distance": 0.3720626000000124,
+      "radius": 1.0,
+      "neighbors": 1
+    },
+    {
+      "site": "SLICE_X170Y366",
+      "iteration": 9,
+      "pu_id": 274100,
+      "distance": 0.2651518000000038,
+      "radius": 1.0,
+      "neighbors": 1
+    },
+    {
+      "site": "SLICE_X170Y366",
+      "iteration": 9,
+      "pu_id": 274106,
+      "distance": 0.4189372000000077,
+      "radius": 1.0,
+      "neighbors": 1
+    },
+    {
+      "site": "SLICE_X170Y366",
+      "iteration": 9,
+      "pu_id": 274107,
+      "distance": 0.4463030000000089,
+      "radius": 1.0,
+      "neighbors": 1
+    },
+    {
+      "site": "SLICE_X170Y366",
+      "iteration": 9,
+      "pu_id": 274112,
+      "distance": 0.4045864000000023,
+      "radius": 1.0,
+      "neighbors": 1
+    },
+    {
+      "site": "SLICE_X170Y366",
+      "iteration": 10,
+      "pu_id": 274110,
+      "distance": 0.1293200000000155,
+      "radius": 1.25,
+      "neighbors": 1
+    },
+    {
+      "site": "SLICE_X21Y307",
+      "iteration": 2,
+      "pu_id": 184270,
+      "distance": 0.49848240000000354,
+      "radius": 0.5,
+      "neighbors": 34
+    },
+    {
+      "site": "SLICE_X21Y307",
+      "iteration": 3,
+      "pu_id": 184270,
+      "distance": 0.49848240000000354,
+      "radius": 0.5,
+      "neighbors": 28
+    },
+    {
+      "site": "SLICE_X21Y307",
+      "iteration": 5,
+      "pu_id": 184192,
+      "distance": 0.32853459999999474,
+      "radius": 0.5,
+      "neighbors": 13
+    },
+    {
+      "site": "SLICE_X21Y307",
+      "iteration": 5,
+      "pu_id": 184189,
+      "distance": 0.3137029999999925,
+      "radius": 0.5,
+      "neighbors": 13
+    },
+    {
+      "site": "SLICE_X21Y307",
+      "iteration": 5,
+      "pu_id": 345087,
+      "distance": 0.25005280000000346,
+      "radius": 0.5,
+      "neighbors": 13
+    },
+    {
+      "site": "SLICE_X21Y307",
+      "iteration": 6,
+      "pu_id": 344992,
+      "distance": 0.2928775999999911,
+      "radius": 0.5,
+      "neighbors": 9
+    },
+    {
+      "site": "SLICE_X21Y307",
+      "iteration": 6,
+      "pu_id": 184190,
+      "distance": 0.2784976000000093,
+      "radius": 0.5,
+      "neighbors": 9
+    },
+    {
+      "site": "SLICE_X21Y307",
+      "iteration": 8,
+      "pu_id": 345012,
+      "distance": 0.8942577999999959,
+      "radius": 1.0,
+      "neighbors": 2
+    },
+    {
+      "site": "SLICE_X21Y307",
+      "iteration": 9,
+      "pu_id": 345028,
+      "distance": 1.1531956000000065,
+      "radius": 1.25,
+      "neighbors": 2
+    },
+    {
+      "site": "SLICE_X139Y68",
+      "iteration": 3,
+      "pu_id": 387509,
+      "distance": 0.35902219999999546,
+      "radius": 0.5,
+      "neighbors": 26
+    },
+    {
+      "site": "SLICE_X139Y68",
+      "iteration": 5,
+      "pu_id": 210615,
+      "distance": 0.03870680000000562,
+      "radius": 0.5,
+      "neighbors": 15
+    },
+    {
+      "site": "SLICE_X139Y68",
+      "iteration": 6,
+      "pu_id": 210615,
+      "distance": 0.09506479999999443,
+      "radius": 0.5,
+      "neighbors": 10
+    },
+    {
+      "site": "SLICE_X139Y68",
+      "iteration": 6,
+      "pu_id": 387520,
+      "distance": 0.34467319999999974,
+      "radius": 0.5,
+      "neighbors": 10
+    },
+    {
+      "site": "SLICE_X139Y68",
+      "iteration": 6,
+      "pu_id": 210545,
+      "distance": 0.09566780000000392,
+      "radius": 0.5,
+      "neighbors": 10
+    }
+  ]
+}

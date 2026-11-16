@@ -43,6 +43,11 @@ class CrossDieSpreadLimit
         origin(id); // Validate snapshot identity before workers are started.
         if (!activated.at(id)) { activated[id] = true; ++activeUnits; }
     }
+    // Only for an activation introduced by a rejected, serialized residual trial.
+    void undoNewActivation(int id) {
+        if(!activated.at(id)) throw std::logic_error("No trial activation to undo");
+        activated[id]=false; --activeUnits;
+    }
     Point origin(int id) const {
         auto p = origins.at(id);
         if (!std::isfinite(p.x)) throw std::logic_error("PU missing from spreading round snapshot");

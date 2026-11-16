@@ -104,6 +104,23 @@ bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::addLUT(DesignInfo::De
 
     assert(singleLUTs.find(curLUT) == singleLUTs.end());
 
+    if (parentPackingCLB->hasCompositeRAM()) {
+        unsigned rows=__builtin_popcount(parentPackingCLB->memoryLogicRows);
+        DesignInfo::DesignCell *mate=nullptr;
+        for (auto other:singleLUTs)
+            if ((!mate || other->getCellId()<mate->getCellId()) && CLBSiteLegality::lutPairCompatible(curLUT,other))
+                mate=other;
+        if (mate) {
+            singleLUTs.erase(mate);
+            if (mate->getCellId()<curLUT->getCellId()) pairedLUTs.emplace(mate,curLUT);
+            else pairedLUTs.emplace(curLUT,mate);
+            return true;
+        }
+        singleLUTs.insert(curLUT);
+        if (singleLUTs.size()+pairedLUTs.size()>rows) maxCardinalityMatching();
+        return singleLUTs.size()+pairedLUTs.size()<=rows;
+    }
+
     bool SLICEMBug = false;
     if (parentPackingCLB->getPlacementInfo()->checkSLICEMBug() &&
         parentPackingCLB->getCLBSite()->getSiteType() == "SLICEM")
@@ -519,6 +536,7 @@ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::updateScoreInSite()
     HPWLChange = 0;
     totalNetNum = 0;
     totalLen = 0;
+    totalNegSlack = 0;
 
     totalCellNum = 0;
 
@@ -625,10 +643,131 @@ void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::incrementalUpdateScor
                   + 0.1 * totalNegSlack;
 }
 
+ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::ScorePUContribution
+ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::getScorePUContribution(
+    PlacementInfo::PlacementUnit *pu)
+{
+    return {pu, getHPWLChangeForPU(pu), getPlacementUnitMaxPathNegativeSlack(pu),
+            static_cast<int>(pu->getNetsSetPtr()->size() * 0.5),
+            parentPackingCLB->isTimingPathLenFactorDisabled() ? 0 : getPlacementUnitMaxPathLen(pu),
+            pu->getType() == PlacementInfo::PlacementUnitType_Macro ? pu->getWeight() : 1};
+}
+
+void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::prepareScoreExtension(ScoreExtensionState &state)
+{
+    state.site = parentPackingCLB;
+    state.pus.clear();
+    state.nets.clear();
+    state.pus.reserve(PUs.size());
+    std::set<PlacementInfo::PlacementNet *, Packing_Netcompare> nets;
+    for (auto pu : PUs)
+    {
+        state.pus.push_back(getScorePUContribution(pu));
+        for (auto net : *pu->getNetsSetPtr())
+            if (net->getUnits().size() <= 64)
+                nets.insert(net);
+    }
+    state.nets.reserve(nets.size());
+    for (auto net : nets)
+    {
+        int inputs = 0;
+        for (auto pu : net->getUnitsBeDriven())
+            if (PUs.find(pu) != PUs.end())
+                ++inputs;
+        float value = net->getUnits().size() > 1
+                          ? static_cast<float>(std::max(1, inputs) - 1) /
+                                static_cast<float>(net->getUnits().size() - 1)
+                          : 1;
+        state.nets.push_back({net, inputs, value});
+    }
+}
+
+void ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::incrementalUpdateScoreInSite(
+    PlacementInfo::PlacementUnit *curPU, const ScoreExtensionState &state)
+{
+    // Keep the existing full computation as the fallback for non-extension callers.
+    if (state.site != parentPackingCLB || state.pus.size() + 1 != PUs.size() || !contains(curPU))
+    {
+        incrementalUpdateScoreInSite(curPU);
+        return;
+    }
+
+    const auto added = getScorePUContribution(curPU);
+    HPWLChange = totalNegSlack = totalConnectivityScore = 0;
+    totalNetNum = totalLen = totalCellNum = 0;
+    size_t oldPU = 0;
+    for (auto pu : PUs)
+    {
+        const ScorePUContribution *term = &added;
+        if (pu != curPU)
+        {
+            if (oldPU >= state.pus.size() || state.pus[oldPU].pu != pu)
+            {
+                incrementalUpdateScoreInSite(curPU);
+                return;
+            }
+            term = &state.pus[oldPU++];
+        }
+        // Refold in the original PU order instead of subtracting/adding aggregate
+        // floats, preserving the original rounding and integer half-net semantics.
+        HPWLChange += term->distance;
+        totalNetNum += term->halfNets;
+        totalLen += term->pathLength;
+        totalNegSlack += term->negativeSlack;
+        totalCellNum += term->cells;
+    }
+
+    std::vector<PlacementInfo::PlacementNet *> affected;
+    for (auto net : *curPU->getNetsSetPtr())
+        if (net->getUnits().size() <= 64)
+            affected.push_back(net);
+    Packing_Netcompare less;
+    std::sort(affected.begin(), affected.end(), less);
+    affected.erase(std::unique(affected.begin(), affected.end()), affected.end());
+
+    size_t oldNet = 0, changedNet = 0;
+    while (oldNet < state.nets.size() || changedNet < affected.size())
+    {
+        if (changedNet == affected.size() ||
+            (oldNet < state.nets.size() && less(state.nets[oldNet].net, affected[changedNet])))
+        {
+            totalConnectivityScore += state.nets[oldNet++].value;
+            continue;
+        }
+        auto net = affected[changedNet++];
+        int inputs = 0;
+        if (oldNet < state.nets.size() && state.nets[oldNet].net == net)
+        {
+            inputs = state.nets[oldNet++].internalInputs;
+            for (auto pu : net->getUnitsBeDriven())
+                if (pu == curPU)
+                    ++inputs;
+        }
+        else
+        {
+            // Newly introduced net: use actual membership, including repeated pins.
+            for (auto pu : net->getUnitsBeDriven())
+                if (PUs.find(pu) != PUs.end())
+                    ++inputs;
+        }
+        float value = net->getUnits().size() > 1
+                          ? static_cast<float>(std::max(1, inputs) - 1) /
+                                static_cast<float>(net->getUnits().size() - 1)
+                          : 1;
+        totalConnectivityScore += value;
+    }
+
+    // addPU may rematch old LUTs: always read the resulting cluster's groups.
+    scoreInSite = totalNetNum * 0.40 + 0.15 * totalLen + 0.5 * totalConnectivityScore
+                  - HPWLWeight * HPWLChange - 0.2 * (singleLUTs.size() + pairedLUTs.size())
+                  + 0.1 * totalNegSlack;
+}
+
 bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::addPU(PlacementInfo::PlacementUnit *tmpPU, bool allowOverlap)
 {
+    if (!parentPackingCLB->packingDieAllows(tmpPU)) return false;
     if(!parentPackingCLB->getPlacementInfo()->hardRegionAllows(tmpPU,parentPackingCLB->getCLBSite()))return false;
-    if (parentPackingCLB->checkIsLUTRAMSite())
+    if (parentPackingCLB->checkIsLUTRAMSite() && !parentPackingCLB->acceptsMemoryPU(tmpPU))
         return false;
 
     if (!allowOverlap)
@@ -779,7 +918,9 @@ bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::addPU(PlacementInfo::
     if (!parentPackingCLB->getPlacementInfo()->checkClockColumnLegalization(tmpPU, parentPackingCLB->getCLBSite()))
         return false;
 
-    return parentPackingCLB->localCandidateAllows(this);
+    if (!parentPackingCLB->localCandidateAllows(this)) return false;
+    directMemoryPairMembers += parentPackingCLB->memoryPairDirectMembers(tmpPU);
+    return true;
 }
 
 bool ParallelCLBPacker::PackingCLBSite::PackingCLBCluster::checkCellCorrectness(PlacementInfo::PlacementUnit *tmpPU,

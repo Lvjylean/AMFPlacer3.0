@@ -13,7 +13,9 @@
  */
 
 #include "InitialPacker.h"
+#include "SRLDirectFF.h"
 #include "CarryLUTRules.h"
+#include "CarryShapeFF.h"
 #include "DSPRegisteredOutputs.h"
 #include "../legalization/HardResourceUtils.h"
 
@@ -1011,6 +1013,28 @@ void InitialPacker::mapCarryRelatedRouteThru(PlacementInfo::PlacementMacro *CARR
                 DesignInfo::CellType_FDCE, 0, CARRYChainSiteOffset);
     }
 
+    // Q2 has an independent I bypass input. Only omit the LUT6-induced
+    // secondary placeholder when neither carry output needs a local route,
+    // the real LUT occupies only L0, and this half has no bound real FFs.
+    // Keep primary X/CI/DI reservations and all earlier route-through slots.
+    bool carryOutputConnected[8] = {};
+    for (auto pin : coreCell->getOutputPins())
+    {
+        if (pin->isUnconnected()) continue;
+        const auto &ref = pin->getRefPinName();
+        for (int bit = 0; bit < 8; ++bit)
+            if (ref == "O[" + std::to_string(bit) + "]" ||
+                ref == "CO[" + std::to_string(bit) + "]")
+                carryOutputConnected[bit] = true;
+    }
+    bool halfHasRealFF[2] = {};
+    for (int half = 0; half < 2; ++half)
+        for (int lane = 0; lane < 2; ++lane)
+            for (int row = 0; row < 4; ++row)
+                if (slotMapping.FFs[half][lane][row] &&
+                    !slotMapping.FFs[half][lane][row]->isVirtualCell())
+                    halfHasRealFF[half] = true;
+
     for (int i = 0; i < 2; i++)
         for (int k = 0; k < 4; k++)
         {
@@ -1021,7 +1045,12 @@ void InitialPacker::mapCarryRelatedRouteThru(PlacementInfo::PlacementMacro *CARR
                     slotMapping.FFs[i][0][k] =
                         CARRYChain->addVirtualCell(coreCell->getName() + "__FF" + std::to_string(i * 4 + k), designInfo,
                                                    DesignInfo::CellType_FDCE, 0, CARRYChainSiteOffset);
-                    if (!slotMapping.FFs[i][1][k])
+                    const auto lut = slotMapping.LUTs[i][0][k];
+                    const bool freeSecondaryBypass =
+                        !lut->isVirtualCell() && lut->getOriCellType() != DesignInfo::CellType_LUT6_2 &&
+                        !slotMapping.LUTs[i][1][k] && !carryOutputConnected[i * 4 + k] &&
+                        !routeThroughHalf[i] && !halfHasRealFF[i];
+                    if (!slotMapping.FFs[i][1][k] && !freeSecondaryBypass)
                     {
                         slotMapping.FFs[i][1][k] =
                             CARRYChain->addVirtualCell(coreCell->getName() + "__FF2" + std::to_string(i * 4 + k),
@@ -1048,6 +1077,7 @@ void InitialPacker::mapCarryRelatedRouteThru(PlacementInfo::PlacementMacro *CARR
 void InitialPacker::findCARRYMacros()
 {
     AMF_PROFILE_FUNCTION("initial_packing");
+    const auto shapeRows = CarryShapeFF::read(JSONCfg);
     std::vector<PlacementInfo::PlacementMacro *> res;
     res.clear();
 
@@ -1387,9 +1417,46 @@ void InitialPacker::findCARRYMacros()
                     if (routeThroughHalf[half]) break;
                 }
             }
+            // If the DCP consumes O locally, CO can use the row OUTMUX.
+            // Other FF slots stay reserved. A real FF disables the transparent
+            // latch witness; the existing final route check must certify OUTMUX.
+            std::vector<DesignInfo::DesignCell *> shapeFFs[2];
+            if (routeThroughHalf[0] || routeThroughHalf[1])
+            {
+                auto entry = shapeRows.find(coreCell->getName());
+                if (entry != shapeRows.end())
+                {
+                    for (int bit : {2, 4, 7})
+                    {
+                        const std::string &name = entry->second[bit];
+                        // Another row's CO must not pull optional shape members
+                        // into this site. Only repair the dual-output row itself.
+                        if (!routeThroughHalf[bit / 4] || name.empty() || !usedO[bit] || !fabricCO[bit]) continue;
+                        auto output = carryOutputs[0][bit];
+                        auto &sinks = output->getNet()->getPinsBeDriven();
+                        for (auto sink : sinks)
+                        {
+                            auto ff = sink->getCell();
+                            if (ff->getName() != name || !ff->isFF() || sink->getRefPinName() != "D") continue;
+                            // Multiple sinks on O would require another egress;
+                            // do not grant a local-only witness in that case.
+                            if (sinks.size() != 1 || cellInMacros.count(ff) ||
+                                !placementInfo->sameHardRegion(coreCell, ff) ||
+                                !placementInfo->sameHardRegion(curCell, ff))
+                                throw std::runtime_error("Incompatible DCP carry shape FF: " + name);
+                            shapeFFs[bit / 4].push_back(ff);
+                        }
+                    }
+                    for (const auto &halfFFs : shapeFFs)
+                        if (halfFFs.size() == 2 &&
+                            halfFFs[0]->getControlSetInfo()->getId() != halfFFs[1]->getControlSetInfo()->getId())
+                            throw std::runtime_error("Incompatible primary FF control sets in carry shape: " +
+                                                     coreCell->getName());
+                }
+            }
             // Decide the shared mode before adding any real FF to this macro.
-            if (routeThroughHalf[0]) drivenBottomFFs.clear();
-            if (routeThroughHalf[1]) drivenTopFFs.clear();
+            if (routeThroughHalf[0]) drivenBottomFFs = shapeFFs[0];
+            if (routeThroughHalf[1]) drivenTopFFs = shapeFFs[1];
             for (auto theFF : drivenBottomFFs)
             {
                 curMacro->addCell(theFF, theFF->getCellType(), 0, coreOffset);
@@ -1455,6 +1522,14 @@ void InitialPacker::findCARRYMacros()
                         char FFPinCellId = driverPin->getRefPinName()[driverPin->getRefPinName().find("[") + 1] - '0';
                         if (driverPin->getRefPinName().find("CO[") != std::string::npos)
                         {
+                            // Dedicated COUT->CIN uses no fabric output or FF route-through.
+                            // Keep the reservation if any sink needs a non-cascade path.
+                            const auto &sinks = curOutputNet->getPinsBeDriven();
+                            if (!sinks.empty() && std::all_of(sinks.begin(), sinks.end(),
+                                    [driverPin](DesignInfo::DesignPin *sink) {
+                                        return HardResourceUtils::isCarryCascade(driverPin, sink);
+                                    }))
+                                continue;
                             curMacro->addVirtualCell(coreCell->getName() + "__FF2" + std::to_string(FFPinCellId),
                                                      designInfo, DesignInfo::CellType_FDCE, 0, coreOffset);
                             // std::string FFSiteName = std::string(1, FFCode) + "FF2";
@@ -1960,7 +2035,8 @@ void InitialPacker::LUTFFPairing()
                     auto pinBeDriven = curCell->getOutputPins()[0]->getNet()->getPinsBeDriven()[0];
                     assert(pinBeDriven->getCell());
                     auto FFBeDriven = pinBeDriven->getCell();
-                    if (FFBeDriven->isFF() && placementInfo->sameHardRegion(curCell, FFBeDriven) && cellInMacros.find(FFBeDriven) == cellInMacros.end())
+                    if (FFBeDriven->isFF() && placementInfo->sameHardRegion(curCell, FFBeDriven) &&
+                        !cellInMacros.count(FFBeDriven) && !hasDirectSRLData(FFBeDriven))
                     {
                         LUTFFPairs.emplace_back(curCell, FFBeDriven);
 

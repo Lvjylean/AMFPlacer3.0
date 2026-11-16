@@ -55,15 +55,15 @@ public:
     void end(){if(remaining)throw std::runtime_error("Unexpected archive tail");}
 };
 inline void writeModel(const std::filesystem::path&p,const amf_sll::Model&m,Budget&b) {
-    const bool masked=std::any_of(m.nets.begin(),m.nets.end(),[](const amf_sll::Net&n){return !n.gradientActive;});
-    Writer w(p,b);w.bytes(masked?"MFSLL02\0":"MFSLL01\0",8);w.scalar<uint64_t>(m.units);w.scalar<uint64_t>(m.boundaries.size());
+    const bool masked=m.sllSTE || std::any_of(m.nets.begin(),m.nets.end(),[](const amf_sll::Net&n){return !n.gradientActive;});
+    Writer w(p,b);w.bytes(m.sllSTE?"MFSLL03\0":masked?"MFSLL02\0":"MFSLL01\0",8);w.scalar<uint64_t>(m.units);w.scalar<uint64_t>(m.boundaries.size());
     w.scalar(m.gamma);w.scalar(m.minY);w.scalar(m.maxY);w.array(m.boundaries);w.array(m.tau);
     w.scalar<uint64_t>(m.pins.size());for(auto&v:m.pins){w.scalar<uint32_t>(v.unit);w.scalar(v.offsetY);}
     w.scalar<uint64_t>(m.nets.size());for(auto&v:m.nets){w.scalar<uint64_t>(v.begin);w.scalar<uint64_t>(v.end);w.scalar<uint32_t>(v.id);w.scalar<uint8_t>(v.optimize);w.scalar(v.weight);if(masked)w.scalar<uint8_t>(v.gradientActive);}w.finish();
 }
 inline amf_sll::Model readModel(const std::filesystem::path&p) {
-    Reader r(p);char version[8];r.bytes(version,8);bool masked=!std::memcmp(version,"MFSLL02\0",8);
-    if(!masked && std::memcmp(version,"MFSLL01\0",8))throw std::runtime_error("Wrong SLL model archive version");amf_sll::Model m;m.units=r.scalar<uint64_t>();auto nb=r.scalar<uint64_t>();
+    Reader r(p);char version[8];r.bytes(version,8);const bool ste=!std::memcmp(version,"MFSLL03\0",8);bool masked=ste || !std::memcmp(version,"MFSLL02\0",8);
+    if(!masked && std::memcmp(version,"MFSLL01\0",8))throw std::runtime_error("Wrong SLL model archive version");amf_sll::Model m;m.sllSTE=ste;m.units=r.scalar<uint64_t>();auto nb=r.scalar<uint64_t>();
     m.gamma=r.scalar<double>();m.minY=r.scalar<double>();m.maxY=r.scalar<double>();m.boundaries=r.array<double>(nb);m.tau=r.array<double>(nb);
     auto np=r.scalar<uint64_t>();if(np>1000000000ULL)throw std::runtime_error("Excessive pin count");
     for(uint64_t i=0;i<np;++i){unsigned u=r.scalar<uint32_t>();double y=r.scalar<double>();m.pins.push_back({u,y});}

@@ -33,6 +33,10 @@ public:
         WireLengthBatch& operator=(const WireLengthBatch&)=delete;
     };
     void refresh(); // Serial outer-step boundary, never inside parallel readers.
+    // One global packing checkpoint, independent of local trial backups.
+    // Restore real PU/site coordinates before restoring this plan.
+    void recordPackingCheckpoint();
+    void restorePackingCheckpoint();
     // A spread notification only arms activation; no plan is made until the next QP.
     void notifyGlobalSpreadCompleted(int round);
     void beginQp();

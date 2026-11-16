@@ -305,6 +305,9 @@ target_link_libraries(checkSllAdaptiveIntegration GlobalPlacer Packing Legalizat
 add_executable(checkDieFirstSpreading EXCLUDE_FROM_ALL tests/check_die_first_spreading.cc)
 target_link_libraries(checkDieFirstSpreading GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 
+add_executable(exportLogicEmptyBins EXCLUDE_FROM_ALL app/emptyLogicBins/main.cc)
+target_link_libraries(exportLogicEmptyBins GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
 add_executable(checkDieFirstSpreadingIntegration EXCLUDE_FROM_ALL tests/check_die_first_spreading_integration.cc)
 target_link_libraries(checkDieFirstSpreadingIntegration GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 
@@ -390,3 +393,25 @@ target_link_libraries(checkCarrySlotMembership Packing GlobalPlacer Legalization
 
 add_executable(checkCarryDIEligibility EXCLUDE_FROM_ALL tests/check_carry_di_eligibility.cc)
 target_link_libraries(checkCarryDIEligibility Packing GlobalPlacer Legalization DesignInfo DeviceInfo PlacementInfo PlacementTiming ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(checkMemoryFFRules EXCLUDE_FROM_ALL tests/check_memory_ff_rules.cc)
+add_executable(checkMemoryFFPacking EXCLUDE_FROM_ALL tests/check_memory_ff_packing.cc)
+target_link_libraries(checkMemoryFFPacking "-Wl,--start-group" GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} "-Wl,--end-group")
+
+add_executable(checkPackingDistance EXCLUDE_FROM_ALL tests/check_packing_distance.cc)
+
+# Opt-in boundary STE quantity model, no full placement in this fixture.
+add_executable(checkSllSTE EXCLUDE_FROM_ALL tests/check_sll_ste.cc)
+target_link_libraries(checkSllSTE ProblemSolvers Utils pthread ${Boost_LIBRARIES})
+
+add_executable(checkRAMFFReadClock EXCLUDE_FROM_ALL tests/check_ram_ff_read_clock.cc)
+target_link_libraries(checkRAMFFReadClock "-Wl,--start-group" GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} "-Wl,--end-group")
+
+add_executable(checkMacroLocalRoutes EXCLUDE_FROM_ALL tests/check_macro_local_routes.cc)
+target_link_libraries(checkMacroLocalRoutes "-Wl,--start-group" GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} "-Wl,--end-group")
+
+add_executable(checkCarryLatchExport EXCLUDE_FROM_ALL tests/check_carry_latch_export.cc)
+target_link_libraries(checkCarryLatchExport "-Wl,--start-group" GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} "-Wl,--end-group")
+
+add_executable(checkX131SourceRemoval EXCLUDE_FROM_ALL tests/check_x131_source_removal.cc)
+target_link_libraries(checkX131SourceRemoval "-Wl,--start-group" GlobalPlacer DesignInfo DeviceInfo PlacementInfo PlacementTiming Packing Legalization ProblemSolvers Utils ${CMAKE_SOURCE_DIR}/lib/3rdParty/PaToH/libpatoh.a pthread ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} "-Wl,--end-group")

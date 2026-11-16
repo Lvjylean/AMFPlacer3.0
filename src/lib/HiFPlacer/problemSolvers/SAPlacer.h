@@ -131,7 +131,14 @@ class SAPlacer
     std::vector<std::vector<std::vector<int>>> res_grid2clusters;
     double resE;
 
-    double SACalibrationOffset;
+    // At launch the greedy placement is already this restart's best result.
+    struct RestartResult
+    {
+        std::vector<std::pair<int, int>> cluster2XY;
+        std::vector<std::vector<std::vector<int>>> grid2clusters;
+        double initialCost;
+        double bestCost;
+    };
 
     void randomSwapInWideRange(const std::vector<std::vector<std::vector<int>>> &grid2clusters,
                                std::vector<std::vector<std::vector<int>>> &new_Grid2clusters,
@@ -150,13 +157,9 @@ class SAPlacer
                                 const std::vector<std::pair<int, int>> &cluster2XY,
                                 std::vector<std::pair<int, int>> &new_cluster2XY, boost::mt19937 &rng);
 
-    float probabilituFunc(double oriE, double newE, float T);
+    static float probabilituFunc(double oriE, double newE, float T, double initialCost);
 
-    static void worker(SAPlacer *saPlacer, std::vector<std::vector<std::vector<int>>> &init_grid2clusters,
-                       std::vector<std::pair<int, int>> &init_cluster2XY,
-                       std::vector<std::vector<std::vector<int>>> &opt_grid2clusters,
-                       std::vector<std::pair<int, int>> &opt_cluster2XY, int &totalIterNum, int &workers_randomSeed,
-                       double &resE);
+    void worker(RestartResult &result, int totalIterNum, int randomSeed);
 
     void greedyInitialize(std::vector<std::pair<int, int>> &init_cluster2XY,
                           std::vector<std::vector<std::vector<int>>> &init_grid2clusters, int initOffset);

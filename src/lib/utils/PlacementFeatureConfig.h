@@ -28,7 +28,7 @@ inline double crossDieSpreadMaxBins(const FeatureMap &c) {
 }
 inline void validatePlacementFeatures(const FeatureMap &c) {
     crossDieSpreadMaxBins(c);
-    for(const char *key:{"SllQuantityEnable","SllDynamicTauEnable","SllPlanningEnable",
+    for(const char *key:{"sllSTE","SllQuantityEnable","SllDynamicTauEnable","SllPlanningEnable",
         "SllCapacityOptimizationEnable","SllTimingCorrectionEnable","SllRouteConstraintEnable",
         "DieFirstSpreadingEnable","TimingDrivenPlacementEnable","DetailedDiagnosticsEnable",
         "IterativeMacroLegalizationEnable","SllTauCompletionRequired"}) feature(c,key);

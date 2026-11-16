@@ -13,6 +13,7 @@
  */
 
 #include "IncrementalBELPacker.h"
+#include "SRLDirectFF.h"
 #include "dumpZip.h"
 #include "readZip.h"
 #include "strPrint.h"
@@ -60,7 +61,8 @@ void IncrementalBELPacker::LUTFFPairing(float disThreshold)
                     auto pinBeDriven = curCell->getOutputPins()[0]->getNet()->getPinsBeDriven()[0];
                     assert(pinBeDriven->getCell());
                     auto FFBeDriven = pinBeDriven->getCell();
-                    if (FFBeDriven->isFF() && placementInfo->sameHardRegion(curCell, FFBeDriven) && cellInMacros.find(FFBeDriven) == cellInMacros.end())
+                    if (FFBeDriven->isFF() && placementInfo->sameHardRegion(curCell, FFBeDriven) &&
+                        !cellInMacros.count(FFBeDriven) && !hasDirectSRLData(FFBeDriven))
                     {
                         if (getCellDistance(cellLoc[FFBeDriven->getCellId()], cellLoc[curCell->getCellId()]) <
                             disThreshold)
@@ -118,7 +120,7 @@ void IncrementalBELPacker::LUTFFPairing(float disThreshold)
                         {
                             float curDis =
                                 getCellDistance(cellLoc[FFBeDriven->getCellId()], cellLoc[curCell->getCellId()]);
-                            if (curDis < disThreshold)
+                            if (curDis < disThreshold && !hasDirectSRLData(FFBeDriven))
                             {
                                 if (curDis < minDis)
                                 {
@@ -258,24 +260,30 @@ void IncrementalBELPacker::FFPairing(float disThreshold)
     {
         auto &FFs = CS->getFFs();
         std::vector<FFLocation> FFpoints;
-        FFpoints.clear();
+        std::vector<DesignInfo::DesignCell *> ram32m16Owners;
 
         for (auto curFF : FFs)
         {
             auto tmpPU = cellId2PlacementUnit[curFF->getCellId()];
             if (auto unpackedCell = dynamic_cast<PlacementInfo::PlacementUnpackedCell *>(tmpPU))
             {
+                auto driver = uniqueFFDataDriver(curFF);
+                if (isSRLQDriver(driver)) continue;
+                auto source = driver ? driver->getCell() : nullptr;
+                ram32m16Owners.push_back(source && source->getOriCellType() == DesignInfo::CellType_RAM32M16
+                                             ? source : nullptr);
                 FFpoints.emplace_back(unpackedCell);
                 FFCouldBePackedCnt++;
             }
         }
 
         // build k-d tree
+        if (FFpoints.size() < 2) continue;
         kdt::KDTree<FFLocation> kdtree(FFpoints, y2xRatio);
 
-        for (auto &FFTmpPoint : FFpoints)
+        for (size_t i = 0; i < FFpoints.size(); ++i)
         {
-            auto FF0 = FFTmpPoint.getUnpackedCell();
+            auto FF0 = FFpoints[i].getUnpackedCell();
 
             if (packedCells.find(FF0) != packedCells.end())
                 continue;
@@ -287,6 +295,9 @@ void IncrementalBELPacker::FFPairing(float disThreshold)
             float closetDis = 10000000;
             for (auto tmpInd : indices)
             {
+                // Keep RAM32M16 read-data loads free to pack with their own RAM.
+                // Two ordinary FFs both have a null owner and keep the original search.
+                if (ram32m16Owners[i] != ram32m16Owners[tmpInd]) continue;
                 auto tmpPU1 = FFpoints[tmpInd].getUnpackedCell();
                 if (auto FF1 = dynamic_cast<PlacementInfo::PlacementUnpackedCell *>(tmpPU1))
                 {

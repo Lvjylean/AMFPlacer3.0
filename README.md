@@ -175,3 +175,10 @@ U250 已开放输入检查和独立硬资源分配/合法化，覆盖 URAM 与 C
 ## E2 与增量编译集成（2026-10-29）
 
 本副本分支为 `codex/e2-incremental-integrated-20261029`。合并范围、使用入口与验证边界见 [集成说明](docs/research/e2-incremental-integration-20261029.md)。
+
+
+## 2026-11-16 验证快照
+
+本分支保存 SA 正确性修正、宏站吸收普通 LUT/FF、SLL STE、并行与保守扩散、CLB/STA 耗时优化。C++ 源码对应已验证的 `17f71c50`，并附可选的 SRL 整链提交适配。详见 [变更及验证范围](docs/research/sa-macro-ste-spreading-runtime-20261116.md) 和 [机器可读来源清单](docs/provenance/sa-macro-ste-spreading-runtime-20261116.json)。
+
+最近一次 llamafpga 验证全量布通且 LOC/BEL 保持，但 setup 时序仍未收敛；该结果不代表所有设计或默认参数的性能保证。构建产物、DCP、全量布局及运行日志不随本分支发布。

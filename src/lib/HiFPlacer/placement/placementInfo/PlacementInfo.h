@@ -35,6 +35,7 @@
 #include "Eigen/SparseCore"
 #include "PlacementTimingInfo.h"
 #include "GridUpdatePolicy.h"
+#include "LogicEmptyBins.h"
 #include "SllPlanner.h"
 #include <memory>
 #include "dumpZip.h"
@@ -65,6 +66,7 @@ class PlacementInfo
 {
   public:
     std::shared_ptr<SllPlanner> sllPlanner;
+    empty_logic::DeviceTable logicEmptyBins;
     /**
      * @brief Placement Instance Types
      *
@@ -415,9 +417,10 @@ class PlacementInfo
          *
          * @param inX
          * @param inY
+         * @param y2xRatio Match the candidate metric so bin pruning remains a lower bound.
          * @return float
          */
-        inline float getManhattanDistanceTo(float inX, float inY)
+        inline float getManhattanDistanceTo(float inX, float inY, float y2xRatio = 1.0f)
         {
             if (leftX < inX && inX <= rightX && bottomY < inY && inY <= topY)
             {
@@ -425,14 +428,14 @@ class PlacementInfo
             }
             if (leftX < inX && inX <= rightX)
             {
-                return std::min(std::fabs(inY - topY), std::fabs(inY - bottomY));
+                return y2xRatio * std::min(std::fabs(inY - topY), std::fabs(inY - bottomY));
             }
             if (bottomY < inY && inY <= topY)
             {
                 return std::min(std::fabs(inX - leftX), std::fabs(inX - rightX));
             }
             return std::min(std::fabs(inX - leftX), std::fabs(inX - rightX)) +
-                   std::min(std::fabs(inY - topY), std::fabs(inY - bottomY));
+                   y2xRatio * std::min(std::fabs(inY - topY), std::fabs(inY - bottomY));
         }
 
         /**
@@ -480,6 +483,7 @@ class PlacementInfo
             cells.insert(cell);
             assert(occupationAdded >= 0);
             utilization += occupationAdded;
+            virtualFFBase += cell->isVirtualCell() && cell->isFF();
             mtx.unlock();
         }
 
@@ -499,6 +503,8 @@ class PlacementInfo
             assert(cells.find(cell) != cells.end());
             cells.erase(cell);
             utilization -= occupationAdded;
+            virtualFFBase -= cell->isVirtualCell() && cell->isFF();
+            assert(virtualFFBase >= 0);
             assert(utilization >= 0);
             mtx.unlock();
         }
@@ -515,6 +521,7 @@ class PlacementInfo
         {
             if (!preserveMembers) cells.clear();
             utilization = 0;
+            virtualFFBase = 0;
             binShrinkRatio = requiredBinShrinkRatio;
             overflowCnt = 0;
             noOverflowCnt = 0;
@@ -530,6 +537,7 @@ class PlacementInfo
                 assert(inserted);
             }
             utilization += occupationAdded;
+            virtualFFBase += cell->isVirtualCell() && cell->isFF();
         }
         inline bool finishGridMembers(const std::vector<DesignInfo::DesignCell *> &expected)
         {
@@ -540,19 +548,19 @@ class PlacementInfo
             return true;
         }
         struct GridAuditState {
-            int capacity, utilization, overflow, noOverflow;
+            int capacity, utilization, overflow, noOverflow, virtualFFBase;
             float shrink, requiredShrink, demand, supply;
             std::vector<DesignInfo::DesignCell *> members;
             bool operator==(const GridAuditState &s) const {
                 return capacity == s.capacity && utilization == s.utilization &&
-                    overflow == s.overflow && noOverflow == s.noOverflow &&
+                    overflow == s.overflow && noOverflow == s.noOverflow && virtualFFBase == s.virtualFFBase &&
                     shrink == s.shrink && requiredShrink == s.requiredShrink &&
                     demand == s.demand && supply == s.supply && members == s.members;
             }
         };
         inline GridAuditState gridAuditState() const
         {
-            return {capacity, utilization, overflowCnt, noOverflowCnt, binShrinkRatio,
+            return {capacity, utilization, overflowCnt, noOverflowCnt, virtualFFBase, binShrinkRatio,
                     requiredBinShrinkRatio, switchDemandForNets, switchSupplyForNets,
                     {cells.begin(), cells.end()}};
         }
@@ -561,6 +569,7 @@ class PlacementInfo
         {
             cells.clear();
             utilization = 0;
+            virtualFFBase = 0;
             binShrinkRatio = requiredBinShrinkRatio;
             overflowCnt = 0;
             noOverflowCnt = 0;
@@ -684,6 +693,36 @@ class PlacementInfo
         inline float getCapacity()
         {
             return (float)capacity * binShrinkRatio;
+        }
+
+        inline int getVirtualFFBase() const { return virtualFFBase; }
+        inline void setSpreadingReserveRatio(float ratio)
+        {
+            assert(ratio == 0 || (ratio > 0 && ratio <= 1 && sharedCellType == "SLICEL_FF"));
+            spreadingReserveRatio = ratio;
+        }
+        inline bool spreadingReserveFirst() const { return spreadingReserveRatio > 0; }
+        // Same physical/effective capacity convention as the original call site.
+        // Reservations remain in demand; only their extra proportional headroom is removed.
+        inline float spreadingDemandLimit(float ratio, bool nominal = false)
+        {
+            const float supply = nominal ? float(capacity) : getCapacity();
+            if (!spreadingReserveRatio || !virtualFFBase) return ratio * supply;
+            assert(ratio == spreadingReserveRatio);
+            const float reserve = std::min(float(virtualFFBase), supply);
+            return std::min(supply, ratio * supply + (1.0f - ratio) * reserve);
+        }
+        // SpreadRegion stores capacity before the common ratio is applied.
+        inline float getSpreadingCapacity()
+        {
+            if (!spreadingReserveRatio || !virtualFFBase) return getCapacity();
+            return spreadingDemandLimit(spreadingReserveRatio) / spreadingReserveRatio;
+        }
+        inline bool isSpreadingOverflow(float ratio)
+        {
+            if (!spreadingReserveRatio || !virtualFFBase || !capacity) return isOverflow(ratio);
+            assert(ratio == spreadingReserveRatio);
+            return float(utilization) / capacity > spreadingDemandLimit(ratio, true) / capacity + eps;
         }
 
         /**
@@ -885,6 +924,9 @@ class PlacementInfo
 
         int capacity = 0;
         int utilization = 0;
+        int virtualFFBase = 0;
+        // Nonzero only during the explicitly enabled coarse FF spread pass.
+        float spreadingReserveRatio = 0.0f;
         float binShrinkRatio = 1.0;
         float requiredBinShrinkRatio = 1.0;
 
@@ -1133,11 +1175,11 @@ class PlacementInfo
          * @param y
          * @param forgetRatio how much should the PlacementUnit forget the original location from later iteration
          */
-        inline void setSpreadLocation(float x, float y, float forgetRatio)
+        inline void setSpreadLocation(float x, float y, float forgetRatio, bool residual = false)
         {
             assert(!locked);
 
-            if (lastSpreadX > -100 && lastSpreadY > -100)
+            if (useSpreadHistory(residual))
             {
                 assert(forgetRatio <= 1);
                 x = x * forgetRatio + lastSpreadX * (1 - forgetRatio);
@@ -1160,11 +1202,11 @@ class PlacementInfo
          * @param limitDisplacement limit the displacement
          */
         inline void setSpreadLocation_WithLimitDisplacement(float x, float y, float forgetRatio,
-                                                            float limitDisplacement)
+                                                            float limitDisplacement, bool residual = false)
         {
             assert(!locked);
 
-            if (lastSpreadX > -100 && lastSpreadY > -100)
+            if (useSpreadHistory(residual))
             {
                 assert(forgetRatio <= 1);
                 float disX = std::fabs(x - lastSpreadX) * forgetRatio;
@@ -1197,6 +1239,7 @@ class PlacementInfo
 
         inline void recordSpreadLocatin()
         {
+            provisionalSpreadHistory = false;
             lastSpreadX = anchorX;
             lastSpreadY = anchorY;
         }
@@ -1475,6 +1518,19 @@ class PlacementInfo
         int id;
         float anchorX = -2000, anchorY = -2000;
         float lastAnchorX = -2000, lastAnchorY = -2000;
+        // A newly created PU may have no recorded resource-pass history yet.
+        // Secondary writes share their first anchor until the next normal
+        // history snapshot. Ordinary writes keep their initial behavior.
+        bool provisionalSpreadHistory = false;
+        bool useSpreadHistory(bool residual)
+        {
+            if (lastSpreadX > -100 && lastSpreadY > -100)
+                return residual || !provisionalSpreadHistory;
+            if (!residual) return false;
+            recordSpreadLocatin();
+            provisionalSpreadHistory = true;
+            return true;
+        }
         float lastSpreadX = -2000, lastSpreadY = -2000;
         PlacementUnitType unitType;
 
@@ -1942,6 +1998,14 @@ class PlacementInfo
             return fixedCells;
         }
 
+        // Legalizers may be recreated between GP stages. Never treat a BEL
+        // assigned by a previous sharing pass as a macro input constraint.
+        void restoreOriginalSRLBELs()
+        {
+            if (!originalSRLBELs) originalSRLBELs=std::make_unique<std::vector<fixedPlacementInfo_inMacro>>(fixedCells);
+            else fixedCells=*originalSRLBELs;
+        }
+
       private:
         // std::vector<std::string> siteNames;
         // std::vector<std::string> BELNames;
@@ -1953,6 +2017,7 @@ class PlacementInfo
                         // can occupy multiple BEL
         std::vector<float> offsetX, offsetY; // offsetX.size() == BELTypeOccupation.size()
         std::vector<fixedPlacementInfo_inMacro> fixedCells;
+        std::unique_ptr<std::vector<fixedPlacementInfo_inMacro>> originalSRLBELs;
         // std::vector<std::pair<float, float>> siteOccupations;
         float left, right, top, bottom;
         PlacementMacroType macroType;
@@ -2799,6 +2864,9 @@ class PlacementInfo
      * @param JSONCfg user-defined placement configuration
      */
     PlacementInfo(DesignInfo *designInfo, DeviceInfo *deviceInfo, std::map<std::string, std::string> &JSONCfg);
+    int ramSharingClockPolarity(DesignInfo::DesignCell *cell);
+    const std::map<std::string,std::vector<std::string>> &getSRLControlMetadata();
+    std::string srl16PairKey(DesignInfo::DesignCell *cell);
     bool detailedDiagnostics() const { auto i=JSONCfg.find("DetailedDiagnosticsEnable"); return i==JSONCfg.end() || i->second=="true"; }
     bool timingDrivenPlacement() const { auto i=JSONCfg.find("TimingDrivenPlacementEnable"); return i==JSONCfg.end() || i->second=="true"; }
     ~PlacementInfo()
@@ -4975,6 +5043,10 @@ class PlacementInfo
 
     std::map<std::string, std::string> &JSONCfg;
     IncrementalContext incremental;
+    std::map<std::string,std::vector<std::string>> srlControlMetadata;
+    bool srlControlsLoaded=false;
+    bool ramControlsLoaded=false;
+    std::map<std::string,std::pair<std::string,int>> ramClockControls;
     std::map<std::string,unsigned> ffQBlockedMasks;
     HardRegionConstraints hardRegions;
     std::string cellType2fixedAmoFileName;

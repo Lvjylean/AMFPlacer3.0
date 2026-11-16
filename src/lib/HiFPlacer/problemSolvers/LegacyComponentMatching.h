@@ -1,3 +1,6 @@
+// CLB_PROFILE_BEGIN
+#include "../../utils/ClbLegalProfile.h"
+// CLB_PROFILE_END
 #ifndef AMF_LEGACY_COMPONENT_MATCHING_H
 #define AMF_LEGACY_COMPONENT_MATCHING_H
 
@@ -131,12 +134,25 @@ inline Result solve(const Adjacency &adj, int rightCount, int requested, int thr
     result.preparationSeconds = seconds(started);
     const auto kernelStart = Clock::now();
     const int workers = std::max(1, std::min(threads, static_cast<int>(components.size())));
-#pragma omp parallel for schedule(dynamic, 1) num_threads(workers)
+// CLB_PROFILE_BEGIN
+    clb_profile::Team clbTeam("componentMatching", workers);
+// CLB_PROFILE_END
+// CLB_PROFILE_ORIGINAL #pragma omp parallel for schedule(dynamic, 1) num_threads(workers)
+// CLB_PROFILE_BEGIN
+#pragma omp parallel num_threads(workers)
+    {
+        clb_profile::WorkerScope clbWorker(clbTeam);
+#pragma omp for schedule(dynamic, 1) nowait
+// CLB_PROFILE_END
     for (int id = 0; id < static_cast<int>(components.size()); ++id)
     {
         try
         {
             const auto &component = components[id];
+// CLB_PROFILE_BEGIN
+            if(auto w=clb_profile::current){++w->items;w->raw+=component.left.size();w->legal+=component.right.size();w->kept+=component.edges;}
+// CLB_PROFILE_END
+
             if (component.edges == 0) continue;
             auto &stats = result.searches[id];
             const int nl = component.left.size(), nr = component.right.size();
@@ -169,7 +185,23 @@ inline Result solve(const Adjacency &adj, int rightCount, int requested, int thr
         }
         catch (...) { errors[id] = std::current_exception(); }
     }
+// CLB_PROFILE_BEGIN
+        clbWorker.beforeBarrier();
+#pragma omp barrier
+        clbWorker.afterBarrier();
+    }
+// CLB_PROFILE_END
+
     result.kernelSeconds = seconds(kernelStart);
+// CLB_PROFILE_BEGIN
+    if(clb_profile::active)for(std::size_t i=0;i<components.size();++i){
+        const auto &c=components[i];const auto &s=result.searches[i];
+        std::ostringstream row;row<<std::setprecision(12)<<"kind=component id="<<i<<" left="<<c.left.size()<<" right="<<c.right.size()
+        <<" edges="<<c.edges<<" build_s="<<s.buildSeconds<<" solve_s="<<s.solveSeconds<<" visits="<<s.visits<<" relax="<<s.relax;
+        clb_profile::emit(row.str());
+    }
+// CLB_PROFILE_END
+
     std::vector<bool> used(rightCount, false);
     for (std::size_t id = 0; id < components.size(); ++id)
     {
